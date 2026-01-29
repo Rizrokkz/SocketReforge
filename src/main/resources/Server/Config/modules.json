@@ -1,0 +1,6 @@
+{
+  "damageSystems": [
+    "com.hypixel.hytale.server.core.modules.entity.damage.BaseDamageSystem",
+    "irai.mod.reforge.Entity.EntityStatType.EquipmentRefineEST"
+  ]
+}

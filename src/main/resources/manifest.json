@@ -1,0 +1,21 @@
+{
+  "Group": "irai.mod.reforge",
+  "Name": "Socket Reforge",
+  "Version": "1.0.0",
+  "Description": "",
+  "Authors": [
+    {
+      "Name": "iRaiden",
+      "Email": "animus0416@gmail.com",
+      "Url": "https://github.com/Rizrokkz"
+    }
+  ],
+  "Website": "",
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "LoadBefore": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": true,
+  "SubPlugins": [],
+  "Main": "irai.mod.reforge.ReforgePlugin"
+}
