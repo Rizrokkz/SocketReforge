@@ -9,18 +9,15 @@ import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import irai.mod.reforge.Systems.WeaponUpgradeTracker;
 
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @SuppressWarnings("removal")
 public class EquipmentRefineEST extends DamageEventSystem {
 
     // Weapon ID pattern - matches items with "Weapon" keyword
-    private static final Pattern WEAPON_PATTERN = Pattern.compile("^(.*)Weapon(.*)$", Pattern.CASE_INSENSITIVE);
-
-    // Upgrade level pattern - matches numeric suffix
-    private static final Pattern UPGRADE_LEVEL_PATTERN = Pattern.compile("^(.+?)(\\d+)$");
+    private static final Pattern WEAPON_PATTERN = Pattern.compile(".*[Ww]eapon.*");
 
     // Damage multipliers per upgrade level (0..3)
     private static final double[] DAMAGE_MULTIPLIERS = {
@@ -64,46 +61,42 @@ public class EquipmentRefineEST extends DamageEventSystem {
             return;
         }
 
-        String attackerName = attacker.getPlayerRef().getUsername();
-
         // Find weapon in attacker's hotbar
         ItemStack weapon = findWeaponInHotbar(attacker);
         if (weapon == null) {
-            System.out.println("[DEBUG] " + attackerName + " has NO WEAPON in hotbar");
             return;
         }
 
-        String itemId = weapon.getItemId();
+        // Check if it's a weapon using our pattern
+        if (!isWeapon(weapon)) {
+            return;
+        }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // DETAILED DEBUG OUTPUT
+        // KEY CHANGE: Get upgrade level from WeaponUpgradeTracker
         // ═══════════════════════════════════════════════════════════════════════
+        short slot = attacker.getInventory().getActiveHotbarSlot();
+        int upgradeLevel = WeaponUpgradeTracker.getUpgradeLevel(attacker, weapon, slot);
+
         System.out.println("═══════════════════════════════════════════════");
-        System.out.println("[DEBUG] WEAPON FOUND:");
-        System.out.println("[DEBUG]   Item ID: '" + itemId + "'");
-        System.out.println("[DEBUG]   Item ID Length: " + (itemId != null ? itemId.length() : "null"));
-        System.out.println("[DEBUG]   Item ID Class: " + (itemId != null ? itemId.getClass().getName() : "null"));
+        System.out.println("[EquipmentRefineEST] Player: " + attacker.getPlayerRef().getUsername());
+        System.out.println("[EquipmentRefineEST] Weapon: " + getItemId(weapon));
+        System.out.println("[EquipmentRefineEST] Upgrade Level: " + upgradeLevel);
+        System.out.println("[EquipmentRefineEST] Max Level: " + (DAMAGE_MULTIPLIERS.length - 1));
 
-        // Check if it matches weapon pattern
-        boolean isWeapon = WEAPON_PATTERN.matcher(itemId).matches();
-        System.out.println("[DEBUG]   Matches WEAPON_PATTERN: " + isWeapon);
-
-        // Try to extract upgrade level with detailed logging
-        int level = getUpgradeLevelDebug(itemId);
-        System.out.println("[DEBUG]   Extracted Level: " + level);
-
-        int clampedLevel = Math.max(0, Math.min(level, DAMAGE_MULTIPLIERS.length - 1));
+        // Clamp the level to valid range
+        int clampedLevel = Math.max(0, Math.min(upgradeLevel, DAMAGE_MULTIPLIERS.length - 1));
         double multiplier = DAMAGE_MULTIPLIERS[clampedLevel];
 
-        System.out.println("[DEBUG]   Clamped Level: " + clampedLevel);
-        System.out.println("[DEBUG]   Multiplier: " + multiplier);
+        System.out.println("[EquipmentRefineEST] Clamped Level: " + clampedLevel);
+        System.out.println("[EquipmentRefineEST] Multiplier: " + multiplier);
 
         // Store original damage
         float originalDamage = damage.getAmount();
         float newDamage = (float) (originalDamage * multiplier);
 
-        System.out.println("[DEBUG]   Original Damage: " + originalDamage);
-        System.out.println("[DEBUG]   New Damage: " + newDamage);
+        System.out.println("[EquipmentRefineEST] Original Damage: " + originalDamage);
+        System.out.println("[EquipmentRefineEST] New Damage: " + newDamage);
         System.out.println("═══════════════════════════════════════════════");
 
         // Apply multiplier
@@ -111,110 +104,79 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Debug version of getUpgradeLevel with extensive logging
-     */
-    private int getUpgradeLevelDebug(String itemId) {
-        System.out.println("[DEBUG getUpgradeLevel] Input: '" + itemId + "'");
-
-        if (itemId == null) {
-            System.out.println("[DEBUG getUpgradeLevel] Item ID is NULL -> returning 0");
-            return 0;
-        }
-
-        Matcher matcher = UPGRADE_LEVEL_PATTERN.matcher(itemId);
-        System.out.println("[DEBUG getUpgradeLevel] Pattern: " + UPGRADE_LEVEL_PATTERN.pattern());
-        System.out.println("[DEBUG getUpgradeLevel] Matches pattern: " + matcher.matches());
-
-        // Reset matcher after matches() call (it consumes the match)
-        matcher = UPGRADE_LEVEL_PATTERN.matcher(itemId);
-
-        if (!matcher.matches()) {
-            System.out.println("[DEBUG getUpgradeLevel] No numeric suffix found -> returning 0");
-            return 0;
-        }
-
-        System.out.println("[DEBUG getUpgradeLevel] Group count: " + matcher.groupCount());
-        System.out.println("[DEBUG getUpgradeLevel] Group 0 (full): '" + matcher.group(0) + "'");
-        System.out.println("[DEBUG getUpgradeLevel] Group 1 (base): '" + matcher.group(1) + "'");
-        System.out.println("[DEBUG getUpgradeLevel] Group 2 (number): '" + matcher.group(2) + "'");
-
-        try {
-            int level = Integer.parseInt(matcher.group(2));
-            System.out.println("[DEBUG getUpgradeLevel] Parsed level: " + level);
-            return level;
-        } catch (NumberFormatException e) {
-            System.out.println("[DEBUG getUpgradeLevel] NumberFormatException: " + e.getMessage());
-            return 0;
-        }
-    }
-
-    /**
-     * Looks in the player's hotbar for the first item whose ID contains "Weapon".
+     * Looks in the player's hotbar for the first item that is a weapon.
      */
     private ItemStack findWeaponInHotbar(Player player) {
-        ItemContainer hotbar = player.getInventory().getHotbar();
-
-        System.out.println("[DEBUG findWeaponInHotbar] Hotbar capacity: " + hotbar.getCapacity());
-
-        // Try to get currently selected slot first
         try {
+            ItemContainer hotbar = player.getInventory().getHotbar();
+
+            // Try to get currently selected slot first
             short selectedSlot = player.getInventory().getActiveHotbarSlot();
             ItemStack selectedItem = hotbar.getItemStack(selectedSlot);
 
-            System.out.println("[DEBUG findWeaponInHotbar] Selected slot: " + selectedSlot);
-            System.out.println("[DEBUG findWeaponInHotbar] Selected item: " +
-                    (selectedItem != null ? selectedItem.getItemId() : "null"));
-
-            if (selectedItem != null && isWeapon(selectedItem.getItemId())) {
-                System.out.println("[DEBUG findWeaponInHotbar] Found weapon in selected slot!");
+            if (selectedItem != null && !selectedItem.isEmpty() && isWeapon(selectedItem)) {
                 return selectedItem;
             }
+
+            // Fallback: search entire hotbar
+            for (short slot = 0; slot < hotbar.getCapacity(); slot++) {
+                ItemStack stack = hotbar.getItemStack(slot);
+                if (stack != null && !stack.isEmpty() && isWeapon(stack)) {
+                    return stack;
+                }
+            }
+
         } catch (Exception e) {
-            System.out.println("[DEBUG findWeaponInHotbar] Exception getting selected slot: " + e.getMessage());
+            System.err.println("[EquipmentRefineEST] Error finding weapon: " + e.getMessage());
         }
 
-        // Fallback: search entire hotbar
-        System.out.println("[DEBUG findWeaponInHotbar] Searching entire hotbar...");
-        for (short slot = 0; slot < hotbar.getCapacity(); slot++) {
-            ItemStack stack = hotbar.getItemStack(slot);
-            if (stack == null) {
-                continue;
-            }
-
-            String id = stack.getItemId();
-            System.out.println("[DEBUG findWeaponInHotbar] Slot " + slot + ": " + id);
-
-            if (isWeapon(id)) {
-                System.out.println("[DEBUG findWeaponInHotbar] Found weapon in slot " + slot + "!");
-                return stack;
-            }
-        }
-
-        System.out.println("[DEBUG findWeaponInHotbar] No weapon found in hotbar");
         return null;
     }
 
-    private boolean isWeapon(String itemId) {
-        return itemId != null && WEAPON_PATTERN.matcher(itemId).matches();
+    /**
+     * Checks if an item is a weapon.
+     */
+    private boolean isWeapon(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return false;
+        }
+
+        String itemId = getItemId(item);
+        if (itemId == null) {
+            return false;
+        }
+
+        return WEAPON_PATTERN.matcher(itemId).matches();
     }
 
     /**
-     * Simplified version for normal use (no debug output)
+     * Safely gets item ID from an ItemStack.
      */
-    private int getUpgradeLevel(String itemId) {
-        if (itemId == null) {
-            return 0;
-        }
-
-        Matcher matcher = UPGRADE_LEVEL_PATTERN.matcher(itemId);
-        if (!matcher.matches()) {
-            return 0;
-        }
+    private String getItemId(ItemStack item) {
+        if (item == null) return null;
 
         try {
-            return Integer.parseInt(matcher.group(2));
-        } catch (NumberFormatException ignored) {
-            return 0;
+            // Try different methods to get item ID
+            return item.getItemId();
+        } catch (Exception e1) {
+            try {
+                if (item != null) {
+                    return item.getItemId();
+                }
+            } catch (Exception e2) {
+                try {
+                    if (item.getItem() != null) {
+                        return item.getItem().getId();
+                    }
+                } catch (Exception e3) {
+                    try {
+                        return item.getItemId();
+                    } catch (Exception e4) {
+                        return null;
+                    }
+                }
+            }
         }
+        return null;
     }
 }
