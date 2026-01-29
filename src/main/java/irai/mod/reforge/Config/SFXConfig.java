@@ -17,7 +17,7 @@ import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
  * Handles sound playback for all reforge events.
  */
 @SuppressWarnings("removal")
-public class SFXConfig extends SoundEvent {
+public class SFXConfig {
 
     public static final BuilderCodec<SFXConfig> CODEC = BuilderCodec.<SFXConfig>builder(SFXConfig.class, SFXConfig::new)
             .append(
