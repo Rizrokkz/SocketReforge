@@ -65,11 +65,11 @@ public class SFXConfig extends SoundEvent {
 
     // Sound event IDs (as strings that will be parsed to integers)
     public String SFX_START = "SFX_Drop_Item_Metal";       // Hammer hitting anvil
-    public String SFX_SUCCESS = "2";     // Successful upgrade
-    public String SFX_JACKPOT = "3";     // +2 levels upgrade
-    public String SFX_FAIL = "4";        // Degradation
-    public String SFX_NO_CHANGE = "5";   // No change
-    public String SFX_SHATTER = "6";     // Weapon breaks
+    public String SFX_SUCCESS = "SFX_Drop_Item_Metal";     // Successful upgrade
+    public String SFX_JACKPOT = "SFX_Drop_Item_Metal";     // +2 levels upgrade
+    public String SFX_FAIL = "SFX_Drop_Item_Metal";        // Degradation
+    public String SFX_NO_CHANGE = "SFX_Drop_Item_Metal";   // No change
+    public String SFX_SHATTER = "SFX_Drop_Item_Metal";     // Weapon breaks
 
     // ══════════════════════════════════════════════════════════════════════════════
     // Sound Playback Methods
