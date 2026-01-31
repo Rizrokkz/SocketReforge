@@ -38,7 +38,7 @@ public class ReforgeEquip extends SimpleInteraction {
     private static final int MATERIAL_COST = 1;
     private static final int MAX_UPGRADE_LEVEL = 3;
     private static final double BREAK_CHANCE_AT_MAX = 0.20;
-    private static final Pattern WEAPON_PATTERN = Pattern.compile(".*[Ww]eapon.*");
+    private static final Pattern WEAPON_PATTERN = Pattern.compile("^(?!.*Arrow).*[Ww]eapon.*$");
 
     private static final double[][] REFORGE_WEIGHTS = {
             {0.00, 0.65, 0.34, 0.01},   // 0 → 1
@@ -64,7 +64,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
         Player player = getPlayerFromContext(context);
         if (player == null) return;
-        //if (!isValidReforgebench(context)) return;
+        if (!isValidReforgebench(context)) {return ;}
 
         ItemStack heldItem = context.getHeldItem();
         if (heldItem == null) return;

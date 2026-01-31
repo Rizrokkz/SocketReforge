@@ -54,7 +54,7 @@
       "Id": "Reforgebench"
     },
     "State": {
-      "Id": "processingBench",
+      "Id": "Reforgebench",
       "Definitions": {
         "Processing": {
           "Looping": true,
@@ -91,7 +91,7 @@
         "GatherType": "Benches"
       }
     },
-    "HitboxType": "Bench_Salvage",
+    "HitboxType": "Bench_Refine",
     "BlockParticleSetId": "Stone",
     "Support": {
       "Down": [

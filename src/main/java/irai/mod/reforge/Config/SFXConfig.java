@@ -89,12 +89,10 @@ public class SFXConfig {
         try {
 
             // Play the sound using SoundUtil
-            CommandBuffer<EntityStore> commandBuffer = null;
-            SoundUtil.playSoundEvent2d(
-                    player.getPlayerRef().getReference(),
+            SoundUtil.playSoundEvent2dToPlayer(
+                    player.getPlayerRef(),
                     SoundEvent.getAssetMap().getIndex(soundEventIdStr),
-                    SoundCategory.SFX,
-                    commandBuffer
+                    SoundCategory.SFX
             );
         } catch (NumberFormatException e) {
             System.out.println("[SFXConfig] Invalid sound event ID: " + soundEventIdStr);
