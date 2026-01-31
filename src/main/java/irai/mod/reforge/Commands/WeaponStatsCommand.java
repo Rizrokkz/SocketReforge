@@ -7,9 +7,7 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import irai.mod.reforge.UI.WeaponTooltip;
-import irai.mod.reforge.Systems.WeaponUpgradeTracker;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
-import org.jline.console.impl.Builtins;
 
 import java.util.regex.Pattern;
 
