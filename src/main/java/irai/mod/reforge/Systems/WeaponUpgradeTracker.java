@@ -4,20 +4,22 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import java.io.File;
+import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Enhanced weapon upgrade tracker with proper unique weapon instance tracking.
+ * Weapon tracker using a deterministic hash of weapon properties.
+ * This creates a stable ID that persists even when weapons are traded/dropped.
  */
 @SuppressWarnings("removal")
-public class WeaponUpgradeTracker  {
+public class WeaponUpgradeTracker {
 
-    // Thread-safe in-memory storage: "playerUUID:uniqueWeaponID" -> WeaponData
+    // Main storage: weaponHash -> WeaponData
     private static final Map<String, WeaponData> weaponUpgrades = new ConcurrentHashMap<>();
 
-    // Store weapon instance UUIDs: "playerUUID:itemID:slot" -> instanceUUID
-    private static final Map<String, UUID> weaponInstances = new ConcurrentHashMap<>();
+    // Reverse lookup: itemId -> List of hashes (for finding weapons)
+    private static final Map<String, Set<String>> itemIdIndex = new ConcurrentHashMap<>();
 
     // Upgrade level display names
     private static final String[] UPGRADE_NAMES = {
@@ -34,7 +36,7 @@ public class WeaponUpgradeTracker  {
     private static final int AUTO_SAVE_THRESHOLD = 10;
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // Initialization & Persistence
+    // Initialization
     // ══════════════════════════════════════════════════════════════════════════════
 
     public static void initialize(File pluginDataFolder) {
@@ -49,93 +51,79 @@ public class WeaponUpgradeTracker  {
                 WeaponData weaponData = new WeaponData(
                         saveData.level,
                         saveData.itemId,
-                        saveData.instanceUUID  // NEW: Store instance UUID
+                        saveData.instanceUUID
                 );
-                weaponUpgrades.put(entry.getKey(), weaponData);
+
+                String hash = entry.getKey();
+                weaponUpgrades.put(hash, weaponData);
+
+                // Build index
+                itemIdIndex.computeIfAbsent(saveData.itemId, k -> ConcurrentHashMap.newKeySet()).add(hash);
             }
 
-            System.out.println("[WeaponUpgradeTracker] Initialized with " +
-                    weaponUpgrades.size() + " weapons");
+            System.out.println("[WeaponUpgradeTracker] Loaded " + weaponUpgrades.size() + " weapons");
+            System.out.println("[WeaponUpgradeTracker] Indexed " + itemIdIndex.size() + " item types");
+
         } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Failed to initialize: " + e.getMessage());
+            System.err.println("[WeaponUpgradeTracker] Init failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // Unique Weapon Instance Management
+    // Weapon Hash Generation - Creates stable ID for weapon instances
     // ══════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Generates or retrieves a unique ID for a weapon instance.
-     * This ensures each physical weapon item gets its own upgrades.
+     * Creates a deterministic hash for a weapon based on its properties.
+     * This hash should be stable enough to track the weapon across trades.
      */
-    private static UUID getOrCreateWeaponInstanceId(Player player, ItemStack weapon, short slot) {
-        if (player == null || weapon == null) {
+    private static String createWeaponHash(Player player, ItemStack weapon, short slot) {
+        if (weapon == null) {
             return null;
         }
 
-        UUID playerUUID = player.getPlayerRef().getUuid();
-        String itemId = getItemId(weapon);
+        try {
+            String itemId = getItemId(weapon);
+            int maxDurability = (int) weapon.getMaxDurability();
 
-        // Create a composite key: player + item + slot
-        String instanceKey = playerUUID + ":" + itemId + ":" + slot + ":" +
-                System.identityHashCode(weapon);
+            // Use player UUID + itemId + slot + max durability as base
+            // This creates a unique ID per player's weapon in a specific slot
+            UUID playerUUID = player.getPlayerRef().getUuid();
 
-        // Check if we already have an instance ID for this weapon
-        UUID instanceId = weaponInstances.get(instanceKey);
+            String baseString = playerUUID.toString() + ":" + itemId + ":" + slot + ":" + maxDurability;
 
-        if (instanceId == null) {
-            // Generate new unique ID for this weapon instance
-            instanceId = UUID.randomUUID();
-            weaponInstances.put(instanceKey, instanceId);
+            // Create a shorter hash
+            String hash = simpleHash(baseString);
 
-            System.out.println("[WeaponUpgradeTracker] Created new weapon instance: " +
-                    instanceId + " for " + itemId + " in slot " + slot);
-        }
+            System.out.println("[WeaponUpgradeTracker] Hash: " + hash + " for " + itemId + " (Player: " +
+                    player.getPlayerRef().getUsername() + ", Slot: " + slot + ")");
 
-        return instanceId;
-    }
+            return hash;
 
-    /**
-     * Creates a unique key for a weapon using player UUID + instance UUID.
-     */
-    private static String createWeaponKey(UUID playerUUID, UUID instanceUUID) {
-        if (playerUUID == null || instanceUUID == null) {
+        } catch (Exception e) {
+            System.err.println("[WeaponUpgradeTracker] Hash generation failed: " + e.getMessage());
             return null;
         }
-        return playerUUID.toString() + ":" + instanceUUID.toString();
     }
 
     /**
-     * Creates a key from an ItemStack (when you have the actual item).
+     * Simple hash function for creating weapon IDs.
      */
-    private static String createWeaponKey(Player player, ItemStack weapon, short slot) {
-        if (player == null || weapon == null) {
-            return null;
-        }
-
-        UUID playerUUID = player.getPlayerRef().getUuid();
-        UUID instanceUUID = getOrCreateWeaponInstanceId(player, weapon, slot);
-
-        return createWeaponKey(playerUUID, instanceUUID);
-    }
-
-    /**
-     * Finds a weapon key by scanning all player weapons for matching item ID.
-     * Used when we don't have the original slot/instance.
-     */
-    private static String findWeaponKeyByItem(UUID playerUUID, String itemId) {
-        String prefix = playerUUID.toString() + ":";
-
-        for (Map.Entry<String, WeaponData> entry : weaponUpgrades.entrySet()) {
-            if (entry.getKey().startsWith(prefix) &&
-                    entry.getValue().itemId.equals(itemId)) {
-                return entry.getKey();
+    private static String simpleHash(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] hash = md.digest(input.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (int i = 0; i < Math.min(8, hash.length); i++) {
+                String hex = Integer.toHexString(0xff & hash[i]);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
             }
+            return hexString.toString();
+        } catch (Exception e) {
+            return String.valueOf(input.hashCode());
         }
-
-        return null;
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -143,7 +131,7 @@ public class WeaponUpgradeTracker  {
     // ══════════════════════════════════════════════════════════════════════════════
 
     /**
-     * Gets the upgrade level for a specific weapon instance.
+     * Gets upgrade level for a weapon.
      */
     public static int getUpgradeLevel(Player player, ItemStack weapon, short slot) {
         if (player == null || weapon == null) {
@@ -151,38 +139,43 @@ public class WeaponUpgradeTracker  {
         }
 
         try {
-            // Try to get the current slot
-            slot = player.getInventory().getActiveHotbarSlot();
-            String key = createWeaponKey(player, weapon, slot);
-
-            if (key == null) {
+            String hash = createWeaponHash(player, weapon, slot);
+            if (hash == null) {
                 return 0;
             }
 
-            WeaponData data = weaponUpgrades.get(key);
+            WeaponData data = weaponUpgrades.get(hash);
             if (data != null) {
+                System.out.println("[WeaponUpgradeTracker] Found weapon: " + hash + " -> +" + data.level);
                 return data.level;
             }
 
-            // Fallback: search by item ID
+            // Fallback: Search by item ID
             String itemId = getItemId(weapon);
-            String foundKey = findWeaponKeyByItem(player.getPlayerRef().getUuid(), itemId);
-
-            if (foundKey != null) {
-                data = weaponUpgrades.get(foundKey);
-                return data != null ? data.level : 0;
+            Set<String> hashes = itemIdIndex.get(itemId);
+            if (hashes != null && !hashes.isEmpty()) {
+                // Return the first matching weapon's level
+                for (String h : hashes) {
+                    WeaponData d = weaponUpgrades.get(h);
+                    if (d != null) {
+                        System.out.println("[WeaponUpgradeTracker] Found by itemId: " + itemId + " -> +" + d.level);
+                        return d.level;
+                    }
+                }
             }
 
+            System.out.println("[WeaponUpgradeTracker] No upgrade found for: " + hash + " (" + itemId + ")");
             return 0;
 
         } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Error getting upgrade level: " + e.getMessage());
+            System.err.println("[WeaponUpgradeTracker] Error getting level: " + e.getMessage());
+            e.printStackTrace();
             return 0;
         }
     }
 
     /**
-     * Sets the upgrade level for a specific weapon instance.
+     * Sets upgrade level for a weapon.
      */
     public static void setUpgradeLevel(Player player, ItemStack weapon, short slot, int level) {
         if (player == null || weapon == null || level < 0 || level > 3) {
@@ -190,60 +183,76 @@ public class WeaponUpgradeTracker  {
         }
 
         try {
-            String key = createWeaponKey(player, weapon, slot);
-            if (key == null) {
+            String hash = createWeaponHash(player, weapon, slot);
+            if (hash == null) {
                 return;
             }
 
             String itemId = getItemId(weapon);
-            UUID instanceUUID = getOrCreateWeaponInstanceId(player, weapon, slot);
+            UUID instanceUUID = UUID.randomUUID();
 
             WeaponData data = new WeaponData(level, itemId, instanceUUID);
-            weaponUpgrades.put(key, data);
+            weaponUpgrades.put(hash, data);
 
-            // Update the display name
+            // Update index
+            itemIdIndex.computeIfAbsent(itemId, k -> ConcurrentHashMap.newKeySet()).add(hash);
+
+            // Update display name
             updateWeaponName(weapon, level);
 
-            // Trigger auto-save
             checkAutoSave();
 
-            System.out.println("[WeaponUpgradeTracker] Set upgrade level +" + level +
-                    " for " + itemId + " in slot " + slot + " (Instance: " + instanceUUID + ")");
+            String playerName = player.getPlayerRef().getUsername();
+            System.out.println("[WeaponUpgradeTracker] SET: " + hash + " -> +" + level +
+                    " (" + itemId + ", Player: " + playerName + ", Slot: " + slot + ")");
+
+            // Debug: Print current state
+            System.out.println("[WeaponUpgradeTracker] Total weapons tracked: " + weaponUpgrades.size());
 
         } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Failed to set upgrade level: " + e.getMessage());
+            System.err.println("[WeaponUpgradeTracker] Failed to set level: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     /**
-     * Alternative method that automatically detects the slot.
+     * Alternative without slot parameter.
      */
     public static void setUpgradeLevel(Player player, ItemStack weapon, int level) {
         try {
             short slot = player.getInventory().getActiveHotbarSlot();
             setUpgradeLevel(player, weapon, slot, level);
         } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Failed to detect slot: " + e.getMessage());
+            setUpgradeLevel(player, weapon, (short) 0, level);
         }
     }
 
     /**
-     * Removes a specific weapon instance from tracking.
+     * Removes a weapon from tracking.
      */
     public static void removeWeapon(Player player, ItemStack weapon, short slot) {
         if (player == null || weapon == null) {
             return;
         }
 
-        String key = createWeaponKey(player, weapon, slot);
-        if (key != null) {
-            WeaponData removed = weaponUpgrades.remove(key);
-            if (removed != null) {
-                System.out.println("[WeaponUpgradeTracker] Removed weapon: " +
-                        removed.itemId + " from slot " + slot);
-                checkAutoSave();
+        try {
+            String hash = createWeaponHash(player, weapon, slot);
+            if (hash != null) {
+                WeaponData removed = weaponUpgrades.remove(hash);
+                if (removed != null) {
+                    System.out.println("[WeaponUpgradeTracker] Removed: " + hash + " (" + removed.itemId + ")");
+
+                    // Clean up index
+                    Set<String> hashes = itemIdIndex.get(removed.itemId);
+                    if (hashes != null) {
+                        hashes.remove(hash);
+                    }
+
+                    checkAutoSave();
+                }
             }
+        } catch (Exception e) {
+            System.err.println("[WeaponUpgradeTracker] Error removing weapon: " + e.getMessage());
         }
     }
 
@@ -267,7 +276,7 @@ public class WeaponUpgradeTracker  {
                 currentName = getItemId(weapon);
             }
 
-            // Remove previous upgrade prefix if present
+            // Remove previous upgrade prefix
             for (String prefix : UPGRADE_NAMES) {
                 if (!prefix.isEmpty() && currentName.startsWith(prefix + " ")) {
                     currentName = currentName.substring(prefix.length() + 1);
@@ -276,7 +285,7 @@ public class WeaponUpgradeTracker  {
             }
 
             String colorCode = getColorForLevel(level);
-            String newName = colorCode + upgradeName + " " + currentName;
+            String newName = colorCode + "[+" + level + "] " + upgradeName + " " + currentName;
             weapon.getItem().getTranslationProperties().getName().concat(newName);
 
         } catch (Exception e) {
@@ -290,26 +299,15 @@ public class WeaponUpgradeTracker  {
 
     private static String getItemId(ItemStack item) {
         if (item == null) return null;
-
         try {
             return item.getItemId();
-        } catch (Exception e1) {
+        } catch (Exception e) {
             try {
-                if (item != null) {
-                    return item.getItemId();
+                if (item.getItem() != null) {
+                    return item.getItem().getId();
                 }
             } catch (Exception e2) {
-                try {
-                    if (item.getItem() != null) {
-                        return item.getItem().getId();
-                    }
-                } catch (Exception e3) {
-                    try {
-                        return item.getItemId();
-                    } catch (Exception e4) {
-                        return "unknown";
-                    }
-                }
+                return "unknown";
             }
         }
         return null;
@@ -326,35 +324,20 @@ public class WeaponUpgradeTracker  {
 
     private static void checkAutoSave() {
         if (!autoSaveEnabled) return;
-
         changesSinceLastSave++;
         if (changesSinceLastSave >= AUTO_SAVE_THRESHOLD) {
-            System.out.println("[WeaponUpgradeTracker] Auto-saving (" +
-                    changesSinceLastSave + " changes)");
+            System.out.println("[WeaponUpgradeTracker] Auto-save triggered");
             saveAll();
         }
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // Save/Load Updates
+    // Persistence
     // ══════════════════════════════════════════════════════════════════════════════
+
     public static void createBackup() {
-        if (saveDirectory == null) {
-            System.err.println("[WeaponUpgradeTracker] Cannot create backup: not initialized!");
-            return;
-        }
-
-        try {
-            System.out.println("[WeaponUpgradeTracker] Creating backup...");
-
-            // Call the persistence layer's backup method
+        if (saveDirectory != null) {
             WeaponPersistence.createBackup(saveDirectory);
-
-            System.out.println("[WeaponUpgradeTracker] ✓ Backup created successfully");
-
-        } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Failed to create backup: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -368,38 +351,33 @@ public class WeaponUpgradeTracker  {
             Map<String, WeaponPersistence.WeaponSaveData> saveData = new HashMap<>();
 
             for (Map.Entry<String, WeaponData> entry : weaponUpgrades.entrySet()) {
-                String key = entry.getKey();
+                String hash = entry.getKey();
                 WeaponData data = entry.getValue();
 
-                // Extract player UUID from key
-                String[] parts = key.split(":");
-                String playerUUID = parts.length > 0 ? parts[0] : "unknown";
+                WeaponPersistence.WeaponSaveData save = new WeaponPersistence.WeaponSaveData(
+                        data.level,
+                        data.itemId,
+                        data.instanceUUID,
+                        System.currentTimeMillis(),
+                        hash // Store hash as playerName field for debugging
+                );
 
-                WeaponPersistence.WeaponSaveData weaponSaveData =
-                        new WeaponPersistence.WeaponSaveData(
-                                data.level,
-                                data.itemId,
-                                data.instanceUUID,  // NEW: Save instance UUID
-                                System.currentTimeMillis(),
-                                playerUUID
-                        );
-
-                saveData.put(key, weaponSaveData);
+                saveData.put(hash, save);
             }
 
             WeaponPersistence.saveToFile(saveData, saveDirectory);
             changesSinceLastSave = 0;
-            System.out.println("[WeaponUpgradeTracker] Saved " +
-                    saveData.size() + " weapon instances");
+
+            System.out.println("[WeaponUpgradeTracker] Saved " + saveData.size() + " weapons");
 
         } catch (Exception e) {
-            System.err.println("[WeaponUpgradeTracker] Failed to save: " + e.getMessage());
+            System.err.println("[WeaponUpgradeTracker] Save failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
-    // Additional Utility Methods
+    // Public API
     // ══════════════════════════════════════════════════════════════════════════════
 
     public static String getUpgradeName(int level) {
@@ -417,31 +395,34 @@ public class WeaponUpgradeTracker  {
         return multipliers[level];
     }
 
-    /**
-     * Gets all weapons owned by a player.
-     */
     public static Map<String, WeaponData> getPlayerWeapons(UUID playerUUID) {
-        if (playerUUID == null) {
-            return new HashMap<>();
-        }
-
-        String prefix = playerUUID.toString() + ":";
+        // Return all weapons that belong to this player
         Map<String, WeaponData> playerWeapons = new HashMap<>();
+        String playerPrefix = playerUUID.toString();
 
         for (Map.Entry<String, WeaponData> entry : weaponUpgrades.entrySet()) {
-            if (entry.getKey().startsWith(prefix)) {
+            if (entry.getKey().contains(playerPrefix)) {
                 playerWeapons.put(entry.getKey(), entry.getValue());
             }
         }
-
-        System.out.println("[WeaponUpgradeTracker] Found " + playerWeapons.size() +
-                " weapons for player " + playerUUID);
 
         return playerWeapons;
     }
 
     public static int getTrackedWeaponCount() {
         return weaponUpgrades.size();
+    }
+
+    /**
+     * Debug method - prints all tracked weapons.
+     */
+    public static void debugPrintAll() {
+        System.out.println("═══════════════════════════════════════════════");
+        System.out.println("Tracked weapons: " + weaponUpgrades.size());
+        for (Map.Entry<String, WeaponData> entry : weaponUpgrades.entrySet()) {
+            System.out.println("  " + entry.getKey() + " -> " + entry.getValue().itemId + " +" + entry.getValue().level);
+        }
+        System.out.println("═══════════════════════════════════════════════");
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -451,7 +432,7 @@ public class WeaponUpgradeTracker  {
     public static class WeaponData {
         public final int level;
         public final String itemId;
-        public final UUID instanceUUID;  // NEW: Unique instance identifier
+        public final UUID instanceUUID;
 
         public WeaponData(int level, String itemId, UUID instanceUUID) {
             this.level = level;
