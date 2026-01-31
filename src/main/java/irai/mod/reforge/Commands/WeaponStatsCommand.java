@@ -1,94 +1,55 @@
 package irai.mod.reforge.Commands;
 
+import java.util.concurrent.CompletableFuture;
+
+import javax.annotation.Nonnull;
+
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.ItemWithAllMetadata;
+import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
-import com.hypixel.hytale.server.core.command.system.CommandSender;
-import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
-import irai.mod.reforge.UI.WeaponTooltip;
-import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
+import com.hypixel.hytale.server.core.io.PacketHandler;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.util.NotificationUtil;
 
-import java.util.regex.Pattern;
+import irai.mod.reforge.UI.WeaponStatsUI;
+
+import irai.mod.reforge.Interactions.ReforgeEquip;
+
 
 /**
  * Command to check weapon upgrade stats.
  * Usage: /weaponstats
  */
-public class WeaponStatsCommand extends CommandBase {
+public class WeaponStatsCommand extends AbstractPlayerCommand {
 
-    private static final Pattern WEAPON_PATTERN = Pattern.compile(".*[Ww]eapon.*");
-
-    public WeaponStatsCommand(@NonNullDecl String name, @NonNullDecl String description, boolean requiresConfirmation) {
-        super(name, description, requiresConfirmation);
+    public WeaponStatsCommand(@Nonnull String name, @Nonnull String description) {
+        super(name, description);
     }
 
     @Override
-    public void executeSync(CommandContext context) {
-        // Get the player executing the command
-        CommandSender sender = context.sender();
-        Player player = (Player) sender;
-        if (player == null) {
-            context.sendMessage(Message.raw("This command can only be used by players!"));
-            return;
-        }
+    protected void execute(@Nonnull CommandContext commandContext, @Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref, @Nonnull PlayerRef playerRef, @Nonnull World world) {
+        Player player = commandContext.senderAs(Player.class);
 
-        // Get the held item
-        ItemStack heldItem = getHeldItem(player);
-        if (heldItem == null) {
-            player.sendMessage(Message.raw("You must be holding an item!"));
-            return;
-        }
+        PacketHandler packetHandler = playerRef.getPacketHandler();
 
-        // Check if it's a weapon
-        if (!isWeapon(heldItem.getItemId())) {
-            player.sendMessage(Message.raw("You must be holding a weapon!"));
-            return;
-        }
-
-        // Get the slot
-        short slot = 0;
-        try {
-            slot = player.getInventory().getActiveHotbarSlot();
-        } catch (Exception e) {
-            // Can't get slot, use 0
-        }
-
-        // Show detailed stats
-        WeaponTooltip.showDetailedStats(player, heldItem, slot);
-    }
-
-    @Override
-    public String getName() {
-        return "weaponstats";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Shows detailed stats for the weapon you're holding";
-    }
-
-//    @Override
-//    public String getUsage() {
-//        return "/weaponstats";
-//    }
-
-    /**
-     * Gets the item the player is currently holding.
-     */
-    private ItemStack getHeldItem(Player player) {
-        try {
-            short selectedSlot = player.getInventory().getActiveHotbarSlot();
-            return player.getInventory().getHotbar().getItemStack(selectedSlot);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * Checks if an item is a weapon.
-     */
-    private boolean isWeapon(String itemId) {
-        return itemId != null && WEAPON_PATTERN.matcher(itemId).matches();
+        // Code moved from OpenGuiListener
+        CompletableFuture.runAsync(new Runnable() {
+            @Override
+            public void run() {
+                com.hypixel.hytale.server.core.entity.entities.player.pages.CustomUIPage page = player.getPageManager().getCustomPage();
+                if (page == null) {
+                    page = new WeaponStatsUI(playerRef, CustomPageLifetime.CanDismiss);
+                    player.getPageManager().openCustomPage(ref, store, page);
+                }
+            }
+        }, world);
     }
 }

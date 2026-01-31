@@ -1,14 +1,23 @@
 package irai.mod.reforge.Systems;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
-
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Handles saving and loading weapon upgrade data to/from JSON files.
@@ -126,15 +135,17 @@ public class WeaponPersistence {
     public static class WeaponSaveData {
         public final int level;
         public final String itemId;
-        public final UUID instanceUUID;  // ADD THIS
+        public final UUID instanceUUID;
+        public final int maxDurability;
         public final long lastModified;
         public final String playerName;
 
-        public WeaponSaveData(int level, String itemId, UUID instanceUUID,
+        public WeaponSaveData(int level, String itemId, UUID instanceUUID, int maxDurability,
                               long lastModified, String playerName) {
             this.level = level;
             this.itemId = itemId;
-            this.instanceUUID = instanceUUID;  // ADD THIS
+            this.instanceUUID = instanceUUID;
+            this.maxDurability = maxDurability;
             this.lastModified = lastModified;
             this.playerName = playerName;
         }

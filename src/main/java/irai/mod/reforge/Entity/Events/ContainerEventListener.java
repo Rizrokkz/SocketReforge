@@ -1,11 +1,12 @@
 package irai.mod.reforge.Entity.Events;
 
+import java.util.regex.Pattern;
+
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
-import irai.mod.reforge.Systems.WeaponUpgradeTracker;
 
-import java.util.regex.Pattern;
+import irai.mod.reforge.Interactions.ReforgeEquip;
 
 @SuppressWarnings("removal")
 public class ContainerEventListener {
@@ -39,11 +40,12 @@ public class ContainerEventListener {
             }
 
             // Get upgrade level
-            int level = WeaponUpgradeTracker.getUpgradeLevel(player, item, slot);
+            int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
 
             if (level > 0) {
                 // Weapon has upgrades - ensure display name is correct
-                WeaponUpgradeTracker.setUpgradeLevel(player, item, level);
+                ReforgeEquip.setUpgradeLevel(player, item, slot, level);
+
                 syncedCount++;
             }
         }
@@ -64,7 +66,11 @@ public class ContainerEventListener {
             return false;
         }
 
-        return !WeaponUpgradeTracker.getPlayerWeapons(player.getPlayerRef().getUuid()).isEmpty();
+        // Check if player has any upgraded weapons by checking current slot
+        short currentSlot = player.getInventory().getActiveHotbarSlot();
+        ItemStack currentItem = player.getInventory().getHotbar().getItemStack(currentSlot);
+        return currentItem != null && ReforgeEquip.getUpgradeLevel(player, currentItem, currentSlot) > 0;
+
     }
 
     /**
@@ -96,11 +102,12 @@ public class ContainerEventListener {
         }
         short slot = player.getInventory().getActiveHotbarSlot();
         // Check if this weapon has upgrades
-        int level = WeaponUpgradeTracker.getUpgradeLevel(player, item, slot);
+        int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
 
         if (level > 0) {
             // Refresh display name
-            WeaponUpgradeTracker.setUpgradeLevel(player, item, level);
+            ReforgeEquip.setUpgradeLevel(player, item, slot, level);
+
         }
     }
 
@@ -118,7 +125,8 @@ public class ContainerEventListener {
         }
         short slot = player.getInventory().getActiveHotbarSlot();
         // Data stays in tracker - will be restored when picked up
-        int level = WeaponUpgradeTracker.getUpgradeLevel(player, item, slot);
+        int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
+
 
         if (level > 0 && false) { // Set to true for debug
             player.sendMessage(com.hypixel.hytale.server.core.Message.raw(

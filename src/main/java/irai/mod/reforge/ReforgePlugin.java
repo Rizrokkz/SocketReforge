@@ -1,50 +1,62 @@
 package irai.mod.reforge;
 
+import java.io.File;
+import java.util.Collection;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.logging.Logger;
+
+import javax.annotation.Nonnull;
+
 import com.hypixel.hytale.server.core.command.system.CommandRegistry;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.util.Config;
-import irai.mod.reforge.Commands.ReforgeCommand;
+
+import irai.mod.reforge.Commands.CheckNameCommand;
+import irai.mod.reforge.Commands.PatchAssetsCommand;
+import irai.mod.reforge.Commands.WeaponStatsCommand;
+import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Systems.SyncTasks;
-import irai.mod.reforge.Systems.WeaponUpgradeTracker;
-
-import javax.annotation.Nonnull;
-import java.io.File;
-import java.util.*;
-import java.util.logging.Logger;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private ReforgeEquip reforgeEquip;
+
+    // Static reference for commands to access plugin
+    private static ReforgePlugin instance;
 
     // Scheduled tasks
     private Timer autoSaveTimer;
     private Timer weaponSyncTimer;
 
     private final Config<SFXConfig> sfxconfig;
+    private final Config<RefinementConfig> refinementConfig;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
         super(init);
+        instance = this;
         refineEST = new EquipmentRefineEST();
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
+        this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
     }
 
     @Override
     protected void setup() {
         // Initialize weapon upgrade tracker with persistence
-        File dataFolder = getDataDirectory().toFile();
-        WeaponUpgradeTracker.initialize(dataFolder);
+        File dataFolder = new File(".");
+        ReforgeEquip.initialize(dataFolder);
 
-        // Register interaction
-        reforgeEquip = new ReforgeEquip();
-        this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
-
+        // Load SFX config first before creating ReforgeEquip
         try {
             this.sfxconfig.save();
             SFXConfig cfg = this.sfxconfig.get();
@@ -59,12 +71,50 @@ public class ReforgePlugin extends JavaPlugin {
             e.printStackTrace();
         }
 
+        // Register interaction
+        reforgeEquip = new ReforgeEquip();
+        
+        // Inject the loaded SFXConfig into ReforgeEquip
+        SFXConfig loadedSfx = this.sfxconfig.get();
+        if (loadedSfx != null) {
+            reforgeEquip.setSfxConfig(loadedSfx);
+            System.out.println("[ReforgePlugin] SFXConfig injected into ReforgeEquip");
+        }
+        
+        this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
+
+        this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
+
+        // Load refinement config and inject into systems
+        try {
+            this.refinementConfig.save();
+            RefinementConfig refinement = this.refinementConfig.get();
+            if (refinement != null) {
+                System.out.println("[ReforgePlugin] Loaded RefinementConfig:");
+                System.out.println("[ReforgePlugin]   Damage Multipliers: " + java.util.Arrays.toString(refinement.getDamageMultipliers()));
+                System.out.println("[ReforgePlugin]   Break Chances: " + java.util.Arrays.toString(refinement.getBreakChances()));
+                
+                // Inject config into EquipmentRefineEST
+                refineEST.setRefinementConfig(refinement);
+                System.out.println("[ReforgePlugin] RefinementConfig injected into EquipmentRefineEST");
+                
+                // Inject config into ReforgeEquip
+                reforgeEquip.setRefinementConfig(refinement);
+                System.out.println("[ReforgePlugin] RefinementConfig injected into ReforgeEquip");
+            }
+        } catch (Exception e) {
+            System.err.println("[ReforgePlugin] Error loading Refinement config: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         // Register ECS damage system
         this.getEntityStoreRegistry().registerSystem(refineEST);
 
         // Register commands
         CommandRegistry commandRegistry = this.getCommandRegistry();
-        //commandRegistry.registerCommand(new ReforgeCommand());
+        this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
+        commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
+        commandRegistry.registerCommand(new PatchAssetsCommand("patchassets", "Patch weapons from HytaleAssets (auto-detect mods folder)", false));
     }
 
     @Override
@@ -90,15 +140,11 @@ public class ReforgePlugin extends JavaPlugin {
             System.out.println("[ReforgePlugin] ✓ Weapon sync task stopped");
         }
 
-        // Create backup before final save
-        System.out.println("[ReforgePlugin] Creating backup...");
-        WeaponUpgradeTracker.createBackup();
-
         // Save all weapon data
         System.out.println("[ReforgePlugin] Saving weapon data...");
-        WeaponUpgradeTracker.saveAll();
+        ReforgeEquip.saveAll();
 
-        int weaponCount = WeaponUpgradeTracker.getTrackedWeaponCount();
+        int weaponCount = ReforgeEquip.getTrackedWeaponCount();
         System.out.println("[ReforgePlugin] ✓ Saved " + weaponCount + " weapon upgrades");
 
         System.out.println("[ReforgePlugin] Shutdown complete!");
@@ -123,11 +169,11 @@ public class ReforgePlugin extends JavaPlugin {
             @Override
             public void run() {
                 try {
-                    int weaponCount = WeaponUpgradeTracker.getTrackedWeaponCount();
+                    int weaponCount = ReforgeEquip.getTrackedWeaponCount();
 
                     if (weaponCount > 0) {
                         System.out.println("[ReforgePlugin] Auto-saving " + weaponCount + " weapon upgrades...");
-                        WeaponUpgradeTracker.saveAll();
+                        ReforgeEquip.saveAll();
                         System.out.println("[ReforgePlugin] ✓ Auto-save complete");
                     }
                 } catch (Exception e) {
@@ -138,7 +184,7 @@ public class ReforgePlugin extends JavaPlugin {
         };
 
         // Schedule: 5 minutes delay, then every 5 minutes
-        long fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+        long fiveMinutes = 5 * 60 * 1000;
         autoSaveTimer.scheduleAtFixedRate(autoSaveTask, fiveMinutes, fiveMinutes);
     }
 
@@ -153,11 +199,9 @@ public class ReforgePlugin extends JavaPlugin {
             @Override
             public void run() {
                 try {
-                    // Get current list of players in the universe
                     Universe universe = Universe.get();
                     Collection<Player> players = List.of();
 
-                    // Run sync task for all online players
                     SyncTasks task = new SyncTasks(players);
                     task.run();
                 } catch (Exception e) {
@@ -168,7 +212,7 @@ public class ReforgePlugin extends JavaPlugin {
         };
 
         // Schedule: 30 seconds delay, then every 30 seconds
-        long thirtySeconds = 30 * 1000; // 30 seconds in milliseconds
+        long thirtySeconds = 30 * 1000;
         weaponSyncTimer.scheduleAtFixedRate(syncTask, thirtySeconds, thirtySeconds);
     }
 }

@@ -1,6 +1,10 @@
 package irai.mod.reforge.Entity.Events;
 
-import com.hypixel.hytale.component.*;
+import com.hypixel.hytale.component.ArchetypeChunk;
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.SystemGroup;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -9,23 +13,47 @@ import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import irai.mod.reforge.Systems.WeaponUpgradeTracker;
 
-import java.util.regex.Pattern;
+import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Interactions.ReforgeEquip;
+
 
 @SuppressWarnings("removal")
 public class EquipmentRefineEST extends DamageEventSystem {
 
-    // Weapon ID pattern - matches items with "Weapon" keyword
-    private static final Pattern WEAPON_PATTERN = Pattern.compile(".*[Ww]eapon.*");
+    // Refinement config - will be injected from plugin
+    private RefinementConfig refinementConfig;
 
-    // Damage multipliers per upgrade level (0..3)
-    private static final double[] DAMAGE_MULTIPLIERS = {
+    // Default damage multipliers per upgrade level (0..3) - used if config not loaded
+    private static final double[] DEFAULT_DAMAGE_MULTIPLIERS = {
             1.0,   // base (no +)
             1.10,  // +1 (10% increase)
             1.15,  // +2 (15% increase)
             1.25   // +3 (25% increase)
     };
+
+    /**
+     * Sets the refinement config for this system.
+     * @param config The refinement configuration to use
+     */
+    public void setRefinementConfig(RefinementConfig config) {
+        this.refinementConfig = config;
+    }
+
+    /**
+     * Gets the damage multiplier for a given level.
+     * Uses config if available, otherwise uses defaults.
+     */
+    private double getDamageMultiplier(int level) {
+        if (refinementConfig != null) {
+            return refinementConfig.getDamageMultiplier(level);
+        }
+        // Fallback to defaults
+        if (level < 0 || level >= DEFAULT_DAMAGE_MULTIPLIERS.length) {
+            return 1.0;
+        }
+        return DEFAULT_DAMAGE_MULTIPLIERS[level];
+    }
 
     @Override
     public SystemGroup<EntityStore> getGroup() {
@@ -67,26 +95,26 @@ public class EquipmentRefineEST extends DamageEventSystem {
             return;
         }
 
-        // Check if it's a weapon using our pattern
+        // Check if it's a weapon using proper category check
         if (!isWeapon(weapon)) {
             return;
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // KEY CHANGE: Get upgrade level from WeaponUpgradeTracker
+        // Get upgrade level from weapon ID suffix (e.g., Weapon_Axe_Cobalt1 = +1)
         // ═══════════════════════════════════════════════════════════════════════
-        short slot = attacker.getInventory().getActiveHotbarSlot();
-        int upgradeLevel = WeaponUpgradeTracker.getUpgradeLevel(attacker, weapon, slot);
+        String weaponId = getItemId(weapon);
+        int upgradeLevel = ReforgeEquip.getLevelFromWeaponId(weaponId);
 
         System.out.println("═══════════════════════════════════════════════");
         System.out.println("[EquipmentRefineEST] Player: " + attacker.getPlayerRef().getUsername());
         System.out.println("[EquipmentRefineEST] Weapon: " + getItemId(weapon));
         System.out.println("[EquipmentRefineEST] Upgrade Level: " + upgradeLevel);
-        System.out.println("[EquipmentRefineEST] Max Level: " + (DAMAGE_MULTIPLIERS.length - 1));
+        System.out.println("[EquipmentRefineEST] Max Level: 3");
 
         // Clamp the level to valid range
-        int clampedLevel = Math.max(0, Math.min(upgradeLevel, DAMAGE_MULTIPLIERS.length - 1));
-        double multiplier = DAMAGE_MULTIPLIERS[clampedLevel];
+        int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
+        double multiplier = getDamageMultiplier(clampedLevel);
 
         System.out.println("[EquipmentRefineEST] Clamped Level: " + clampedLevel);
         System.out.println("[EquipmentRefineEST] Multiplier: " + multiplier);
@@ -134,19 +162,16 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Checks if an item is a weapon.
+     * Checks if an item is a weapon using proper category checks.
+     * Uses ReforgeEquip.isWeapon(ItemStack) for accurate detection.
      */
     private boolean isWeapon(ItemStack item) {
         if (item == null || item.isEmpty()) {
             return false;
         }
 
-        String itemId = getItemId(item);
-        if (itemId == null) {
-            return false;
-        }
-
-        return WEAPON_PATTERN.matcher(itemId).matches();
+        // Use the proper category check from ReforgeEquip
+        return ReforgeEquip.isWeapon(item);
     }
 
     /**
@@ -156,25 +181,14 @@ public class EquipmentRefineEST extends DamageEventSystem {
         if (item == null) return null;
 
         try {
-            // Try different methods to get item ID
             return item.getItemId();
         } catch (Exception e1) {
             try {
-                if (item != null) {
-                    return item.getItemId();
+                if (item.getItem() != null) {
+                    return item.getItem().getId();
                 }
             } catch (Exception e2) {
-                try {
-                    if (item.getItem() != null) {
-                        return item.getItem().getId();
-                    }
-                } catch (Exception e3) {
-                    try {
-                        return item.getItemId();
-                    } catch (Exception e4) {
-                        return null;
-                    }
-                }
+                // Fallback: return null
             }
         }
         return null;
