@@ -18,8 +18,8 @@ import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.reforge.Config.SFXConfig;
-import irai.mod.reforge.UI.WeaponTooltip;
 import irai.mod.reforge.Systems.WeaponUpgradeTracker;
+import irai.mod.reforge.UI.WeaponTooltip;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 import java.util.regex.Pattern;

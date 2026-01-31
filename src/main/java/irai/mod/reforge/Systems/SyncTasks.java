@@ -1,11 +1,9 @@
 package irai.mod.reforge.Systems;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.universe.PlayerRef;
 import irai.mod.reforge.Entity.Events.ContainerEventListener;
 
 import java.util.Collection;
-import java.util.List;
 
 /**
  * Periodic task that syncs weapon upgrades for all online players.

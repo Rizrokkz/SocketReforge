@@ -5,7 +5,10 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import java.io.File;
 import java.security.MessageDigest;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
