@@ -43,7 +43,7 @@ bin/
 .DS_Store
 .fake
 
-/libs/
+libs/HytaleServer.jar
 /lib/
 /build/
 /server/
