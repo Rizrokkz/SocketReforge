@@ -41,8 +41,8 @@ public class ReforgeEquip extends SimpleInteraction {
     public static final BuilderCodec<ReforgeEquip> CODEC =
             BuilderCodec.builder(ReforgeEquip.class, ReforgeEquip::new, SimpleInteraction.CODEC).build();
 
-    private static final String MATERIAL_ID = "Ingredient_Bar_Iron";
-    private static final int MATERIAL_COST = 1;
+    private static final String MATERIAL_ID = "Refinement_Glob";
+    private static final int MATERIAL_COST = 3;
     private static final int MAX_UPGRADE_LEVEL = 3;
     private static final double[] BREAK_CHANCES = {
             0.010,  // 0 → 1: 10% break chance
@@ -133,7 +133,7 @@ public class ReforgeEquip extends SimpleInteraction {
         }
 
         if (!hasEnoughMaterial(player, MATERIAL_ID, MATERIAL_COST)) {
-            player.sendMessage(Message.raw("Not enough Iron Bars (need " + MATERIAL_COST + ")"));
+            player.sendMessage(Message.raw("Not enough refinement globs (need " + MATERIAL_COST + ")"));
             return;
         }
 

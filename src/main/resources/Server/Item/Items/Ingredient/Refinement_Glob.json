@@ -1,0 +1,52 @@
+{
+  "TranslationProperties": {
+    "Name": "Refinement Glob"
+  },
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ore_Iron",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Processing",
+        "Id": "Salvagebench"
+      }
+    ],
+    "OutputQuantity": 15,
+    "TimeSeconds": 3
+  },
+  "Model": "Blocks/Benches/Campfire_Off.blockymodel",
+  "Texture": "Blocks/Benches/Campfire_Off_Texture.png",
+  "Icon": "Icons/ItemsGenerated/Deco_Campfire_Off.png",
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 1,
+    "Translation": [
+      0,
+      -3
+    ],
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  },
+  "ItemEntity": {
+    "ParticleSystemId": null
+  },
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "DropOnDeath": true,
+  "MaxStack": 1000,
+  "Scale": 1
+}
