@@ -91,13 +91,15 @@ public class ReforgePlugin extends JavaPlugin {
             RefinementConfig refinement = this.refinementConfig.get();
             if (refinement != null) {
                 System.out.println("[ReforgePlugin] Loaded RefinementConfig:");
-                System.out.println("[ReforgePlugin]   Damage Multipliers: " + java.util.Arrays.toString(refinement.getDamageMultipliers()));
-                System.out.println("[ReforgePlugin]   Break Chances: " + java.util.Arrays.toString(refinement.getBreakChances()));
-                
+                System.out.println("[ReforgePlugin]   Damage Multipliers:  " + java.util.Arrays.toString(refinement.getDamageMultipliers()));
+                System.out.println("[ReforgePlugin]   Defense Multipliers: " + java.util.Arrays.toString(refinement.getDefenseMultipliers()));
+                System.out.println("[ReforgePlugin]   Break Chances:       " + java.util.Arrays.toString(refinement.getBreakChances()));
+                System.out.println("[ReforgePlugin]   Armor Break Chances: " + java.util.Arrays.toString(refinement.getArmorBreakChances()));
+
                 // Inject config into EquipmentRefineEST
                 refineEST.setRefinementConfig(refinement);
                 System.out.println("[ReforgePlugin] RefinementConfig injected into EquipmentRefineEST");
-                
+
                 // Inject config into ReforgeEquip
                 reforgeEquip.setRefinementConfig(refinement);
                 System.out.println("[ReforgePlugin] RefinementConfig injected into ReforgeEquip");

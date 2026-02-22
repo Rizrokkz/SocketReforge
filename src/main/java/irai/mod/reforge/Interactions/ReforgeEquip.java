@@ -28,11 +28,12 @@ import irai.mod.reforge.Config.SFXConfig;
 
 
 /**
- * Weapon reforging system using weapon ID-based level tracking.
- * Upgrade level is determined by the weapon ID suffix (e.g., Weapon_Axe_Cobalt1 = +1).
+ * Weapon and armor reforging system using item ID-based level tracking.
+ * Upgrade level is determined by the item ID suffix (e.g., Weapon_Axe_Cobalt1 = +1, Armor_Chest_Iron1 = +1).
  * No persistent tracking needed - level is embedded in the item ID.
- * 
+ *
  * Merged functionality from WeaponUpgradeTracker and WeaponTooltip.
+ * Supports both weapons (Weapon_ prefix) and armors (Armor_ prefix).
  */
 @SuppressWarnings("removal")
 public class ReforgeEquip extends SimpleInteraction {
@@ -50,9 +51,11 @@ public class ReforgeEquip extends SimpleInteraction {
     };
 
     private static final Pattern WEAPON_PATTERN = Pattern.compile("^(?!.*Arrow).*[Ww]eapon.*$");
-    
-    // Static cache for weapon category/structure checks to avoid repeated reflection
+    private static final Pattern ARMOR_PATTERN  = Pattern.compile("^.*[Aa]rmor.*$");
+
+    // Static cache for item category/structure checks to avoid repeated reflection
     private static final java.util.Map<String, Boolean> weaponCheckCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, Boolean> armorCheckCache  = new java.util.concurrent.ConcurrentHashMap<>();
     private static final long CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
     private static final java.util.Map<String, Long> cacheTimestamps = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -68,6 +71,14 @@ public class ReforgeEquip extends SimpleInteraction {
             "Sharp",      // +1
             "Deadly",     // +2
             "Legendary"   // +3
+    };
+
+    // Armor upgrade level display names
+    private static final String[] ARMOR_UPGRADE_NAMES = {
+            "",           // Base
+            "Sturdy",     // +1
+            "Fortified",  // +2
+            "Impenetrable" // +3
     };
 
     private SFXConfig sfxConfig;
@@ -103,21 +114,23 @@ public class ReforgeEquip extends SimpleInteraction {
 
     private void processReforge(Player player, ItemStack heldItem, InteractionContext context) {
         // Use the ItemStack-based check for proper category detection
-        if (!isWeapon(heldItem)) {
+        boolean isWeaponItem = isWeapon(heldItem);
+        boolean isArmorItem  = !isWeaponItem && isArmor(heldItem);
+
+        if (!isWeaponItem && !isArmorItem) {
             player.sendMessage(Message.raw("This item cannot be reforged"));
             return;
         }
 
         String itemId = heldItem.getItemId();
         short slot = context.getHeldItemSlot();
-        int currentLevel = getLevelFromWeaponId(itemId);
+        int currentLevel = getLevelFromItemId(itemId);
 
         if (currentLevel >= MAX_UPGRADE_LEVEL) {
-            player.sendMessage(Message.raw("Weapon is already at max level"));
+            player.sendMessage(Message.raw((isArmorItem ? "Armor" : "Weapon") + " is already at max level"));
             showDetailedStats(player, heldItem, slot);
             return;
         }
-
 
         if (!hasEnoughMaterial(player, MATERIAL_ID, MATERIAL_COST)) {
             player.sendMessage(Message.raw("Not enough Iron Bars (need " + MATERIAL_COST + ")"));
@@ -131,143 +144,164 @@ public class ReforgeEquip extends SimpleInteraction {
             return;
         }
 
-        // Check for weapon break chance - use config if available, otherwise use defaults
+        // Check for item break chance - use config if available, otherwise use defaults
         double breakChance;
         if (refinementConfig != null) {
-            breakChance = refinementConfig.getBreakChance(currentLevel);
+            breakChance = isArmorItem
+                    ? refinementConfig.getArmorBreakChance(currentLevel)
+                    : refinementConfig.getBreakChance(currentLevel);
         } else {
             breakChance = BREAK_CHANCES[Math.min(currentLevel, BREAK_CHANCES.length - 1)];
         }
         if (Math.random() < breakChance) {
-
             player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
             sfxConfig.playShatter(player);
-            showWeaponShatter(player);
+            showItemShatter(player, isArmorItem);
             return;
         }
-
-
 
         // Roll for upgrade outcome
         ReforgeOutcome outcome = rollReforgeOutcome(currentLevel);
         int newLevel = Math.max(0, Math.min(currentLevel + outcome.levelChange, MAX_UPGRADE_LEVEL));
-        
-        // Create the upgraded weapon with new ID
-        String baseWeaponId = getBaseWeaponId(itemId);
-        String newWeaponId = baseWeaponId + newLevel;
-        
-        // Try to create the upgraded weapon
-        ItemStack upgradedWeapon = createUpgradedWeapon(heldItem, baseWeaponId, newLevel);
-        if (upgradedWeapon == null) {
-            player.sendMessage(Message.raw("Failed to upgrade weapon"));
+
+        // Create the upgraded item with new ID
+        String baseItemId = getBaseItemId(itemId);
+
+        // Try to create the upgraded item
+        ItemStack upgradedItem = createUpgradedItem(heldItem, baseItemId, newLevel);
+        if (upgradedItem == null) {
+            player.sendMessage(Message.raw("Failed to upgrade " + (isArmorItem ? "armor" : "weapon")));
             return;
         }
 
         // Replace the item in inventory
         player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
-        player.getInventory().getHotbar().addItemStackToSlot(slot, upgradedWeapon);
+        player.getInventory().getHotbar().addItemStackToSlot(slot, upgradedItem);
 
         // Play outcome sound and show feedback
         playOutcomeSound(player, outcome);
-        showOutcomeFeedback(player, outcome, currentLevel, newLevel, upgradedWeapon, slot);
+        showOutcomeFeedback(player, outcome, currentLevel, newLevel, upgradedItem, slot, isArmorItem);
     }
 
     /**
-     * Gets the upgrade level from the weapon ID based on server.lang pattern.
-     * Pattern: Weapon_Name (base=0), Weapon_Name1 (+1), Weapon_Name2 (+2), Weapon_Name3 (+3)
-     * E.g., "Weapon_Axe_Cobalt" = 0, "Weapon_Axe_Cobalt1" = 1, "Weapon_Axe_Cobalt2" = 2, "Weapon_Axe_Cobalt3" = 3
+     * Gets the upgrade level from an item ID based on server.lang pattern.
+     * Pattern: Item_Name (base=0), Item_Name1 (+1), Item_Name2 (+2), Item_Name3 (+3)
+     * Works for both weapons (Weapon_*) and armors (Armor_*).
+     * E.g., "Weapon_Axe_Cobalt" = 0, "Weapon_Axe_Cobalt1" = 1
+     *       "Armor_Chest_Iron"  = 0, "Armor_Chest_Iron1"  = 1
      */
-    public static int getLevelFromWeaponId(String weaponId) {
-        if (weaponId == null) return 0;
-        
-        // Check if ends with 1, 2, or 3 (server.lang pattern: base, +1, +2, +3)
-        if (weaponId.length() > 0) {
-            char lastChar = weaponId.charAt(weaponId.length() - 1);
-            if (lastChar == '1') {
-                return 1; // Level 1 = suffix "1"
-            } else if (lastChar == '2') {
-                return 2; // Level 2 = suffix "2"
-            } else if (lastChar == '3') {
-                return 3; // Level 3 = suffix "3"
-            }
+    public static int getLevelFromItemId(String itemId) {
+        if (itemId == null) return 0;
+
+        if (itemId.length() > 0) {
+            char lastChar = itemId.charAt(itemId.length() - 1);
+            if (lastChar == '1') return 1;
+            if (lastChar == '2') return 2;
+            if (lastChar == '3') return 3;
         }
         return 0; // Base level (no suffix)
     }
 
     /**
-     * Gets the base weapon ID without the level suffix.
-     * E.g., "Weapon_Axe_Cobalt1" -> "Weapon_Axe_Cobalt", "Weapon_Axe_Cobalt2" -> "Weapon_Axe_Cobalt"
+     * Backwards-compatible alias for {@link #getLevelFromItemId(String)}.
+     * @deprecated Use {@link #getLevelFromItemId(String)} instead.
      */
-    private static String getBaseWeaponId(String weaponId) {
-        if (weaponId == null) return null;
-        
-        // Remove trailing 1, 2, or 3 (server.lang pattern)
-        if (weaponId.length() > 0) {
-            char lastChar = weaponId.charAt(weaponId.length() - 1);
-            if (lastChar == '1' || lastChar == '2' || lastChar == '3') {
-                return weaponId.substring(0, weaponId.length() - 1);
-            }
-        }
-        return weaponId; // Already base (no suffix)
+    @Deprecated
+    public static int getLevelFromWeaponId(String weaponId) {
+        return getLevelFromItemId(weaponId);
     }
 
+    /**
+     * Gets the base item ID without the level suffix.
+     * Works for both weapons and armors.
+     * E.g., "Weapon_Axe_Cobalt1" -> "Weapon_Axe_Cobalt"
+     *       "Armor_Chest_Iron2"  -> "Armor_Chest_Iron"
+     */
+    public static String getBaseItemId(String itemId) {
+        if (itemId == null) return null;
 
+        if (itemId.length() > 0) {
+            char lastChar = itemId.charAt(itemId.length() - 1);
+            if (lastChar == '1' || lastChar == '2' || lastChar == '3') {
+                return itemId.substring(0, itemId.length() - 1);
+            }
+        }
+        return itemId; // Already base (no suffix)
+    }
 
     /**
-     * Creates an upgraded weapon ItemStack with the new level.
-     * Items must be defined in resources (server.lang pattern: Weapon_Name1, Weapon_Name2, Weapon_Name3).
+     * Backwards-compatible alias for {@link #getBaseItemId(String)}.
+     * @deprecated Use {@link #getBaseItemId(String)} instead.
      */
-    private ItemStack createUpgradedWeapon(ItemStack original, String baseId, int newLevel) {
-        // Validate baseId pattern - should be like "Weapon_Axe_Cobalt"
-        if (baseId == null || !baseId.startsWith("Weapon_")) {
-            System.err.println("[ReforgeEquip] Invalid base weapon ID: " + baseId);
+    @Deprecated
+    private static String getBaseWeaponId(String weaponId) {
+        return getBaseItemId(weaponId);
+    }
+
+    /**
+     * Creates an upgraded item (weapon or armor) ItemStack with the new level.
+     * Items must be defined in resources (server.lang pattern: Item_Name1, Item_Name2, Item_Name3).
+     */
+    private ItemStack createUpgradedItem(ItemStack original, String baseId, int newLevel) {
+        if (baseId == null) {
+            System.err.println("[ReforgeEquip] Invalid base item ID: null");
             return null;
         }
-        
-        // Create new item ID based on server.lang pattern
-        // Level 0 = base (no suffix), Level 1 = "1", Level 2 = "2", Level 3 = "3"
-        String newItemId;
-        if (newLevel == 0) {
-            newItemId = baseId; // Base level, no suffix
-        } else {
-            newItemId = baseId + newLevel; // Level 1 = "1", Level 2 = "2", Level 3 = "3"
+
+        boolean isWeaponBase = baseId.toLowerCase().startsWith("weapon_");
+        boolean isArmorBase  = baseId.toLowerCase().startsWith("armor_");
+
+        if (!isWeaponBase && !isArmorBase) {
+            System.err.println("[ReforgeEquip] Invalid base item ID (not weapon or armor): " + baseId);
+            return null;
         }
 
-        // Create new ItemStack with the upgraded item ID
+        // Create new item ID based on server.lang pattern
+        // Level 0 = base (no suffix), Level 1 = "1", Level 2 = "2", Level 3 = "3"
+        String newItemId = (newLevel == 0) ? baseId : (baseId + newLevel);
+
         try {
-            // Try to create ItemStack using the item ID string constructor
             ItemStack newItemStack = new ItemStack(newItemId, 1);
-            System.out.println("[ReforgeEquip] Created upgraded weapon: " + newItemId + " (level " + newLevel + ")");
+            System.out.println("[ReforgeEquip] Created upgraded item: " + newItemId + " (level " + newLevel + ")");
             return newItemStack;
         } catch (Exception e) {
-            System.err.println("[ReforgeEquip] Error creating upgraded weapon '" + newItemId + "': " + e.getMessage());
+            System.err.println("[ReforgeEquip] Error creating upgraded item '" + newItemId + "': " + e.getMessage());
             e.printStackTrace();
             return null;
         }
     }
 
+    /**
+     * Backwards-compatible alias for {@link #createUpgradedItem(ItemStack, String, int)}.
+     * @deprecated Use {@link #createUpgradedItem(ItemStack, String, int)} instead.
+     */
+    @Deprecated
+    private ItemStack createUpgradedWeapon(ItemStack original, String baseId, int newLevel) {
+        return createUpgradedItem(original, baseId, newLevel);
+    }
 
 
 
 
-    private void showOutcomeFeedback(Player player, ReforgeOutcome outcome, int oldLevel, int newLevel, ItemStack weapon, short slot) {
+
+    private void showOutcomeFeedback(Player player, ReforgeOutcome outcome, int oldLevel, int newLevel, ItemStack item, short slot, boolean isArmor) {
         switch (outcome.type) {
             case DEGRADE:
-                showUpgradeFailure(player, oldLevel, newLevel);
+                showUpgradeFailure(player, oldLevel, newLevel, isArmor);
                 break;
             case SAME:
                 player.sendMessage(Message.raw("--------------------"));
                 player.sendMessage(Message.raw("   Refine Failed    "));
                 player.sendMessage(Message.raw("--------------------"));
-                showCompactTooltip(player, weapon, slot);
+                showCompactTooltip(player, item, slot);
                 break;
             case UPGRADE:
-                showUpgradeSuccess(player, oldLevel, newLevel);
-                showDetailedStats(player, weapon, slot);
+                showUpgradeSuccess(player, oldLevel, newLevel, isArmor);
+                showDetailedStats(player, item, slot);
                 break;
             case JACKPOT:
                 player.sendMessage(Message.raw("**** JACKPOT! ****"));
-                showDetailedStats(player, weapon, slot);
+                showDetailedStats(player, item, slot);
                 break;
         }
     }
@@ -309,30 +343,13 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Checks if an item can be reforged.
-     * Uses proper category check like PatchAssetsCommand:
-     * 1. Check if item ID starts with "Weapon_" (existing behavior)
-     * 2. Check if item has Categories containing "Items.Weapons"
-     * 3. Check if item has Weapon structure (WeaponStats, DamageProperties, etc.)
+     * Checks if an item ID belongs to a weapon.
      * Arrows are always excluded from refinement.
      */
     private boolean isWeapon(String itemId) {
-        if (itemId == null) {
-            return false;
-        }
-        
-        // Always exclude arrows - they can't be reforged
-        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) {
-            return false;
-        }
-        
-        // Check 1: If it starts with "Weapon_", it's definitely a weapon
-        if (itemId.toLowerCase().startsWith("weapon_")) {
-            return true;
-        }
-        
-        // Check 2 & 3: Need to check item categories/structure
-        // This is handled by isWeapon(ItemStack) which does the full check
+        if (itemId == null) return false;
+        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) return false;
+        if (itemId.toLowerCase().startsWith("weapon_")) return true;
         return false;
     }
 
@@ -345,47 +362,67 @@ public class ReforgeEquip extends SimpleInteraction {
      * Arrows are always excluded.
      */
     public static boolean isWeapon(ItemStack itemStack) {
-        if (itemStack == null || itemStack.isEmpty()) {
-            return false;
-        }
-        
+        if (itemStack == null || itemStack.isEmpty()) return false;
+
         String itemId = itemStack.getItemId();
-        if (itemId == null) {
-            return false;
-        }
-        
+        if (itemId == null) return false;
+
         // Always exclude arrows
-        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) {
-            return false;
-        }
-        
+        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) return false;
+
         // Check cache first
-        Boolean cachedResult = getCachedWeaponCheck(itemId);
-        if (cachedResult != null) {
-            return cachedResult;
-        }
-        
-        boolean isWeapon = false;
-        
+        Boolean cachedResult = getCachedCheck(weaponCheckCache, itemId);
+        if (cachedResult != null) return cachedResult;
+
+        boolean result = false;
+
         // Check 1: Item ID starts with "Weapon_"
         if (itemId.toLowerCase().startsWith("weapon_")) {
-            isWeapon = true;
+            result = true;
         }
-        
+
         // Check 2: Item has Categories containing "Items.Weapons"
-        if (!isWeapon) {
-            isWeapon = hasWeaponCategory(itemStack);
-        }
-        
+        if (!result) result = hasWeaponCategory(itemStack);
+
         // Check 3: Item has Weapon structure
-        if (!isWeapon) {
-            isWeapon = hasWeaponStructure(itemStack);
+        if (!result) result = hasWeaponStructure(itemStack);
+
+        cacheCheck(weaponCheckCache, itemId, result);
+        return result;
+    }
+
+    /**
+     * Checks if an ItemStack is a piece of armor using proper category checks.
+     * This method checks:
+     * 1. Item ID starts with "Armor_"
+     * 2. Item has Categories containing "Items.Armor"
+     * 3. Item has Armor structure (ArmorStats, DefenseProperties, etc.)
+     */
+    public static boolean isArmor(ItemStack itemStack) {
+        if (itemStack == null || itemStack.isEmpty()) return false;
+
+        String itemId = itemStack.getItemId();
+        if (itemId == null) return false;
+
+        // Check cache first
+        Boolean cachedResult = getCachedCheck(armorCheckCache, itemId);
+        if (cachedResult != null) return cachedResult;
+
+        boolean result = false;
+
+        // Check 1: Item ID starts with "Armor_"
+        if (itemId.toLowerCase().startsWith("armor_")) {
+            result = true;
         }
-        
-        // Cache the result
-        cacheWeaponCheck(itemId, isWeapon);
-        
-        return isWeapon;
+
+        // Check 2: Item has Categories containing "Items.Armor"
+        if (!result) result = hasArmorCategory(itemStack);
+
+        // Check 3: Item has Armor structure
+        if (!result) result = hasArmorStructure(itemStack);
+
+        cacheCheck(armorCheckCache, itemId, result);
+        return result;
     }
 
     /**
@@ -473,16 +510,76 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Gets cached weapon check result if still valid.
+     * Checks if the item has "Items.Armor" category using reflection.
      */
-    private static Boolean getCachedWeaponCheck(String itemId) {
+    private static boolean hasArmorCategory(ItemStack itemStack) {
+        try {
+            if (itemStack.getItem() == null) return false;
+            Object item = itemStack.getItem();
+            java.lang.reflect.Field categoriesField = null;
+            for (String fieldName : new String[]{"categories", "Categories", "category"}) {
+                try {
+                    categoriesField = item.getClass().getField(fieldName);
+                    if (categoriesField != null) break;
+                } catch (NoSuchFieldException ignored) {}
+            }
+            if (categoriesField != null) {
+                categoriesField.setAccessible(true);
+                Object categoriesObj = categoriesField.get(item);
+                if (categoriesObj instanceof java.util.List) {
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Object> categories = (java.util.List<Object>) categoriesObj;
+                    for (Object cat : categories) {
+                        if (cat != null && (cat.toString().contains("Items.Armor") || cat.toString().contains("Items.Armour"))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Reflection failed
+        }
+        return false;
+    }
+
+    /**
+     * Checks if the item has armor structure (ArmorStats, DefenseProperties, etc.).
+     * This is a fallback check when category check fails.
+     */
+    private static boolean hasArmorStructure(ItemStack itemStack) {
+        try {
+            if (itemStack.getItem() == null) return false;
+            Object item = itemStack.getItem();
+            String[] armorFields = {"armorStats", "ArmorStats", "armor", "Armor",
+                                    "defenseProperties", "DefenseProperties",
+                                    "armorType", "ArmorType",
+                                    "protection", "Protection"};
+            for (String fieldName : armorFields) {
+                try {
+                    java.lang.reflect.Field field = item.getClass().getField(fieldName);
+                    if (field != null) {
+                        field.setAccessible(true);
+                        Object value = field.get(item);
+                        if (value != null) return true;
+                    }
+                } catch (NoSuchFieldException ignored) {}
+            }
+        } catch (Exception e) {
+            // Reflection failed
+        }
+        return false;
+    }
+
+    /**
+     * Gets cached check result from the given cache map if still valid.
+     */
+    private static Boolean getCachedCheck(java.util.Map<String, Boolean> cache, String itemId) {
         Long timestamp = cacheTimestamps.get(itemId);
         if (timestamp != null) {
             if (System.currentTimeMillis() - timestamp < CACHE_EXPIRY_MS) {
-                return weaponCheckCache.get(itemId);
+                return cache.get(itemId);
             } else {
-                // Cache expired, remove entries
-                weaponCheckCache.remove(itemId);
+                cache.remove(itemId);
                 cacheTimestamps.remove(itemId);
             }
         }
@@ -490,21 +587,22 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Caches the weapon check result.
+     * Caches a check result in the given cache map.
      */
-    private static void cacheWeaponCheck(String itemId, boolean isWeapon) {
-        weaponCheckCache.put(itemId, isWeapon);
+    private static void cacheCheck(java.util.Map<String, Boolean> cache, String itemId, boolean value) {
+        cache.put(itemId, value);
         cacheTimestamps.put(itemId, System.currentTimeMillis());
     }
 
     /**
-     * Clears the weapon check cache.
-     * Can be called when weapons are patched to refresh cache.
+     * Clears all item check caches (weapon and armor).
+     * Can be called when items are patched to refresh cache.
      */
     public static void clearWeaponCache() {
         weaponCheckCache.clear();
+        armorCheckCache.clear();
         cacheTimestamps.clear();
-        System.out.println("[ReforgeEquip] Weapon check cache cleared");
+        System.out.println("[ReforgeEquip] Item check cache cleared");
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -559,13 +657,19 @@ public class ReforgeEquip extends SimpleInteraction {
 
 
     /**
-     * Gets the upgrade name for a given level.
+     * Gets the upgrade name for a given level (weapon).
      */
     public static String getUpgradeName(int level) {
-        if (level < 0 || level >= UPGRADE_NAMES.length) {
-            return "";
-        }
+        if (level < 0 || level >= UPGRADE_NAMES.length) return "";
         return UPGRADE_NAMES[level];
+    }
+
+    /**
+     * Gets the armor upgrade name for a given level.
+     */
+    public static String getArmorUpgradeName(int level) {
+        if (level < 0 || level >= ARMOR_UPGRADE_NAMES.length) return "";
+        return ARMOR_UPGRADE_NAMES[level];
     }
 
     /**
@@ -573,9 +677,17 @@ public class ReforgeEquip extends SimpleInteraction {
      */
     public static double getDamageMultiplier(int level) {
         double[] multipliers = {1.0, 1.10, 1.15, 1.25};
-        if (level < 0 || level >= multipliers.length) {
-            return 1.0;
-        }
+        if (level < 0 || level >= multipliers.length) return 1.0;
+        return multipliers[level];
+    }
+
+    /**
+     * Gets the defense multiplier for a given armor level.
+     * Defaults: +0%/+8%/+12%/+20% defense.
+     */
+    public static double getDefenseMultiplier(int level) {
+        double[] multipliers = {1.0, 1.08, 1.12, 1.20};
+        if (level < 0 || level >= multipliers.length) return 1.0;
         return multipliers[level];
     }
 
@@ -590,13 +702,11 @@ public class ReforgeEquip extends SimpleInteraction {
         int level = getWeaponLevel(player, weapon, slot);
 
         if (level == 0) {
-            // Base weapon - show upgrade potential
             player.sendMessage(Message.raw(""));
             player.sendMessage(Message.raw("[Upgradeable Weapon]"));
             player.sendMessage(Message.raw("Take to a Reforgebench to upgrade!"));
             player.sendMessage(Message.raw(""));
         } else {
-            // Upgraded weapon - show stats
             showUpgradedWeaponTooltip(player, level);
         }
     }
@@ -622,82 +732,122 @@ public class ReforgeEquip extends SimpleInteraction {
 
     /**
      * Shows a compact inline tooltip (for hotbar switching).
+     * Handles both weapons and armor.
      */
-    public static void showCompactTooltip(Player player, ItemStack weapon, short slot) {
-        int level = getWeaponLevel(player, weapon, slot);
+    public static void showCompactTooltip(Player player, ItemStack item, short slot) {
+        int level = getWeaponLevel(player, item, slot);
 
-        if (level == 0) {
-            return; // Don't show anything for base weapons
-        }
+        if (level == 0) return; // Don't show anything for base items
 
         String color = getColorForLevel(level);
-        String upgradeName = getUpgradeName(level);
-        double multiplier = getDamageMultiplier(level);
+        boolean isArmorItem = isArmor(item);
 
-        String tooltip = color + "⚔ " + upgradeName + " +" + level + " (+" +
-                         String.format("%.0f", (multiplier - 1.0) * 100) + "% damage)";
-
-        player.sendMessage(Message.raw(tooltip));
+        if (isArmorItem) {
+            String upgradeName = getArmorUpgradeName(level);
+            double multiplier = getDefenseMultiplier(level);
+            String tooltip = color + "🛡 " + upgradeName + " +" + level + " (+" +
+                             String.format("%.0f", (multiplier - 1.0) * 100) + "% defense)";
+            player.sendMessage(Message.raw(tooltip));
+        } else {
+            String upgradeName = getUpgradeName(level);
+            double multiplier = getDamageMultiplier(level);
+            String tooltip = color + "⚔ " + upgradeName + " +" + level + " (+" +
+                             String.format("%.0f", (multiplier - 1.0) * 100) + "% damage)";
+            player.sendMessage(Message.raw(tooltip));
+        }
     }
 
     /**
      * Shows upgrade success animation.
+     * @param isArmor true if the upgraded item is armor, false for weapons
      */
-    public static void showUpgradeSuccess(Player player, int oldLevel, int newLevel) {
+    public static void showUpgradeSuccess(Player player, int oldLevel, int newLevel, boolean isArmor) {
         String color = getColorForLevel(newLevel);
+        String label = isArmor ? "ARMOR UPGRADED!" : "WEAPON UPGRADED!";
 
         player.sendMessage(Message.raw(""));
         player.sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw(color + "        WEAPON UPGRADED!        "));
+        player.sendMessage(Message.raw(color + "        " + label + "        "));
         player.sendMessage(Message.raw("      +" + oldLevel + "   ->  " + color + "+" + newLevel));
         player.sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
         player.sendMessage(Message.raw(""));
     }
 
     /**
-     * Shows upgrade failure animation.
+     * Backwards-compatible overload for {@link #showUpgradeSuccess(Player, int, int, boolean)}.
      */
-    public static void showUpgradeFailure(Player player, int oldLevel, int newLevel) {
+    public static void showUpgradeSuccess(Player player, int oldLevel, int newLevel) {
+        showUpgradeSuccess(player, oldLevel, newLevel, false);
+    }
+
+    /**
+     * Shows upgrade failure (degrade) animation.
+     * @param isArmor true if the item is armor, false for weapons
+     */
+    public static void showUpgradeFailure(Player player, int oldLevel, int newLevel, boolean isArmor) {
+        String label = isArmor ? "ARMOR DEGRADED!" : "WEAPON DEGRADED!";
         player.sendMessage(Message.raw(""));
         player.sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw("     WEAPON DEGRADED!           "));
+        player.sendMessage(Message.raw("     " + label + "           "));
         player.sendMessage(Message.raw("    +" + oldLevel + " ->   +" + newLevel));
         player.sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
         player.sendMessage(Message.raw(""));
     }
 
     /**
-     * Shows weapon shatter animation.
+     * Backwards-compatible overload for {@link #showUpgradeFailure(Player, int, int, boolean)}.
      */
-    public static void showWeaponShatter(Player player) {
+    public static void showUpgradeFailure(Player player, int oldLevel, int newLevel) {
+        showUpgradeFailure(player, oldLevel, newLevel, false);
+    }
+
+    /**
+     * Shows item shatter animation (weapon or armor).
+     * @param isArmor true if the shattered item is armor, false for weapons
+     */
+    public static void showItemShatter(Player player, boolean isArmor) {
+        String label = isArmor ? "ARMOR SHATTERED!" : "WEAPON SHATTERED!";
+        String detail = isArmor ? "The armor broke into pieces..." : "The weapon broke into pieces...";
         player.sendMessage(Message.raw(""));
         player.sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
-        player.sendMessage(Message.raw("      WEAPON SHATTERED!  "));
-        player.sendMessage(Message.raw("    The weapon broke into pieces..."));
+        player.sendMessage(Message.raw("      " + label + "  "));
+        player.sendMessage(Message.raw("    " + detail));
         player.sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
         player.sendMessage(Message.raw(""));
     }
 
     /**
-     * Shows weapon stats in a detailed format.
+     * Backwards-compatible alias for {@link #showItemShatter(Player, boolean)}.
      */
-    public static void showDetailedStats(Player player, ItemStack weapon, short slot) {
-        int level = getWeaponLevel(player, weapon, slot);
-        String itemId = weapon != null ? weapon.getItemId() : "null";
-        String upgradeName = getUpgradeName(level);
-        double multiplier = getDamageMultiplier(level);
+    public static void showWeaponShatter(Player player) {
+        showItemShatter(player, false);
+    }
+
+    /**
+     * Shows item stats in a detailed format.
+     * Handles both weapons and armor.
+     */
+    public static void showDetailedStats(Player player, ItemStack item, short slot) {
+        int level = getWeaponLevel(player, item, slot);
+        String itemId = item != null ? item.getItemId() : "null";
+        boolean isArmorItem = isArmor(item);
+
+        String upgradeName = isArmorItem ? getArmorUpgradeName(level) : getUpgradeName(level);
+        double multiplier   = isArmorItem ? getDefenseMultiplier(level) : getDamageMultiplier(level);
+        String statLabel    = isArmorItem ? "Defense" : "Damage";
+        String typeLabel    = isArmorItem ? "Armor" : "Weapon";
         String color = getColorForLevel(level);
         String progressBar = createProgressBar(level, 3);
 
         player.sendMessage(Message.raw(""));
         player.sendMessage(Message.raw("============================="));
-        player.sendMessage(Message.raw("  Weapon: " + itemId));
+        player.sendMessage(Message.raw("  " + typeLabel + ": " + itemId));
         player.sendMessage(Message.raw("  Upgrade: " + color + upgradeName + " +" + level));
         player.sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/3)"));
-        player.sendMessage(Message.raw("  Damage: x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
+        player.sendMessage(Message.raw("  " + statLabel + ": x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
 
         if (level < 3) {
-            double nextMultiplier = getDamageMultiplier(level + 1);
+            double nextMultiplier = isArmorItem ? getDefenseMultiplier(level + 1) : getDamageMultiplier(level + 1);
             player.sendMessage(Message.raw("  Next Level: x" + String.format("%.2f", nextMultiplier) + " (" + String.format("%.0f", nextMultiplier * 100) + "%)"));
         } else {
             player.sendMessage(Message.raw("   MAX LEVEL ACHIEVED   "));
@@ -708,23 +858,20 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Gets the weapon level, checking both refined and regular weapons.
+     * Gets the item level, checking both refined weapons/armor and regular items.
      */
-    private static int getWeaponLevel(Player player, ItemStack weapon, short slot) {
-        if (weapon == null) {
-            return 0;
-        }
+    private static int getWeaponLevel(Player player, ItemStack item, short slot) {
+        if (item == null) return 0;
 
-        String weaponId = weapon.getItemId();
+        String itemId = item.getItemId();
 
-        if (weaponId != null && weaponId.startsWith("Weapon_")) {
-            // Refined weapon - get level from weapon ID suffix
-            return getLevelFromWeaponId(weaponId);
+        if (itemId != null && (itemId.toLowerCase().startsWith("weapon_") || itemId.toLowerCase().startsWith("armor_"))) {
+            // Refined item - get level from item ID suffix
+            return getLevelFromItemId(itemId);
         } else {
-            // Regular weapon - get level from tracker
-            return getUpgradeLevel(player, weapon, slot);
+            // Regular item - get level from tracker
+            return getUpgradeLevel(player, item, slot);
         }
-
     }
 
     /**

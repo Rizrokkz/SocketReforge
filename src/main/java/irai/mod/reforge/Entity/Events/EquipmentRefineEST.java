@@ -32,6 +32,14 @@ public class EquipmentRefineEST extends DamageEventSystem {
             1.25   // +3 (25% increase)
     };
 
+    // Default defense multipliers per upgrade level (0..3) - used if config not loaded
+    private static final double[] DEFAULT_DEFENSE_MULTIPLIERS = {
+            1.0,   // base (no +)
+            1.08,  // +1 (8% increase)
+            1.12,  // +2 (12% increase)
+            1.20   // +3 (20% increase)
+    };
+
     /**
      * Sets the refinement config for this system.
      * @param config The refinement configuration to use
@@ -41,18 +49,27 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Gets the damage multiplier for a given level.
+     * Gets the damage multiplier for a given weapon level.
      * Uses config if available, otherwise uses defaults.
      */
     private double getDamageMultiplier(int level) {
         if (refinementConfig != null) {
             return refinementConfig.getDamageMultiplier(level);
         }
-        // Fallback to defaults
-        if (level < 0 || level >= DEFAULT_DAMAGE_MULTIPLIERS.length) {
-            return 1.0;
-        }
+        if (level < 0 || level >= DEFAULT_DAMAGE_MULTIPLIERS.length) return 1.0;
         return DEFAULT_DAMAGE_MULTIPLIERS[level];
+    }
+
+    /**
+     * Gets the defense multiplier for a given armor level.
+     * Uses config if available, otherwise uses defaults.
+     */
+    private double getDefenseMultiplier(int level) {
+        if (refinementConfig != null) {
+            return refinementConfig.getDefenseMultiplier(level);
+        }
+        if (level < 0 || level >= DEFAULT_DEFENSE_MULTIPLIERS.length) return 1.0;
+        return DEFAULT_DEFENSE_MULTIPLIERS[level];
     }
 
     @Override
@@ -83,56 +100,54 @@ public class EquipmentRefineEST extends DamageEventSystem {
 
         Ref<EntityStore> attackerRef = entitySource.getRef();
 
-        // Check if attacker is a player
+        // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        if (attacker == null) {
-            return;
+        if (attacker != null) {
+            ItemStack weapon = findWeaponInHotbar(attacker);
+            if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
+                String weaponId = getItemId(weapon);
+                int upgradeLevel = ReforgeEquip.getLevelFromItemId(weaponId);
+                int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
+                double multiplier = getDamageMultiplier(clampedLevel);
+
+                System.out.println("═══════════════════════════════════════════════");
+                System.out.println("[EquipmentRefineEST] Attacker: " + attacker.getPlayerRef().getUsername());
+                System.out.println("[EquipmentRefineEST] Weapon: " + weaponId + " (level " + clampedLevel + ")");
+                System.out.println("[EquipmentRefineEST] Damage multiplier: " + multiplier);
+
+                float newDamage = (float) (damage.getAmount() * multiplier);
+                System.out.println("[EquipmentRefineEST] Damage: " + damage.getAmount() + " -> " + newDamage);
+                System.out.println("═══════════════════════════════════════════════");
+                damage.setAmount(newDamage);
+            }
         }
 
-        // Find weapon in attacker's hotbar
-        ItemStack weapon = findWeaponInHotbar(attacker);
-        if (weapon == null) {
-            return;
+        // ── Defender armor bonus (defense / damage reduction) ─────────────────
+        Player defender = store.getComponent(targetRef, Player.getComponentType());
+        if (defender != null) {
+            ItemStack armor = findArmorInEquipment(defender);
+            if (armor != null && ReforgeEquip.isArmor(armor)) {
+                String armorId = getItemId(armor);
+                int upgradeLevel = ReforgeEquip.getLevelFromItemId(armorId);
+                int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
+                // Defense multiplier reduces incoming damage: damage / defenseMultiplier
+                double defenseMultiplier = getDefenseMultiplier(clampedLevel);
+
+                System.out.println("═══════════════════════════════════════════════");
+                System.out.println("[EquipmentRefineEST] Defender: " + defender.getPlayerRef().getUsername());
+                System.out.println("[EquipmentRefineEST] Armor: " + armorId + " (level " + clampedLevel + ")");
+                System.out.println("[EquipmentRefineEST] Defense multiplier: " + defenseMultiplier);
+
+                float reducedDamage = (float) (damage.getAmount() / defenseMultiplier);
+                System.out.println("[EquipmentRefineEST] Damage after defense: " + damage.getAmount() + " -> " + reducedDamage);
+                System.out.println("═══════════════════════════════════════════════");
+                damage.setAmount(reducedDamage);
+            }
         }
-
-        // Check if it's a weapon using proper category check
-        if (!isWeapon(weapon)) {
-            return;
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // Get upgrade level from weapon ID suffix (e.g., Weapon_Axe_Cobalt1 = +1)
-        // ═══════════════════════════════════════════════════════════════════════
-        String weaponId = getItemId(weapon);
-        int upgradeLevel = ReforgeEquip.getLevelFromWeaponId(weaponId);
-
-        System.out.println("═══════════════════════════════════════════════");
-        System.out.println("[EquipmentRefineEST] Player: " + attacker.getPlayerRef().getUsername());
-        System.out.println("[EquipmentRefineEST] Weapon: " + getItemId(weapon));
-        System.out.println("[EquipmentRefineEST] Upgrade Level: " + upgradeLevel);
-        System.out.println("[EquipmentRefineEST] Max Level: 3");
-
-        // Clamp the level to valid range
-        int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
-        double multiplier = getDamageMultiplier(clampedLevel);
-
-        System.out.println("[EquipmentRefineEST] Clamped Level: " + clampedLevel);
-        System.out.println("[EquipmentRefineEST] Multiplier: " + multiplier);
-
-        // Store original damage
-        float originalDamage = damage.getAmount();
-        float newDamage = (float) (originalDamage * multiplier);
-
-        System.out.println("[EquipmentRefineEST] Original Damage: " + originalDamage);
-        System.out.println("[EquipmentRefineEST] New Damage: " + newDamage);
-        System.out.println("═══════════════════════════════════════════════");
-
-        // Apply multiplier
-        damage.setAmount(newDamage);
     }
 
     /**
-     * Looks in the player's hotbar for the first item that is a weapon.
+     * Looks in the player's hotbar for the currently held weapon.
      */
     private ItemStack findWeaponInHotbar(Player player) {
         try {
@@ -142,14 +157,14 @@ public class EquipmentRefineEST extends DamageEventSystem {
             short selectedSlot = player.getInventory().getActiveHotbarSlot();
             ItemStack selectedItem = hotbar.getItemStack(selectedSlot);
 
-            if (selectedItem != null && !selectedItem.isEmpty() && isWeapon(selectedItem)) {
+            if (selectedItem != null && !selectedItem.isEmpty() && ReforgeEquip.isWeapon(selectedItem)) {
                 return selectedItem;
             }
 
             // Fallback: search entire hotbar
             for (short slot = 0; slot < hotbar.getCapacity(); slot++) {
                 ItemStack stack = hotbar.getItemStack(slot);
-                if (stack != null && !stack.isEmpty() && isWeapon(stack)) {
+                if (stack != null && !stack.isEmpty() && ReforgeEquip.isWeapon(stack)) {
                     return stack;
                 }
             }
@@ -162,16 +177,35 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Checks if an item is a weapon using proper category checks.
-     * Uses ReforgeEquip.isWeapon(ItemStack) for accurate detection.
+     * Looks in the player's hotbar and storage for the best (highest level) armor piece.
      */
-    private boolean isWeapon(ItemStack item) {
-        if (item == null || item.isEmpty()) {
-            return false;
+    private ItemStack findArmorInEquipment(Player player) {
+        try {
+            ItemStack best = null;
+            int bestLevel = -1;
+
+            for (ItemContainer container : new ItemContainer[]{
+                    player.getInventory().getHotbar(),
+                    player.getInventory().getStorage()}) {
+                if (container == null) continue;
+                for (short slot = 0; slot < container.getCapacity(); slot++) {
+                    ItemStack stack = container.getItemStack(slot);
+                    if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
+                        int level = ReforgeEquip.getLevelFromItemId(stack.getItemId());
+                        if (level > bestLevel) {
+                            bestLevel = level;
+                            best = stack;
+                        }
+                    }
+                }
+            }
+            return best;
+
+        } catch (Exception e) {
+            System.err.println("[EquipmentRefineEST] Error finding armor: " + e.getMessage());
         }
 
-        // Use the proper category check from ReforgeEquip
-        return ReforgeEquip.isWeapon(item);
+        return null;
     }
 
     /**

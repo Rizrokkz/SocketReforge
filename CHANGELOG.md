@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-02-22
+
+### Added
+
+#### Armor Support
+
+- **Armor Reforging System**
+  - Extended reforging system to support armor items
+  - Armor items identified by "Armor_" prefix, Items.Armor category, or structural armor properties
+  - Defense multipliers per upgrade level (default: +5%, +10%, +15%)
+  - Armor break chances per upgrade transition (default: 10%, 5%, 2%)
+  - Display names: Base (""), +1 ("Reinforced"), +2 ("Fortified"), +3 ("Impenetrable")
+
+- **Dynamic Armor Detection**
+  - PatchAssets command now scans armor items from Assets.zip and mod JARs
+  - Automatically discovers armor parent template names during scanning
+  - Structural armor properties detection (ArmorStats, DefenseProperties, ProtectionProperties, etc.)
+  - Generates upgrade variants for armor items (Armor_*+1, Armor_*+2, Armor_*+3)
+
+- **ECS Defense System**
+  - EquipmentRefineEST now applies defense multipliers for armor
+  - Armor break chance applied when armor takes damage
+  - Both weapons (damage) and armor (defense) receive bonuses from reforging
+
+- **Configuration Updates**
+  - Added DEFENSE_MULTIPLIERS config (default: 0.05, 0.10, 0.15)
+  - Added ARMOR_BREAK_CHANCES config (default: 10, 5, 2)
+  - Generalized RefinementConfig to support both weapon and armor settings
+
+- **UI Updates**
+  - WeaponStats command now displays armor stats and defense bonuses
+  - Generalized item type handling in stats display
+
+---
+
 ## [1.0.0] - 2024-XX-XX
 
 ### Added

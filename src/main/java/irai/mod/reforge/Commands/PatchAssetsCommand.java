@@ -57,6 +57,13 @@ public class PatchAssetsCommand extends CommandBase {
     private static String storedModsPath       = null;
     private static String storedGlobalModsPath = null;
 
+    /**
+     * Dynamically discovered armor parent template names.
+     * Populated during scanning of items found in known Armor/ paths.
+     * Used to identify armor items in JARs that don't use standard parent names.
+     */
+    private final java.util.Set<String> discoveredArmorParents = new java.util.LinkedHashSet<>();
+
     public static void setStoredAssetsPath(String path)     { storedAssetsPath = path; }
     public static String getStoredAssetsPath()              { return storedAssetsPath; }
 
@@ -103,34 +110,41 @@ public class PatchAssetsCommand extends CommandBase {
                 context.sendMessage(Message.raw("Created target directory: " + targetPath));
             }
 
-            context.sendMessage(Message.raw("Scanning for weapons..."));
-            // Map: weaponId -> [content, sourceModFolder] (sourceModFolder null = base game)
-            Map<String, String[]> weaponData = scanAllSources(context, saveMods, globalMods, explicitSource);
+            context.sendMessage(Message.raw("Scanning for weapons and armor..."));
+            // Map: itemId -> [content, sourceModFolder, subfolder] (sourceModFolder null = base game)
+            Map<String, String[]> itemData = scanAllSources(context, saveMods, globalMods, explicitSource);
+            
+            // Map: itemId -> displayName from source server.lang
+            Map<String, String> sourceLangNames = new LinkedHashMap<>();
+            scanAllLangFiles(context, saveMods, globalMods, explicitSource, sourceLangNames);
 
-            if (weaponData.isEmpty()) {
-                context.sendMessage(Message.raw("[ERROR] No weapons found!"));
+            if (itemData.isEmpty()) {
+                context.sendMessage(Message.raw("[ERROR] No weapons or armor found!"));
                 context.sendMessage(Message.raw("Create assets_path.txt in your server root containing the path to Assets.zip"));
                 context.sendMessage(Message.raw("Example: F:\\XboxGames\\Hytale\\install\\release\\package\\game\\latest\\Assets.zip"));
                 return;
             }
 
-            context.sendMessage(Message.raw("Found " + weaponData.size() + " base weapons"));
+            long weaponCount = itemData.keySet().stream().filter(id -> id.toLowerCase().startsWith("weapon_")).count();
+            long armorCount  = itemData.keySet().stream().filter(id -> id.toLowerCase().startsWith("armor_")).count();
+            context.sendMessage(Message.raw("Found " + weaponCount + " base weapons, " + armorCount + " base armor pieces"));
 
-            Set<String> weaponIds  = new LinkedHashSet<>(weaponData.keySet());
+            Set<String> baseIds    = new LinkedHashSet<>(itemData.keySet());
             Set<String> upgradeIds = new LinkedHashSet<>();
-            for (String baseId : weaponIds) {
+            for (String baseId : baseIds) {
                 for (int level = 1; level <= MAX_UPGRADE_LEVEL; level++) {
                     upgradeIds.add(baseId + level);
                 }
             }
 
-            int baseWritten     = processWeapons(weaponData, targetPath, saveMods);
-            int upgradesCreated = createUpgrades(weaponData, targetPath, saveMods);
-            int langEntries     = writeServerLang(context, targetPath, weaponIds, upgradeIds);
-            boolean manifestCreated = writeManifest(targetPath, weaponIds, upgradeIds);
+            int baseWritten     = processWeapons(itemData, targetPath, saveMods);
+            int upgradesCreated = createUpgrades(itemData, targetPath, saveMods);
+            int langEntries     = writeServerLang(context, targetPath, itemData, sourceLangNames, baseIds, upgradeIds);
+            boolean manifestCreated = writeManifest(targetPath, baseIds, upgradeIds);
 
             context.sendMessage(Message.raw("========== SUMMARY =========="));
-            context.sendMessage(Message.raw("Base weapons:  " + weaponIds.size()));
+            context.sendMessage(Message.raw("Base weapons:  " + weaponCount));
+            context.sendMessage(Message.raw("Base armor:    " + armorCount));
             context.sendMessage(Message.raw("Upgrades:      " + upgradesCreated));
             context.sendMessage(Message.raw("Lang entries:  " + langEntries));
             context.sendMessage(Message.raw("Manifest:      " + (manifestCreated ? "created" : "updated")));
@@ -354,89 +368,105 @@ public class PatchAssetsCommand extends CommandBase {
     /**
      * Scan all sources in priority order (lowest to highest):
      *   1. Explicit Assets.zip or folder (from config)
-     *   2. Assets.zip next to the mods folder
-     *   3. Assets folder next to the mods folder
-     *   4. JAR files in the mods folder (highest priority)
+     *   2. JAR files in the global mods folder
+     *   3. JAR files in the save mods folder (highest priority)
+     * Scans both weapons (Item/Items/Weapon/) and armor (Item/Items/Armor/).
      */
     private Map<String, String[]> scanAllSources(CommandContext context, Path saveMods, Path globalMods, Path explicitSource) throws IOException {
-        // value: [content, sourceModFolder]  -- sourceModFolder is null for base game assets
-        Map<String, String[]> weapons = new LinkedHashMap<>();
+        // value: [content, sourceModFolder, subfolder]  -- sourceModFolder is null for base game assets
+        Map<String, String[]> items = new LinkedHashMap<>();
 
-        // 1. Assets.zip - base game weapons (lowest priority, no source mod folder)
+        // 1. Assets.zip - base game items (lowest priority, no source mod folder)
         if (explicitSource != null) {
             context.sendMessage(Message.raw("[SCAN] Assets source: " + explicitSource.toAbsolutePath()));
             if (Files.isDirectory(explicitSource)) {
-                int before = weapons.size();
-                scanFolder(explicitSource, weapons);
-                context.sendMessage(Message.raw("[SCAN] Assets folder: found " + (weapons.size() - before) + " weapons"));
+                int before = items.size();
+                scanFolder(explicitSource, items);
+                context.sendMessage(Message.raw("[SCAN] Assets folder: found " + (items.size() - before) + " items"));
             } else {
-                int before = weapons.size();
-                scanZip(explicitSource, weapons);
-                context.sendMessage(Message.raw("[SCAN] Assets ZIP: found " + (weapons.size() - before) + " weapons"));
+                int before = items.size();
+                scanZip(explicitSource, items);
+                context.sendMessage(Message.raw("[SCAN] Assets ZIP: found " + (items.size() - before) + " items"));
             }
         } else {
-            context.sendMessage(Message.raw("[SCAN] No assets_path configured - base game weapons will not be scanned"));
+            context.sendMessage(Message.raw("[SCAN] No assets_path configured - base game items will not be scanned"));
         }
 
         // 2. Global mods - client: UserData\Mods, server: skip (null)
         if (globalMods != null && !globalMods.equals(saveMods)) {
             context.sendMessage(Message.raw("[SCAN] Global mods: " + globalMods.toAbsolutePath()));
-            int before = weapons.size();
-            scanJars(globalMods, weapons, context);
-            context.sendMessage(Message.raw("[SCAN] Global mods: found " + (weapons.size() - before) + " weapons"));
+            int before = items.size();
+            scanJars(globalMods, items, context);
+            context.sendMessage(Message.raw("[SCAN] Global mods: found " + (items.size() - before) + " items"));
         }
 
         // 3. Per-save mods - highest priority, overrides everything above
         context.sendMessage(Message.raw("[SCAN] Save mods: " + saveMods.toAbsolutePath()));
-        int before = weapons.size();
-        scanJars(saveMods, weapons, context);
-        context.sendMessage(Message.raw("[SCAN] Save mods: found " + (weapons.size() - before) + " weapons"));
+        int before = items.size();
+        scanJars(saveMods, items, context);
+        context.sendMessage(Message.raw("[SCAN] Save mods: found " + (items.size() - before) + " items"));
 
-        return weapons;
+        return items;
     }
 
-    private void scanFolder(Path sourcePath, Map<String, String[]> weapons) throws IOException {
+    private void scanFolder(Path sourcePath, Map<String, String[]> items) throws IOException {
+        // Scan weapons
         Path weaponsPath = sourcePath.resolve("Server/Item/Items/Weapon");
         if (!Files.exists(weaponsPath)) weaponsPath = sourcePath.resolve("Item/Items/Weapon");
-        if (!Files.exists(weaponsPath)) {
+        if (Files.exists(weaponsPath)) {
+            System.out.println("[SCAN]   Weapon folder: " + weaponsPath.toAbsolutePath());
+            scanFolderRecursive(weaponsPath, items, false);
+        } else {
             System.out.println("[SCAN]   No Weapon subfolder found under: " + sourcePath);
-            return;
         }
-        System.out.println("[SCAN]   Weapon folder: " + weaponsPath.toAbsolutePath());
-        scanFolderRecursive(weaponsPath, weapons);
+
+        // Scan armor
+        Path armorPath = sourcePath.resolve("Server/Item/Items/Armor");
+        if (!Files.exists(armorPath)) armorPath = sourcePath.resolve("Item/Items/Armor");
+        if (Files.exists(armorPath)) {
+            System.out.println("[SCAN]   Armor folder: " + armorPath.toAbsolutePath());
+            scanFolderRecursive(armorPath, items, true);
+        } else {
+            System.out.println("[SCAN]   No Armor subfolder found under: " + sourcePath);
+        }
     }
 
-    private void scanFolderRecursive(Path dir, Map<String, String[]> weapons) throws IOException {
+    private void scanFolderRecursive(Path dir, Map<String, String[]> items, boolean isArmorDir) throws IOException {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
             for (Path entry : stream) {
                 if (Files.isDirectory(entry)) {
                     System.out.println("[SCAN]     Subfolder: " + entry.getFileName());
-                    scanFolderRecursive(entry, weapons);
+                    scanFolderRecursive(entry, items, isArmorDir);
                 } else if (entry.toString().endsWith(".json")) {
                     String fileName = entry.getFileName().toString();
                     String content = Files.readString(entry);
-                    // Already inside Server/Item/Items/Weapon/ — but still require the
-                    // Categories: Items.Weapons field to confirm it is actually a weapon item.
-                    // Some folders may contain non-weapon JSONs (templates, configs, etc.)
-                    if (!hasWeaponCategory(content)) {
-                        System.out.println("[SCAN]     ~ skipped: " + fileName + " (no Items.Weapons category)");
+                    boolean validItem = isArmorDir ? hasArmorCategory(content) : hasWeaponCategory(content);
+                    if (!validItem) {
+                        System.out.println("[SCAN]     ~ skipped: " + fileName + " (no " + (isArmorDir ? "Items.Armor" : "Items.Weapons") + " category)");
                         continue;
+                    }
+                    // If this is an armor item found by path, record its Parent for future checks
+                    if (isArmorDir) {
+                        String parent = extractParentValue(content);
+                        if (parent != null && !parent.isBlank()) {
+                            discoveredArmorParents.add(parent);
+                            System.out.println("[SCAN]     [armor-parent] " + parent);
+                        }
                     }
                     String id = extractWeaponIdFromContent(content, fileName);
                     if (id != null && !id.matches(".*\\d$")) {
-                        // Store subfolder name from actual directory (e.g. "Sword", "Battleaxe")
-                        String sub = entry.getParent() != null ? entry.getParent().getFileName().toString() : "Weapon";
-                        weapons.put(id, new String[]{content, null, sub}); // null modFolder = base game
+                        String sub = entry.getParent() != null ? entry.getParent().getFileName().toString() : (isArmorDir ? "Armor" : "Weapon");
+                        items.put(id, new String[]{content, null, sub}); // null modFolder = base game
                         System.out.println("[SCAN]     + " + id + "  (" + fileName + ")");
                     } else {
-                        System.out.println("[SCAN]     ~ skipped: " + fileName + (id != null ? " (upgrade id)" : " (no weapon id found)"));
+                        System.out.println("[SCAN]     ~ skipped: " + fileName + (id != null ? " (upgrade id)" : " (no item id found)"));
                     }
                 }
             }
         }
     }
 
-    private void scanZip(Path zipPath, Map<String, String[]> weapons) {
+    private void scanZip(Path zipPath, Map<String, String[]> items) {
         System.out.println("[SCAN]   Opening ZIP: " + zipPath.toAbsolutePath());
         int found = 0, skipped = 0;
         try (ZipFile zf = new ZipFile(zipPath.toFile())) {
@@ -446,25 +476,35 @@ public class PatchAssetsCommand extends CommandBase {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName();
                 if (name.endsWith(".json")) {
-                    // Must be under .../Item/Items/Weapon/ AND have Categories: Items.Weapons
-                    boolean byPath = name.replace("\\", "/").toLowerCase().contains("item/items/weapon/");
-                    if (!byPath) continue;
+                    String nameLower = name.replace("\\", "/").toLowerCase();
+                    boolean byWeaponPath = nameLower.contains("item/items/weapon/");
+                    boolean byArmorPath  = nameLower.contains("item/items/armor/");
+                    if (!byWeaponPath && !byArmorPath) continue;
+                    boolean isArmorEntry = byArmorPath && !byWeaponPath;
                     String fname = name.contains("/") ? name.substring(name.lastIndexOf("/") + 1) : name;
                     try (InputStream is = zf.getInputStream(entry)) {
                         String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                        if (!hasWeaponCategory(content)) {
-                            System.out.println("[SCAN]     ~ skipped: " + name + " (no Items.Weapons category)");
+                        boolean validItem = isArmorEntry ? hasArmorCategory(content) : hasWeaponCategory(content);
+                        if (!validItem) {
+                            System.out.println("[SCAN]     ~ skipped: " + name + " (no " + (isArmorEntry ? "Items.Armor" : "Items.Weapons") + " category)");
                             skipped++;
                             continue;
+                        }
+                        // Collect armor parent names for dynamic detection
+                        if (isArmorEntry) {
+                            String parent = extractParentValue(content);
+                            if (parent != null && !parent.isBlank()) {
+                                discoveredArmorParents.add(parent);
+                            }
                         }
                         String id = extractWeaponIdFromContent(content, fname);
                         if (id != null && !id.matches(".*\\d$")) {
                             String sub = extractSubfolder(name);
-                            weapons.put(id, new String[]{content, null, sub}); // null = base game
+                            items.put(id, new String[]{content, null, sub}); // null = base game
                             System.out.println("[SCAN]     + " + id + "  (" + name + ")");
                             found++;
                         } else {
-                            System.out.println("[SCAN]     ~ skipped: " + name + (id != null ? " (upgrade id)" : " (no weapon id found)"));
+                            System.out.println("[SCAN]     ~ skipped: " + name + (id != null ? " (upgrade id)" : " (no item id found)"));
                             skipped++;
                         }
                     }
@@ -476,7 +516,7 @@ public class PatchAssetsCommand extends CommandBase {
         System.out.println("[SCAN]   ZIP result: " + found + " added, " + skipped + " skipped");
     }
 
-    private void scanJars(Path modsPath, Map<String, String[]> weapons, CommandContext context) {
+    private void scanJars(Path modsPath, Map<String, String[]> items, CommandContext context) {
         if (!Files.exists(modsPath) || !Files.isDirectory(modsPath)) {
             context.sendMessage(Message.raw("[SCAN] Mods path does not exist: " + modsPath));
             return;
@@ -491,7 +531,7 @@ public class PatchAssetsCommand extends CommandBase {
                         continue;
                     }
                     context.sendMessage(Message.raw("[SCAN]   Found mod file: " + modPath.getFileName()));
-                    scanSingleJar(modPath, weapons, context);
+                    scanSingleJar(modPath, items, context);
                 }
             } catch (IOException e) {
                 context.sendMessage(Message.raw("[SCAN]   ERROR listing " + glob + ": " + e.getMessage()));
@@ -499,7 +539,7 @@ public class PatchAssetsCommand extends CommandBase {
         }
     }
 
-    private void scanSingleJar(Path jarPath, Map<String, String[]> weapons, CommandContext context) {
+    private void scanSingleJar(Path jarPath, Map<String, String[]> items, CommandContext context) {
         int found = 0, skipped = 0;
         try (ZipFile zf = new ZipFile(jarPath.toFile())) {
             context.sendMessage(Message.raw("[SCAN]     Entries in " + jarPath.getFileName() + ": " + zf.size()));
@@ -509,40 +549,51 @@ public class PatchAssetsCommand extends CommandBase {
             java.util.Enumeration<? extends ZipEntry> allEnum = zf.entries();
             while (allEnum.hasMoreElements()) allEntries.add(allEnum.nextElement());
 
-            // ── Pass 2: weapon check — find passing weapons and cache their content ──
-            // Key: entry name  Value: [content, subfolder]
+            // ── Pass 2: weapon/armor check — find passing items and cache their content ──
+            // Key: entry name  Value: [content, id, subfolder]
             java.util.Map<String, String[]> passing = new java.util.LinkedHashMap<>();
             for (ZipEntry entry : allEntries) {
                 if (entry.isDirectory()) continue;
                 String name = entry.getName();
                 if (!name.endsWith(".json")) continue;
                 String nameFwd    = name.replace("\\", "/");
-                boolean byPath    = nameFwd.toLowerCase().contains("item/items/weapon/");
+                String nameLower  = nameFwd.toLowerCase();
+                boolean byWeaponPath = nameLower.contains("item/items/weapon/");
+                boolean byArmorPath  = nameLower.contains("item/items/armor/");
                 String fname      = nameFwd.contains("/") ? nameFwd.substring(nameFwd.lastIndexOf("/") + 1) : nameFwd;
-                // Pre-filter: must be under the weapon path OR have a Weapon_ filename
-                // (filename alone is not confirmed yet — category check happens after reading)
-                if (!byPath && !fname.toLowerCase().startsWith("weapon_")) continue;
+                // Pre-filter: must be under a known item path OR have a recognizable filename prefix
+                boolean byPath = byWeaponPath || byArmorPath;
+                boolean byFilename = fname.toLowerCase().startsWith("weapon_") || fname.toLowerCase().startsWith("armor_");
+                if (!byPath && !byFilename) continue;
+                boolean isArmorEntry = byArmorPath || (!byWeaponPath && fname.toLowerCase().startsWith("armor_"));
                 try (InputStream is = zf.getInputStream(entry)) {
                     String wContent = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                    boolean byCategory = hasWeaponCategory(wContent);
+                    boolean byCategory = isArmorEntry ? hasArmorCategory(wContent) : hasWeaponCategory(wContent);
                     // Path alone is sufficient (already in the right folder structure)
                     // Filename prefix alone is NOT sufficient — must also have the category
                     if (!byPath && !byCategory) continue;
+                    // Collect armor parent names for dynamic detection
+                    if (isArmorEntry) {
+                        String parent = extractParentValue(wContent);
+                        if (parent != null && !parent.isBlank()) {
+                            discoveredArmorParents.add(parent);
+                        }
+                    }
                     String id = extractWeaponIdFromContent(wContent, fname);
                     if (id != null && !id.matches(".*\\d$")) {
                         passing.put(name, new String[]{wContent, id, extractSubfolder(name)});
                         context.sendMessage(Message.raw("[SCAN]     + " + id + "  (" + name + ")"));
                         found++;
                     } else {
-                        context.sendMessage(Message.raw("[SCAN]     ~ skipped: " + name + (id != null ? " (upgrade id)" : " (no weapon id found)")));
+                        context.sendMessage(Message.raw("[SCAN]     ~ skipped: " + name + (id != null ? " (upgrade id)" : " (no item id found)")));
                         skipped++;
                     }
                 }
             }
 
-            // No weapons found in this JAR - skip copy entirely
+            // No items found in this JAR - skip copy entirely
             if (passing.isEmpty()) {
-                context.sendMessage(Message.raw("[SCAN]     No weapons found - skipping copy"));
+                context.sendMessage(Message.raw("[SCAN]     No weapons or armor found - skipping copy"));
                 context.sendMessage(Message.raw("[SCAN]     Result for " + jarPath.getFileName() + ": 0 added, " + skipped + " skipped"));
                 return;
             }
@@ -597,13 +648,13 @@ public class PatchAssetsCommand extends CommandBase {
             }
             context.sendMessage(Message.raw("[SCAN]     Copied " + copied + " files -> " + destRoot.getFileName()));
 
-            // ── Pass 5: register passing weapons with their output folder ──
-            // [0]=content  [1]=destFolderName (Group.Name)  [2]=weaponTypeSubfolder
+            // ── Pass 5: register passing items with their output folder ──
+            // [0]=content  [1]=destFolderName (Group.Name)  [2]=itemTypeSubfolder
             for (java.util.Map.Entry<String, String[]> e : passing.entrySet()) {
                 String id        = e.getValue()[1];
                 String wContent  = e.getValue()[0];
                 String subfolder = e.getValue()[2];
-                weapons.put(id, new String[]{wContent, destFolderName, subfolder});
+                items.put(id, new String[]{wContent, destFolderName, subfolder});
             }
 
         } catch (IOException e) {
@@ -617,41 +668,60 @@ public class PatchAssetsCommand extends CommandBase {
     // -------------------------------------------------------------------------
 
     /**
-     * Derives a weapon subfolder from the weapon ID when no path info is available.
-     * Weapon_Sword_Iron -> Sword, Template_Weapon_Sword -> Sword,
-     * WanMine_God_Slayer_Battleaxe -> falls back to "Weapon"
+     * Derives an item subfolder from the item ID when no path info is available.
+     * Weapon_Sword_Iron -> Sword, Armor_Chest_Iron -> Chest,
+     * Template_Weapon_Sword -> Sword, Template_Armor_Chest -> Chest.
+     * Falls back to "Weapon" or "Armor" based on prefix.
      */
-    private String deriveSubfolder(String weaponId) {
-        String[] parts = weaponId.split("_");
+    private String deriveSubfolder(String itemId) {
+        String[] parts = itemId.split("_");
         // Template_Weapon_<Type>_... -> parts[2]
         if (parts.length > 2 && parts[0].equalsIgnoreCase("Template") && parts[1].equalsIgnoreCase("Weapon")) {
+            return Character.toUpperCase(parts[2].charAt(0)) + parts[2].substring(1).toLowerCase();
+        }
+        // Template_Armor_<Type>_... -> parts[2]
+        if (parts.length > 2 && parts[0].equalsIgnoreCase("Template") && parts[1].equalsIgnoreCase("Armor")) {
             return Character.toUpperCase(parts[2].charAt(0)) + parts[2].substring(1).toLowerCase();
         }
         // Weapon_<Type>_... -> parts[1]
         if (parts.length > 1 && parts[0].equalsIgnoreCase("Weapon")) {
             return Character.toUpperCase(parts[1].charAt(0)) + parts[1].substring(1).toLowerCase();
         }
-        return "Weapon";
+        // Armor_<Type>_... -> parts[1]
+        if (parts.length > 1 && parts[0].equalsIgnoreCase("Armor")) {
+            return Character.toUpperCase(parts[1].charAt(0)) + parts[1].substring(1).toLowerCase();
+        }
+        return itemId.toLowerCase().startsWith("armor_") ? "Armor" : "Weapon";
     }
 
     /**
-     * Extracts the weapon type subfolder from a ZIP entry path.
+     * Extracts the item type subfolder from a ZIP entry path.
      * e.g. "Server/Item/Items/Weapon/Sword/Weapon_Sword_Iron.json" -> "Sword"
-     * Falls back to "Weapon" if not determinable.
+     *      "Server/Item/Items/Armor/Chest/Armor_Chest_Iron.json"   -> "Chest"
+     * Falls back to "Weapon" or "Armor" if not determinable.
      */
     private String extractSubfolder(String entryName) {
         String norm = entryName.replace("\\", "/");
+        // Try weapon path first
         int idx = norm.toLowerCase().indexOf("item/items/weapon/");
-        if (idx < 0) return "Weapon";
-        String after = norm.substring(idx + "item/items/weapon/".length());
-        int slash = after.indexOf("/");
-        if (slash > 0) return after.substring(0, slash);
-        return "Weapon"; // file is directly in Weapon/ with no subfolder
+        if (idx >= 0) {
+            String after = norm.substring(idx + "item/items/weapon/".length());
+            int slash = after.indexOf("/");
+            return (slash > 0) ? after.substring(0, slash) : "Weapon";
+        }
+        // Try armor path
+        idx = norm.toLowerCase().indexOf("item/items/armor/");
+        if (idx >= 0) {
+            String after = norm.substring(idx + "item/items/armor/".length());
+            int slash = after.indexOf("/");
+            return (slash > 0) ? after.substring(0, slash) : "Armor";
+        }
+        return "Weapon"; // fallback
     }
 
     /**
-     * Returns true if the JSON content has "Categories": [ ... "Items.Weapons" ... ].
-     * This is the definitive weapon check used by all scanners.
+     * Returns true if the JSON content has "Categories": [ ... "Items.Weapons" ... ]
+     * or inherits from a weapon template.
      */
     private boolean hasWeaponCategory(String content) {
         // Check 1: explicit Categories array contains "Items.Weapons"
@@ -666,11 +736,10 @@ public class PatchAssetsCommand extends CommandBase {
         }
 
         // Check 2: inherits from a weapon template via "Parent": "Template_Weapon_*"
-        // The template carries the category; the child weapon item omits it.
         int parentIdx = content.indexOf("\"Parent\"");
         if (parentIdx >= 0) {
             int colon    = content.indexOf(':', parentIdx);
-            int valOpen  = colon >= 0 ? content.indexOf('"'  , colon) : -1;
+            int valOpen  = colon >= 0 ? content.indexOf('"', colon) : -1;
             int valClose = valOpen >= 0 ? content.indexOf('"', valOpen + 1) : -1;
             if (valOpen >= 0 && valClose > valOpen) {
                 String parentVal = content.substring(valOpen + 1, valClose);
@@ -681,6 +750,73 @@ public class PatchAssetsCommand extends CommandBase {
         }
 
         return false;
+    }
+
+    /**
+     * Returns true if the JSON content is an armor item.
+     * Uses multiple checks in order:
+     *   1. Explicit "Categories" array contains "Items.Armor" or "Items.Armour"
+     *   2. "Parent" value matches a dynamically discovered armor parent name
+     *   3. "Parent" value contains "armor" (case-insensitive) anywhere
+     *   4. Structural armor properties present (ArmorStats, DefenseProperties, etc.)
+     */
+    private boolean hasArmorCategory(String content) {
+        // Check 1: explicit Categories array contains "Items.Armor" or "Items.Armour"
+        int catIdx = content.indexOf("\"Categories\"");
+        if (catIdx >= 0) {
+            int arrOpen  = content.indexOf('[', catIdx);
+            int arrClose = arrOpen >= 0 ? content.indexOf(']', arrOpen) : -1;
+            if (arrOpen >= 0 && arrClose >= 0) {
+                String catSection = content.substring(arrOpen, arrClose + 1);
+                if (catSection.contains("Items.Armor") || catSection.contains("Items.Armour")) {
+                    return true;
+                }
+            }
+        }
+
+        // Check 2 & 3: inspect the "Parent" field
+        String parentVal = extractParentValue(content);
+        if (parentVal != null) {
+            // Check 2: matches a dynamically discovered armor parent
+            if (discoveredArmorParents.contains(parentVal)) {
+                return true;
+            }
+            // Check 3: parent name contains "armor" anywhere (case-insensitive)
+            if (parentVal.toLowerCase().contains("armor") || parentVal.toLowerCase().contains("armour")) {
+                return true;
+            }
+        }
+
+        // Check 4: structural armor properties
+        String[] armorProps = {
+            "\"ArmorStats\"", "\"DefenseProperties\"", "\"ProtectionProperties\"",
+            "\"ArmorType\"", "\"ArmorSlot\"", "\"EquipmentSlot\"",
+            "\"ArmorValue\"", "\"Defense\"", "\"Toughness\""
+        };
+        for (String prop : armorProps) {
+            if (content.contains(prop)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extracts the value of the "Parent" field from JSON content.
+     * Returns null if not found.
+     */
+    private String extractParentValue(String content) {
+        int parentIdx = content.indexOf("\"Parent\"");
+        if (parentIdx < 0) return null;
+        int colon    = content.indexOf(':', parentIdx);
+        int valOpen  = colon >= 0 ? content.indexOf('"', colon) : -1;
+        int valClose = valOpen >= 0 ? content.indexOf('"', valOpen + 1) : -1;
+        if (valOpen >= 0 && valClose > valOpen) {
+            String val = content.substring(valOpen + 1, valClose).trim();
+            return val.isBlank() ? null : val;
+        }
+        return null;
     }
 
     /**
@@ -839,31 +975,34 @@ public class PatchAssetsCommand extends CommandBase {
     // Output generation
     // -------------------------------------------------------------------------
 
-    private int processWeapons(Map<String, String[]> weaponData, Path targetPath, Path saveMods) throws IOException {
+    private int processWeapons(Map<String, String[]> itemData, Path targetPath, Path saveMods) throws IOException {
         int count = 0;
-        for (Map.Entry<String, String[]> entry : weaponData.entrySet()) {
-            String weaponId      = entry.getKey();
+        for (Map.Entry<String, String[]> entry : itemData.entrySet()) {
+            String itemId        = entry.getKey();
             String wContent      = entry.getValue()[0];
             String modFolderName = entry.getValue()[1]; // null = base game
             String subfolder     = (entry.getValue().length > 2 && entry.getValue()[2] != null)
-                ? entry.getValue()[2] : deriveSubfolder(weaponId);
+                ? entry.getValue()[2] : deriveSubfolder(itemId);
 
-            // Base game weapons -> DEFAULT_TARGET (targetPath)
-            // Mod weapons       -> saveMods/Group.Name/
+            boolean isArmorItem = itemId.toLowerCase().startsWith("armor_");
+            String itemFolder   = isArmorItem ? "Armor" : "Weapon";
+
+            // Base game items -> DEFAULT_TARGET (targetPath)
+            // Mod items       -> saveMods/Group.Name/
             Path outRoot   = (modFolderName == null) ? targetPath : saveMods.resolve(modFolderName);
-            Path targetDir = outRoot.resolve("Server/Item/Items/Weapon/" + subfolder);
+            Path targetDir = outRoot.resolve("Server/Item/Items/" + itemFolder + "/" + subfolder);
             Files.createDirectories(targetDir);
 
-            String modifiedContent = modifyContent(wContent, weaponId, null);
-            Files.write(targetDir.resolve(weaponId + ".json"), modifiedContent.getBytes(StandardCharsets.UTF_8));
+            String modifiedContent = modifyContent(wContent, itemId, null);
+            Files.write(targetDir.resolve(itemId + ".json"), modifiedContent.getBytes(StandardCharsets.UTF_8));
             count++;
         }
         return count;
     }
 
-    private int createUpgrades(Map<String, String[]> weaponData, Path targetPath, Path saveMods) throws IOException {
+    private int createUpgrades(Map<String, String[]> itemData, Path targetPath, Path saveMods) throws IOException {
         int count = 0;
-        for (Map.Entry<String, String[]> entry : weaponData.entrySet()) {
+        for (Map.Entry<String, String[]> entry : itemData.entrySet()) {
             String baseId        = entry.getKey();
             String baseContent   = entry.getValue()[0];
             String modFolderName = entry.getValue()[1]; // null = base game
@@ -874,10 +1013,13 @@ public class PatchAssetsCommand extends CommandBase {
             String subfolder = (entry.getValue().length > 2 && entry.getValue()[2] != null)
                 ? entry.getValue()[2] : deriveSubfolder(baseId);
 
+            boolean isArmorItem = baseId.toLowerCase().startsWith("armor_");
+            String itemFolder   = isArmorItem ? "Armor" : "Weapon";
+
             // Base game upgrades -> DEFAULT_TARGET (targetPath)
             // Mod upgrades       -> saveMods/Group.Name/
             Path outRoot   = (modFolderName == null) ? targetPath : saveMods.resolve(modFolderName);
-            Path targetDir = outRoot.resolve("Server/Item/Items/Weapon/" + subfolder);
+            Path targetDir = outRoot.resolve("Server/Item/Items/" + itemFolder + "/" + subfolder);
             Files.createDirectories(targetDir);
 
             for (int level = 1; level <= MAX_UPGRADE_LEVEL; level++) {
@@ -961,23 +1103,330 @@ public class PatchAssetsCommand extends CommandBase {
         return before + after;
     }
 
-    private int writeServerLang(CommandContext context, Path targetPath, Set<String> baseIds, Set<String> upgradeIds) throws IOException {
+    private int writeServerLang(CommandContext context, Path targetPath, Map<String, String[]> itemData, Map<String, String> sourceLangNames, Set<String> baseIds, Set<String> upgradeIds) throws IOException {
         Path langPath = targetPath.resolve("Server/Languages/en-US/server.lang");
         Files.createDirectories(langPath.getParent());
 
-        StringBuilder sb = new StringBuilder("# Auto-patched weapon entries\n");
-        for (String id : baseIds)    if (!id.toLowerCase().startsWith("template_")) sb.append("items.").append(id).append(".name = ").append(buildName(id)).append("\n");
-        for (String id : upgradeIds) sb.append("items.").append(id).append(".name = ").append(buildName(id)).append("\n");
+        StringBuilder sb = new StringBuilder("# Auto-patched weapon and armor entries\n");
+        for (String id : baseIds) {
+            if (id.toLowerCase().startsWith("template_")) continue;
+            String displayName = extractDisplayName(sourceLangNames, itemData, id);
+            sb.append("items.").append(id).append(".name = ").append(displayName).append("\n");
+        }
+        for (String id : upgradeIds) {
+            String displayName = extractDisplayName(sourceLangNames, itemData, id);
+            sb.append("items.").append(id).append(".name = ").append(displayName).append("\n");
+        }
 
         Files.write(langPath, sb.toString().getBytes(StandardCharsets.UTF_8));
         return baseIds.size() + upgradeIds.size();
     }
 
+    /**
+     * Extracts the display name from source server.lang or falls back to other methods.
+     */
+    private String extractDisplayName(Map<String, String> sourceLangNames, Map<String, String[]> itemData, String itemId) {
+        // First, check if we have the name from source server.lang
+        String langName = sourceLangNames.get(itemId);
+        if (langName != null && !langName.isBlank()) {
+            return langName;
+        }
+        
+        // Check if this is an upgrade item (ends with a number) - try to get base name
+        if (itemId.matches(".*\\d$")) {
+            int i = itemId.length() - 1;
+            while (i >= 0 && Character.isDigit(itemId.charAt(i))) i--;
+            String baseId = itemId.substring(0, i + 1);
+            String level = itemId.substring(i + 1);
+            
+            String baseLangName = sourceLangNames.get(baseId);
+            if (baseLangName != null && !baseLangName.isBlank()) {
+                return baseLangName + " +" + level;
+            }
+        }
+        
+        // Fallback to extracting from itemData content
+        String displayName = extractDisplayNameFromItemData(itemData, itemId);
+        if (displayName != null) {
+            return displayName;
+        }
+        
+        // Final fallback to buildName
+        return buildName(itemId);
+    }
+
+    /**
+     * Extracts display name from itemData content (JSON TranslationProperties).
+     */
+    private String extractDisplayNameFromItemData(Map<String, String[]> itemData, String itemId) {
+        // Check if this is an upgrade item
+        String level = "";
+        String baseId = itemId;
+        
+        if (itemId.matches(".*\\d$")) {
+            int i = itemId.length() - 1;
+            while (i >= 0 && Character.isDigit(itemId.charAt(i))) i--;
+            level = itemId.substring(i + 1);
+            baseId = itemId.substring(0, i + 1);
+        }
+        
+        // Get the source content for the base item
+        String[] data = itemData.get(baseId);
+        if (data == null || data[0] == null) {
+            return null;
+        }
+        
+        String content = data[0];
+        
+        // Extract the Name from TranslationProperties
+        String name = extractNameFromTranslationProperties(content);
+        
+        if (name != null && !name.isBlank()) {
+            // Strip the trailing .name if present
+            if (name.endsWith(".name")) {
+                name = name.substring(0, name.length() - 5);
+            }
+            // Get the last segment after the last dot (the actual name key)
+            int lastDot = name.lastIndexOf('.');
+            if (lastDot >= 0) {
+                name = name.substring(lastDot + 1);
+            }
+            // Replace underscores with spaces for readability
+            name = name.replace("_", " ");
+            
+            // Add level suffix for upgrade items
+            if (!level.isEmpty()) {
+                name = name + " +" + level;
+            }
+            
+            return name;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Extracts the Name value from TranslationProperties in JSON content.
+     */
+    private String extractNameFromTranslationProperties(String content) {
+        // Look for TranslationProperties section
+        int tpStart = content.indexOf("\"TranslationProperties\"");
+        if (tpStart < 0) return null;
+        
+        // Find the "Name" field after TranslationProperties
+        int nameStart = content.indexOf("\"Name\"", tpStart);
+        if (nameStart < 0) return null;
+        
+        // Find the colon after Name
+        int colon = content.indexOf(':', nameStart);
+        if (colon < 0) return null;
+        
+        // Find the opening quote
+        int quoteStart = content.indexOf('"', colon);
+        if (quoteStart < 0) return null;
+        
+        // Find the closing quote
+        int quoteEnd = content.indexOf('"', quoteStart + 1);
+        if (quoteEnd < 0) return null;
+        
+        return content.substring(quoteStart + 1, quoteEnd);
+    }
+
+    /**
+     * Scans all sources for server.lang files and extracts item names.
+     */
+    private void scanAllLangFiles(CommandContext context, Path saveMods, Path globalMods, Path explicitSource, Map<String, String> sourceLangNames) throws IOException {
+        // 1. Assets.zip - base game lang file
+        if (explicitSource != null) {
+            if (Files.isDirectory(explicitSource)) {
+                scanFolderForLang(explicitSource, sourceLangNames);
+            } else {
+                scanZipForLang(explicitSource, sourceLangNames);
+            }
+        }
+
+        // 2. Global mods
+        if (globalMods != null && !globalMods.equals(saveMods)) {
+            scanJarsForLang(globalMods, sourceLangNames, context);
+        }
+
+        // 3. Per-save mods
+        scanJarsForLang(saveMods, sourceLangNames, context);
+    }
+
+    /**
+     * Scans a folder for server.lang files.
+     */
+    private void scanFolderForLang(Path sourcePath, Map<String, String> sourceLangNames) {
+        // Check both possible lang file locations
+        Path langPath1 = sourcePath.resolve("Server/Languages/en-US/server.lang");
+        Path langPath2 = sourcePath.resolve("Languages/en-US/server.lang");
+        
+        for (Path langPath : new Path[]{langPath1, langPath2}) {
+            if (Files.exists(langPath)) {
+                try {
+                    String content = Files.readString(langPath);
+                    parseServerLang(content, sourceLangNames);
+                    System.out.println("[LANG] Loaded names from: " + langPath);
+                } catch (IOException e) {
+                    System.out.println("[LANG] Error reading: " + langPath + " - " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Scans a ZIP file for server.lang files.
+     */
+    private void scanZipForLang(Path zipPath, Map<String, String> sourceLangNames) {
+        try (ZipFile zf = new ZipFile(zipPath.toFile())) {
+            var entries = zf.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = entry.getName().replace("\\", "/");
+                // Look for server.lang in language folders
+                if (name.endsWith("server.lang") && name.toLowerCase().contains("languages/")) {
+                    try (InputStream is = zf.getInputStream(entry)) {
+                        String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                        parseServerLang(content, sourceLangNames);
+                        System.out.println("[LANG] Loaded names from ZIP: " + name);
+                    } catch (IOException e) {
+                        System.out.println("[LANG] Error reading ZIP entry: " + name);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("[LANG] Error opening ZIP: " + zipPath);
+        }
+    }
+
+    /**
+     * Scans JAR files in a folder for server.lang files.
+     */
+    private void scanJarsForLang(Path modsPath, Map<String, String> sourceLangNames, CommandContext context) {
+        if (!Files.exists(modsPath) || !Files.isDirectory(modsPath)) {
+            return;
+        }
+
+        for (String glob : new String[]{"*.jar", "*.zip"}) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(modsPath, glob)) {
+                for (Path modPath : stream) {
+                    String fname = modPath.getFileName().toString().toLowerCase();
+                    if (fname.equals("assets.zip")) {
+                        continue;
+                    }
+                    scanSingleJarForLang(modPath, sourceLangNames);
+                }
+            } catch (IOException e) {
+                // Ignore errors
+            }
+        }
+    }
+
+    /**
+     * Scans a single JAR file for server.lang files.
+     */
+    private void scanSingleJarForLang(Path jarPath, Map<String, String> sourceLangNames) {
+        try (ZipFile zf = new ZipFile(jarPath.toFile())) {
+            var entries = zf.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = entry.getName().replace("\\", "/");
+                // Look for server.lang in language folders
+                if (name.endsWith("server.lang") && name.toLowerCase().contains("languages/")) {
+                    try (InputStream is = zf.getInputStream(entry)) {
+                        String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+                        parseServerLang(content, sourceLangNames);
+                        System.out.println("[LANG] Loaded names from JAR: " + jarPath.getFileName() + ":" + name);
+                    } catch (IOException e) {
+                        // Ignore
+                    }
+                }
+            }
+        } catch (IOException e) {
+            // Ignore
+        }
+    }
+
+    /**
+     * Parses server.lang content and extracts item names.
+     * Handles formats like:
+     *   server.items.Weapon_Sword_Crude.name = Crude Sword
+     *   items.Weapon_Sword_Crude.name = Crude Sword
+     *   item.Weapon_Sword_Crude.name = Crude Sword
+     */
+    private void parseServerLang(String content, Map<String, String> sourceLangNames) {
+        for (String line : content.split("\n")) {
+            line = line.trim();
+            if (line.isEmpty() || line.startsWith("#")) continue;
+            
+            // Look for pattern: key.name = value
+            int equalsIdx = line.indexOf('=');
+            if (equalsIdx <= 0) continue;
+            
+            String key = line.substring(0, equalsIdx).trim();
+            String value = line.substring(equalsIdx + 1).trim();
+            
+            // We only care about keys ending with .name
+            if (!key.endsWith(".name")) continue;
+            
+            // Strip .name suffix
+            key = key.substring(0, key.length() - 5);
+            
+            // Get the item ID (last segment after the last dot)
+            int lastDot = key.lastIndexOf('.');
+            if (lastDot < 0) continue;
+            
+            String itemId = key.substring(lastDot + 1);
+            
+            // Skip template items
+            if (itemId.toLowerCase().startsWith("template_")) continue;
+            
+            // Only store if not already present (first source takes priority)
+            if (!sourceLangNames.containsKey(itemId)) {
+                sourceLangNames.put(itemId, value);
+            }
+        }
+    }
+
+    /**
+     * Builds a human-readable display name for a weapon or armor item ID.
+     *
+     * Weapons:  Weapon_Sword_Iron  -> "Iron Sword"
+     *           Weapon_Sword_Iron1 -> "Iron Sword +1"
+     * Armor:    Armor_Chest_Iron   -> "Iron Chestplate"
+     *           Armor_Chest_Iron1  -> "Iron Chestplate +1"
+     *           Armor_Helmet_Iron  -> "Iron Helmet"
+     *           Armor_Legs_Iron    -> "Iron Leggings"
+     *           Armor_Boots_Iron   -> "Iron Boots"
+     */
     private String buildName(String itemId) {
         String[] parts = itemId.split("_");
         if (parts.length < 3) return itemId;
 
-        String type     = Character.toUpperCase(parts[1].charAt(0)) + parts[1].substring(1).toLowerCase();
+        boolean isArmor = parts[0].equalsIgnoreCase("Armor");
+
+        // Determine the type label
+        String typeLabel;
+        if (isArmor) {
+            String slot = parts[1].toLowerCase();
+            switch (slot) {
+                case "chest":    typeLabel = "Chestplate"; break;
+                case "helmet":   typeLabel = "Helmet";     break;
+                case "head":     typeLabel = "Helmet";     break;
+                case "legs":     typeLabel = "Leggings";   break;
+                case "leggings": typeLabel = "Leggings";   break;
+                case "boots":    typeLabel = "Boots";      break;
+                case "feet":     typeLabel = "Boots";      break;
+                case "gloves":   typeLabel = "Gloves";     break;
+                case "hands":    typeLabel = "Gloves";     break;
+                default:
+                    typeLabel = Character.toUpperCase(slot.charAt(0)) + slot.substring(1).toLowerCase();
+            }
+        } else {
+            typeLabel = Character.toUpperCase(parts[1].charAt(0)) + parts[1].substring(1).toLowerCase();
+        }
+
         String lastPart = parts[parts.length - 1];
 
         String level, material;
@@ -992,20 +1441,20 @@ public class PatchAssetsCommand extends CommandBase {
         }
         material = Character.toUpperCase(material.charAt(0)) + material.substring(1).toLowerCase();
 
-        return level.isEmpty() ? material + " " + type : material + " " + type + " +" + level;
+        return level.isEmpty() ? material + " " + typeLabel : material + " " + typeLabel + " +" + level;
     }
 
-    private boolean writeManifest(Path targetPath, Set<String> weaponIds, Set<String> upgradeIds) throws IOException {
+    private boolean writeManifest(Path targetPath, Set<String> baseIds, Set<String> upgradeIds) throws IOException {
         Path manifestPath = targetPath.resolve("manifest.json");
         boolean existed = Files.exists(manifestPath);
 
-        // SocketReforge no longer owns weapon JSONs - they live in the source mod folders.
+        // SocketReforge no longer owns item JSONs - they live in the source mod folders.
         // This manifest only needs to register the plugin and its lang pack.
         String json = "{\n" +
             "  \"Group\": \"irai.mod.reforge\",\n" +
             "  \"Name\": \"SocketReforge\",\n" +
             "  \"Version\": \"1.0.0\",\n" +
-            "  \"Description\": \"Weapon upgrade and reforge system - Patched with External Asset Patcher\",\n" +
+            "  \"Description\": \"Weapon and armor upgrade/reforge system - Patched with External Asset Patcher\",\n" +
             "  \"Authors\": [{\"Name\": \"iRaiden\", \"Email\": \"animus0416@gmail.com\", \"Url\": \"https://github.com/Rizrokkz\"}],\n" +
             "  \"Website\": \"\",\n" +
             "  \"Dependencies\": {},\n" +
@@ -1023,6 +1472,6 @@ public class PatchAssetsCommand extends CommandBase {
 
     @Override
     public String getDescription() {
-        return "Patch weapons from Assets.zip/folder/jars - /patchassets";
+        return "Patch weapons and armor from Assets.zip/folder/jars - /patchassets";
     }
 }
