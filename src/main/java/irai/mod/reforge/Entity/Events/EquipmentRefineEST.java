@@ -1,5 +1,8 @@
 package irai.mod.reforge.Entity.Events;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
@@ -125,20 +128,28 @@ public class EquipmentRefineEST extends DamageEventSystem {
         // ── Defender armor bonus (defense / damage reduction) ─────────────────
         Player defender = store.getComponent(targetRef, Player.getComponentType());
         if (defender != null) {
-            ItemStack armor = findArmorInEquipment(defender);
-            if (armor != null && ReforgeEquip.isArmor(armor)) {
-                String armorId = getItemId(armor);
-                int upgradeLevel = ReforgeEquip.getLevelFromItemId(armorId);
-                int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
-                // Defense multiplier reduces incoming damage: damage / defenseMultiplier
-                double defenseMultiplier = getDefenseMultiplier(clampedLevel);
+            List<ItemStack> armorPieces = getAllEquippedArmor(defender);
+            if (!armorPieces.isEmpty()) {
+                double avgDefenseMultiplier = calculateAverageDefenseMultiplier(armorPieces);
+
+                // Get the highest level armor for display purposes
+                int highestLevel = 0;
+                for (ItemStack armor : armorPieces) {
+                    String armorId = getItemId(armor);
+                    if (armorId != null) {
+                        int level = ReforgeEquip.getLevelFromItemId(armorId);
+                        if (level > highestLevel) highestLevel = level;
+                    }
+                }
+                int clampedLevel = Math.max(0, Math.min(highestLevel, 3));
 
                 System.out.println("═══════════════════════════════════════════════");
                 System.out.println("[EquipmentRefineEST] Defender: " + defender.getPlayerRef().getUsername());
-                System.out.println("[EquipmentRefineEST] Armor: " + armorId + " (level " + clampedLevel + ")");
-                System.out.println("[EquipmentRefineEST] Defense multiplier: " + defenseMultiplier);
+                System.out.println("[EquipmentRefineEST] Armor pieces: " + armorPieces.size());
+                System.out.println("[EquipmentRefineEST] Highest armor level: " + clampedLevel);
+                System.out.println("[EquipmentRefineEST] Average defense multiplier: " + avgDefenseMultiplier);
 
-                float reducedDamage = (float) (damage.getAmount() / defenseMultiplier);
+                float reducedDamage = (float) (damage.getAmount() / avgDefenseMultiplier);
                 System.out.println("[EquipmentRefineEST] Damage after defense: " + damage.getAmount() + " -> " + reducedDamage);
                 System.out.println("═══════════════════════════════════════════════");
                 damage.setAmount(reducedDamage);
@@ -177,13 +188,29 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Looks in the player's hotbar and storage for the best (highest level) armor piece.
+     * Gets all equipped armor pieces from the player's equipment slots and inventory.
+     * Returns a list of armor ItemStacks.
      */
-    private ItemStack findArmorInEquipment(Player player) {
-        try {
-            ItemStack best = null;
-            int bestLevel = -1;
+    private List<ItemStack> getAllEquippedArmor(Player player) {
+        List<ItemStack> armorPieces = new ArrayList<>();
 
+        try {
+            // First, check player's equipment slots (helmet, chestplate, leggings, boots)
+            try {
+                ItemContainer armorContainer = player.getInventory().getArmor();
+                if (armorContainer != null) {
+                    for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
+                        ItemStack stack = armorContainer.getItemStack(slot);
+                        if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
+                            armorPieces.add(stack);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[EquipmentRefineEST] Error checking armor container: " + e.getMessage());
+            }
+
+            // Then, check inventory (hotbar and storage) for any additional armor
             for (ItemContainer container : new ItemContainer[]{
                     player.getInventory().getHotbar(),
                     player.getInventory().getStorage()}) {
@@ -191,21 +218,45 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 for (short slot = 0; slot < container.getCapacity(); slot++) {
                     ItemStack stack = container.getItemStack(slot);
                     if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
-                        int level = ReforgeEquip.getLevelFromItemId(stack.getItemId());
-                        if (level > bestLevel) {
-                            bestLevel = level;
-                            best = stack;
-                        }
+                        armorPieces.add(stack);
                     }
                 }
             }
-            return best;
 
         } catch (Exception e) {
-            System.err.println("[EquipmentRefineEST] Error finding armor: " + e.getMessage());
+            System.err.println("[EquipmentRefineEST] Error getting equipped armor: " + e.getMessage());
         }
 
-        return null;
+        return armorPieces;
+    }
+
+    /**
+     * Calculates the average defense multiplier from all equipped armor pieces.
+     */
+    private double calculateAverageDefenseMultiplier(List<ItemStack> armorPieces) {
+        if (armorPieces.isEmpty()) {
+            return 1.0; // No armor, no bonus
+        }
+
+        double totalMultiplier = 0.0;
+        int count = 0;
+
+        for (ItemStack armor : armorPieces) {
+            String armorId = getItemId(armor);
+            if (armorId != null) {
+                int level = ReforgeEquip.getLevelFromItemId(armorId);
+                int clampedLevel = Math.max(0, Math.min(level, 3));
+                double multiplier = getDefenseMultiplier(clampedLevel);
+                totalMultiplier += multiplier;
+                count++;
+            }
+        }
+
+        if (count == 0) {
+            return 1.0;
+        }
+
+        return totalMultiplier / count;
     }
 
     /**
