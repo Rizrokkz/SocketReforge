@@ -259,14 +259,8 @@ public class ReforgeEquip extends SimpleInteraction {
      */
     public static String getDisplayNameFromMetadata(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
-        
-        // First check if we have a stored display name in metadata
-        String storedName = item.getFromMetadataOrNull(META_REFINEMENT_NAME, Codec.STRING);
-        if (storedName != null && !storedName.isEmpty()) {
-            return storedName;
-        }
-        
-        return null;
+
+        return getItemMetadataDisplayName(item);
     }
     
     /**
@@ -275,23 +269,55 @@ public class ReforgeEquip extends SimpleInteraction {
     private static String getRefinedDisplayName(ItemStack item, int level) {
         if (item == null || item.isEmpty()) return null;
         
-        // Get the base name from translation properties
-        String baseName = null;
-        try {
-            baseName = item.getItem().getTranslationProperties().getName();
-        } catch (Exception e) {
-            // Fall back to item ID
+        // Get the base name from item metadata first (actual runtime/customized name)
+        String baseName = getItemMetadataDisplayName(item);
+
+        // Fall back to translation properties only when no metadata name exists
+        if (baseName == null || baseName.isEmpty()) {
+            try {
+                baseName = item.getItem().getTranslationProperties().getName();
+            } catch (Exception e) {
+                // Fall back to item ID
+            }
         }
         
         if (baseName == null || baseName.isEmpty()) {
             baseName = item.getItemId();
         }
+
+        // Avoid stacking suffixes like "Sword +1 +2"
+        baseName = baseName.replaceFirst("\\s\\+[123]$", "");
         
         // Append refinement level if > 0
         if (level > 0) {
             return baseName + " +" + level;
         }
         return baseName;
+    }
+
+    /**
+     * Attempts to read an item's display name from metadata.
+     */
+    private static String getItemMetadataDisplayName(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+
+        String[] candidateKeys = {
+                META_REFINEMENT_NAME,
+                "DisplayName",
+                "displayName",
+                "Name",
+                "name",
+                "Item.Name"
+        };
+
+        for (String key : candidateKeys) {
+            String value = item.getFromMetadataOrNull(key, Codec.STRING);
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     /**

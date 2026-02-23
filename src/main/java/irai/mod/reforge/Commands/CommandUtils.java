@@ -187,9 +187,20 @@ public class CommandUtils {
      * Gets the display name of an item.
      */
     public static String getItemDisplayName(ItemStack itemStack) {
-        if (itemStack == null || itemStack.getItem() == null) {
+        if (itemStack == null || itemStack.isEmpty()) {
             return null;
         }
+
+        // Prefer runtime/custom item name stored in metadata (used by weaponstats and debug commands)
+        String metadataName = ReforgeEquip.getDisplayNameFromMetadata(itemStack);
+        if (metadataName != null && !metadataName.isEmpty()) {
+            return metadataName;
+        }
+
+        if (itemStack.getItem() == null) {
+            return itemStack.getItemId();
+        }
+
         try {
             return itemStack.getItem().getTranslationProperties().getName();
         } catch (Exception e) {

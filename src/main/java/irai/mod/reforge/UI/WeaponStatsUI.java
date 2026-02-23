@@ -146,7 +146,11 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
         // First check if we have a stored display name in refinement metadata
         String metadataName = ReforgeEquip.getDisplayNameFromMetadata(item);
         if (metadataName != null && !metadataName.isEmpty()) {
-            return metadataName;
+            String baseMetadataName = metadataName.replaceFirst("\\s\\+[123]$", "");
+            if (refinementLevel > 0) {
+                return baseMetadataName + " +" + refinementLevel;
+            }
+            return baseMetadataName;
         }
         
         // Try to get the proper display name from the item's translation properties

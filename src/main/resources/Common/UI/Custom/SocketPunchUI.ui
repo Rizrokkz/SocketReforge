@@ -1,114 +1,110 @@
 // Socket Punching UI
 Group {
   LayoutMode: Center;
+
   Group #SocketPunchRoot {
     LayoutMode: Top;
-    Background: #333333;
-    Anchor: (Width: 400, Height: 400);
-    
+    Anchor: (Width: 520, Height: 430);
+    Background: #1E1E1E;
+
     Label #TitleText {
-      Text: "Socket Punching";
+      Anchor: (Top: 12);
+      Text: "Socket Punch Bench";
       Style: (FontSize: 20, TextColor: #FFFFFF);
     }
-    
+
     Group #EquipmentSlot {
-      Anchor: (Width: 100, Height: 100, Top: 50);
-      Background: #555555;
+      Anchor: (Width: 220, Height: 42, Top: 52, Left: 20);
+      Background: #444444;
     }
     Label #EquipmentPlaceholder {
-      Anchor: (Top: 160);
-      Text: "Drop Equipment";
+      Anchor: (Top: 98, Left: 20);
+      Text: "Hold weapon/armor";
       Style: (FontSize: 12, TextColor: #AAAAAA);
     }
     Label #EquipmentItemName {
-      Anchor: (Top: 180);
+      Anchor: (Top: 116, Left: 20);
       Text: "";
-      Style: (FontSize: 14, TextColor: #FFFFFF);
+      Style: (FontSize: 13, TextColor: #FFFFFF);
     }
     Label #EquipmentItemSockets {
-      Anchor: (Top: 200);
+      Anchor: (Top: 134, Left: 20);
       Text: "";
       Style: (FontSize: 12, TextColor: #55FF55);
     }
-    
+
     Group #PuncherSlot {
-      Anchor: (Width: 80, Height: 80, Top: 230);
-      Background: #555555;
+      Anchor: (Width: 220, Height: 42, Top: 170, Left: 20);
+      Background: #444444;
     }
     Label #PuncherPlaceholder {
-      Anchor: (Top: 320);
+      Anchor: (Top: 216, Left: 20);
       Text: "Socket Puncher";
       Style: (FontSize: 12, TextColor: #AAAAAA);
     }
     Label #PuncherItemName {
-      Anchor: (Top: 340);
+      Anchor: (Top: 234, Left: 20);
       Text: "";
-      Style: (FontSize: 14, TextColor: #FFFFFF);
+      Style: (FontSize: 13, TextColor: #FFFFFF);
     }
-    
+
     Group #SupportSlot {
-      Anchor: (Width: 80, Height: 80, Top: 370);
-      Background: #555555;
+      Anchor: (Width: 220, Height: 42, Top: 268, Left: 20);
+      Background: #444444;
     }
     Label #SupportPlaceholder {
-      Anchor: (Top: 460);
+      Anchor: (Top: 314, Left: 20);
       Text: "Optional Booster";
       Style: (FontSize: 12, TextColor: #AAAAAA);
     }
     Label #SupportItemName {
-      Anchor: (Top: 480);
+      Anchor: (Top: 332, Left: 20);
       Text: "";
-      Style: (FontSize: 14, TextColor: #FFFFFF);
+      Style: (FontSize: 13, TextColor: #FFFFFF);
     }
-    
-    Group #SocketDisplay {
-      LayoutMode: Left;
-      Anchor: (Top: 510);
-      Group #Socket1 {
-        Anchor: (Width: 42, Height: 42);
-        Background: #333333;
-      }
-      Group #Socket2 {
-        Anchor: (Width: 42, Height: 42, Left: 5);
-        Background: #333333;
-      }
-      Group #Socket3 {
-        Anchor: (Width: 42, Height: 42, Left: 5);
-        Background: #333333;
-      }
-      Group #Socket4 {
-        Anchor: (Width: 42, Height: 42, Left: 5);
-        Background: #333333;
-      }
+
+    Group #Socket1 {
+      Anchor: (Width: 42, Height: 42, Top: 60, Left: 300);
+      Background: #333333;
     }
-    
+    Group #Socket2 {
+      Anchor: (Width: 42, Height: 42, Top: 60, Left: 348);
+      Background: #333333;
+    }
+    Group #Socket3 {
+      Anchor: (Width: 42, Height: 42, Top: 60, Left: 396);
+      Background: #333333;
+    }
+    Group #Socket4 {
+      Anchor: (Width: 42, Height: 42, Top: 60, Left: 444);
+      Background: #333333;
+    }
+
     Label #SocketCountValue {
-      Anchor: (Top: 560);
-      Text: "0/4";
+      Anchor: (Top: 120, Left: 300);
+      Text: "0 / 4";
       Style: (FontSize: 14, TextColor: #FFFFFF);
     }
-    
     Label #SuccessValue {
-      Anchor: (Top: 580);
+      Anchor: (Top: 145, Left: 300);
       Text: "0%";
       Style: (FontSize: 14, TextColor: #55FF55);
     }
-    
     Label #BreakValue {
-      Anchor: (Top: 600);
+      Anchor: (Top: 170, Left: 300);
       Text: "0%";
       Style: (FontSize: 14, TextColor: #FF5555);
     }
-    
+
     Label #WarningText {
-      Anchor: (Top: 620);
+      Anchor: (Top: 295, Left: 300);
       Text: "";
       Style: (FontSize: 12, TextColor: #FFAA00);
     }
-    
+
     Group #PunchSocketButton {
-      Anchor: (Width: 150, Height: 40, Top: 650);
-      Background: #55FF55;
+      Anchor: (Width: 170, Height: 42, Top: 338, Left: 300);
+      Background: #55AA55;
     }
   }
 }
