@@ -1,0 +1,27 @@
+{
+  "TranslationProperties": {
+    "Name": "Socket Puncher"
+  },
+  "Categories": [
+    "Items.SocketMaterials"
+  ],
+  "Model": "Blocks/Benches/Campfire_Off.blockymodel",
+  "Texture": "Blocks/Benches/Campfire_Off_Texture.png",
+  "Icon": "Icons/ItemsGenerated/Deco_Campfire_Off.png",
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 1,
+    "Translation": [0, -3],
+    "Rotation": [22.5, 45, 22.5]
+  },
+  "Tags": {
+    "Type": ["SocketMaterial", "MainMaterial"]
+  },
+  "ItemEntity": {
+    "ParticleSystemId": null
+  },
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "DropOnDeath": true,
+  "MaxStack": 64,
+  "Scale": 1
+}

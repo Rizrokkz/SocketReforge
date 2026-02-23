@@ -109,7 +109,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
             ItemStack weapon = findWeaponInHotbar(attacker);
             if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
                 String weaponId = getItemId(weapon);
-                int upgradeLevel = ReforgeEquip.getLevelFromItemId(weaponId);
+                int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
                 int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
                 double multiplier = getDamageMultiplier(clampedLevel);
 
@@ -137,7 +137,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 for (ItemStack armor : armorPieces) {
                     String armorId = getItemId(armor);
                     if (armorId != null) {
-                        int level = ReforgeEquip.getLevelFromItemId(armorId);
+                        int level = ReforgeEquip.getLevelFromItem(armor);
                         if (level > highestLevel) highestLevel = level;
                     }
                 }
@@ -244,7 +244,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
         for (ItemStack armor : armorPieces) {
             String armorId = getItemId(armor);
             if (armorId != null) {
-                int level = ReforgeEquip.getLevelFromItemId(armorId);
+                int level = ReforgeEquip.getLevelFromItem(armor);
                 int clampedLevel = Math.max(0, Math.min(level, 3));
                 double multiplier = getDefenseMultiplier(clampedLevel);
                 totalMultiplier += multiplier;

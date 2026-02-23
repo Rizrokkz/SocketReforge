@@ -5,6 +5,7 @@ import java.util.regex.Pattern;
 
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
+import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -124,7 +125,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
         String itemId = heldItem.getItemId();
         short slot = context.getHeldItemSlot();
-        int currentLevel = getLevelFromItemId(itemId);
+        int currentLevel = getLevelFromItem(heldItem); // Check metadata first, then ID suffix
 
         if (currentLevel >= MAX_UPGRADE_LEVEL) {
             player.sendMessage(Message.raw((isArmorItem ? "Armor" : "Weapon") + " is already at max level"));
@@ -201,6 +202,97 @@ public class ReforgeEquip extends SimpleInteraction {
         }
         return 0; // Base level (no suffix)
     }
+    
+    private static final String META_REFINEMENT_LEVEL = "SocketReforge.Refinement.Level";
+    private static final String META_BASE_ITEM_ID = "SocketReforge.Refinement.BaseItemId";
+    private static final String META_REFINEMENT_NAME = "SocketReforge.Refinement.DisplayName";
+    
+    /**
+     * Gets refinement level from item metadata.
+     * Falls back to legacy ID suffix parsing when metadata is not present.
+     */
+    public static int getLevelFromItem(ItemStack item) {
+        if (item == null || item.isEmpty()) return 0;
+
+        Integer levelFromMetadata = item.getFromMetadataOrNull(META_REFINEMENT_LEVEL, Codec.INTEGER);
+        if (levelFromMetadata != null) {
+            return Math.max(0, Math.min(levelFromMetadata, 3));
+        }
+
+        return getLevelFromItemId(item.getItemId());
+    }
+
+    /**
+     * Checks if the item has refinement metadata.
+     */
+    public static boolean hasRefinementMetadata(ItemStack item) {
+        if (item == null || item.isEmpty()) return false;
+        return item.getFromMetadataOrNull(META_REFINEMENT_LEVEL, Codec.INTEGER) != null;
+    }
+    
+    /**
+     * Applies the upgrade level to an item's metadata.
+     */
+    public static ItemStack withUpgradeLevel(ItemStack item, int level) {
+        if (item == null || item.isEmpty()) {
+            return item;
+        }
+
+        String baseId = getBaseItemId(item.getItemId());
+        int clampedLevel = Math.max(0, Math.min(level, 3));
+        ItemStack updated = item.withMetadata(META_REFINEMENT_LEVEL, Codec.INTEGER, clampedLevel);
+        if (baseId != null) {
+            updated = updated.withMetadata(META_BASE_ITEM_ID, Codec.STRING, baseId);
+        }
+        
+        // Store the refined display name in metadata
+        String refinedName = getRefinedDisplayName(item, clampedLevel);
+        if (refinedName != null) {
+            updated = updated.withMetadata(META_REFINEMENT_NAME, Codec.STRING, refinedName);
+        }
+        
+        return updated;
+    }
+    
+    /**
+     * Gets the display name from metadata, or falls back to translation properties.
+     */
+    public static String getDisplayNameFromMetadata(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+        
+        // First check if we have a stored display name in metadata
+        String storedName = item.getFromMetadataOrNull(META_REFINEMENT_NAME, Codec.STRING);
+        if (storedName != null && !storedName.isEmpty()) {
+            return storedName;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Gets the refined display name for an item based on its level.
+     */
+    private static String getRefinedDisplayName(ItemStack item, int level) {
+        if (item == null || item.isEmpty()) return null;
+        
+        // Get the base name from translation properties
+        String baseName = null;
+        try {
+            baseName = item.getItem().getTranslationProperties().getName();
+        } catch (Exception e) {
+            // Fall back to item ID
+        }
+        
+        if (baseName == null || baseName.isEmpty()) {
+            baseName = item.getItemId();
+        }
+        
+        // Append refinement level if > 0
+        if (level > 0) {
+            return baseName + " +" + level;
+        }
+        return baseName;
+    }
 
     /**
      * Backwards-compatible alias for {@link #getLevelFromItemId(String)}.
@@ -239,8 +331,8 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Creates an upgraded item (weapon or armor) ItemStack with the new level.
-     * Items must be defined in resources (server.lang pattern: Item_Name1, Item_Name2, Item_Name3).
+     * Creates an upgraded item (weapon or armor) ItemStack with the new level stored in metadata.
+     * The item ID remains unchanged - refinement level is stored in metadata only.
      */
     private ItemStack createUpgradedItem(ItemStack original, String baseId, int newLevel) {
         if (baseId == null) {
@@ -248,24 +340,18 @@ public class ReforgeEquip extends SimpleInteraction {
             return null;
         }
 
-        boolean isWeaponBase = baseId.toLowerCase().startsWith("weapon_");
-        boolean isArmorBase  = baseId.toLowerCase().startsWith("armor_");
-
-        if (!isWeaponBase && !isArmorBase) {
-            System.err.println("[ReforgeEquip] Invalid base item ID (not weapon or armor): " + baseId);
+        if (original == null || original.isEmpty()) {
+            System.err.println("[ReforgeEquip] Invalid original item for refinement");
             return null;
         }
 
-        // Create new item ID based on server.lang pattern
-        // Level 0 = base (no suffix), Level 1 = "1", Level 2 = "2", Level 3 = "3"
-        String newItemId = (newLevel == 0) ? baseId : (baseId + newLevel);
-
         try {
-            ItemStack newItemStack = new ItemStack(newItemId, 1);
-            System.out.println("[ReforgeEquip] Created upgraded item: " + newItemId + " (level " + newLevel + ")");
-            return newItemStack;
+            // Keep the same item ID - store refinement level in metadata only
+            ItemStack upgraded = withUpgradeLevel(original, newLevel);
+            System.out.println("[ReforgeEquip] Created upgraded item: " + baseId + " (level " + newLevel + " in metadata)");
+            return upgraded;
         } catch (Exception e) {
-            System.err.println("[ReforgeEquip] Error creating upgraded item '" + newItemId + "': " + e.getMessage());
+            System.err.println("[ReforgeEquip] Error creating upgraded item '" + baseId + "': " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -427,6 +513,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
     /**
      * Checks if the item has "Items.Weapons" category using reflection.
+     * Also checks getWeapon() method and getCategories() method directly.
      * Returns true if the item has the proper weapon category.
      */
     private static boolean hasWeaponCategory(ItemStack itemStack) {
@@ -435,8 +522,35 @@ public class ReforgeEquip extends SimpleInteraction {
                 return false;
             }
             
-            // Try to get the categories field via reflection
             Object item = itemStack.getItem();
+            
+            // Method 1: Call getCategories() directly - returns String[]
+            try {
+                java.lang.reflect.Method getCategoriesMethod = item.getClass().getMethod("getCategories");
+                Object categoriesResult = getCategoriesMethod.invoke(item);
+                if (categoriesResult instanceof String[]) {
+                    String[] categories = (String[]) categoriesResult;
+                    for (String cat : categories) {
+                        if (cat != null) {
+                            String catLower = cat.toLowerCase();
+                            if (catLower.contains("items.weapon") || catLower.equals("weapon")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            
+            // Method 2: Check getWeapon() - returns non-null for weapons
+            try {
+                java.lang.reflect.Method getWeaponMethod = item.getClass().getMethod("getWeapon");
+                Object weaponResult = getWeaponMethod.invoke(item);
+                if (weaponResult != null) {
+                    return true;
+                }
+            } catch (Exception ignored) {}
+            
+            // Method 3: Try to get the categories field via reflection from item object
             java.lang.reflect.Field categoriesField = null;
             
             // Try different field names that might contain categories
@@ -454,7 +568,20 @@ public class ReforgeEquip extends SimpleInteraction {
                 categoriesField.setAccessible(true);
                 Object categoriesObj = categoriesField.get(item);
                 
-                if (categoriesObj instanceof java.util.List) {
+                // Handle String array
+                if (categoriesObj instanceof String[]) {
+                    String[] categories = (String[]) categoriesObj;
+                    for (String cat : categories) {
+                        if (cat != null) {
+                            String catLower = cat.toLowerCase();
+                            if (catLower.contains("items.weapon") || catLower.equals("weapon")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Handle List
+                else if (categoriesObj instanceof java.util.List) {
                     @SuppressWarnings("unchecked")
                     java.util.List<Object> categories = (java.util.List<Object>) categoriesObj;
                     for (Object cat : categories) {
@@ -511,11 +638,40 @@ public class ReforgeEquip extends SimpleInteraction {
 
     /**
      * Checks if the item has "Items.Armor" category using reflection.
+     * Also checks getArmor() method and getCategories() method directly.
      */
     private static boolean hasArmorCategory(ItemStack itemStack) {
         try {
             if (itemStack.getItem() == null) return false;
             Object item = itemStack.getItem();
+            
+            // Method 1: Call getCategories() directly - returns String[]
+            try {
+                java.lang.reflect.Method getCategoriesMethod = item.getClass().getMethod("getCategories");
+                Object categoriesResult = getCategoriesMethod.invoke(item);
+                if (categoriesResult instanceof String[]) {
+                    String[] categories = (String[]) categoriesResult;
+                    for (String cat : categories) {
+                        if (cat != null) {
+                            String catLower = cat.toLowerCase();
+                            if (catLower.contains("items.armor") || catLower.contains("items.armour") || catLower.equals("armor")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+            
+            // Method 2: Check getArmor() - returns non-null for armor
+            try {
+                java.lang.reflect.Method getArmorMethod = item.getClass().getMethod("getArmor");
+                Object armorResult = getArmorMethod.invoke(item);
+                if (armorResult != null) {
+                    return true;
+                }
+            } catch (Exception ignored) {}
+            
+            // Method 3: Try to get the categories field via reflection from item object
             java.lang.reflect.Field categoriesField = null;
             for (String fieldName : new String[]{"categories", "Categories", "category"}) {
                 try {
@@ -526,7 +682,20 @@ public class ReforgeEquip extends SimpleInteraction {
             if (categoriesField != null) {
                 categoriesField.setAccessible(true);
                 Object categoriesObj = categoriesField.get(item);
-                if (categoriesObj instanceof java.util.List) {
+                // Handle String array
+                if (categoriesObj instanceof String[]) {
+                    String[] categories = (String[]) categoriesObj;
+                    for (String cat : categories) {
+                        if (cat != null) {
+                            String catLower = cat.toLowerCase();
+                            if (catLower.contains("items.armor") || catLower.contains("items.armour") || catLower.equals("armor")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                // Handle List
+                else if (categoriesObj instanceof java.util.List) {
                     @SuppressWarnings("unchecked")
                     java.util.List<Object> categories = (java.util.List<Object>) categoriesObj;
                     for (Object cat : categories) {
@@ -617,13 +786,13 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Gets upgrade level for a weapon from its ID.
+     * Gets upgrade level for a weapon from its metadata or ID.
      */
     public static int getUpgradeLevel(Player player, ItemStack weapon, short slot) {
         if (weapon == null) {
             return 0;
         }
-        return getLevelFromWeaponId(weapon.getItemId());
+        return getLevelFromItem(weapon); // Check metadata first, then ID suffix
     }
 
     /**
@@ -858,20 +1027,13 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Gets the item level, checking both refined weapons/armor and regular items.
+     * Gets the item level, checking metadata first, then ID suffix.
      */
     private static int getWeaponLevel(Player player, ItemStack item, short slot) {
         if (item == null) return 0;
 
-        String itemId = item.getItemId();
-
-        if (itemId != null && (itemId.toLowerCase().startsWith("weapon_") || itemId.toLowerCase().startsWith("armor_"))) {
-            // Refined item - get level from item ID suffix
-            return getLevelFromItemId(itemId);
-        } else {
-            // Regular item - get level from tracker
-            return getUpgradeLevel(player, item, slot);
-        }
+        // Check metadata first, then fall back to ID suffix
+        return getLevelFromItem(item);
     }
 
     /**

@@ -161,8 +161,8 @@ public class CommandUtils {
                 weaponData.addProperty("displayName", displayName);
             }
 
-            // Get quality index (refinement level) from weapon ID
-            int qualityIndex = ReforgeEquip.getLevelFromWeaponId(itemStack.getItemId());
+            // Get quality index (refinement level) from metadata (legacy ID suffix fallback)
+            int qualityIndex = ReforgeEquip.getLevelFromItem(itemStack);
             weaponData.addProperty("qualityIndex", qualityIndex);
 
 

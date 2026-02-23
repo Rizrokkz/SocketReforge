@@ -17,8 +17,12 @@ import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Commands.CommandUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
+/**
+ * Weapon stats page that only targets selectors present in WeaponStatHUD.ui.
+ */
 public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
 
     public WeaponStatsUI(@Nonnull PlayerRef playerRef, @Nonnull CustomPageLifetime lifetime) {
@@ -29,183 +33,80 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
     public void build(@Nonnull Ref<EntityStore> ref, @Nonnull UICommandBuilder uiCommandBuilder, @Nonnull UIEventBuilder uiEventBuilder, @Nonnull Store<EntityStore> store) {
         uiCommandBuilder.append("WeaponStatHUD.ui");
 
-        // Get the player and their held item
         Player player = store.getComponent(ref, Player.getComponentType());
-        ItemStack heldItem = player != null ? player.getInventory().getHotbar().getItemStack(player.getInventory().getActiveHotbarSlot()) : null;
+        ItemStack heldItem = player != null
+                ? player.getInventory().getHotbar().getItemStack(player.getInventory().getActiveHotbarSlot())
+                : null;
 
-        // Default values if no weapon is held
         String weaponName = "No weapon";
         String weaponLevel = "N/A";
         String weaponDamage = "x1.00";
         String weaponProgress = "[   ]";
-        String nextLevelDamage = "";
-        String degradeChance = "";
-        String breakChance = "";
-        String upgradeChance = "";
-        String jackpotChance = "";
-        
-        // Max level values
-        String weaponNameMax = "No weapon";
-        String weaponLevelMax = "N/A";
-        String weaponDamageMax = "x1.00";
-        String weaponProgressMax = "[   ]";
-        
-        // Next level preview values
+
         String nextWeaponName = "No weapon";
         String nextWeaponLevel = "N/A";
         String nextWeaponDamage = "x1.00";
-        String nextWeaponProgress = "[   ]";
-        
+
+        String weaponNameMax = "No weapon";
+        String weaponLevelMax = "N/A";
+        String weaponDamageMax = "x1.00";
+
         boolean isMaxLevel = false;
 
-        if (heldItem != null) {
+        if (heldItem != null && !heldItem.isEmpty()) {
             String weaponId = heldItem.getItemId();
-
-            // Get weapon level from ReforgeEquip
-            int level = ReforgeEquip.getLevelFromWeaponId(weaponId);
+            int level = ReforgeEquip.getLevelFromItem(heldItem);
             isMaxLevel = (level >= 3);
 
-            // Get weapon name (the ID)
-            weaponName = weaponId != null ? weaponId : "Unknown";
-            weaponNameMax = weaponId != null ? weaponId : "Unknown";
+            // Get the proper display name from the item's metadata/properties
+            weaponName = getItemDisplayName(heldItem, level);
+            weaponNameMax = weaponName;
 
-            // Get upgrade name and level
             String upgradeName = ReforgeEquip.getUpgradeName(level);
-            if (level > 0) {
-                weaponLevel = upgradeName + " +" + level;
-                weaponLevelMax = upgradeName + " +" + level;
-            } else {
-                weaponLevel = "Base (Upgradeable)";
-                weaponLevelMax = "Base";
-            }
+            weaponLevel = level > 0 ? (upgradeName + " +" + level) : "Base (Upgradeable)";
+            weaponLevelMax = level > 0 ? (upgradeName + " +" + level) : "Base";
 
-            // Get damage multiplier for current level
             double damageMultiplier = ReforgeEquip.getDamageMultiplier(level);
             weaponDamage = "x" + String.format("%.2f", damageMultiplier);
-            weaponDamageMax = "x" + String.format("%.2f", damageMultiplier);
+            weaponDamageMax = weaponDamage;
 
-            // Get progress bar with next level info
             if (level < 3) {
                 double nextDamageMultiplier = ReforgeEquip.getDamageMultiplier(level + 1);
-                double damageIncrease = nextDamageMultiplier - damageMultiplier;
-                double damageIncreasePercent = (damageIncrease / damageMultiplier) * 100;
-                weaponProgress = ReforgeEquip.createProgressBar(level, 3) + " (" + level + "/3)";
-                nextLevelDamage = "→ x" + String.format("%.2f", damageMultiplier) + " (+" + String.format("%.0f", damageIncreasePercent) + "%)";
-                weaponProgressMax = ReforgeEquip.createProgressBar(level, 3) + " (MAX)";
-                
-                // Calculate NEXT level preview data (level + 1)
+                double damageIncreasePct = ((nextDamageMultiplier - damageMultiplier) / damageMultiplier) * 100.0;
+                weaponProgress = ReforgeEquip.createProgressBar(level, 3) + " (" + level + "/3) -> +" + String.format("%.0f", damageIncreasePct) + "%";
+
                 int nextLevel = level + 1;
-                String nextUpgradeName = ReforgeEquip.getUpgradeName(nextLevel);
-                double nextDamageMult = ReforgeEquip.getDamageMultiplier(nextLevel);
-                
-                // Predict next weapon ID (append level suffix)
-                if (nextLevel > 0) {
-                    // Try to find the base name and append the next level suffix
-                    // Common patterns: Weapon_Axe_Cobalt1 -> Weapon_Axe_Cobalt2
-                    String baseName = weaponId;
-                    // Remove any existing number suffix
-                    if (baseName.matches(".*\\d$")) {
-                        baseName = baseName.substring(0, baseName.length() - 1);
-                    }
-                    nextWeaponName = baseName + nextLevel;
-                } else {
-                    nextWeaponName = weaponId;
-                }
-                
-                nextWeaponLevel = nextUpgradeName + " +" + nextLevel;
-                nextWeaponDamage = "x" + String.format("%.2f", nextDamageMult);
-                nextWeaponProgress = ReforgeEquip.createProgressBar(nextLevel, 3) + " (" + nextLevel + "/3)";
+                nextWeaponName = getItemDisplayName(heldItem, nextLevel);
+                nextWeaponLevel = ReforgeEquip.getUpgradeName(nextLevel) + " +" + nextLevel;
+                nextWeaponDamage = "x" + String.format("%.2f", nextDamageMultiplier);
             } else {
                 weaponProgress = "+++ MAX";
-                nextLevelDamage = "MAX";
-                weaponProgressMax = "MAX LEVEL REACHED!";
-            }
-
-            // Get upgrade chances
-            if (level < 3) {
-                // Break chance for next upgrade
-                double[] breakChances = {0.01, 0.05, 0.10};
-                double breakChanceValue = breakChances[level];
-                breakChance = String.format("%.0f%%", breakChanceValue * 100);
-
-                // Upgrade weights: {degrade, same, upgrade, jackpot}
-                double[][] reforgeWeights = {
-                    {0.00, 0.65, 0.34, 0.01},   // 0 → 1
-                    {0.35, 0.45, 0.19, 0.01},   // 1 → 2
-                    {0.60, 0.30, 0.095, 0.005}, // 2 → 3
-                };
-                double[] weights = reforgeWeights[level];
-                
-                // Degrade chance (1st element)
-                if (level > 0) {
-                    degradeChance = String.format("%.0f%%", weights[0] * 100);
-                } else {
-                    degradeChance = "0%";
-                }
-                
-                upgradeChance = String.format("%.0f%%", weights[2] * 100);  // 3rd element is upgrade
-                jackpotChance = String.format("%.1f%%", weights[3] * 100); // 4th element is jackpot
-            } else {
-                breakChance = "MAX";
-                upgradeChance = "MAX";
-                jackpotChance = "MAX";
-                degradeChance = "MAX";
             }
         }
 
-        // Toggle visibility based on level
-        // Show WeaponStatsBase and WeaponStatsNext groups when not max level
         uiCommandBuilder.set("#WeaponStatsBase.Visible", !isMaxLevel);
         uiCommandBuilder.set("#WeaponStatsNext.Visible", !isMaxLevel);
-        // Show WeaponStatsMax group when at max level
         uiCommandBuilder.set("#WeaponStatsMax.Visible", isMaxLevel);
 
-        // Set UI elements for non-max level (Group #WeaponStats)
         if (!isMaxLevel) {
-            uiCommandBuilder.set("#WeaponName.TextSpans",  Message.raw("Name: " + getItemNameFromId(weaponName)));
+            uiCommandBuilder.set("#WeaponName.TextSpans", Message.raw("Name: " + weaponName));
             uiCommandBuilder.set("#WeaponLevel.TextSpans", Message.raw("Level: " + weaponLevel));
             uiCommandBuilder.set("#WeaponDamage.TextSpans", Message.raw("Damage: " + weaponDamage));
             uiCommandBuilder.set("#WeaponProgress.TextSpans", Message.raw("Progress: " + weaponProgress));
-            uiCommandBuilder.set("#NextLevelDamage.TextSpans", Message.raw("Next: " + nextLevelDamage));
-            uiCommandBuilder.set("#DegradeChance.TextSpans", Message.raw("Degrade: " + degradeChance));
-            uiCommandBuilder.set("#BreakChance.TextSpans", Message.raw("Break: " + breakChance));
-            uiCommandBuilder.set("#UpgradeChance.TextSpans", Message.raw("Upgrade: " + upgradeChance));
-            uiCommandBuilder.set("#JackpotChance.TextSpans", Message.raw("Jackpot: " + jackpotChance));
-            
-            // Set next weapon preview (Group #WeaponStatsNext)
-            uiCommandBuilder.set("#NextWeaponName.TextSpans", Message.raw("Next: " + getItemNameFromId(nextWeaponName)));
+
+            uiCommandBuilder.set("#NextWeaponName.TextSpans", Message.raw("Next: " + nextWeaponName));
             uiCommandBuilder.set("#NextWeaponLevel.TextSpans", Message.raw("Level: " + nextWeaponLevel));
             uiCommandBuilder.set("#NewWeaponDamage.TextSpans", Message.raw("Damage: " + nextWeaponDamage));
-            uiCommandBuilder.set("#NextWeaponProgress.TextSpans", Message.raw("Progress: " + nextWeaponProgress));
-        }
-        
-        // Set UI elements for max level (Group #WeaponStatsMax)
-        if (isMaxLevel) {
-            uiCommandBuilder.set("#WeaponNameMax.TextSpans", Message.raw("Name: " + getItemNameFromId(weaponNameMax)));
+        } else {
+            uiCommandBuilder.set("#WeaponNameMax.TextSpans", Message.raw("Name: " + weaponNameMax));
             uiCommandBuilder.set("#WeaponLevelMax.TextSpans", Message.raw(weaponLevelMax + " MAX"));
             uiCommandBuilder.set("#WeaponDamageMax.TextSpans", Message.raw("Damage: " + weaponDamageMax));
-            uiCommandBuilder.set("#WeaponProgressMax.TextSpans", Message.raw("Progress: " + weaponProgressMax));
         }
     }
 
     @Override
     public void handleDataEvent(@Nonnull Ref<EntityStore> ref, @Nonnull Store<EntityStore> store, Data data) {
         super.handleDataEvent(ref, store, data);
-
-        System.out.println("EVENT - WeaponName: " + data.weaponName);
-        System.out.println("EVENT - WeaponLevel: " + data.weaponLevel);
-        System.out.println("EVENT - WeaponDamage: " + data.weaponDamage);
-        System.out.println("EVENT - WeaponProgress: " + data.weaponProgress);
-        System.out.println("EVENT - NextLevelDamage: " + data.nextLevelDamage);
-        System.out.println("EVENT - DegradeChance: " + data.degradeChance);
-        System.out.println("EVENT - BreakChance: " + data.breakChance);
-        System.out.println("EVENT - UpgradeChance: " + data.upgradeChance);
-        System.out.println("EVENT - JackpotChance: " + data.jackpotChance);
-        System.out.println("EVENT - WeaponNameMax: " + data.weaponNameMax);
-        System.out.println("EVENT - WeaponLevelMax: " + data.weaponLevelMax);
-        System.out.println("EVENT - WeaponDamageMax: " + data.weaponDamageMax);
-        System.out.println("EVENT - WeaponProgressMax: " + data.weaponProgressMax);
-
         sendUpdate();
     }
 
@@ -215,49 +116,86 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
                 .append(new KeyedCodec<>("#WeaponLevel.TextSpans", Codec.STRING), (data, value) -> data.weaponLevel = value, data -> data.weaponLevel).add()
                 .append(new KeyedCodec<>("#WeaponDamage.TextSpans", Codec.STRING), (data, value) -> data.weaponDamage = value, data -> data.weaponDamage).add()
                 .append(new KeyedCodec<>("#WeaponProgress.TextSpans", Codec.STRING), (data, value) -> data.weaponProgress = value, data -> data.weaponProgress).add()
-                .append(new KeyedCodec<>("#NextLevelDamage.TextSpans", Codec.STRING), (data, value) -> data.nextLevelDamage = value, data -> data.nextLevelDamage).add()
-                .append(new KeyedCodec<>("#DegradeChance.TextSpans", Codec.STRING), (data, value) -> data.degradeChance = value, data -> data.degradeChance).add()
-                .append(new KeyedCodec<>("#BreakChance.TextSpans", Codec.STRING), (data, value) -> data.breakChance = value, data -> data.breakChance).add()
-                .append(new KeyedCodec<>("#UpgradeChance.TextSpans", Codec.STRING), (data, value) -> data.upgradeChance = value, data -> data.upgradeChance).add()
-                .append(new KeyedCodec<>("#JackpotChance.TextSpans", Codec.STRING), (data, value) -> data.jackpotChance = value, data -> data.jackpotChance).add()
+                .append(new KeyedCodec<>("#NextWeaponName.TextSpans", Codec.STRING), (data, value) -> data.nextWeaponName = value, data -> data.nextWeaponName).add()
+                .append(new KeyedCodec<>("#NextWeaponLevel.TextSpans", Codec.STRING), (data, value) -> data.nextWeaponLevel = value, data -> data.nextWeaponLevel).add()
+                .append(new KeyedCodec<>("#NewWeaponDamage.TextSpans", Codec.STRING), (data, value) -> data.newWeaponDamage = value, data -> data.newWeaponDamage).add()
                 .append(new KeyedCodec<>("#WeaponNameMax.TextSpans", Codec.STRING), (data, value) -> data.weaponNameMax = value, data -> data.weaponNameMax).add()
                 .append(new KeyedCodec<>("#WeaponLevelMax.TextSpans", Codec.STRING), (data, value) -> data.weaponLevelMax = value, data -> data.weaponLevelMax).add()
                 .append(new KeyedCodec<>("#WeaponDamageMax.TextSpans", Codec.STRING), (data, value) -> data.weaponDamageMax = value, data -> data.weaponDamageMax).add()
-                .append(new KeyedCodec<>("#WeaponProgressMax.TextSpans", Codec.STRING), (data, value) -> data.weaponProgressMax = value, data -> data.weaponProgressMax).add()
                 .build();
 
         private String weaponName;
         private String weaponLevel;
         private String weaponDamage;
         private String weaponProgress;
-        private String nextLevelDamage;
-        private String degradeChance;
-        private String breakChance;
-        private String upgradeChance;
-        private String jackpotChance;
+        private String nextWeaponName;
+        private String nextWeaponLevel;
+        private String newWeaponDamage;
         private String weaponNameMax;
         private String weaponLevelMax;
         private String weaponDamageMax;
-        private String weaponProgressMax;
     }
 
-    private String getItemNameFromId(String itemId) {
-        if (itemId == null || itemId.isEmpty()) return "Unknown Item";
-
-        // Split by underscore: ["Weapon", "Axe", "Cobalt1"]
-        String[] parts = itemId.split("_");
-        if (parts.length < 3) return itemId; // fallback to raw ID
-
-        String type = parts[1];                              // "Axe"
-        String materialRaw = parts[2].replaceAll("\\d+$", ""); // "Cobalt1" -> "Cobalt"
-        String levelSuffix = parts[2].replaceAll("\\D+", "");  // FIX 2: "Cobalt1" -> "1" (strip all non-digits)
-
-        // Add + prefix to level if > 0
-        if (!levelSuffix.isEmpty() && Integer.parseInt(levelSuffix) > 0) {
-            return materialRaw + " " + type + " +" + levelSuffix; // "Cobalt Axe +1"
+    /**
+     * Gets the display name from the item's metadata/properties.
+     * Falls back to parsing the item ID if the display name is not available.
+     */
+    private String getItemDisplayName(ItemStack item, int refinementLevel) {
+        if (item == null || item.isEmpty()) return "Unknown Item";
+        
+        // First check if we have a stored display name in refinement metadata
+        String metadataName = ReforgeEquip.getDisplayNameFromMetadata(item);
+        if (metadataName != null && !metadataName.isEmpty()) {
+            return metadataName;
         }
         
-        return materialRaw + " " + type; // "Cobalt Axe"
-    }
+        // Try to get the proper display name from the item's translation properties
+        String displayName = CommandUtils.getItemDisplayName(item);
+        
+        if (displayName != null && !displayName.isEmpty() && !displayName.equals(item.getItemId())) {
+            // We got a proper display name from translation properties
+            if (refinementLevel > 0) {
+                return displayName + " +" + refinementLevel;
+            }
+            return displayName;
+        }
+        
+        // Fallback: parse the item ID
+        String itemId = item.getItemId();
+        if (itemId == null || itemId.isEmpty()) return "Unknown Item";
 
+        String[] parts = itemId.split("_");
+        if (parts.length < 3) {
+            if (refinementLevel > 0) {
+                return itemId + " +" + refinementLevel;
+            }
+            return itemId;
+        }
+
+        String type = parts[1];
+        String materialRaw = parts[2].replaceAll("\\d+$", "");
+        if (refinementLevel > 0) {
+            return materialRaw + " " + type + " +" + refinementLevel;
+        }
+        return materialRaw + " " + type;
+    }
+    
+    /**
+     * Legacy method for backwards compatibility.
+     * @deprecated Use {@link #getItemDisplayName(ItemStack, int)} instead.
+     */
+    @Deprecated
+    private String getItemNameFromId(String itemId, int refinementLevel) {
+        if (itemId == null || itemId.isEmpty()) return "Unknown Item";
+
+        String[] parts = itemId.split("_");
+        if (parts.length < 3) return itemId;
+
+        String type = parts[1];
+        String materialRaw = parts[2].replaceAll("\\d+$", "");
+        if (refinementLevel > 0) {
+            return materialRaw + " " + type + " +" + refinementLevel;
+        }
+        return materialRaw + " " + type;
+    }
 }

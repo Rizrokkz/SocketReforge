@@ -28,12 +28,15 @@ public class ContainerEventListener {
             // Check if it's a weapon or armor
             if (!isReforgeable(item)) continue;
 
-            // Get upgrade level
             int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
+            boolean hasMetadata = ReforgeEquip.hasRefinementMetadata(item);
 
-            if (level > 0) {
-                // Item has upgrades - ensure display name is correct
-                ReforgeEquip.setUpgradeLevel(player, item, slot, level);
+            // Migrate only refined legacy items or already-metadata items.
+            if (level <= 0 && !hasMetadata) continue;
+
+            ItemStack updated = ReforgeEquip.withUpgradeLevel(item, level);
+            if (!updated.equals(item)) {
+                container.setItemStackForSlot(slot, updated);
                 syncedCount++;
             }
         }
@@ -73,14 +76,6 @@ public class ContainerEventListener {
      */
     public static void onItemPickup(Player player, ItemStack item) {
         if (player == null || item == null) return;
-        if (!isReforgeable(item)) return;
-
-        short slot = player.getInventory().getActiveHotbarSlot();
-        int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
-
-        if (level > 0) {
-            ReforgeEquip.setUpgradeLevel(player, item, slot, level);
-        }
     }
 
     /**

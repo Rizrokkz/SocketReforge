@@ -1,0 +1,120 @@
+// Essence Socketing UI
+Group {
+  LayoutMode: Center;
+  Group #EssenceSocketRoot {
+    LayoutMode: Top;
+    Background: #333333;
+    Anchor: (Width: 400, Height: 450);
+    
+    Label #TitleText {
+      Text: "Essence Socketing";
+      Style: (FontSize: 20, TextColor: #FFFFFF);
+    }
+    
+    Group #EquipmentSlot {
+      Anchor: (Width: 100, Height: 100, Top: 50);
+      Background: #555555;
+    }
+    Label #EquipmentPlaceholder {
+      Anchor: (Top: 160);
+      Text: "Drop Equipment";
+      Style: (FontSize: 12, TextColor: #AAAAAA);
+    }
+    Label #EquipmentItemName {
+      Anchor: (Top: 180);
+      Text: "";
+      Style: (FontSize: 14, TextColor: #FFFFFF);
+    }
+    Label #EquipmentSocketDisplay {
+      Anchor: (Top: 200);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #55FF55);
+    }
+    
+    Group #SocketDisplay {
+      LayoutMode: Left;
+      Anchor: (Top: 230);
+      Group #Socket1 {
+        Anchor: (Width: 42, Height: 42);
+        Background: #333333;
+      }
+      Group #Socket2 {
+        Anchor: (Width: 42, Height: 42, Left: 5);
+        Background: #333333;
+      }
+      Group #Socket3 {
+        Anchor: (Width: 42, Height: 42, Left: 5);
+        Background: #333333;
+      }
+      Group #Socket4 {
+        Anchor: (Width: 42, Height: 42, Left: 5);
+        Background: #333333;
+      }
+    }
+    
+    Group #EssenceSlot {
+      Anchor: (Width: 80, Height: 80, Top: 290);
+      Background: #555555;
+    }
+    Label #EssencePlaceholder {
+      Anchor: (Top: 380);
+      Text: "Essence";
+      Style: (FontSize: 12, TextColor: #AAAAAA);
+    }
+    Label #EssenceItemName {
+      Anchor: (Top: 400);
+      Text: "";
+      Style: (FontSize: 14, TextColor: #FFFFFF);
+    }
+    Label #EssenceItemTier {
+      Anchor: (Top: 420);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #55FFFF);
+    }
+    
+    Group #CatalystSlot {
+      Anchor: (Width: 80, Height: 80, Top: 450);
+      Background: #555555;
+    }
+    Label #CatalystPlaceholder {
+      Anchor: (Top: 540);
+      Text: "Optional Removal Tool";
+      Style: (FontSize: 12, TextColor: #AAAAAA);
+    }
+    Label #CatalystItemName {
+      Anchor: (Top: 560);
+      Text: "";
+      Style: (FontSize: 14, TextColor: #FFFFFF);
+    }
+    
+    Label #EffectLine1 {
+      Anchor: (Top: 590);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #55FF55);
+    }
+    Label #EffectLine2 {
+      Anchor: (Top: 610);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #55FF55);
+    }
+    Label #EffectLine3 {
+      Anchor: (Top: 630);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #55FF55);
+    }
+    
+    Group #SocketEssenceButton {
+      Anchor: (Width: 150, Height: 40, Top: 660);
+      Background: #55FF55;
+    }
+    Group #RemoveEssenceButton {
+      Anchor: (Width: 150, Height: 40, Top: 710);
+      Background: #FF5555;
+    }
+    Label #FeedbackText {
+      Anchor: (Top: 760);
+      Text: "";
+      Style: (FontSize: 12, TextColor: #FFAA00);
+    }
+  }
+}

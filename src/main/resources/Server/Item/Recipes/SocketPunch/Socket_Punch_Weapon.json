@@ -1,0 +1,25 @@
+{
+  "Input": [
+    {
+      "ItemId": "Ore_Iron",
+      "Quantity": 1
+    }
+  ],
+  "PrimaryOutput": {
+    "ItemId": "Ore_Adamantite",
+    "Quantity": 6
+  },
+  "Output": [
+    {
+      "ItemId": "Refinement_Glob",
+      "Quantity": 15
+    }
+  ],
+  "BenchRequirement": [
+    {
+      "Type": "Processing",
+      "Id": "SocketPunchBench"
+    }
+  ],
+  "TimeSeconds": 3
+}

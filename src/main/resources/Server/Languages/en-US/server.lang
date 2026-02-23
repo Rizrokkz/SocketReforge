@@ -1,0 +1,38 @@
+
+# Socket System Items
+items.Bench_Socket_Punch.name = Socket Punch Bench
+items.Bench_Socket_Punch.description = A workbench for punching sockets into equipment
+items.Socket_Puncher.name = Socket Puncher
+items.Socket_Puncher.description = A tool used to punch sockets into equipment
+items.Socket_Stabilizer.name = Socket Stabilizer
+items.Socket_Stabilizer.description = Increases socket punch success chance and reduces break chance
+items.Socket_Reinforcer.name = Socket Reinforcer
+items.Socket_Reinforcer.description = Greatly increases socket punch success chance
+items.Socket_Guarantor.name = Socket Guarantor
+items.Socket_Guarantor.description = Guarantees socket punch success but not break protection
+items.Socket_Expander.name = Socket Expander
+items.Socket_Expander.description = Chance to add an extra socket on success
+
+# Essences
+items.Essence_Attack_Speed.name = Essence of Alacrity
+items.Essence_Attack_Speed.description = Increases attack speed when socketed
+items.Essence_Life_Steal.name = Essence of Vampirism
+items.Essence_Life_Steal.description = Grants life steal on attacks when socketed
+items.Essence_Critical_Chance.name = Essence of Precision
+items.Essence_Critical_Chance.description = Increases critical hit chance when socketed
+items.Essence_Critical_Damage.name = Essence of Devastation
+items.Essence_Critical_Damage.description = Increases critical hit damage when socketed
+items.Essence_Physical_Damage.name = Essence of Might
+items.Essence_Physical_Damage.description = Increases physical damage when socketed
+items.Essence_Elemental_Damage.name = Essence of Elements
+items.Essence_Elemental_Damage.description = Increases elemental damage when socketed
+items.Essence_Armor_Penetration.name = Essence of Piercing
+items.Essence_Armor_Penetration.description = Increases armor penetration when socketed
+items.Essence_Max_Health.name = Essence of Vitality
+items.Essence_Max_Health.description = Increases maximum health when socketed
+items.Essence_Health_Regen.name = Essence of Regeneration
+items.Essence_Health_Regen.description = Increases health regeneration when socketed
+items.Essence_Armor.name = Essence of Protection
+items.Essence_Armor.description = Increases armor when socketed
+items.Essence_Movement_Speed.name = Essence of Swiftness
+items.Essence_Movement_Speed.description = Increases movement speed when socketed

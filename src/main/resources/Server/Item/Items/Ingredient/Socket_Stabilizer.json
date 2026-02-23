@@ -1,0 +1,41 @@
+{
+  "TranslationProperties": {
+    "Name": "items.Socket_Stabilizer.name",
+    "Description": "items.Socket_Stabilizer.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Ingredient_Bar_Iron.png",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Iron",
+        "Quantity": 2
+      },
+      {
+        "ItemId": "Ingredient_Emerald",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Crafting"
+        ],
+        "Id": "Workbench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "MaxStack": 64,
+  "ItemLevel": 1,
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "Tags": {
+    "Type": [
+      "SocketMaterial"
+    ]
+  }
+}
