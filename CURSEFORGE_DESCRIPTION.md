@@ -1,12 +1,14 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
-<p><strong>Upgrade, enhance, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic with configurable rates, sound effects, and a custom stats UI.</p>
+<p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
 
 <hr>
 
 <h2>⚔️ Weapon & Armor Reforging</h2>
 
-<p>Take your equipment to a <strong>Reforge Bench</strong> and spend <strong>Iron Bars</strong> to attempt upgrades up to <strong>+3 levels</strong>. But be careful — every attempt carries risk!</p>
+<p>Craft <strong>Reforge Bench</strong> from <strong>Workbench</strong>.</p>
+<p>Take your equipment to a <strong>Reforge Bench</strong> and spend <strong>Refinement Globs</strong> to attempt upgrades up to <strong>+3 levels</strong>. But be careful — every attempt carries risk!</p>
+<p>Take Iron Ore to Salvage Station to get <strong>15x Refinement Globs</strong>.</p>
 
 <h3>Upgrade Tiers — Weapons</h3>
 
@@ -160,6 +162,172 @@
 
 <hr>
 
+<h2>🔷 Socket Punching System (WIP)</h2>
+
+<p>Use a <strong>Socket Punch Bench</strong> to punch sockets into your equipment! Sockets can be filled with powerful essences to gain additional stat bonuses. Inspired by Path of Exile's socket system.</p>
+
+<h3>How Socket Punching Works</h3>
+
+<ol>
+  <li>Place your equipment (weapon or armor) in the bench</li>
+  <li>Add a <strong>Socket Puncher</strong> material (required)</li>
+  <li>Optionally add a <strong>Socket Stabilizer</strong> to reduce break chance</li>
+  <li>Click to punch — success adds a socket, failure may destroy the item!</li>
+</ol>
+
+<h3>Socket Limits</h3>
+
+<table>
+  <tr>
+    <th>Equipment Type</th>
+    <th>Max Sockets</th>
+  </tr>
+  <tr>
+    <td>Weapons</td>
+    <td>4</td>
+  </tr>
+  <tr>
+    <td>Armor</td>
+    <td>2</td>
+  </tr>
+</table>
+
+<h3>Socket Punching Odds</h3>
+
+<table>
+  <tr>
+    <th>Socket #</th>
+    <th>Success Chance</th>
+    <th>Break Chance</th>
+  </tr>
+  <tr>
+    <td>1st Socket</td>
+    <td>90%</td>
+    <td>2%</td>
+  </tr>
+  <tr>
+    <td>2nd Socket</td>
+    <td>75%</td>
+    <td>5%</td>
+  </tr>
+  <tr>
+    <td>3rd Socket</td>
+    <td>55%</td>
+    <td>10%</td>
+  </tr>
+  <tr>
+    <td>4th Socket</td>
+    <td>35%</td>
+    <td>18%</td>
+  </tr>
+</table>
+
+<p><em>*Each additional socket is harder to obtain with higher risk!*</em></p>
+
+<hr>
+
+<h2>💎 Essence System (WIP)</h2>
+
+<p>Fill your sockets with <strong>Essences</strong> to gain powerful stat bonuses! Each essence type provides unique effects based on its element and tier.</p>
+
+<h3>Essence Types</h3>
+
+<table>
+  <tr>
+    <th>Type</th>
+    <th>Theme</th>
+    <th>Primary Effects</th>
+  </tr>
+  <tr>
+    <td>🔥 <strong>Fire</strong></td>
+    <td>Burns with intense heat</td>
+    <td>Damage, Fire Damage</td>
+  </tr>
+  <tr>
+    <td>❄️ <strong>Ice</strong></td>
+    <td>Glows with frost</td>
+    <td>Cold Damage, Slow Effect</td>
+  </tr>
+  <tr>
+    <td>⚡ <strong>Lightning</strong></td>
+    <td>Crackles with energy</td>
+    <td>Attack Speed, Crit Chance</td>
+  </tr>
+  <tr>
+    <td>💚 <strong>Life</strong></td>
+    <td>Pulses with vitality</td>
+    <td>Health, Life Steal</td>
+  </tr>
+  <tr>
+    <td>🌑 <strong>Shadow</strong></td>
+    <td>Shimmers with darkness</td>
+    <td>Crit Damage, Evasion</td>
+  </tr>
+</table>
+
+<h3>Essence Tiers (WIP)</h3>
+
+<p>Each essence type comes in <strong>5 tiers</strong> (T1-T5). Higher tiers provide stronger effects but are rarer to obtain.</p>
+
+<table>
+  <tr>
+    <th>Essence Type</th>
+    <th>Tier 1</th>
+    <th>Tier 3</th>
+    <th>Tier 5</th>
+  </tr>
+  <tr>
+    <td><strong>Fire</strong></td>
+    <td>+2% Damage, +3 Flat DMG</td>
+    <td>+6% Damage, +8 Flat DMG</td>
+    <td>+12% Damage, +15 Flat DMG</td>
+  </tr>
+  <tr>
+    <td><strong>Ice</strong></td>
+    <td>+2% Slow, +2 Cold DMG</td>
+    <td>+5% Slow, +6 Cold DMG</td>
+    <td>+10% Slow, +12 Cold DMG</td>
+  </tr>
+  <tr>
+    <td><strong>Lightning</strong></td>
+    <td>+3% ATK Speed, +2% Crit</td>
+    <td>+7% ATK Speed, +4% Crit</td>
+    <td>+15% ATK Speed, +8% Crit</td>
+  </tr>
+  <tr>
+    <td><strong>Life</strong></td>
+    <td>+2% Lifesteal, +10 HP</td>
+    <td>+5% Lifesteal, +25 HP</td>
+    <td>+10% Lifesteal, +50 HP</td>
+  </tr>
+  <tr>
+    <td><strong>Shadow</strong></td>
+    <td>+5% Crit DMG, +2% Evasion</td>
+    <td>+12% Crit DMG, +5% Evasion</td>
+    <td>+25% Crit DMG, +10% Evasion</td>
+  </tr>
+</table>
+
+<h3>Available Stats</h3>
+
+<p>Essences can provide bonuses to the following stats:</p>
+
+<ul>
+  <li><strong>Offensive:</strong> Attack Speed, Damage, Crit Chance, Crit Damage</li>
+  <li><strong>Defensive:</strong> Health, Defense, Evasion</li>
+  <li><strong>Utility:</strong> Life Steal, Movement Speed, Luck</li>
+  <li><strong>Elemental:</strong> Cold Damage, Slow Effect, Fire Damage, Lightning Damage</li>
+</ul>
+
+<h3>Essence Management</h3>
+
+<ul>
+  <li><strong>Socket Essence:</strong> Place an essence into an empty socket to gain its effects</li>
+  <li><strong>Remove Essence:</strong> 70% success rate to remove, 30% chance the essence is destroyed</li>
+</ul>
+
+<hr>
+
 <h2>📊 Weapon Stats UI</h2>
 
 <p>Use <code>/weaponstats</code> to open a custom in-game UI panel showing:</p>
@@ -169,6 +337,7 @@
   <li>Damage multiplier with progress bar</li>
   <li>Next level damage preview</li>
   <li>Reforge outcome probabilities</li>
+  <li>Socket information and socketed essences</li>
   <li>Max level comparison</li>
 </ul>
 
@@ -184,6 +353,14 @@
   <li>Defense multipliers per armor upgrade level</li>
   <li>Break chances for weapons and armor</li>
   <li>Reforge outcome weights (degrade/same/upgrade/jackpot) for each level</li>
+</ul>
+
+<h3>SocketConfig.json</h3>
+<ul>
+  <li>Maximum sockets for weapons and armor</li>
+  <li>Socket punch success chances per socket count</li>
+  <li>Socket punch break chances per socket count</li>
+  <li>Essence removal success/destroy chances</li>
 </ul>
 
 <h3>SFXConfig.json</h3>
@@ -202,12 +379,16 @@
     <th>Description</th>
   </tr>
   <tr>
-    <td><code>/patchassets</code></td>
-    <td>Patch and register weapons and armor from Assets.zip, folders, and mod JARs</td>
-  </tr>
-  <tr>
     <td><code>/weaponstats</code></td>
     <td>Open the Weapon Stats UI for your held weapon</td>
+  </tr>
+  <tr>
+    <td><code>/socketpunch</code></td>
+    <td>Open the Socket Punching UI to add sockets to equipment</td>
+  </tr>
+  <tr>
+    <td><code>/essencesocket</code></td>
+    <td>Open the Essence Socketing UI to manage socketed essences</td>
   </tr>
   <tr>
     <td><code>/checkname</code></td>
@@ -219,7 +400,7 @@
 
 <h2>📦 Installation</h2>
 
-<h3>Step 1: Install the Mod</h3>
+<h3>Install the Mod</h3>
 
 <ol>
   <li>Copy the mod JAR to your Hytale server's <code>mods</code> folder</li>
@@ -227,48 +408,16 @@
   <li>The mod will create:
     <ul>
       <li><code>mods/irai.mod.reforge_SocketReforge/RefinementConfig.json</code></li>
+      <li><code>mods/irai.mod.reforge_SocketReforge/SocketConfig.json</code></li>
       <li><code>mods/irai.mod.reforge_SocketReforge/SFXConfig.json</code></li>
     </ul>
   </li>
 </ol>
 
-<h3>Step 2: Patch Your Items (Important!)</h3>
-
-<p>Before players can reforge items, you must patch them:</p>
-
-<ol>
-  <li>Run <code>/patchassets</code> ingame first time — this creates <code>assets_path.txt</code></li>
-  <li>Edit <code>assets_path.txt</code> to provide the file locations:
-    <ul>
-      <li>Path to the game's <code>Assets.zip</code></li>
-      <li>Path to the server's <code>mods</code> folder</li>
-    </ul>
-  </li>
-  <li>Run <code>/patchassets</code> ingame again to scan and generate upgrade variants</li>
-  <li>Restart the server once patching is complete</li>
-</ol>
-
-<p>This command scans:</p>
-<ul>
-  <li><code>assets.zip</code> (base game items)</li>
-  <li>Mod JARs in the <code>mods</code> folder</li>
-</ul>
-
-<p>And generates upgrade variants for all weapons and armor found.</p>
-
-<h3>Step 3: Configure</h3>
-
-<p>Edit <code>RefinementConfig.json</code> to customize:</p>
-<ul>
-  <li>Damage multipliers for weapons</li>
-  <li>Defense multipliers for armor</li>
-  <li>Break chances</li>
-  <li>Reforge odds</li>
-</ul>
-
-<h3>Step 4: Restart</h3>
-
-<p>Restart the server to apply all changes.</p>
+<div style="background: #1a1a2e; border-left: 4px solid #4ade80; padding: 12px 16px; margin: 16px 0;">
+  <strong style="color: #4ade80;">✨ No Patching Required!</strong><br>
+  <span style="color: #a0a0a0;">The mod uses metadata-based refinement. Weapons and armor work out of the box — no <code>/patchassets</code> command needed!</span>
+</div>
 
 <hr>
 
@@ -277,13 +426,18 @@
 <ul>
   <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
   <li><strong>3 upgrade tiers</strong> with unique names and star ratings for weapons and armor</li>
+  <li><strong>Socket punching system</strong> — add up to 4 sockets to weapons, 2 to armor</li>
+  <li><strong>5 essence types</strong> (Fire, Ice, Lightning, Life, Shadow) with 5 tiers each</li>
+  <li><strong>14 different stats</strong> that can be modified by essences</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
   <li><strong>Custom Stats UI</strong> with detailed upgrade information for weapons and armor</li>
+  <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>
+  <li><strong>Essence Socketing UI</strong> for managing socketed essences</li>
   <li><strong>Configurable sound effects</strong> for every reforge event</li>
   <li><strong>Auto-save</strong> every 5 minutes with data persistence</li>
   <li><strong>Item display sync</strong> across all players every 30 seconds</li>
   <li><strong>Smart item detection</strong> via item ID, categories, and structure checks</li>
-  <li><strong>Asset patcher</strong> to register weapons and armor from Assets.zip and mod JARs</li>
+  <li><strong>Metadata-based refinement</strong> — no item duplication or patching required</li>
   <li><strong>Fully configurable</strong> rates, weights, multipliers, and sounds via JSON</li>
 </ul>
 
@@ -296,7 +450,8 @@
 <ul>
   <li>Want easier upgrades? Increase upgrade weights and lower break chances</li>
   <li>Want a hardcore experience? Crank up degrade and shatter rates</li>
-  <li>Custom weapons? Just follow the <code>Weapon_</code> naming convention and run <code>/patchassets</code></li>
+  <li>Want easier socketing? Increase success chances and reduce break rates</li>
+  <li>Custom weapons? Just follow the categorization Category: Items.Weapon</li>
 </ul>
 
 <hr>
@@ -309,25 +464,39 @@
   <tr>
     <th>Feature</th>
     <th>Description</th>
+    <th>Status</th>
   </tr>
   <tr>
     <td><strong>Refinement</strong></td>
-    <td>Weapons and Armor (✓ Now Available!)</td>
+    <td>Weapons and Armor upgrade system</td>
+    <td>✅ Available</td>
   </tr>
   <tr>
     <td><strong>Socket Punching</strong></td>
-    <td>Add sockets to equipment for gem insertion</td>
+    <td>Add sockets to equipment for essence insertion</td>
+    <td>🔄 WIP</td>
   </tr>
   <tr>
-    <td><strong>Gem Socketing</strong></td>
-    <td>Weapon enchantments (Fire, Frost, etc.) by adding specific gems + essence</td>
+    <td><strong>Essence Socketing</strong></td>
+    <td>Socket essences for stat bonuses (Fire, Ice, Lightning, Life, Shadow)</td>
+    <td>🔄 WIP</td>
+  </tr>
+  <tr>
+    <td><strong>Supporting Materials</strong></td>
+    <td>Additional materials for socket punching bonuses</td>
+    <td>🔄 WIP</td>
+  </tr>
+  <tr>
+    <td><strong>Essence Crafting</strong></td>
+    <td>Craft and upgrade essences</td>
+    <td>🔄 WIP</td>
   </tr>
 </table>
 
 <hr>
 
 <h2>🔗 Links</h2>
-
+<p>Found any bugs? please post it here: https://legacy.curseforge.com/hytale/mods/socket-reforge/settings/issues</p>
 <ul>
   <li><strong>Source:</strong> <a href="https://github.com/Rizrokkz">GitHub</a></li>
   <li><strong>Test Video:</strong> <a href="https://www.youtube.com/watch?v=QZYTjpr7mms">YouTube</a></li>

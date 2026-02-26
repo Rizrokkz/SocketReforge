@@ -27,6 +27,7 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.SocketManager.RemoveResult;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
  * Essence Socketing UI
@@ -137,6 +138,9 @@ public class EssenceSocketUI extends InteractiveCustomUIPage<EssenceSocketUI.Dat
             setText(cmd, "#EssenceItemTier",    " ");
             setText(cmd, "#FeedbackText", "Essence socketed successfully!");
             clearEffectLines(cmd);
+            
+            // Register dynamic tooltips for the socketed item
+            registerSocketTooltips();
         } else {
             setText(cmd, "#FeedbackText", "No empty socket found.");
         }
@@ -290,5 +294,33 @@ public class EssenceSocketUI extends InteractiveCustomUIPage<EssenceSocketUI.Dat
         setText(cmd, "#EffectLine1", " ");
         setText(cmd, "#EffectLine2", " ");
         setText(cmd, "#EffectLine3", " ");
+    }
+
+    /**
+     * Registers dynamic tooltips for the socketed item using DynamicTooltipsLib.
+     */
+    private void registerSocketTooltips() {
+        if (equipmentItem == null || socketData == null) return;
+        
+        String itemId = equipmentItem.getItemId();
+        
+        // Use utility class for DynamicTooltipsLib integration
+        if (!DynamicTooltipUtils.isAvailable()) {
+            return;
+        }
+        
+        // Add essence info tooltips
+        for (Socket socket : socketData.getSockets()) {
+            if (!socket.isEmpty() && socket.getEssenceId() != null) {
+                Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+                if (essence != null) {
+                    // Get the effect line for this essence
+                    List<EssenceEffect> effects = essence.getEffects();
+                    String effectLine = effects.isEmpty() ? null : effects.get(0).getDisplayLine(essence.getDisplayName());
+                    
+                    DynamicTooltipUtils.addEssenceTooltip(itemId, essence.getDisplayName(), effectLine);
+                }
+            }
+        }
     }
 }

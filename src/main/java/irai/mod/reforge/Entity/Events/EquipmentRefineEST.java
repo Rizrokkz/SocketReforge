@@ -113,14 +113,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
                 double multiplier = getDamageMultiplier(clampedLevel);
 
-                System.out.println("═══════════════════════════════════════════════");
-                System.out.println("[EquipmentRefineEST] Attacker: " + attacker.getPlayerRef().getUsername());
-                System.out.println("[EquipmentRefineEST] Weapon: " + weaponId + " (level " + clampedLevel + ")");
-                System.out.println("[EquipmentRefineEST] Damage multiplier: " + multiplier);
-
                 float newDamage = (float) (damage.getAmount() * multiplier);
-                System.out.println("[EquipmentRefineEST] Damage: " + damage.getAmount() + " -> " + newDamage);
-                System.out.println("═══════════════════════════════════════════════");
                 damage.setAmount(newDamage);
             }
         }
@@ -143,15 +136,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 }
                 int clampedLevel = Math.max(0, Math.min(highestLevel, 3));
 
-                System.out.println("═══════════════════════════════════════════════");
-                System.out.println("[EquipmentRefineEST] Defender: " + defender.getPlayerRef().getUsername());
-                System.out.println("[EquipmentRefineEST] Armor pieces: " + armorPieces.size());
-                System.out.println("[EquipmentRefineEST] Highest armor level: " + clampedLevel);
-                System.out.println("[EquipmentRefineEST] Average defense multiplier: " + avgDefenseMultiplier);
-
                 float reducedDamage = (float) (damage.getAmount() / avgDefenseMultiplier);
-                System.out.println("[EquipmentRefineEST] Damage after defense: " + damage.getAmount() + " -> " + reducedDamage);
-                System.out.println("═══════════════════════════════════════════════");
                 damage.setAmount(reducedDamage);
             }
         }
@@ -188,41 +173,24 @@ public class EquipmentRefineEST extends DamageEventSystem {
     }
 
     /**
-     * Gets all equipped armor pieces from the player's equipment slots and inventory.
+     * Gets all equipped armor pieces from the player's armor equipment slots only.
+     * Does NOT check inventory - only actual equipped armor.
      * Returns a list of armor ItemStacks.
      */
     private List<ItemStack> getAllEquippedArmor(Player player) {
         List<ItemStack> armorPieces = new ArrayList<>();
 
         try {
-            // First, check player's equipment slots (helmet, chestplate, leggings, boots)
-            try {
-                ItemContainer armorContainer = player.getInventory().getArmor();
-                if (armorContainer != null) {
-                    for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
-                        ItemStack stack = armorContainer.getItemStack(slot);
-                        if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
-                            armorPieces.add(stack);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("[EquipmentRefineEST] Error checking armor container: " + e.getMessage());
-            }
-
-            // Then, check inventory (hotbar and storage) for any additional armor
-            for (ItemContainer container : new ItemContainer[]{
-                    player.getInventory().getHotbar(),
-                    player.getInventory().getStorage()}) {
-                if (container == null) continue;
-                for (short slot = 0; slot < container.getCapacity(); slot++) {
-                    ItemStack stack = container.getItemStack(slot);
+            // Only check player's armor equipment slots (helmet, chestplate, leggings, boots)
+            ItemContainer armorContainer = player.getInventory().getArmor();
+            if (armorContainer != null) {
+                for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
+                    ItemStack stack = armorContainer.getItemStack(slot);
                     if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
                         armorPieces.add(stack);
                     }
                 }
             }
-
         } catch (Exception e) {
             System.err.println("[EquipmentRefineEST] Error getting equipped armor: " + e.getMessage());
         }

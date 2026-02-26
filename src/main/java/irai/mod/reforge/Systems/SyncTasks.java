@@ -30,8 +30,6 @@ public class SyncTasks implements Runnable {
         }
 
         try {
-            int syncedPlayers = 0;
-
             for (Player player : players) {
                 if (player == null) {
                     continue;
@@ -40,12 +38,7 @@ public class SyncTasks implements Runnable {
                 // Only sync players who have upgraded weapons
                 if (ContainerEventListener.hasUpgradedWeapons(player)) {
                     ContainerEventListener.syncPlayerInventory(player);
-                    syncedPlayers++;
                 }
-            }
-
-            if (syncedPlayers > 0) {
-                System.out.println("[WeaponSyncTask] Synced weapons for " + syncedPlayers + " players");
             }
 
         } catch (Exception e) {

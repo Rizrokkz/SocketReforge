@@ -3,6 +3,7 @@ package irai.mod.reforge.Interactions;
 import java.io.File;
 import java.util.regex.Pattern;
 
+import org.bson.BsonDocument;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 import com.hypixel.hytale.codec.Codec;
@@ -12,6 +13,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.BlockPosition;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -26,6 +28,8 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.NameResolver;
 
 
 /**
@@ -179,6 +183,9 @@ public class ReforgeEquip extends SimpleInteraction {
         player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
         player.getInventory().getHotbar().addItemStackToSlot(slot, upgradedItem);
 
+        // Register dynamic tooltips for the reforged item
+        registerReforgeTooltip(upgradedItem, newLevel);
+
         // Play outcome sound and show feedback
         playOutcomeSound(player, outcome);
         showOutcomeFeedback(player, outcome, currentLevel, newLevel, upgradedItem, slot, isArmorItem);
@@ -232,6 +239,7 @@ public class ReforgeEquip extends SimpleInteraction {
     
     /**
      * Applies the upgrade level to an item's metadata.
+     * Stores the RESOLVED display name (not the translation key).
      */
     public static ItemStack withUpgradeLevel(ItemStack item, int level) {
         if (item == null || item.isEmpty()) {
@@ -245,10 +253,25 @@ public class ReforgeEquip extends SimpleInteraction {
             updated = updated.withMetadata(META_BASE_ITEM_ID, Codec.STRING, baseId);
         }
         
-        // Store the refined display name in metadata
-        String refinedName = getRefinedDisplayName(item, clampedLevel);
-        if (refinedName != null) {
-            updated = updated.withMetadata(META_REFINEMENT_NAME, Codec.STRING, refinedName);
+        // Store the RESOLVED display name in metadata (not the translation key)
+        // Get the translation key and resolve it to the actual localized name
+        String translationKey = NameResolver.getTranslationKey(item);
+        String resolvedName;
+        if (translationKey != null && !translationKey.isEmpty()) {
+            // Resolve the translation key to get the actual localized name
+            resolvedName = NameResolver.resolveTranslationKey(translationKey);
+        } else {
+            // Fall back to item ID
+            resolvedName = item.getItemId();
+        }
+        
+        // Append refinement level if > 0
+        if (clampedLevel > 0 && resolvedName != null) {
+            resolvedName = resolvedName + " +" + clampedLevel;
+        }
+        
+        if (resolvedName != null) {
+            updated = updated.withMetadata(META_REFINEMENT_NAME, Codec.STRING, resolvedName);
         }
         
         return updated;
@@ -256,35 +279,23 @@ public class ReforgeEquip extends SimpleInteraction {
     
     /**
      * Gets the display name from metadata, or falls back to translation properties.
+     * Uses NameResolver for consistent name resolution across the mod.
      */
     public static String getDisplayNameFromMetadata(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
-
-        return getItemMetadataDisplayName(item);
+        return NameResolver.getDisplayName(item);
     }
     
     /**
      * Gets the refined display name for an item based on its level.
+     * Uses NameResolver to get the actual localized name.
      */
     private static String getRefinedDisplayName(ItemStack item, int level) {
         if (item == null || item.isEmpty()) return null;
         
-        // Get the base name from item metadata first (actual runtime/customized name)
-        String baseName = getItemMetadataDisplayName(item);
-
-        // Fall back to translation properties only when no metadata name exists
-        if (baseName == null || baseName.isEmpty()) {
-            try {
-                baseName = item.getItem().getTranslationProperties().getName();
-            } catch (Exception e) {
-                // Fall back to item ID
-            }
-        }
+        // Use NameResolver to get the actual localized display name
+        String baseName = NameResolver.getBaseDisplayName(item);
         
-        if (baseName == null || baseName.isEmpty()) {
-            baseName = item.getItemId();
-        }
-
         // Avoid stacking suffixes like "Sword +1 +2"
         baseName = baseName.replaceFirst("\\s\\+[123]$", "");
         
@@ -374,7 +385,6 @@ public class ReforgeEquip extends SimpleInteraction {
         try {
             // Keep the same item ID - store refinement level in metadata only
             ItemStack upgraded = withUpgradeLevel(original, newLevel);
-            System.out.println("[ReforgeEquip] Created upgraded item: " + baseId + " (level " + newLevel + " in metadata)");
             return upgraded;
         } catch (Exception e) {
             System.err.println("[ReforgeEquip] Error creating upgraded item '" + baseId + "': " + e.getMessage());
@@ -467,74 +477,66 @@ public class ReforgeEquip extends SimpleInteraction {
 
     /**
      * Checks if an ItemStack is a weapon using proper category checks.
-     * This method checks:
-     * 1. Item ID starts with "Weapon_"
-     * 2. Item has Categories containing "Items.Weapons"
-     * 3. Item has Weapon structure (WeaponStats, DamageProperties, etc.)
-     * Arrows are always excluded.
+     * This method checks if the item has a weapon configuration.
+     * Excludes arrows, projectiles, bombs, deployables, and other non-weapon items.
      */
     public static boolean isWeapon(ItemStack itemStack) {
         if (itemStack == null || itemStack.isEmpty()) return false;
-
+        
         String itemId = itemStack.getItemId();
-        if (itemId == null) return false;
-
-        // Always exclude arrows
-        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) return false;
-
-        // Check cache first
-        Boolean cachedResult = getCachedCheck(weaponCheckCache, itemId);
-        if (cachedResult != null) return cachedResult;
-
-        boolean result = false;
-
-        // Check 1: Item ID starts with "Weapon_"
-        if (itemId.toLowerCase().startsWith("weapon_")) {
-            result = true;
+        Item item = itemStack.getItem();
+        if (item == null || item == Item.UNKNOWN) return false;
+        
+        // Check getWeapon() - returns non-null for weapons
+        Object weapon = item.getWeapon();
+        
+        // If getWeapon() returns non-null, apply arrow filters
+        if (weapon != null) {
+            if (itemId != null) {
+                String itemIdLower = itemId.toLowerCase();
+                // Exclude arrows and projectiles (whole word check)
+                if (itemIdLower.contains("arrow") || itemIdLower.contains("bolt") || 
+                    itemIdLower.contains("projectile") || itemIdLower.contains("ammo") ||
+                    itemIdLower.contains("ammunition")) {
+                    return false;
+                }
+                // Exclude bombs and explosives - use word boundaries
+                if (itemIdLower.contains("_bomb") || itemIdLower.contains("bomb_") ||
+                    itemIdLower.contains("_tnt") || itemIdLower.contains("tnt_") ||
+                    itemIdLower.contains("_dynamite") || itemIdLower.contains("dynamite_") ||
+                    itemIdLower.contains("explosive") || itemIdLower.contains("_mine")) {
+                    return false;
+                }
+                // Exclude deployables and placeables
+                if (itemIdLower.contains("deployable") || itemIdLower.contains("placeable") ||
+                    itemIdLower.contains("turret") || itemIdLower.contains("trap") ||
+                    itemIdLower.contains("totem") || itemIdLower.contains("banner") ||
+                    itemIdLower.contains("flag") || itemIdLower.contains("ward")) {
+                    return false;
+                }
+            }
+            // getWeapon() is non-null and item passed filters
+            return true;
         }
-
-        // Check 2: Item has Categories containing "Items.Weapons"
-        if (!result) result = hasWeaponCategory(itemStack);
-
-        // Check 3: Item has Weapon structure
-        if (!result) result = hasWeaponStructure(itemStack);
-
-        cacheCheck(weaponCheckCache, itemId, result);
-        return result;
+        
+        // getWeapon() returned null - pass through to other checks (armor, category, etc.)
+        return false;
     }
 
     /**
      * Checks if an ItemStack is a piece of armor using proper category checks.
-     * This method checks:
-     * 1. Item ID starts with "Armor_"
-     * 2. Item has Categories containing "Items.Armor"
-     * 3. Item has Armor structure (ArmorStats, DefenseProperties, etc.)
+     * This method checks if the item has an armor configuration.
      */
     public static boolean isArmor(ItemStack itemStack) {
         if (itemStack == null || itemStack.isEmpty()) return false;
-
-        String itemId = itemStack.getItemId();
-        if (itemId == null) return false;
-
-        // Check cache first
-        Boolean cachedResult = getCachedCheck(armorCheckCache, itemId);
-        if (cachedResult != null) return cachedResult;
-
-        boolean result = false;
-
-        // Check 1: Item ID starts with "Armor_"
-        if (itemId.toLowerCase().startsWith("armor_")) {
-            result = true;
-        }
-
-        // Check 2: Item has Categories containing "Items.Armor"
-        if (!result) result = hasArmorCategory(itemStack);
-
-        // Check 3: Item has Armor structure
-        if (!result) result = hasArmorStructure(itemStack);
-
-        cacheCheck(armorCheckCache, itemId, result);
-        return result;
+        Item item = itemStack.getItem();
+        if (item == null || item == Item.UNKNOWN) return false;
+        
+        // Check getArmor() first
+        if (item.getArmor() != null) return true;
+        
+        // Fallback: check category metadata (handles modded items)
+        return hasArmorCategory(itemStack);
     }
 
     /**
@@ -797,7 +799,6 @@ public class ReforgeEquip extends SimpleInteraction {
         weaponCheckCache.clear();
         armorCheckCache.clear();
         cacheTimestamps.clear();
-        System.out.println("[ReforgeEquip] Item check cache cleared");
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -808,7 +809,7 @@ public class ReforgeEquip extends SimpleInteraction {
      * Initializes the weapon upgrade tracker.
      */
     public static void initialize(File pluginDataFolder) {
-        System.out.println("[ReforgeEquip] Weapon tracking initialized");
+        // No-op: no persistent tracking needed
     }
 
     /**
@@ -839,7 +840,7 @@ public class ReforgeEquip extends SimpleInteraction {
      * Saves all tracked weapons.
      */
     public static void saveAll() {
-        System.out.println("[ReforgeEquip] Save called (no persistence needed)");
+        // No-op: no persistence needed
     }
 
     /**
@@ -1102,6 +1103,29 @@ public class ReforgeEquip extends SimpleInteraction {
 
         bar.append("]");
         return bar.toString();
+    }
+
+    /**
+     * Registers dynamic tooltips for a reforged item using DynamicTooltipsLib.
+     */
+    private static void registerReforgeTooltip(ItemStack item, int level) {
+        if (level <= 0) return;
+        
+        String itemId = item.getItemId();
+        boolean isArmor = itemId != null && ARMOR_PATTERN.matcher(itemId).matches();
+        
+        // Use utility class for DynamicTooltipsLib integration
+        if (!DynamicTooltipUtils.isAvailable()) {
+            return;
+        }
+        
+        // Add upgrade tier tooltip
+        String upgradeName = isArmor ? getArmorUpgradeName(level) : getUpgradeName(level);
+        double multiplier = isArmor ? getDefenseMultiplier(level) : getDamageMultiplier(level);
+        int percentBonus = (int) ((multiplier - 1.0) * 100);
+        
+        DynamicTooltipUtils.addReforgeTooltip(itemId, upgradeName, level, percentBonus, isArmor);
+        DynamicTooltipUtils.refreshAllPlayers();
     }
 
     // ══════════════════════════════════════════════════════════════════════════════

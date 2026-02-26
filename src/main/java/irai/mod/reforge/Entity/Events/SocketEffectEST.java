@@ -68,13 +68,6 @@ public class SocketEffectEST extends DamageEventSystem {
                 if (damageMultiplier != 1.0 || flatDamage != 0) {
                     float newDamage = (float) ((damage.getAmount() * damageMultiplier) + flatDamage);
                     
-                    System.out.println("==========================================");
-                    System.out.println("[SocketEffectEST] Attacker: " + attacker.getPlayerRef().getUsername());
-                    System.out.println("[SocketEffectEST] Socket Damage Multiplier: " + damageMultiplier);
-                    System.out.println("[SocketEffectEST] Socket Flat Damage: " + flatDamage);
-                    System.out.println("[SocketEffectEST] Damage: " + damage.getAmount() + " -> " + newDamage);
-                    System.out.println("==========================================");
-                    
                     damage.setAmount(newDamage);
                 }
             }
@@ -90,13 +83,6 @@ public class SocketEffectEST extends DamageEventSystem {
                 
                 if (defenseMultiplier != 1.0 || flatReduction != 0) {
                     float reducedDamage = (float) Math.max(0, (damage.getAmount() / defenseMultiplier) - flatReduction);
-                    
-                    System.out.println("==========================================");
-                    System.out.println("[SocketEffectEST] Defender: " + defender.getPlayerRef().getUsername());
-                    System.out.println("[SocketEffectEST] Socket Defense Multiplier: " + defenseMultiplier);
-                    System.out.println("[SocketEffectEST] Socket Flat Reduction: " + flatReduction);
-                    System.out.println("[SocketEffectEST] Damage after defense: " + damage.getAmount() + " -> " + reducedDamage);
-                    System.out.println("==========================================");
                     
                     damage.setAmount(reducedDamage);
                 }

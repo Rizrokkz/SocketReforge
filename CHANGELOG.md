@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-02-23
+
+### Major Overhaul
+
+#### Metadata-Based Refinement System
+
+This update completely overhauls how refinement data is stored, moving from item ID suffixes to NBT metadata.
+
+- **Metadata-Based Refinement**
+  - Refinement levels (0-3) are now stored in item NBT metadata instead of creating duplicate item IDs
+  - Item IDs no longer change when upgrading (e.g., `Weapon_Axe_Cobalt` stays the same at all levels)
+  - Cleaner data model with `RefinementData` class for storing level information
+  - `RefinementManager` handles all refinement operations centrally
+
+- **Refinement Items**
+  - Refinement Glob - Crafted at Salvage Bench Using 1 Iron Ore = 15 Globs
+  - Refinement Globs used during refinement 3
+  
+- **PatchAssets Removed**
+  - `/patchassets` command has been **completely removed**
+  - No longer needed since items are no longer duplicated for each upgrade level
+  - Weapons and armor work out of the box without any patching required
+  - No more `assets_path.txt` configuration needed
+
+- **New Configuration**
+  - `SocketConfig.json` for socket punching and essence settings
+  - Configurable max sockets, success/break chances, removal rates
+
+### Migration Notes
+
+- Locate the mods directory and remove all patched folders from previous version
+
+### Removed
+
+- `/patchassets` command — No longer needed
+- `PatchAssetsCommand.java` — Deleted
+- Item duplication system — Replaced with metadata storage
+
+---
+
 ## [1.0.2] - 2024-XX-XX
 
 ### Fixed

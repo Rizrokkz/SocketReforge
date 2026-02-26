@@ -1,7 +1,7 @@
 {
   "TranslationProperties": {
-    "Name": "Refinement Anvil",
-    "Description": ""
+    "Name": "irai.items.Bench_Refinement_Anvil.name",
+    "Description": "irai.items.Bench_Refinement_Anvil.description"
   },
   "Icon": "Icons/ItemsGenerated/Bench_Anvil.png",
   "Categories": [

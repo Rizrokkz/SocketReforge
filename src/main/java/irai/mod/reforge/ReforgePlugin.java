@@ -20,7 +20,7 @@ import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.reforge.Commands.CheckNameCommand;
 import irai.mod.reforge.Commands.EssenceSocketCommand;
-import irai.mod.reforge.Commands.PatchAssetsCommand;
+import irai.mod.reforge.Commands.ItemMetaCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.WeaponStatsCommand;
 import irai.mod.reforge.Config.RefinementConfig;
@@ -34,8 +34,9 @@ import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
-import irai.mod.reforge.UI.EssenceSocketUI;
 import irai.mod.reforge.UI.SocketPunchUI;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.LangLoader;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
@@ -65,6 +66,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
+        // Initialize language file loader for name resolution
+        LangLoader.initialize();
+        // Tooltip refresh is handled automatically by the provider approach
+        DynamicTooltipUtils.init();
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
@@ -74,11 +79,8 @@ public class ReforgePlugin extends JavaPlugin {
             this.sfxconfig.save();
             SFXConfig cfg = this.sfxconfig.get();
             if (cfg != null) {
-                System.out.println("[ReforgePlugin] Loaded SFX: start=" + cfg.getSFX_START() +
-                        ", success=" + cfg.getSFX_SUCCESS() +
-                        ", benches=" + String.join(", ", cfg.getBenches()));
+                Logger.getLogger("System: ").info("SFX Loaded!");
             }
-            Logger.getLogger("System: ").info("SFX Loaded!");
         } catch (Exception e) {
             System.err.println("[ReforgePlugin] Error loading SFX config: " + e.getMessage());
             e.printStackTrace();
@@ -91,14 +93,12 @@ public class ReforgePlugin extends JavaPlugin {
         SFXConfig loadedSfx = this.sfxconfig.get();
         if (loadedSfx != null) {
             reforgeEquip.setSfxConfig(loadedSfx);
-            System.out.println("[ReforgePlugin] SFXConfig injected into ReforgeEquip");
         }
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
         
         // Register Socket Punch Bench interaction
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
-        System.out.println("[ReforgePlugin] SocketPunchBench interaction registered");
 
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
 
@@ -107,19 +107,11 @@ public class ReforgePlugin extends JavaPlugin {
             this.refinementConfig.save();
             RefinementConfig refinement = this.refinementConfig.get();
             if (refinement != null) {
-                System.out.println("[ReforgePlugin] Loaded RefinementConfig:");
-                System.out.println("[ReforgePlugin]   Damage Multipliers:  " + java.util.Arrays.toString(refinement.getDamageMultipliers()));
-                System.out.println("[ReforgePlugin]   Defense Multipliers: " + java.util.Arrays.toString(refinement.getDefenseMultipliers()));
-                System.out.println("[ReforgePlugin]   Break Chances:       " + java.util.Arrays.toString(refinement.getBreakChances()));
-                System.out.println("[ReforgePlugin]   Armor Break Chances: " + java.util.Arrays.toString(refinement.getArmorBreakChances()));
-
                 // Inject config into EquipmentRefineEST
                 refineEST.setRefinementConfig(refinement);
-                System.out.println("[ReforgePlugin] RefinementConfig injected into EquipmentRefineEST");
 
                 // Inject config into ReforgeEquip
                 reforgeEquip.setRefinementConfig(refinement);
-                System.out.println("[ReforgePlugin] RefinementConfig injected into ReforgeEquip");
             }
         } catch (Exception e) {
             System.err.println("[ReforgePlugin] Error loading Refinement config: " + e.getMessage());
@@ -131,20 +123,12 @@ public class ReforgePlugin extends JavaPlugin {
             this.socketConfig.save();
             SocketConfig socketCfg = this.socketConfig.get();
             if (socketCfg != null) {
-                System.out.println("[ReforgePlugin] Loaded SocketConfig:");
-                System.out.println("[ReforgePlugin]   Max Sockets Weapon: " + socketCfg.getMaxSocketsWeapon());
-                System.out.println("[ReforgePlugin]   Max Sockets Armor:  " + socketCfg.getMaxSocketsArmor());
-                System.out.println("[ReforgePlugin]   Punch Success Chances: " + java.util.Arrays.toString(socketCfg.getPunchSuccessChances()));
-                System.out.println("[ReforgePlugin]   Punch Break Chances:   " + java.util.Arrays.toString(socketCfg.getPunchBreakChances()));
-                
                 // Initialize socket system
                 SocketManager.initialize(socketCfg);
                 EssenceRegistry.initialize();
                 
                 // Inject config into UI classes
                 SocketPunchUI.setConfig(socketCfg);
-                
-                System.out.println("[ReforgePlugin] Socket system initialized");
             }
         } catch (Exception e) {
             System.err.println("[ReforgePlugin] Error loading Socket config: " + e.getMessage());
@@ -159,8 +143,7 @@ public class ReforgePlugin extends JavaPlugin {
         CommandRegistry commandRegistry = this.getCommandRegistry();
         this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
         commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
-        commandRegistry.registerCommand(new PatchAssetsCommand("patchassets", "Patch weapons from HytaleAssets (auto-detect mods folder)", false));
-        
+        commandRegistry.registerCommand(new ItemMetaCommand("showmeta", "Checks the metadata of the held item", false));
         // Register socket commands
         commandRegistry.registerCommand(new SocketPunchCommand("socketpunch", "Open the socket punching UI"));
         commandRegistry.registerCommand(new EssenceSocketCommand("essencesocket", "Open the essence socketing UI"));
@@ -168,28 +151,19 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void start() {
-        System.out.println("[ReforgePlugin] Metadata-backed refinement active (packet persistence enabled)");
+        // Refresh all players to ensure tooltip changes are applied
+        startTooltipRefreshTimer();
     }
 
     protected void stop() {
-        System.out.println("==================================================");
-        System.out.println("[ReforgePlugin] Shutting down...");
-
         // Stop scheduled tasks
         if (autoSaveTimer != null) {
             autoSaveTimer.cancel();
-            System.out.println("[ReforgePlugin] Auto-save task stopped");
         }
 
         if (weaponSyncTimer != null) {
             weaponSyncTimer.cancel();
-            System.out.println("[ReforgePlugin] Weapon sync task stopped");
         }
-
-        System.out.println("[ReforgePlugin] Refinement data is stored in item metadata and serialized by built-in packets");
-
-        System.out.println("[ReforgePlugin] Shutdown complete!");
-        System.out.println("==================================================");
     }
 
     /**
@@ -199,6 +173,21 @@ public class ReforgePlugin extends JavaPlugin {
         return sfxconfig;
     }
 
+    
+    private Timer tooltipRefreshTimer;
+    private void startTooltipRefreshTimer() {
+        tooltipRefreshTimer = new Timer("RefreshTooltips", true);
+        tooltipRefreshTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    DynamicTooltipUtils.refreshAllPlayers();
+                } catch (Exception e) {
+                    System.err.println("Tooltips Refresh failed: " + e.getMessage());
+                }
+            }
+        }, 0, 3000);
+    }
     /**
      * Starts the auto-save task that periodically saves weapon data.
      * Runs every 5 minutes.
@@ -213,9 +202,7 @@ public class ReforgePlugin extends JavaPlugin {
                     int weaponCount = ReforgeEquip.getTrackedWeaponCount();
 
                     if (weaponCount > 0) {
-                        System.out.println("[ReforgePlugin] Auto-saving " + weaponCount + " weapon upgrades...");
                         ReforgeEquip.saveAll();
-                        System.out.println("[ReforgePlugin] Auto-save complete");
                     }
                 } catch (Exception e) {
                     System.err.println("[ReforgePlugin] Auto-save failed: " + e.getMessage());
@@ -257,3 +244,4 @@ public class ReforgePlugin extends JavaPlugin {
         weaponSyncTimer.scheduleAtFixedRate(syncTask, thirtySeconds, thirtySeconds);
     }
 }
+

@@ -1,110 +1,78 @@
 // Socket Punching UI
-Group {
-  LayoutMode: Center;
+$Common = "Common.ui";
+@MyTex = PatchStyle(TexturePath: "output_bg.png");
 
+@CustomLabelStyle = LabelStyle(
+  FontSize: 17,
+  TextColor: #bfcdd5,
+  RenderBold: true,
+  RenderUppercase: true,
+  HorizontalAlignment: Center,
+  VerticalAlignment: Center
+);
+
+@CustomStyle = TextButtonStyle(
+  Default: (Background: $Common.@DefaultSquareButtonDefaultBackground, LabelStyle: @CustomLabelStyle),
+  Hovered: (Background: $Common.@DefaultSquareButtonHoveredBackground, LabelStyle: @CustomLabelStyle),
+  Pressed: (Background: $Common.@DefaultSquareButtonPressedBackground, LabelStyle: @CustomLabelStyle),
+  Disabled: (Background: $Common.@DefaultSquareButtonDisabledBackground, LabelStyle: @CustomLabelStyle),
+  Sounds: $Common.@ButtonSounds,
+);
+
+Group {
+  LayoutMode: Top;
+  Anchor: (Width: 560, Height: 450,Top: 300,Left:300);
   Group #SocketPunchRoot {
     LayoutMode: Top;
-    Anchor: (Width: 520, Height: 430);
-    Background: #1E1E1E;
-
-    Label #TitleText {
-      Anchor: (Top: 12);
-      Text: "Socket Punch Bench";
-      Style: (FontSize: 20, TextColor: #FFFFFF);
+    Anchor: (Width: 560, Height: 170);
+    Background: (Color: #17171A);
+      Group {
+      LayoutMode: Left;
+      Anchor: (Width: 560, Height: 170);
+      Background: (Color: #17171A);
+      // Equipment Slot
+      $Common.@TextButton #EquipmentSlot {
+        Background: @MyTex;
+        Anchor: (Width: 560/3, Height: 170, Top: 0, Left: 0);
+        Padding: (Full: 4);
+        Text: "Equipment";
+        Overscroll: false;
+        Style: @CustomStyle;
+      }
+      
+      // Material Slot
+      $Common.@TextButton #PuncherSlot {
+        Background: @MyTex;
+        Anchor: (Width: 560/3, Height: 170, Top: 0, Left: 0);
+        Padding: (Full: 4);
+        Text: "Material";
+        Overscroll: false;
+        Style: @CustomStyle;
+      }
+      
+      // Support Slot
+      $Common.@TextButton #SupportSlot {
+        Background: @MyTex;
+        Anchor: (Width: 560/3, Height: 170, Top: 0, Left: 0);
+        Padding: (Full: 4);
+        Text: "Support";
+        Overscroll: false;
+        Style: @CustomStyle;
+      }
     }
-
-    Group #EquipmentSlot {
-      Anchor: (Width: 220, Height: 42, Top: 52, Left: 20);
-      Background: #444444;
-    }
-    Label #EquipmentPlaceholder {
-      Anchor: (Top: 98, Left: 20);
-      Text: "Hold weapon/armor";
-      Style: (FontSize: 12, TextColor: #AAAAAA);
-    }
-    Label #EquipmentItemName {
-      Anchor: (Top: 116, Left: 20);
-      Text: "";
-      Style: (FontSize: 13, TextColor: #FFFFFF);
-    }
-    Label #EquipmentItemSockets {
-      Anchor: (Top: 134, Left: 20);
-      Text: "";
-      Style: (FontSize: 12, TextColor: #55FF55);
-    }
-
-    Group #PuncherSlot {
-      Anchor: (Width: 220, Height: 42, Top: 170, Left: 20);
-      Background: #444444;
-    }
-    Label #PuncherPlaceholder {
-      Anchor: (Top: 216, Left: 20);
-      Text: "Socket Puncher";
-      Style: (FontSize: 12, TextColor: #AAAAAA);
-    }
-    Label #PuncherItemName {
-      Anchor: (Top: 234, Left: 20);
-      Text: "";
-      Style: (FontSize: 13, TextColor: #FFFFFF);
-    }
-
-    Group #SupportSlot {
-      Anchor: (Width: 220, Height: 42, Top: 268, Left: 20);
-      Background: #444444;
-    }
-    Label #SupportPlaceholder {
-      Anchor: (Top: 314, Left: 20);
-      Text: "Optional Booster";
-      Style: (FontSize: 12, TextColor: #AAAAAA);
-    }
-    Label #SupportItemName {
-      Anchor: (Top: 332, Left: 20);
-      Text: "";
-      Style: (FontSize: 13, TextColor: #FFFFFF);
-    }
-
-    Group #Socket1 {
-      Anchor: (Width: 42, Height: 42, Top: 60, Left: 300);
-      Background: #333333;
-    }
-    Group #Socket2 {
-      Anchor: (Width: 42, Height: 42, Top: 60, Left: 348);
-      Background: #333333;
-    }
-    Group #Socket3 {
-      Anchor: (Width: 42, Height: 42, Top: 60, Left: 396);
-      Background: #333333;
-    }
-    Group #Socket4 {
-      Anchor: (Width: 42, Height: 42, Top: 60, Left: 444);
-      Background: #333333;
-    }
-
-    Label #SocketCountValue {
-      Anchor: (Top: 120, Left: 300);
-      Text: "0 / 4";
-      Style: (FontSize: 14, TextColor: #FFFFFF);
-    }
-    Label #SuccessValue {
-      Anchor: (Top: 145, Left: 300);
-      Text: "0%";
-      Style: (FontSize: 14, TextColor: #55FF55);
-    }
-    Label #BreakValue {
-      Anchor: (Top: 170, Left: 300);
-      Text: "0%";
-      Style: (FontSize: 14, TextColor: #FF5555);
-    }
-
-    Label #WarningText {
-      Anchor: (Top: 295, Left: 300);
-      Text: "";
-      Style: (FontSize: 12, TextColor: #FFAA00);
-    }
-
-    Group #PunchSocketButton {
-      Anchor: (Width: 170, Height: 42, Top: 338, Left: 300);
-      Background: #55AA55;
+  }
+  Group #SocketPunchRoot {
+    LayoutMode: Left;
+    Anchor: (Width: 560, Height: 30);
+    Background: (Color: #17171A);
+    // Action Button
+    $Common.@TextButton #PunchSocketButton {
+      Background: @MyTex;
+      Anchor: (Width: 200, Height: 30, Top: 0, Left: 190);
+      Padding: (Full: 8);
+      Text: "Punch Socket";
+      Overscroll: false;
+      Style: @CustomStyle;
     }
   }
 }

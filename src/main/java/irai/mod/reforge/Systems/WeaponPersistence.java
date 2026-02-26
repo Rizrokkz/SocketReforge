@@ -51,8 +51,6 @@ public class WeaponPersistence {
                 GSON.toJson(data, writer);
             }
 
-            System.out.println("[WeaponPersistence] Saved " + data.size() + " weapon upgrades to " + saveFile.getAbsolutePath());
-
         } catch (IOException e) {
             System.err.println("[WeaponPersistence] Failed to save weapon data: " + e.getMessage());
             e.printStackTrace();
@@ -69,7 +67,6 @@ public class WeaponPersistence {
         File saveFile = new File(saveDirectory, SAVE_FILE);
 
         if (!saveFile.exists()) {
-            System.out.println("[WeaponPersistence] No save file found, starting fresh");
             return new HashMap<>();
         }
 
@@ -83,7 +80,6 @@ public class WeaponPersistence {
                     data = new HashMap<>();
                 }
 
-                System.out.println("[WeaponPersistence] Loaded " + data.size() + " weapon upgrades from " + saveFile.getAbsolutePath());
                 return data;
             }
 
@@ -108,7 +104,6 @@ public class WeaponPersistence {
 
         try {
             copyFile(saveFile, backupFile);
-            System.out.println("[WeaponPersistence] Created backup: " + backupFile.getName());
         } catch (IOException e) {
             System.err.println("[WeaponPersistence] Failed to create backup: " + e.getMessage());
         }

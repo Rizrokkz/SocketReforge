@@ -1,6 +1,7 @@
 {
   "TranslationProperties": {
-    "Name": "Refinement Glob"
+    "Name": "irai.items.Ingredient_Refinement_Glob.name",
+    "Description": "irai.items.Ingredient_Refinement_Glob.description"
   },
   "Categories": [
     "Items.Ingredients"

@@ -3,6 +3,8 @@ package irai.mod.reforge.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
+import irai.mod.reforge.Util.DynamicTooltipUtils;
+
 /**
  * Stored in item NBT under key "Sockets".
  */
@@ -134,5 +136,34 @@ public class SocketData {
         // Weapons get 4 max sockets, armour gets 2
         int max = itemType != null && itemType.toLowerCase().contains("armor") ? 2 : 4;
         return new SocketData(max);
+    }
+
+    // ── Dynamic Tooltips integration ─────────────────────────────────────────────
+
+    /**
+     * Registers tooltips for this socket data to DynamicTooltipsLib if available.
+     * @param itemId The item ID to add tooltips to
+     */
+    public void registerTooltips(String itemId) {
+        if (!DynamicTooltipUtils.isAvailable()) {
+            return;
+        }
+
+        // Add socket count tooltip
+        int filledSockets = (int) sockets.stream().filter(s -> !s.isEmpty()).count();
+        DynamicTooltipUtils.addSocketTooltip(itemId, maxSockets, filledSockets);
+
+        // Add individual stat bonuses from socketed essences
+        for (StatType stat : StatType.values()) {
+            double flatBonus = getTotalStatBonus(stat, EffectType.FLAT);
+            double percentBonus = getTotalStatBonus(stat, EffectType.PERCENTAGE);
+
+            if (flatBonus > 0) {
+                DynamicTooltipUtils.addStatTooltip(itemId, stat.getDisplayName(), flatBonus);
+            }
+            if (percentBonus > 0) {
+                DynamicTooltipUtils.addStatTooltip(itemId, stat.getDisplayName() + " %", percentBonus);
+            }
+        }
     }
 }

@@ -77,7 +77,6 @@ public class SFXConfig {
      */
     public void playSound(Player player, String soundEventIdStr) {
         if (player == null || soundEventIdStr == null || soundEventIdStr.isEmpty()) {
-            System.out.println("[SFXConfig] playSound called with null player or empty sound ID");
             return;
         }
 
@@ -85,21 +84,17 @@ public class SFXConfig {
             int soundIndex = SoundEvent.getAssetMap().getIndex(soundEventIdStr);
             
             if (soundIndex < 0) {
-                System.out.println("[SFXConfig] Sound event index not found for: " + soundEventIdStr);
                 return;
             }
             
-            System.out.println("[SFXConfig] Found sound event '" + soundEventIdStr + "' at index: " + soundIndex);
-
             SoundUtil.playSoundEvent2dToPlayer(
                     player.getPlayerRef(),
                     soundIndex,
                     SoundCategory.SFX
             );
             
-            System.out.println("[SFXConfig] Playing sound: " + soundEventIdStr);
         } catch (Exception e) {
-            System.out.println("[SFXConfig] Failed to play sound '" + soundEventIdStr + "': " + e.getMessage());
+            System.err.println("[SFXConfig] Failed to play sound '" + soundEventIdStr + "': " + e.getMessage());
             e.printStackTrace();
         }
     }

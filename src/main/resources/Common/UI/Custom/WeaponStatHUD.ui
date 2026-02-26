@@ -1,75 +1,97 @@
 // Weapon Stats HUD UI - Minimal Version
 $Common = "Common.ui";
-@MyTex = PatchStyle(TexturePath: "socket_panel_bg.png");
+@MyTex = PatchStyle(TexturePath: "output_bg.png");
+
+@CustomLabelStyle = LabelStyle(
+  FontSize: 17,
+  TextColor: #bfcdd5,
+  RenderBold: true,
+  RenderUppercase: true,
+  HorizontalAlignment: Center,
+  VerticalAlignment: Center
+);
+
+@CustomStyle = TextButtonStyle(
+  Default: (Background: $Common.@DefaultSquareButtonDefaultBackground, LabelStyle: @CustomLabelStyle),
+  Hovered: (Background: $Common.@DefaultSquareButtonHoveredBackground, LabelStyle: @CustomLabelStyle),
+  Pressed: (Background: $Common.@DefaultSquareButtonPressedBackground, LabelStyle: @CustomLabelStyle),
+  Disabled: (Background: $Common.@DefaultSquareButtonDisabledBackground, LabelStyle: @CustomLabelStyle),
+  Sounds: $Common.@ButtonSounds,
+);
 
 Group {
   LayoutMode: Center;
   Group #WeaponStatsBase {
-    LayoutMode: Top;
+    LayoutMode: Left;
     Visible: false;
-    Background: @MyTex;
+    Background: (Color: #222222);
     Anchor: (Width: 300, Height: 400);
-    Label #WeaponName {
+    Label #WeaponNameLabel {
       Anchor: (Top: 20);
+      Text: "Current Status";
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFD700);
+    }
+    Label #WeaponName {
+      Anchor: (Top: 20, Right: 20);
       Text: "Weapon Name";
-      Style: (HorizontalAlignment: Center, FontSize: 24, TextColor: #FFD700);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFD700);
     }
     Label #WeaponLevel {
-      Anchor: (Top: 60);
+      Anchor: (Top: 20);
       Text: "Level: 1";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #FFFFFF);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFFFFF);
     }
     Label #WeaponDamage {
-      Anchor: (Top: 90);
+      Anchor: (Top: 20);
       Text: "Damage: 100";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #55FF55);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #55FF55);
     }
     Label #WeaponProgress {
-      Anchor: (Top: 120);
+      Anchor: (Top: 20);
       Text: "Progress: 0%";
-      Style: (HorizontalAlignment: Center, FontSize: 14, TextColor: #55FFFF);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #55FFFF);
     }
   }
   Group #WeaponStatsNext {
     LayoutMode: Top;
     Visible: false;
     Background: @MyTex;
-    Anchor: (Width: 300, Height: 200);
+    Anchor: (Width: 300, Height: 400);
     Label #NextWeaponName {
       Anchor: (Top: 20);
       Text: "Next Level";
-      Style: (HorizontalAlignment: Center, FontSize: 20, TextColor: #FFD700);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFD700);
     }
     Label #NextWeaponLevel {
-      Anchor: (Top: 50);
+      Anchor: (Top: 40);
       Text: "Level: 2";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #FFFFFF);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFFFFF);
     }
     Label #NewWeaponDamage {
-      Anchor: (Top: 80);
+      Anchor: (Top: 60);
       Text: "Damage: 105";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #55FF55);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #55FF55);
     }
   }
   Group #WeaponStatsMax {
     LayoutMode: Top;
     Visible: false;
     Background: @MyTex;
-    Anchor: (Width: 300, Height: 150);
+    Anchor: (Width: 300, Height: 400);
     Label #WeaponNameMax {
       Anchor: (Top: 20);
       Text: "MAX LEVEL";
-      Style: (HorizontalAlignment: Center, FontSize: 20, TextColor: #FFD700);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFD700);
     }
     Label #WeaponLevelMax {
-      Anchor: (Top: 50);
+      Anchor: (Top: 40);
       Text: "Level: MAX";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #FFFFFF);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #FFFFFF);
     }
     Label #WeaponDamageMax {
-      Anchor: (Top: 80);
+      Anchor: (Top: 60);
       Text: "Damage: 1000";
-      Style: (HorizontalAlignment: Center, FontSize: 16, TextColor: #55FF55);
+      Style: (HorizontalAlignment: Center, FontSize: 12, TextColor: #55FF55);
     }
   }
 }

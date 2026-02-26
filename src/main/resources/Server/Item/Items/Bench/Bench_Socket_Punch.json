@@ -1,7 +1,7 @@
 {
   "TranslationProperties": {
-    "Name": "server.items.Bench_Socket_Punch.name",
-    "Description": "server.items.Bench_Socket_Punch.description"
+    "Name": "irai.items.Bench_Socket_Punch.name",
+    "Description": "irai.items.Bench_Socket_Punch.description"
   },
   "Icon": "Icons/ItemsGenerated/Bench_Salvage.png",
   "Categories": [

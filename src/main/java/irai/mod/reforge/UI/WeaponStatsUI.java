@@ -2,6 +2,8 @@ package irai.mod.reforge.UI;
 
 import javax.annotation.Nonnull;
 
+import org.bson.BsonDocument;
+
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -21,7 +23,8 @@ import irai.mod.reforge.Commands.CommandUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
 /**
- * Weapon stats page that only targets selectors present in WeaponStatHUD.ui.
+ * Weapon/Armor stats page that displays detailed item information.
+ * Supports both weapons and armor with appropriate upgrade names.
  */
 public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
 
@@ -38,47 +41,79 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
                 ? player.getInventory().getHotbar().getItemStack(player.getInventory().getActiveHotbarSlot())
                 : null;
 
-        String weaponName = "No weapon";
+        String weaponName = "No item";
         String weaponLevel = "N/A";
         String weaponDamage = "x1.00";
         String weaponProgress = "[   ]";
+        String itemTypeInfo = "";
+        String socketInfo = "";
+        String metadataInfo = "";
 
-        String nextWeaponName = "No weapon";
+        String nextWeaponName = "No item";
         String nextWeaponLevel = "N/A";
         String nextWeaponDamage = "x1.00";
 
-        String weaponNameMax = "No weapon";
+        String weaponNameMax = "No item";
         String weaponLevelMax = "N/A";
         String weaponDamageMax = "x1.00";
 
         boolean isMaxLevel = false;
 
         if (heldItem != null && !heldItem.isEmpty()) {
-            String weaponId = heldItem.getItemId();
+            String itemId = heldItem.getItemId();
             int level = ReforgeEquip.getLevelFromItem(heldItem);
             isMaxLevel = (level >= 3);
+            
+            // Detect item type
+            boolean isWeapon = ReforgeEquip.isWeapon(heldItem);
+            boolean isArmor = ReforgeEquip.isArmor(heldItem);
+            String itemType = isWeapon ? "Weapon" : (isArmor ? "Armor" : "Item");
 
             // Get the proper display name from the item's metadata/properties
             weaponName = getItemDisplayName(heldItem, level);
             weaponNameMax = weaponName;
 
-            String upgradeName = ReforgeEquip.getUpgradeName(level);
+            // Use appropriate upgrade names based on item type
+            String upgradeName = isArmor 
+                    ? ReforgeEquip.getArmorUpgradeName(level) 
+                    : ReforgeEquip.getUpgradeName(level);
             weaponLevel = level > 0 ? (upgradeName + " +" + level) : "Base (Upgradeable)";
             weaponLevelMax = level > 0 ? (upgradeName + " +" + level) : "Base";
 
-            double damageMultiplier = ReforgeEquip.getDamageMultiplier(level);
-            weaponDamage = "x" + String.format("%.2f", damageMultiplier);
+            // Use appropriate multiplier based on item type
+            double multiplier = isArmor 
+                    ? ReforgeEquip.getDefenseMultiplier(level) 
+                    : ReforgeEquip.getDamageMultiplier(level);
+            String statLabel = isArmor ? "Defense" : "Damage";
+            weaponDamage = statLabel + ": x" + String.format("%.2f", multiplier);
             weaponDamageMax = weaponDamage;
 
+            // Build item type info
+            itemTypeInfo = "Type: " + itemType;
+            if (heldItem.getItem() != null) {
+                itemTypeInfo += " | Quality: " + getQuality(heldItem);
+            }
+
+            // Build socket info from metadata
+            socketInfo = getSocketInfo(heldItem);
+            
+            // Build additional metadata info
+            metadataInfo = getMetadataInfo(heldItem);
+
             if (level < 3) {
-                double nextDamageMultiplier = ReforgeEquip.getDamageMultiplier(level + 1);
-                double damageIncreasePct = ((nextDamageMultiplier - damageMultiplier) / damageMultiplier) * 100.0;
-                weaponProgress = ReforgeEquip.createProgressBar(level, 3) + " (" + level + "/3) -> +" + String.format("%.0f", damageIncreasePct) + "%";
+                double nextMultiplier = isArmor 
+                        ? ReforgeEquip.getDefenseMultiplier(level + 1) 
+                        : ReforgeEquip.getDamageMultiplier(level + 1);
+                double increasePct = ((nextMultiplier - multiplier) / multiplier) * 100.0;
+                weaponProgress = ReforgeEquip.createProgressBar(level, 3) + " (" + level + "/3) -> +" + String.format("%.0f", increasePct) + "%";
 
                 int nextLevel = level + 1;
                 nextWeaponName = getItemDisplayName(heldItem, nextLevel);
-                nextWeaponLevel = ReforgeEquip.getUpgradeName(nextLevel) + " +" + nextLevel;
-                nextWeaponDamage = "x" + String.format("%.2f", nextDamageMultiplier);
+                String nextUpgradeName = isArmor 
+                        ? ReforgeEquip.getArmorUpgradeName(nextLevel) 
+                        : ReforgeEquip.getUpgradeName(nextLevel);
+                nextWeaponLevel = nextUpgradeName + " +" + nextLevel;
+                nextWeaponDamage = statLabel + ": x" + String.format("%.2f", nextMultiplier);
             } else {
                 weaponProgress = "+++ MAX";
             }
@@ -91,16 +126,16 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
         if (!isMaxLevel) {
             uiCommandBuilder.set("#WeaponName.TextSpans", Message.raw("Name: " + weaponName));
             uiCommandBuilder.set("#WeaponLevel.TextSpans", Message.raw("Level: " + weaponLevel));
-            uiCommandBuilder.set("#WeaponDamage.TextSpans", Message.raw("Damage: " + weaponDamage));
+            uiCommandBuilder.set("#WeaponDamage.TextSpans", Message.raw(weaponDamage));
             uiCommandBuilder.set("#WeaponProgress.TextSpans", Message.raw("Progress: " + weaponProgress));
 
             uiCommandBuilder.set("#NextWeaponName.TextSpans", Message.raw("Next: " + nextWeaponName));
             uiCommandBuilder.set("#NextWeaponLevel.TextSpans", Message.raw("Level: " + nextWeaponLevel));
-            uiCommandBuilder.set("#NewWeaponDamage.TextSpans", Message.raw("Damage: " + nextWeaponDamage));
+            uiCommandBuilder.set("#NewWeaponDamage.TextSpans", Message.raw(nextWeaponDamage));
         } else {
             uiCommandBuilder.set("#WeaponNameMax.TextSpans", Message.raw("Name: " + weaponNameMax));
             uiCommandBuilder.set("#WeaponLevelMax.TextSpans", Message.raw(weaponLevelMax + " MAX"));
-            uiCommandBuilder.set("#WeaponDamageMax.TextSpans", Message.raw("Damage: " + weaponDamageMax));
+            uiCommandBuilder.set("#WeaponDamageMax.TextSpans", Message.raw(weaponDamageMax));
         }
     }
 
@@ -185,21 +220,74 @@ public class WeaponStatsUI extends InteractiveCustomUIPage<WeaponStatsUI.Data> {
     }
     
     /**
-     * Legacy method for backwards compatibility.
-     * @deprecated Use {@link #getItemDisplayName(ItemStack, int)} instead.
+     * Gets the quality/rarity of an item.
      */
-    @Deprecated
-    private String getItemNameFromId(String itemId, int refinementLevel) {
-        if (itemId == null || itemId.isEmpty()) return "Unknown Item";
-
-        String[] parts = itemId.split("_");
-        if (parts.length < 3) return itemId;
-
-        String type = parts[1];
-        String materialRaw = parts[2].replaceAll("\\d+$", "");
-        if (refinementLevel > 0) {
-            return materialRaw + " " + type + " +" + refinementLevel;
+    private String getQuality(ItemStack item) {
+        if (item == null || item.isEmpty()) return "Common";
+        try {
+            // Try to get quality from item config
+            var itemConfig = item.getItem();
+            if (itemConfig != null) {
+                // Use reflection to try to get quality field
+                try {
+                    java.lang.reflect.Method getQuality = itemConfig.getClass().getMethod("getQuality");
+                    String quality = (String) getQuality.invoke(itemConfig);
+                    if (quality != null && !quality.isEmpty()) {
+                        return quality;
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        return "Common";
+    }
+    
+    /**
+     * Gets socket information from item metadata.
+     */
+    private String getSocketInfo(ItemStack item) {
+        if (item == null || item.isEmpty()) return "";
+        
+        BsonDocument meta = item.getMetadata();
+        if (meta == null) return "";
+        
+        StringBuilder sb = new StringBuilder();
+        
+        // Check for socket data
+        if (meta.containsKey("SocketReforge.SocketData")) {
+            try {
+                BsonDocument socketDoc = meta.getDocument("SocketReforge.SocketData");
+                int sockets = socketDoc.containsKey("sockets") ? socketDoc.getInt32("sockets").getValue() : 0;
+                int maxSockets = socketDoc.containsKey("maxSockets") ? socketDoc.getInt32("maxSockets").getValue() : 0;
+                if (maxSockets > 0) {
+                    sb.append("Sockets: ").append(sockets).append("/").append(maxSockets);
+                }
+            } catch (Exception ignored) {}
         }
-        return materialRaw + " " + type;
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Gets additional metadata information.
+     */
+    private String getMetadataInfo(ItemStack item) {
+        if (item == null || item.isEmpty()) return "";
+        
+        BsonDocument meta = item.getMetadata();
+        if (meta == null) return "";
+        
+        StringBuilder sb = new StringBuilder();
+        
+        // Check for base item ID
+        if (meta.containsKey("SocketReforge.Refinement.BaseItemId")) {
+            try {
+                String baseId = meta.getString("SocketReforge.Refinement.BaseItemId").getValue();
+                if (baseId != null && !baseId.isEmpty()) {
+                    sb.append("Base: ").append(baseId);
+                }
+            } catch (Exception ignored) {}
+        }
+        
+        return sb.toString();
     }
 }
