@@ -921,7 +921,7 @@ public class ReforgeEquip extends SimpleInteraction {
         player.sendMessage(Message.raw(color + "|  " + stars + " " + upgradeName.toUpperCase() + " WEAPON " + stars + "  |"));
         player.sendMessage(Message.raw(color + "============================="));
         player.sendMessage(Message.raw(color + "| Upgrade Level: " + color + "+" + level + "        " + color + "|"));
-        player.sendMessage(Message.raw(color + "| Damage Bonus: §6+" + String.format("%.0f", (multiplier - 1.0) * 100) + "%       " + color + "|"));
+        player.sendMessage(Message.raw(color + "| Damage Bonus: +" + String.format("%.0f", (multiplier - 1.0) * 100) + "%       " + color + "|"));
         player.sendMessage(Message.raw(color + "============================="));
         player.sendMessage(Message.raw(""));
     }
@@ -1068,10 +1068,10 @@ public class ReforgeEquip extends SimpleInteraction {
      */
     private static String getColorForLevel(int level) {
         switch (level) {
-            case 1: return "§a"; // Green for +1
-            case 2: return "§b"; // Aqua for +2
-            case 3: return "§6"; // Gold for +3
-            default: return "§f"; // White for base
+            case 1: return ""; // Green for +1
+            case 2: return ""; // Aqua for +2
+            case 3: return ""; // Gold for +3
+            default: return ""; // White for base
         }
     }
 
@@ -1080,9 +1080,9 @@ public class ReforgeEquip extends SimpleInteraction {
      */
     private static String getStarsForLevel(int level) {
         switch (level) {
-            case 1: return "★";
-            case 2: return "★★";
-            case 3: return "★★★";
+            case 1: return "*";
+            case 2: return "**";
+            case 3: return "***";
             default: return "";
         }
     }

@@ -27,6 +27,7 @@ import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.SocketManager.PunchResult;
 import irai.mod.reforge.Socket.SocketManager.SupportMaterial;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
  * Socket Punching UI - Standard Hytale UI implementation.
@@ -174,10 +175,18 @@ public class SocketPunchUI extends InteractiveCustomUIPage<SocketPunchUI.Data> {
                 selectedEquipment = updatedItem;
             }
         } else if (result == PunchResult.BREAK) {
-            player.getInventory().getHotbar().setItemStackForSlot((short) selectedEquipmentSlot, ItemStack.EMPTY);
-            cmd.set("#PunchSocketButton.TextSpans", Message.raw("Item Broke!"));
-            selectedEquipment = null;
-            selectedEquipmentSlot = -1;
+            // Item broke during punch - reduce max sockets instead of destroying
+            socketData.reduceMaxSockets();
+            ItemStack brokenItem = SocketManager.withSocketData(selectedEquipment, socketData);
+            player.getInventory().getHotbar().setItemStackForSlot((short) selectedEquipmentSlot, brokenItem);
+            
+            // Update tooltip
+            String itemId = selectedEquipment.getItemId();
+            socketData.registerTooltips(itemId);
+            DynamicTooltipUtils.refreshAllPlayers();
+            
+            cmd.set("#PunchSocketButton.TextSpans", Message.raw("Item Damaged! Max Sockets: " + socketData.getMaxSockets()));
+            selectedEquipment = brokenItem;
         } else {
             cmd.set("#PunchSocketButton.TextSpans", Message.raw("Failed - Try Again!"));
         }

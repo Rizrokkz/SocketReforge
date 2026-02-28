@@ -7,6 +7,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-02-27
+
+### New Feature: Socket Punching & Essence Socketting
+
+This major update introduces a complete socket system using specialized benches and materials.
+
+#### Socket Punch Bench
+
+- **New Bench: Socket Punch Bench**
+  - Crafted using 8 Iron Bars + 3 Emeralds at a Workbench (Tier 2)
+  - Used to punch sockets into weapons and armor
+  - Custom 3D model and animations
+  - Interaction: `SocketPunchBench`
+
+- **Socket Puncher Material**
+  - Crafted at Salvage Bench: 1 Iron Bar → 15 Socket Punchers
+  - Required material for each socket punch attempt
+  - Configurable success/break chances per socket level
+
+- **Socket Stabilizer Material** (Optional Enhancement)
+  - Crafted at Alchemy Bench: 15 Socket Punchers + 1 Emerald Gem
+  - Provides +15% success chance and -5% break chance
+  - Recommended for higher-risk socket punches
+
+- **Socket Punching Mechanics**
+  - Max 4 sockets per item (5th possible as rare bonus)
+  - Configurable success chances: 90% → 75% → 55% → 35%
+  - Configurable break chances: 2% → 5% → 10% → 18%
+  - Bonus 5th socket: 1% chance when punching 4th socket
+  - Broken sockets can be repaired with Voidheart
+
+#### Essence Socket Bench
+
+- **New Bench: Essence Socket Bench**
+  - Crafted using 8 Iron Bars + 3 Wood at a Workbench (Tier 2)
+  - Used to socket essences into punched sockets
+  - Custom 3D model and animations
+  - Interaction: `EssenceSocket`
+
+- **Essence Types** (6 varieties)
+  - **Fire**: +2-12% Damage or +3-15 Flat Damage
+  - **Ice**: +2-5% Slow/Freeze, +2-12 Cold Damage
+  - **Lightning**: +3-15% Attack Speed, +2-8% Crit
+  - **Life**: +2-10% Lifesteal (weapons) or +10-50 HP (armor)
+  - **Void**: +5-25% Crit Damage
+  - **Water**: +2-10% Evasion (armor only)
+
+- **Tier System**
+  - Consecutive essences of the same type build tier (max T5)
+  - Example: "Life, Life, Life, Fire" = Tier 3 Life, Tier 1 Fire
+  - Higher tiers provide significantly stronger effects
+
+- **Voidheart**
+  - Used to repair broken sockets
+  - Consumed automatically when repairing while socketing
+
+#### Configuration (SocketConfig.json)
+
+- `MAX_SOCKETS`: [4, 4] - Max sockets for weapons and armor
+- `PUNCH_SUCCESS_CHANCES`: [0.9, 0.75, 0.55, 0.35] - Success rate per socket level
+- `PUNCH_BREAK_CHANCES`: [0.02, 0.05, 0.1, 0.18] - Break chance per socket level
+- `ESSENCE_REMOVAL_SUCCESS`: [0.7] - Essence removal success rate
+- `ESSENCE_REMOVAL_DESTROY`: [0.3] - Essence destroy on removal
+
+### UI Improvements
+
+- **SocketPunchUI Redesign**
+  - Complete overhaul of socket punching interface
+  - Improved visual feedback for socket operations
+  - Better progress tracking and display
+  - Added stat preview before punching
+
+- **WeaponStatsUI Improvements**
+  - Enhanced weapon statistics display
+  - Better socket information visualization
+  - Improved stat comparison tools
+
+- **EssenceSocketUI Updates**
+  - Enhanced essence socket interface
+  - Better socket state visualization
+
+### New Commands
+
+- **ItemMetaCommand Added**
+  - `/itemmeta` command to view and manage item metadata
+  - Inspect refinement levels, socket data, and essence information
+  - Debug tool for item property analysis
+
+### New Utility Classes
+
+- **DynamicTooltipUtils** - Dynamic tooltip generation for socketed items
+- **LangLoader** - Centralized language string loading
+- **NameResolver** - Advanced name resolution with caching
+- **ReforgeLogger** - Dedicated logging system for reforge operations
+
+### Technical Improvements
+
+- **SocketData Enhancement** - New socket data handling with tier calculations
+- **EssenceRegistry** - Centralized essence type definitions and tier effects
+- **SocketEffectEST** - Entity Component System for applying essence effects
+- **DynamicTooltips Integration** - Full compatibility with DynamicTooltipsLib mod
+  - Socket and essence information displayed as in-game tooltips
+  - Per-item metadata tooltips via Provider-based approach
+  - Auto-refreshes tooltips when sockets/essences are modified
+- Event system improvements for better interaction handling
+
+---
+
 ## [1.1.0] - 2026-02-23
 
 ### Major Overhaul

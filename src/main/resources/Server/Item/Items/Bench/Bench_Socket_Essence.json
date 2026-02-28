@@ -1,9 +1,9 @@
 {
   "TranslationProperties": {
-    "Name": "irai.items.Bench_Socket_Punch.name",
-    "Description": "irai.items.Bench_Socket_Punch.description"
+    "Name": "irai.items.Bench_Socket_Essence.name",
+    "Description": "irai.items.Bench_Socket_Essence.description"
   },
-  "Icon": "Icons/ItemsGenerated/Bench_Socket_Punch.png",
+  "Icon": "Icons/ItemsGenerated/Bench_Socket_Essence.png",
   "Categories": [
     "Furniture.Benches"
   ],
@@ -14,7 +14,7 @@
         "Quantity": 8
       },
       {
-        "ResourceTypeId": "Emerald",
+        "ResourceTypeId": "Wood",
         "Quantity": 3
       }
     ],
@@ -34,10 +34,10 @@
     "Material": "Solid",
     "DrawType": "Model",
     "Opacity": "Transparent",
-    "CustomModel": "Blocks/Benches/Bench_Socket_Puncher.blockymodel",
+    "CustomModel": "Blocks/Benches/Bench_Socket_Essence.blockymodel",
     "CustomModelTexture": [
       {
-        "Texture": "Blocks/Benches/Texture_Bench_SocketPuncher.png",
+        "Texture": "Blocks/Benches/Texture_Bench_GemSocket.png",
         "Weight": 1
       }
     ],
@@ -61,10 +61,10 @@
       "CompletedSoundEventId": "SFX_Furnace_Bench_Processing_Complete",
       "EndSoundEventId": "SFX_Furnace_Bench_Processing_End",
       "FailedSoundEventId": "SFX_Generic_Crafting_Failed",
-      "Id": "SocketPunchBench"
+      "Id": "GemSocketBench"
     },
     "State": {
-      "Id": "SocketPunchBench",
+      "Id": "GemSocketBench",
       "Definitions": {
         "Processing": {
           "Looping": true,
@@ -73,7 +73,7 @@
           },
           "CustomModelTexture": [
             {
-              "Texture": "Blocks/Benches/Texture_Bench_SocketPuncher.png",
+              "Texture": "Blocks/Benches/Texture_Bench_GemSocket.png",
               "Weight": 1
             }
           ],
@@ -101,7 +101,7 @@
         "GatherType": "Benches"
       }
     },
-    "HitboxType": "Bench_Salvage",
+    "HitboxType": "Bench_Loom",
     "BlockParticleSetId": "Stone",
     "Support": {
       "Down": [
@@ -112,7 +112,7 @@
     },
     "BlockSoundSetId": "Stone",
     "Interactions": {
-      "Use": "SocketPunchBench"
+      "Use": "EssenceSocket"
     }
   },
   "PlayerAnimationsId": "Block",

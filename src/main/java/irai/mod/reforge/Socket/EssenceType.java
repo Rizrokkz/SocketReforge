@@ -9,7 +9,8 @@ public enum EssenceType {
     ICE("Ice", "55FFFF", "§b", "Glows with frost"),
     LIGHTNING("Lightning", "FFFF55", "§e", "Crackles with energy"),
     LIFE("Life", "55FF55", "§a", "Pulses with vitality"),
-    SHADOW("Shadow", "AA55AA", "§5", "Shimmers with darkness");
+    VOID("Void", "AA55FF", "§d", "Echos with darkness"),
+    WATER("Water", "5555FF", "§9", "Flows with clarity");
     
     private final String displayName;
     private final String hexColor;

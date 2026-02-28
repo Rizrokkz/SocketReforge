@@ -3,6 +3,8 @@ package irai.mod.reforge.Socket;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
@@ -21,14 +23,124 @@ public class SocketData {
     // ── Accessors ─────────────────────────────────────────────────────────────
 
     public int getMaxSockets() { return maxSockets; }
+    public int getLockedSocketCount() { 
+        return (int) sockets.stream().filter(Socket::isLocked).count(); 
+    }
     public List<Socket> getSockets() { return sockets; }
+    
+    /**
+     * Sets the maximum number of sockets.
+     */
+    public void setMaxSockets(int max) { 
+        this.maxSockets = Math.max(0, max);
+    }
+    
+    /**
+     * Reduces the maximum number of sockets by 1 (used when item breaks during punching).
+     * @return true if max sockets was reduced, false if already at 0
+     */
+    public boolean reduceMaxSockets() {
+        if (maxSockets > 0) {
+            maxSockets--;
+            // Also remove last socket if there are more sockets than new max
+            while (sockets.size() > maxSockets && !sockets.isEmpty()) {
+                sockets.remove(sockets.size() - 1);
+            }
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Marks the last socket as broken (used when item breaks during punching).
+     * This keeps the socket slot but marks it as unusable.
+     * @return true if a socket was broken, false if no sockets available
+     */
+    public boolean breakSocket() {
+        if (!sockets.isEmpty()) {
+            // Mark the last socket as broken
+            Socket lastSocket = sockets.get(sockets.size() - 1);
+            lastSocket.setBroken(true);
+            lastSocket.setEssenceId(null);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Checks if there are any broken sockets.
+     * @return true if there is at least one broken socket
+     */
+    public boolean hasBrokenSocket() {
+        return sockets.stream().anyMatch(Socket::isBroken);
+    }
+    
+    /**
+     * Repairs the first broken socket found.
+     * This makes the socket available for use again (empty but not broken).
+     * @return true if a socket was repaired, false if no broken sockets
+     */
+    public boolean repairBrokenSocket() {
+        for (Socket socket : sockets) {
+            if (socket.isBroken()) {
+                socket.setBroken(false);
+                // Keep it empty, player needs to socket an essence again
+                socket.setEssenceId(null);
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Returns the number of available (unlocked and unfilled) socket slots.
+     */
+    public int getOpenSocketCount() {
+        return Math.max(0, maxSockets - sockets.size());
+    }
 
     public int getCurrentSocketCount() { return sockets.size(); }
 
     public boolean canAddSocket() { return sockets.size() < maxSockets; }
 
     public boolean hasEmptySocket() {
-        return sockets.stream().anyMatch(s -> s.getEssenceId() == null);
+        return sockets.stream().anyMatch(s -> s.getEssenceId() == null && !s.isLocked());
+    }
+    
+    /**
+     * Checks if there's a socket available for filling (empty or broken).
+     * @return true if there's an available socket
+     */
+    public boolean hasAvailableSocket() {
+        return sockets.stream().anyMatch(s -> (s.getEssenceId() == null || s.isBroken()) && !s.isLocked());
+    }
+    
+    /**
+     * Lock the first empty socket (called when essence socketting fails).
+     * Returns true if a socket was locked, false if no empty sockets available.
+     */
+    public boolean lockEmptySocket() {
+        for (Socket socket : sockets) {
+            if (socket.getEssenceId() == null && !socket.isLocked()) {
+                socket.setLocked(true);
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Salvage a locked socket (restore it to usable state).
+     * Returns true if a socket was salvaged, false if no locked sockets.
+     */
+    public boolean salvageLockedSocket() {
+        for (Socket socket : sockets) {
+            if (socket.isLocked()) {
+                socket.setLocked(false);
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── Mutations ─────────────────────────────────────────────────────────────
@@ -40,10 +152,11 @@ public class SocketData {
         return true;
     }
 
-    /** Fills the first empty socket with the given essence. Returns false if none available. */
+    /** Fills the first empty socket with the given essence. Skips broken sockets. Returns false if none available. */
     public boolean socketEssence(String essenceId) {
         for (Socket socket : sockets) {
-            if (socket.getEssenceId() == null) {
+            // Only fill empty sockets, skip broken ones
+            if (socket.getEssenceId() == null && !socket.isBroken() && !socket.isLocked()) {
                 socket.setEssenceId(essenceId);
                 return true;
             }
@@ -104,6 +217,78 @@ public class SocketData {
         return total;
     }
 
+    /**
+     * Calculates tiered stat bonuses based on CONSECUTIVE essence types.
+     * This is used for DynamicTooltips and actual effect application.
+     * 
+     * @param statType The stat type to calculate
+     * @param isWeapon Whether the item is a weapon (affects Life essence)
+     * @return The total bonus value
+     */
+    public double getTieredStatBonus(StatType statType, boolean isWeapon) {
+        double total = 0;
+
+        // Get tier map from SocketManager
+        java.util.Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
+
+        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+            Essence.Type type = entry.getKey();
+            int tier = entry.getValue();
+
+            double[] effects = EssenceRegistry.getTierEffect(type, tier, isWeapon);
+
+            // Map stat type to effect
+            switch (statType) {
+                case DAMAGE:
+                    if (type == Essence.Type.FIRE) {
+                        total += effects[1]; // flat damage
+                    } else if (type == Essence.Type.ICE) {
+                        total += effects[1]; // cold damage
+                    }
+                    break;
+                case ATTACK_SPEED:
+                    if (type == Essence.Type.LIGHTNING) {
+                        total += effects[0];
+                    }
+                    break;
+                case CRIT_CHANCE:
+                    if (type == Essence.Type.LIGHTNING) {
+                        total += effects[1];
+                    }
+                    break;
+                case CRIT_DAMAGE:
+                    if (type == Essence.Type.VOID) {
+                        total += effects[0];
+                    }
+                    break;
+                case LIFE_STEAL:
+                    if (type == Essence.Type.LIFE && isWeapon) {
+                        total += effects[0];
+                    }
+                    break;
+                case HEALTH:
+                    if (type == Essence.Type.LIFE && !isWeapon) {
+                        total += effects[1];
+                    }
+                    break;
+                case EVASION:
+                    if (type == Essence.Type.WATER && !isWeapon) {
+                        total += effects[0];
+                    }
+                    break;
+                case MOVEMENT_SPEED:
+                    if (type == Essence.Type.ICE) {
+                        total += effects[0]; // slow (negative)
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return total;
+    }
+
     /** Converts EssenceEffect.StatType to SocketData.StatType */
     private StatType convertStatType(EssenceEffect.StatType stat) {
         switch (stat) {
@@ -133,37 +318,217 @@ public class SocketData {
     // ── Serialisation helpers (used by SocketManager with item metadata) ──────
 
     public static SocketData fromDefaults(String itemType) {
-        // Weapons get 4 max sockets, armour gets 2
-        int max = itemType != null && itemType.toLowerCase().contains("armor") ? 2 : 4;
+        // Weapons and armor both get 4 max sockets
+        int max = 4;
         return new SocketData(max);
     }
 
-    // ── Dynamic Tooltips integration ─────────────────────────────────────────────
-
     /**
      * Registers tooltips for this socket data to DynamicTooltipsLib if available.
+     * Reads tier info from item metadata for consistency.
+     * Shows color-coded socket indicators.
+     * @param item The item stack to read metadata from
      * @param itemId The item ID to add tooltips to
+     * @param isWeapon Whether the item is a weapon (affects Life essence effects)
      */
-    public void registerTooltips(String itemId) {
+    public void registerTooltips(ItemStack item, String itemId, boolean isWeapon) {
         if (!DynamicTooltipUtils.isAvailable()) {
             return;
         }
 
-        // Add socket count tooltip
-        int filledSockets = (int) sockets.stream().filter(s -> !s.isEmpty()).count();
-        DynamicTooltipUtils.addSocketTooltip(itemId, maxSockets, filledSockets);
+        // Build socket colors array for color-coded display
+        // Also track which sockets are broken
+        String[] socketColors = new String[sockets.size()];
+        boolean[] brokenSockets = new boolean[sockets.size()];
+        for (int i = 0; i < sockets.size(); i++) {
+            Socket socket = sockets.get(i);
+            if (socket.isBroken()) {
+                brokenSockets[i] = true;
+            } else if (!socket.isEmpty()) {
+                Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+                if (essence != null) {
+                    socketColors[i] = getEssenceColor(essence.getType());
+                }
+            }
+        }
+        
+        // Register colored socket display with broken socket info
+        DynamicTooltipUtils.registerColoredSocketTooltip(itemId, null, maxSockets, socketColors, brokenSockets);
 
-        // Add individual stat bonuses from socketed essences
+        // Try to get tier info from metadata first
+        String[] effectTypes = SocketManager.getEssenceEffects(item);
+        String[] effectTiers = SocketManager.getEssenceTiers(item);
+        
+        // Fall back to calculating from socket data if not in metadata
+        java.util.Map<Essence.Type, Integer> tierMap;
+        if (effectTypes != null && effectTiers != null && effectTypes.length == effectTiers.length) {
+            tierMap = new java.util.LinkedHashMap<>();
+            for (int i = 0; i < effectTypes.length; i++) {
+                try {
+                    Essence.Type type = Essence.Type.valueOf(effectTypes[i]);
+                    int tier = Integer.parseInt(effectTiers[i]);
+                    tierMap.put(type, tier);
+                } catch (Exception e) {
+                    // Ignore invalid entries
+                }
+            }
+        } else {
+            tierMap = SocketManager.calculateConsecutiveTiers(this);
+        }
+
+        // Add tiered stat bonuses from socketed essences as separate tooltip lines
+        java.util.List<String> statLines = new java.util.ArrayList<>();
         for (StatType stat : StatType.values()) {
-            double flatBonus = getTotalStatBonus(stat, EffectType.FLAT);
-            double percentBonus = getTotalStatBonus(stat, EffectType.PERCENTAGE);
+            double tieredBonus = getTieredStatBonus(stat, isWeapon);
 
-            if (flatBonus > 0) {
-                DynamicTooltipUtils.addStatTooltip(itemId, stat.getDisplayName(), flatBonus);
+            if (tieredBonus != 0) {
+                // Determine if it's percentage or flat based on stat type
+                boolean isPercent = isPercentageStat(stat);
+                String prefix = stat.getDisplayName() + ": +";
+                if (isPercent) {
+                    statLines.add(prefix + (int)tieredBonus + "%");
+                } else {
+                    statLines.add(prefix + (int)tieredBonus);
+                }
             }
-            if (percentBonus > 0) {
-                DynamicTooltipUtils.addStatTooltip(itemId, stat.getDisplayName() + " %", percentBonus);
+        }
+
+        // Register stat bonus lines if we have any
+        if (!statLines.isEmpty()) {
+            String[] lines = statLines.toArray(new String[0]);
+            DynamicTooltipUtils.registerTooltip(itemId, "socket_stats", lines);
+        }
+
+        // Add individual essence info for display with colors
+        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+            String essenceName = entry.getKey().name();
+            int tier = entry.getValue();
+            String color = getEssenceColor(entry.getKey());
+            String coloredName = color + essenceName + " T" + tier + "</color>";
+            DynamicTooltipUtils.addEssenceTooltip(itemId, coloredName, 
+                getEffectDescription(entry.getKey(), tier, isWeapon));
+        }
+    }
+    
+    /**
+     * Overload for backward compatibility.
+     */
+    public void registerTooltips(String itemId, boolean isWeapon) {
+        // This version doesn't have item metadata access, use empty map
+        if (!DynamicTooltipUtils.isAvailable()) {
+            return;
+        }
+
+        // Build socket colors array
+        String[] socketColors = new String[sockets.size()];
+        boolean[] brokenSockets = new boolean[sockets.size()];
+        for (int i = 0; i < sockets.size(); i++) {
+            Socket socket = sockets.get(i);
+            if (socket.isBroken()) {
+                brokenSockets[i] = true;
+            } else if (!socket.isEmpty()) {
+                Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+                if (essence != null) {
+                    socketColors[i] = getEssenceColor(essence.getType());
+                }
             }
+        }
+        
+        DynamicTooltipUtils.registerColoredSocketTooltip(itemId, null, maxSockets, socketColors, brokenSockets);
+
+        // Calculate tier map
+        java.util.Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
+
+        // Add stat bonuses
+        java.util.List<String> statLines = new java.util.ArrayList<>();
+        for (StatType stat : StatType.values()) {
+            double tieredBonus = getTieredStatBonus(stat, isWeapon);
+            if (tieredBonus != 0) {
+                boolean isPercent = isPercentageStat(stat);
+                String prefix = stat.getDisplayName() + ": +";
+                statLines.add(prefix + (int)tieredBonus + (isPercent ? "%" : ""));
+            }
+        }
+
+        if (!statLines.isEmpty()) {
+            DynamicTooltipUtils.registerTooltip(itemId, "socket_stats", statLines.toArray(new String[0]));
+        }
+
+        // Add essence info
+        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+            String color = getEssenceColor(entry.getKey());
+            String coloredName = color + entry.getKey().name() + " T" + entry.getValue() + "</color>";
+            DynamicTooltipUtils.addEssenceTooltip(itemId, coloredName, 
+                getEffectDescription(entry.getKey(), entry.getValue(), isWeapon));
+        }
+    }
+
+    /**
+     * Gets the color code for an essence type.
+     */
+    private String getEssenceColor(Essence.Type type) {
+        switch (type) {
+            case FIRE: return "<color is=\"#FFAA00\">";   // Orange
+            case ICE: return "<color is=\"#55FFFF\">";    // Cyan
+            case LIFE: return "<color is=\"#55FF55\">";    // Green
+            case LIGHTNING: return "<color is=\"#FFFF55\">"; // Yellow
+            case VOID: return "<color is=\"#AA55FF\">";    // Purple
+            case WATER: return "<color is=\"#5555FF\">";    // Blue
+            default: return "<color is=\"#FFFFFF\">";     // White
+        }
+    }
+
+    /**
+     * Overload for backward compatibility - assumes weapon by default.
+     */
+    public void registerTooltips(String itemId) {
+        registerTooltips(itemId, true);
+    }
+
+    /**
+     * Checks if a stat is a percentage-based stat.
+     */
+    private boolean isPercentageStat(StatType stat) {
+        return stat == StatType.DAMAGE || stat == StatType.ATTACK_SPEED || 
+               stat == StatType.CRIT_CHANCE || stat == StatType.CRIT_DAMAGE ||
+               stat == StatType.EVASION || stat == StatType.LIFE_STEAL ||
+               stat == StatType.DEFENSE;
+    }
+
+    /**
+     * Gets a description of the effect for an essence type and tier.
+     * Uses actual values from EssenceRegistry to ensure consistency.
+     */
+    private String getEffectDescription(Essence.Type type, int tier, boolean isWeapon) {
+        double[] effects = EssenceRegistry.getTierEffect(type, tier, isWeapon);
+        double percentBonus = effects[0];
+        double flatBonus = effects[1];
+        
+        switch (type) {
+            case FIRE:
+                // Fire gives either % Damage OR flat Damage
+                if (flatBonus > 0) {
+                    return "+" + (int)flatBonus + " Flat DMG";
+                }
+                return "+" + (int)percentBonus + "% DMG";
+            case ICE:
+                if (tier >= 5) {
+                    return "+" + (int)percentBonus + "% Freeze, +" + (int)flatBonus + " Cold DMG";
+                }
+                return "+" + (int)percentBonus + "% Slow, +" + (int)flatBonus + " Cold DMG";
+            case LIGHTNING:
+                return "+" + (int)percentBonus + "% ATK Spd, +" + (int)flatBonus + "% Crit";
+            case LIFE:
+                if (isWeapon) {
+                    return "+" + (int)percentBonus + "% Lifesteal";
+                }
+                return "+" + (int)flatBonus + " HP";
+            case VOID:
+                return "+" + (int)percentBonus + "% Crit DMG";
+            case WATER:
+                return "+" + (int)percentBonus + "% Evasion";
+            default:
+                return "Unknown";
         }
     }
 }

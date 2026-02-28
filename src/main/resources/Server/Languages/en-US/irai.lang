@@ -19,6 +19,8 @@ items.Socket_Expander.name = Socket Expander
 items.Socket_Expander.description = Chance to add an extra socket on success
 
 # Essences
+items.Bench_Socket_Essence.name = Essence Socketting Bench
+items.Bench_Socket_Essence.description = A workbench for socketing essence into equipment
 items.Essence_Attack_Speed.name = Essence of Alacrity
 items.Essence_Attack_Speed.description = Increases attack speed when socketed
 items.Essence_Life_Steal.name = Essence of Vampirism

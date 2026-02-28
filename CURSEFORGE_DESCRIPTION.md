@@ -162,7 +162,7 @@
 
 <hr>
 
-<h2>🔷 Socket Punching System (WIP)</h2>
+<h2>🔷 Socket Punching System</h2>
 
 <p>Use a <strong>Socket Punch Bench</strong> to punch sockets into your equipment! Sockets can be filled with powerful essences to gain additional stat bonuses. Inspired by Path of Exile's socket system.</p>
 
@@ -188,9 +188,29 @@
   </tr>
   <tr>
     <td>Armor</td>
-    <td>2</td>
+    <td>4</td>
   </tr>
 </table>
+
+<h3>How to Craft</h3>
+
+<p><strong>Socket Punch Bench</strong> — Craft at Workbench (Tier 2):</p>
+<ul>
+  <li>8 Iron Bars + 3 Emeralds</li>
+</ul>
+
+<p><strong>Socket Puncher</strong> — Craft at Salvage Bench:</p>
+<ul>
+  <li>1 Iron Bar → 15 Socket Punchers</li>
+</ul>
+
+<p><strong>Socket Stabilizer</strong> — Craft at Alchemy Bench (Tier 1):</p>
+<ul>
+  <li>15 Socket Punchers + 1 Emerald Gem</li>
+  <li>Provides +15% success chance and -5% break chance</li>
+</ul>
+
+<p><em>*Bonus 5th socket: 1% chance when punching the 4th socket!*</em></p>
 
 <h3>Socket Punching Odds</h3>
 
@@ -226,7 +246,7 @@
 
 <hr>
 
-<h2>💎 Essence System (WIP)</h2>
+<h2>💎 Essence System</h2>
 
 <p>Fill your sockets with <strong>Essences</strong> to gain powerful stat bonuses! Each essence type provides unique effects based on its element and tier.</p>
 
@@ -259,15 +279,20 @@
     <td>Health, Life Steal</td>
   </tr>
   <tr>
-    <td>🌑 <strong>Shadow</strong></td>
+    <td>🌑 <strong>Void</strong></td>
     <td>Shimmers with darkness</td>
-    <td>Crit Damage, Evasion</td>
+    <td>Crit Damage</td>
+  </tr>
+  <tr>
+    <td>💧 <strong>Water</strong></td>
+    <td>Flows with clarity</td>
+    <td>Evasion (Armor Only)</td>
   </tr>
 </table>
 
-<h3>Essence Tiers (WIP)</h3>
+<h3>Essence Tiers</h3>
 
-<p>Each essence type comes in <strong>5 tiers</strong> (T1-T5). Higher tiers provide stronger effects but are rarer to obtain.</p>
+<p>Essences gain power based on <strong>consecutive count</strong> of the same type. For example: Life, Life, Life, Fire = Tier 3 Life, Tier 1 Fire. Higher tiers provide stronger effects!</p>
 
 <table>
   <tr>
@@ -286,7 +311,7 @@
     <td><strong>Ice</strong></td>
     <td>+2% Slow, +2 Cold DMG</td>
     <td>+5% Slow, +6 Cold DMG</td>
-    <td>+10% Slow, +12 Cold DMG</td>
+    <td>+5% Freeze, +12 Cold DMG</td>
   </tr>
   <tr>
     <td><strong>Lightning</strong></td>
@@ -295,16 +320,28 @@
     <td>+15% ATK Speed, +8% Crit</td>
   </tr>
   <tr>
-    <td><strong>Life</strong></td>
-    <td>+2% Lifesteal, +10 HP</td>
-    <td>+5% Lifesteal, +25 HP</td>
-    <td>+10% Lifesteal, +50 HP</td>
+    <td><strong>Life</strong> (Weapon)</td>
+    <td>+2% Lifesteal</td>
+    <td>+5% Lifesteal</td>
+    <td>+10% Lifesteal</td>
   </tr>
   <tr>
-    <td><strong>Shadow</strong></td>
-    <td>+5% Crit DMG, +2% Evasion</td>
-    <td>+12% Crit DMG, +5% Evasion</td>
-    <td>+25% Crit DMG, +10% Evasion</td>
+    <td><strong>Life</strong> (Armor)</td>
+    <td>+10 HP</td>
+    <td>+25 HP</td>
+    <td>+50 HP</td>
+  </tr>
+  <tr>
+    <td><strong>Void</strong></td>
+    <td>+5% Crit DMG</td>
+    <td>+12% Crit DMG</td>
+    <td>+25% Crit DMG</td>
+  </tr>
+  <tr>
+    <td><strong>Water</strong> (Armor)</td>
+    <td>+2% Evasion</td>
+    <td>+5% Evasion</td>
+    <td>+10% Evasion</td>
   </tr>
 </table>
 
@@ -319,18 +356,26 @@
   <li><strong>Elemental:</strong> Cold Damage, Slow Effect, Fire Damage, Lightning Damage</li>
 </ul>
 
+<h3>How to Craft</h3>
+
+<p><strong>Essence Socket Bench</strong> — Craft at Workbench (Tier 2):</p>
+<ul>
+  <li>8 Iron Bars + 3 Wood</li>
+</ul>
+
 <h3>Essence Management</h3>
 
 <ul>
-  <li><strong>Socket Essence:</strong> Place an essence into an empty socket to gain its effects</li>
+  <li><strong>Socket Essence:</strong> Place an essence into an empty socket at Essence Socket Bench to gain its effects</li>
   <li><strong>Remove Essence:</strong> 70% success rate to remove, 30% chance the essence is destroyed</li>
+  <li><strong>Repair Broken Sockets:</strong> Use Voidheart to repair broken sockets</li>
 </ul>
 
 <hr>
 
 <h2>📊 Weapon Stats UI</h2>
 
-<p>Use <code>/weaponstats</code> to open a custom in-game UI panel showing:</p>
+<p>View your weapon's stats in a custom in-game UI panel showing:</p>
 
 <ul>
   <li>Current weapon name and upgrade level</li>
@@ -371,33 +416,6 @@
 
 <hr>
 
-<h2>🛠️ Commands</h2>
-
-<table>
-  <tr>
-    <th>Command</th>
-    <th>Description</th>
-  </tr>
-  <tr>
-    <td><code>/weaponstats</code></td>
-    <td>Open the Weapon Stats UI for your held weapon</td>
-  </tr>
-  <tr>
-    <td><code>/socketpunch</code></td>
-    <td>Open the Socket Punching UI to add sockets to equipment</td>
-  </tr>
-  <tr>
-    <td><code>/essencesocket</code></td>
-    <td>Open the Essence Socketing UI to manage socketed essences</td>
-  </tr>
-  <tr>
-    <td><code>/checkname</code></td>
-    <td>Check the translation name of your held item</td>
-  </tr>
-</table>
-
-<hr>
-
 <h2>📦 Installation</h2>
 
 <h3>Install the Mod</h3>
@@ -426,9 +444,11 @@
 <ul>
   <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
   <li><strong>3 upgrade tiers</strong> with unique names and star ratings for weapons and armor</li>
-  <li><strong>Socket punching system</strong> — add up to 4 sockets to weapons, 2 to armor</li>
-  <li><strong>5 essence types</strong> (Fire, Ice, Lightning, Life, Shadow) with 5 tiers each</li>
-  <li><strong>14 different stats</strong> that can be modified by essences</li>
+  <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
+  <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
+  <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
+  <li><strong>DynamicTooltips compatibility</strong> — socket and essence info displayed as in-game tooltips<br><em>(Requires <a href="https://www.curseforge.com/hytale/mods/dynamictooltipslib">DynamicTooltipsLib</a>)</em></li>
+  <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
   <li><strong>Custom Stats UI</strong> with detailed upgrade information for weapons and armor</li>
   <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>
@@ -474,22 +494,22 @@
   <tr>
     <td><strong>Socket Punching</strong></td>
     <td>Add sockets to equipment for essence insertion</td>
-    <td>🔄 WIP</td>
+    <td>✅ Available</td>
   </tr>
   <tr>
     <td><strong>Essence Socketing</strong></td>
-    <td>Socket essences for stat bonuses (Fire, Ice, Lightning, Life, Shadow)</td>
-    <td>🔄 WIP</td>
+    <td>Socket essences for stat bonuses (Fire, Ice, Lightning, Life, Void, Water)</td>
+    <td>✅ Available</td>
   </tr>
   <tr>
     <td><strong>Supporting Materials</strong></td>
     <td>Additional materials for socket punching bonuses</td>
-    <td>🔄 WIP</td>
+    <td>✅ Available</td>
   </tr>
   <tr>
     <td><strong>Essence Crafting</strong></td>
     <td>Craft and upgrade essences</td>
-    <td>🔄 WIP</td>
+    <td>🔄 Planned</td>
   </tr>
 </table>
 

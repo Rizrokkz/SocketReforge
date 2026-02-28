@@ -17,10 +17,9 @@ import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Interactions.ReforgeEquip;
-import irai.mod.reforge.Socket.EffectType;
+import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
-import irai.mod.reforge.Socket.StatType;
 
 /**
  * Entity Stat Type (EST) that applies socket effects to damage calculations.
@@ -91,7 +90,7 @@ public class SocketEffectEST extends DamageEventSystem {
     }
 
     /**
-     * Calculates the total damage multiplier from socketed essences.
+     * Calculates the total damage multiplier from socketed essences using tier-based calculation.
      */
     private double calculateSocketDamageBonus(ItemStack weapon) {
         SocketData socketData = SocketManager.getSocketData(weapon);
@@ -99,12 +98,14 @@ public class SocketEffectEST extends DamageEventSystem {
             return 1.0;
         }
 
-        double percentageBonus = socketData.getTotalStatBonus(StatType.DAMAGE, EffectType.PERCENTAGE);
+        // Use tier-based calculation
+        double[] bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DAMAGE, true);
+        double percentageBonus = bonuses[1]; // percent bonus
         return 1.0 + (percentageBonus / 100.0);
     }
 
     /**
-     * Calculates the total flat damage bonus from socketed essences.
+     * Calculates the total flat damage bonus from socketed essences using tier-based calculation.
      */
     private double calculateSocketFlatDamage(ItemStack weapon) {
         SocketData socketData = SocketManager.getSocketData(weapon);
@@ -112,11 +113,13 @@ public class SocketEffectEST extends DamageEventSystem {
             return 0;
         }
 
-        return socketData.getTotalStatBonus(StatType.DAMAGE, EffectType.FLAT);
+        // Use tier-based calculation
+        double[] bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DAMAGE, true);
+        return bonuses[0]; // flat bonus
     }
 
     /**
-     * Calculates the total defense multiplier from socketed armor essences.
+     * Calculates the total defense multiplier from socketed armor essences using tier-based calculation.
      */
     private double calculateSocketDefenseBonus(List<ItemStack> armorPieces) {
         double totalMultiplier = 1.0;
@@ -124,7 +127,9 @@ public class SocketEffectEST extends DamageEventSystem {
         for (ItemStack armor : armorPieces) {
             SocketData socketData = SocketManager.getSocketData(armor);
             if (socketData != null && socketData.getMaxSockets() > 0) {
-                double percentageBonus = socketData.getTotalStatBonus(StatType.DEFENSE, EffectType.PERCENTAGE);
+                // Use tier-based calculation for armor (isWeapon = false)
+                double[] bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DEFENSE, false);
+                double percentageBonus = bonuses[1];
                 totalMultiplier *= (1.0 + percentageBonus / 100.0);
             }
         }
@@ -133,7 +138,7 @@ public class SocketEffectEST extends DamageEventSystem {
     }
 
     /**
-     * Calculates the total flat defense reduction from socketed armor essences.
+     * Calculates the total flat defense reduction from socketed armor essences using tier-based calculation.
      */
     private double calculateSocketFlatDefense(List<ItemStack> armorPieces) {
         double totalReduction = 0;
@@ -141,7 +146,9 @@ public class SocketEffectEST extends DamageEventSystem {
         for (ItemStack armor : armorPieces) {
             SocketData socketData = SocketManager.getSocketData(armor);
             if (socketData != null && socketData.getMaxSockets() > 0) {
-                totalReduction += socketData.getTotalStatBonus(StatType.DEFENSE, EffectType.FLAT);
+                // Use tier-based calculation for armor
+                double[] bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DEFENSE, false);
+                totalReduction += bonuses[0];
             }
         }
 

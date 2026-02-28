@@ -6,7 +6,7 @@ public class Essence {
 
     public enum Tier { T1, T2, T3, T4, T5 }
 
-    public enum Type { FIRE, ICE, LIGHTNING, LIFE, SHADOW }
+    public enum Type { FIRE, ICE, LIGHTNING, LIFE, VOID, WATER }
 
     private final String          id;
     private final Tier            tier;

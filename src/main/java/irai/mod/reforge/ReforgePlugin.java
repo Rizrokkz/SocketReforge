@@ -18,17 +18,13 @@ import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.util.Config;
 
-import irai.mod.reforge.Commands.CheckNameCommand;
-import irai.mod.reforge.Commands.EssenceSocketCommand;
-import irai.mod.reforge.Commands.ItemMetaCommand;
-import irai.mod.reforge.Commands.SocketPunchCommand;
-import irai.mod.reforge.Commands.WeaponStatsCommand;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
+import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -97,9 +93,9 @@ public class ReforgePlugin extends JavaPlugin {
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
         
-        // Register Socket Punch Bench interaction
+        // Register Bench interactions
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
-
+        this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
 
         // Load refinement config and inject into systems
@@ -141,12 +137,12 @@ public class ReforgePlugin extends JavaPlugin {
 
         // Register commands
         CommandRegistry commandRegistry = this.getCommandRegistry();
-        this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
-        commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
-        commandRegistry.registerCommand(new ItemMetaCommand("showmeta", "Checks the metadata of the held item", false));
+        //this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
+        //commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
+        //commandRegistry.registerCommand(new ItemMetaCommand("showmeta", "Checks the metadata of the held item", false));
         // Register socket commands
-        commandRegistry.registerCommand(new SocketPunchCommand("socketpunch", "Open the socket punching UI"));
-        commandRegistry.registerCommand(new EssenceSocketCommand("essencesocket", "Open the essence socketing UI"));
+        //commandRegistry.registerCommand(new SocketPunchCommand("socketpunch", "Open the socket punching UI"));
+        //commandRegistry.registerCommand(new EssenceSocketCommand("essencesocket", "Open the essence socketing UI"));
     }
 
     @Override

@@ -70,12 +70,19 @@ public class SocketConfig {
 
     /**
      * Item destruction chances per current socket count [0-indexed].
+     * Progressively increases with each socket to add risk.
      */
-    private double[] punchBreakChances = { 0.02, 0.05, 0.10, 0.18 };
+    private double[] punchBreakChances = { 0.05, 0.10, 0.20, 0.35 };
 
     // Essence removal
     private double essenceRemovalSuccessChance = 0.70;
     private double essenceRemovalDestroyChance = 0.30;
+    
+    // Bonus socket chance (1% chance to add 5th socket when punching 4th)
+    private double bonusSocketChance = 0.01;
+    
+    // Chance to reduce max sockets when breaking (separate from break chance)
+    private double maxReduceChance = 0.25;
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
@@ -102,6 +109,8 @@ public class SocketConfig {
 
     public double getEssenceRemovalSuccessChance() { return essenceRemovalSuccessChance; }
     public double getEssenceRemovalDestroyChance()  { return essenceRemovalDestroyChance;  }
+    public double getBonusSocketChance() { return bonusSocketChance; }
+    public double getMaxReduceChance() { return maxReduceChance; }
 
     // ── Setters (used by config loader) ───────────────────────────────────────
 

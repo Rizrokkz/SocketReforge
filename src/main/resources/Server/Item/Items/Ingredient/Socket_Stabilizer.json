@@ -1,20 +1,20 @@
 {
   "TranslationProperties": {
-    "Name": "items.Socket_Stabilizer.name",
-    "Description": "items.Socket_Stabilizer.description"
+    "Name": "irai.items.Socket_Stabilizer.name",
+    "Description": "irai.items.Socket_Stabilizer.description"
   },
-  "Icon": "Icons/ItemsGenerated/Ingredient_Bar_Iron.png",
+  "Icon": "Icons/ItemsGenerated/Potion_Regen_Stamina_Small.png",
   "Categories": [
     "Items.Ingredients"
   ],
   "Recipe": {
     "Input": [
       {
-        "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 2
+        "ItemId": "Socket_Puncher",
+        "Quantity": 15
       },
       {
-        "ItemId": "Ingredient_Emerald",
+        "ItemId": "Rock_Gem_Emerald",
         "Quantity": 1
       }
     ],
@@ -22,15 +22,15 @@
       {
         "Type": "Crafting",
         "Categories": [
-          "Workbench_Crafting"
+          "Alchemy_Potions_Misc"
         ],
-        "Id": "Workbench",
+        "Id": "Alchemybench",
         "RequiredTierLevel": 1
       }
     ],
     "TimeSeconds": 3
   },
-  "MaxStack": 64,
+  "MaxStack": 100,
   "ItemLevel": 1,
   "ItemSoundSetId": "ISS_Items_Ingots",
   "Tags": {

@@ -1,9 +1,9 @@
 {
   "TranslationProperties": {
-    "Name": "items.Socket_Puncher.name",
-    "Description": "items.Socket_Puncher.description"
+    "Name": "irai.items.Socket_Puncher.name",
+    "Description": "irai.items.Socket_Puncher.description"
   },
-  "Icon": "Icons/ItemsGenerated/Ingredient_Bar_Iron.png",
+  "Icon": "Icons/ItemsGenerated/Ingredient_Stud_Iron.png",
   "Categories": [
     "Items.Ingredients"
   ],
@@ -11,22 +11,19 @@
     "Input": [
       {
         "ItemId": "Ingredient_Bar_Iron",
-        "Quantity": 3
+        "Quantity": 1
       }
     ],
     "BenchRequirement": [
       {
-        "Type": "Crafting",
-        "Categories": [
-          "Workbench_Crafting"
-        ],
-        "Id": "Workbench",
-        "RequiredTierLevel": 1
+        "Type": "Processing",
+        "Id": "Salvagebench"
       }
     ],
+    "OutputQuantity": 15,
     "TimeSeconds": 3
   },
-  "MaxStack": 64,
+  "MaxStack": 100,
   "ItemLevel": 1,
   "ItemSoundSetId": "ISS_Items_Ingots",
   "Tags": {

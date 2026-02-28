@@ -3,11 +3,11 @@ package irai.mod.reforge.Util;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-
-import com.hypixel.hytale.server.core.entity.entities.Player;
 
 /**
  * Utility class for interacting with DynamicTooltipsLib.
@@ -34,6 +34,17 @@ public class DynamicTooltipUtils {
     private static final String COLOR_BLUE = "<color is=\"#5555FF\">";
     private static final String COLOR_PURPLE = "<color is=\"#FF55FF\">";
     private static final String COLOR_GRAY = "<color is=\"#AAAAAA\">";
+    private static final String COLOR_RED = "<color is=\"#ff0000\">";
+    private static final String COLOR_YELLOW = "<color is=\"#FFFF55\">";
+    private static final String COLOR_ORANGE = "<color is=\"#FFAA00\">";
+    
+    // Dark gray for empty sockets
+    private static final String COLOR_DARK_GRAY = "<color is=\"#555555\">";
+    
+    // ASCII socket symbols - always work in any font
+    private static final String SOCKET_FILLED = "[o]";
+    private static final String SOCKET_EMPTY = "[ ]";
+    private static final String SOCKET_LOCKED = "[x]";
     
     // ==================== Reforge Level ====================
     
@@ -239,12 +250,74 @@ public class DynamicTooltipUtils {
     }
     
     /**
-     * Register socket tooltip
+     * Register socket tooltip with placeholder display
+     * Shows all slots as ◆ representing max socket capacity
      */
     public static void registerSocketTooltip(String baseItemId, String metadata, int socketCount, int filledSockets) {
+        registerSocketTooltip(baseItemId, metadata, socketCount, filledSockets, 0);
+    }
+    
+    /**
+     * Register socket tooltip - shows total max sockets as ◆
+     * Filled sockets are shown as ◆, locked as ✕
+     */
+    public static void registerSocketTooltip(String baseItemId, String metadata, int socketCount, int filledSockets, int lockedSockets) {
         if (!isAvailable) return;
         
-        String line = COLOR_CYAN + "Sockets: " + COLOR_WHITE + filledSockets + "/" + socketCount;
+        // Build socket display based on current socket count: ◆◆ format
+        StringBuilder socketDisplay = new StringBuilder();
+        
+        // Show only current socket slots as ◆ (filled, white color)
+        for (int i = 0; i < socketCount; i++) {
+            socketDisplay.append(COLOR_WHITE + SOCKET_FILLED);
+        }
+        
+        String line = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
+        
+        String cacheKey = baseItemId + "::" + (metadata != null ? metadata : "");
+        String[] existing = tooltipDataCache.get(cacheKey);
+        
+        String[] combined;
+        if (existing != null) {
+            combined = new String[existing.length + 1];
+            System.arraycopy(existing, 0, combined, 0, existing.length);
+            combined[existing.length] = line;
+        } else {
+            combined = new String[]{line};
+        }
+        
+        registerTooltip(baseItemId, metadata, combined);
+    }
+    
+    /**
+     * Register socket tooltip with color-coded essence display.
+     * Uses simple text characters that Hytale can render.
+     * @param baseItemId The item ID
+     * @param metadata The metadata (can be null)
+     * @param socketCount Total max sockets
+     * @param socketColors Array of color codes for each socket (null for empty)
+     * @param brokenSockets Array indicating which sockets are broken (null means no broken sockets)
+     */
+    public static void registerColoredSocketTooltip(String baseItemId, String metadata, int socketCount, String[] socketColors, boolean[] brokenSockets) {
+        if (!isAvailable) return;
+        
+        StringBuilder socketDisplay = new StringBuilder();
+        
+        for (int i = 0; i < socketCount; i++) {
+            // Check if this socket is broken
+            if (brokenSockets != null && i < brokenSockets.length && brokenSockets[i]) {
+                // Broken socket - show as ✕ in red
+                socketDisplay.append("<color is=\"#FF5555\">" + SOCKET_LOCKED + "</color>");
+            } else if (socketColors != null && i < socketColors.length && socketColors[i] != null) {
+                // Filled socket with color - use simple asterisk
+                socketDisplay.append(socketColors[i]).append("*");
+            } else {
+                // Empty socket - use lowercase o
+                socketDisplay.append("<color is=\"#555555\">o</color>");
+            }
+        }
+        
+        String line = "<color is=\"#55FFFF\">Sockets: </color>" + socketDisplay.toString();
         
         String cacheKey = baseItemId + "::" + (metadata != null ? metadata : "");
         String[] existing = tooltipDataCache.get(cacheKey);
@@ -412,25 +485,104 @@ public class DynamicTooltipUtils {
     private static Object getTooltipDataForItem(String itemId, String metadata) {
         // Parse the JSON metadata to extract reforge level
         int reforgeLevel = extractReforgeLevel(metadata);
-        String baseItemId = extractBaseItemId(metadata);
-        String displayName = extractDisplayName(metadata);
         
-        if (reforgeLevel <= 0) {
+        // Parse socket data from metadata
+        int socketMax = extractSocketMax(metadata);
+        int socketFilled = extractSocketFilled(metadata);
+        
+        // If neither reforge nor sockets, return null
+        if (reforgeLevel <= 0 && socketMax <= 0) {
             return null;
         }
         
-        // Determine if it's armor or weapon based on base item ID
-        boolean isArmor = baseItemId != null && baseItemId.startsWith("Armor_");
+        List<String> tooltipLines = new ArrayList<>();
+        String displayName = null;
         
-        String upgradeName = isArmor ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
-        double multiplier = isArmor ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
-        int percentBonus = (int) ((multiplier - 1.0) * 100);
+        // Add reforge line if present
+        if (reforgeLevel > 0) {
+            String baseItemId = extractBaseItemId(metadata);
+            displayName = extractDisplayName(metadata);
+            
+            // Determine if it's armor or weapon based on base item ID
+            boolean isArmor = baseItemId != null && baseItemId.startsWith("Armor_");
+            
+            String upgradeName = isArmor ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
+            double multiplier = isArmor ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
+            int percentBonus = (int) ((multiplier - 1.0) * 100);
+            
+            ReforgeLevel reforgeLevelEnum = ReforgeLevel.fromLevel(reforgeLevel);
+            String statType = isArmor ? "defense" : "damage";
+            String line = COLOR_WHITE + "Refine Grade: " + reforgeLevelEnum.getColor() + upgradeName 
+                    + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
+            tooltipLines.add(line);
+        }
         
-        ReforgeLevel reforgeLevelEnum = ReforgeLevel.fromLevel(reforgeLevel);
-        String statType = isArmor ? "defense" : "damage";
-        // Format: "Refine Grade: Legendary (+XX% damage)" - name already has the +level
-        String line = COLOR_WHITE + "Refine Grade: " + reforgeLevelEnum.getColor() + upgradeName 
-                + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
+        // Add socket line if present
+        if (socketMax > 0) {
+            // Use Values array length as total socket count (not Max)
+            int actualSocketCount = socketFilled; // Now returns array length
+            
+            // Parse each socket entry in order
+            String[] socketEntries = new String[0];
+            try {
+                String searchKey = "SocketReforge.Socket.Values";
+                int keyIndex = metadata.indexOf(searchKey);
+                if (keyIndex >= 0) {
+                    int bracketStart = metadata.indexOf("[", keyIndex);
+                    int bracketEnd = metadata.indexOf("]", bracketStart);
+                    if (bracketStart >= 0 && bracketEnd >= 0) {
+                        String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+                        if (!arrayContent.trim().isEmpty()) {
+                            socketEntries = arrayContent.split(",");
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+            
+            StringBuilder socketDisplay = new StringBuilder();
+            for (String entry : socketEntries) {
+                String trimmed = entry.trim().replace("\"", "");
+                if (trimmed.equals("x")) {
+                    socketDisplay.append(COLOR_RED + SOCKET_LOCKED);
+                } else if (!trimmed.isEmpty()) {
+                    // Apply color based on essence type
+                    socketDisplay.append(getEssenceTooltipColor(trimmed) + SOCKET_FILLED + "</color>");
+                } else {
+                    socketDisplay.append(COLOR_DARK_GRAY + SOCKET_EMPTY);
+                }
+            }
+            String socketLine = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
+            tooltipLines.add(socketLine);
+        }
+        
+        // Add essence effects from metadata
+        String[] effectTypes = extractEssenceEffects(metadata);
+        String[] effectTiers = extractEssenceTiers(metadata);
+        if (effectTypes != null && effectTiers != null && effectTypes.length == effectTiers.length) {
+            for (int i = 0; i < effectTypes.length; i++) {
+                String effectType = effectTypes[i].trim();
+                String tierStr = effectTiers[i].trim();
+                try {
+                    int tier = Integer.parseInt(tierStr);
+                    // Get the color for this essence type
+                    String color = getEssenceTooltipColor("Essence_" + effectType);
+                    // Get the effect description
+                    String effectDesc = getEssenceEffectDescription(effectType, tier, itemId);
+                    // Add the essence line
+                    String essenceLine = color + effectType + " T" + tier + "</color> " + COLOR_GRAY + effectDesc;
+                    tooltipLines.add(essenceLine);
+                } catch (Exception e) {
+                    // Ignore invalid tier
+                }
+            }
+        }
+        
+        // If no lines, return null
+        if (tooltipLines.isEmpty()) {
+            return null;
+        }
         
         try {
             // Try to create TooltipData using builder pattern
@@ -468,15 +620,17 @@ public class DynamicTooltipUtils {
                 }
             }
             
-            // Add the line
+            // Add all tooltip lines
             Method addLineMethod = builder.getClass().getMethod("addLine", String.class);
-            addLineMethod.invoke(builder, line);
+            for (String tooltipLine : tooltipLines) {
+                addLineMethod.invoke(builder, tooltipLine);
+            }
             
             // Build the result
             Method buildMethod = builder.getClass().getMethod("build");
             Object result = buildMethod.invoke(builder);
             
-            logger.info("[TOOLTIP] Created tooltip for " + itemId + " level " + reforgeLevel + ": " + line);
+            logger.info("[TOOLTIP] Created tooltip for " + itemId + " with " + tooltipLines.size() + " lines");
             
             return result;
             
@@ -539,6 +693,203 @@ public class DynamicTooltipUtils {
         }
         
         return 0;
+    }
+    
+    /**
+     * Extract socket max count from JSON metadata
+     */
+    private static int extractSocketMax(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            String searchKey = "SocketReforge.Socket.Max";
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) {
+                return 0;
+            }
+            
+            int colonIndex = metadata.indexOf(":", keyIndex);
+            if (colonIndex < 0) {
+                return 0;
+            }
+            
+            int numberStart = colonIndex + 1;
+            while (numberStart < metadata.length() && 
+                   (metadata.charAt(numberStart) == ' ' || metadata.charAt(numberStart) == '"')) {
+                numberStart++;
+            }
+            
+            int numberEnd = numberStart;
+            while (numberEnd < metadata.length() && 
+                   Character.isDigit(metadata.charAt(numberEnd))) {
+                numberEnd++;
+            }
+            
+            if (numberEnd > numberStart) {
+                return Integer.parseInt(metadata.substring(numberStart, numberEnd));
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * Extract socket count from Values array in JSON metadata
+     */
+    private static int extractSocketFilled(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            String searchKey = "SocketReforge.Socket.Values";
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) {
+                return 0;
+            }
+            
+            // Find the array bracket
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) {
+                return 0;
+            }
+            
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            // Count entries (both empty and non-empty)
+            if (arrayContent.trim().isEmpty()) {
+                return 0;
+            }
+            String[] entries = arrayContent.split(",");
+            return entries.length;
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * Extract essence effects from JSON metadata
+     */
+    private static String[] extractEssenceEffects(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            String searchKey = "SocketReforge.Essence.Effects";
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) {
+                return null;
+            }
+            
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) {
+                return null;
+            }
+            
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            if (arrayContent.trim().isEmpty()) {
+                return null;
+            }
+            
+            String[] entries = arrayContent.split(",");
+            for (int i = 0; i < entries.length; i++) {
+                entries[i] = entries[i].trim().replace("\"", "");
+            }
+            return entries;
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Extract essence tiers from JSON metadata
+     */
+    private static String[] extractEssenceTiers(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            String searchKey = "SocketReforge.Essence.TierMap";
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) {
+                return null;
+            }
+            
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) {
+                return null;
+            }
+            
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            if (arrayContent.trim().isEmpty()) {
+                return null;
+            }
+            
+            String[] entries = arrayContent.split(",");
+            for (int i = 0; i < entries.length; i++) {
+                entries[i] = entries[i].trim().replace("\"", "");
+            }
+            return entries;
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get effect description for an essence type and tier
+     */
+    private static String getEssenceEffectDescription(String effectType, int tier, String itemId) {
+        // Determine if it's armor based on item ID
+        boolean isArmor = itemId != null && itemId.startsWith("Armor_");
+        
+        switch (effectType.toUpperCase()) {
+            case "FIRE":
+                if (tier >= 5) return "+12% DMG or +15 Flat";
+                if (tier >= 3) return "+6% DMG or +8 Flat";
+                return "+2% DMG or +3 Flat";
+            case "ICE":
+                if (tier >= 5) return "+5% Freeze, +12 Cold DMG";
+                if (tier >= 3) return "+5% Slow, +6 Cold DMG";
+                return "+2% Slow, +2 Cold DMG";
+            case "LIGHTNING":
+                if (tier >= 5) return "+15% ATK Spd, +8% Crit";
+                if (tier >= 3) return "+7% ATK Spd, +4% Crit";
+                return "+3% ATK Spd, +2% Crit";
+            case "LIFE":
+                if (isArmor) {
+                    if (tier >= 5) return "+50 HP";
+                    if (tier >= 3) return "+25 HP";
+                    return "+10 HP";
+                } else {
+                    if (tier >= 5) return "+10% Lifesteal";
+                    if (tier >= 3) return "+5% Lifesteal";
+                    return "+2% Lifesteal";
+                }
+            case "VOID":
+                if (tier >= 5) return "+25% Crit DMG";
+                if (tier >= 3) return "+12% Crit DMG";
+                return "+5% Crit DMG";
+            case "WATER":
+                if (tier >= 5) return "+10% Evasion";
+                if (tier >= 3) return "+5% Evasion";
+                return "+2% Evasion";
+            default:
+                return "Unknown";
+        }
     }
     
     /**
@@ -628,8 +979,8 @@ public class DynamicTooltipUtils {
     private static double getDamageMultiplier(int level) {
         switch (level) {
             case 1: return 1.10;
-            case 2: return 1.25;
-            case 3: return 1.50;
+            case 2: return 1.15;
+            case 3: return 1.25;
             default: return 1.0;
         }
     }
@@ -641,6 +992,16 @@ public class DynamicTooltipUtils {
             case 3: return 1.35;
             default: return 1.0;
         }
+    }
+    
+    /**
+     * Get color based on max sockets (health indicator)
+     */
+    private static String getSocketHealthColor(int maxSockets) {
+        if (maxSockets >= 4) return COLOR_GREEN;    // Healthy
+        if (maxSockets == 3) return COLOR_YELLOW;   // Warning
+        if (maxSockets == 2) return COLOR_ORANGE;  // Danger
+        return COLOR_RED;                           // Critical
     }
 
     // ==================== Legacy Compatibility Methods ====================
@@ -697,5 +1058,24 @@ public class DynamicTooltipUtils {
      */
     public static void refreshAllPlayers() {
         // Provider approach handles this automatically
+    }
+    
+    /**
+     * Gets the color for an essence type in tooltips.
+     * @param essenceId The essence ID (e.g., "Essence_Fire", "Essence_Ice")
+     * @return The color code
+     */
+    private static String getEssenceTooltipColor(String essenceId) {
+        if (essenceId == null) return COLOR_WHITE;
+        
+        String upper = essenceId.toUpperCase();
+        if (upper.contains("FIRE")) return COLOR_ORANGE;      // Orange
+        if (upper.contains("ICE")) return COLOR_CYAN;         // Cyan
+        if (upper.contains("LIFE")) return COLOR_GREEN;       // Green
+        if (upper.contains("LIGHTNING")) return COLOR_YELLOW; // Yellow
+        if (upper.contains("VOID")) return COLOR_PURPLE;       // Purple
+        if (upper.contains("WATER")) return COLOR_BLUE;        // Blue
+        
+        return COLOR_WHITE;
     }
 }
