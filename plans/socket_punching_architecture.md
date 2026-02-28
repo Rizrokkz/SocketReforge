@@ -60,12 +60,12 @@ Based on Path of Exile-inspired balance:
 
 | Essence Type | Tier 1 Effects | Tier 3 Effects | Tier 5 Effects |
 |--------------|----------------|----------------|----------------|
-| **Fire** | +2% Damage, +3 Flat DMG | +6% Damage, +8 Flat DMG | +12% Damage, +15 Flat DMG |
-| **Ice** | +2% Slow, +2 Cold DMG | +5% Slow, +6 Cold DMG | +10% Slow, +12 Cold DMG |
+| **Fire** | +2% Damage or +3 Flat DMG | +6% Damage or +8 Flat DMG | +12% Damage or +15 Flat DMG |
+| **Ice** | +2% Slow, +2 Cold DMG | +5% Slow, +6 Cold DMG | +5% Freeze Chance, +12 Cold DMG |
 | **Lightning** | +3% ATK Speed, +2% Crit | +7% ATK Speed, +4% Crit | +15% ATK Speed, +8% Crit |
 | **Life** | +2% Lifesteal, +10 HP | +5% Lifesteal, +25 HP | +10% Lifesteal, +50 HP |
-| **Shadow** | +5% Crit DMG, +2% Evasion | +12% Crit DMG, +5% Evasion | +25% Crit DMG, +10% Evasion |
-
+| **Void** | +5% Crit DMG | +12% Crit DMG | +25% Crit DMG |
+| **Water** | +2% Evasion | +5% Evasion | +10% Evasion |
 ### 3. Socket Configuration System
 
 #### 3.1 SocketConfig.java
