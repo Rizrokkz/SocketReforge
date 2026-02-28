@@ -30,7 +30,6 @@ import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
-import irai.mod.reforge.UI.SocketPunchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -122,9 +121,7 @@ public class ReforgePlugin extends JavaPlugin {
                 // Initialize socket system
                 SocketManager.initialize(socketCfg);
                 EssenceRegistry.initialize();
-                
-                // Inject config into UI classes
-                SocketPunchUI.setConfig(socketCfg);
+
             }
         } catch (Exception e) {
             System.err.println("[ReforgePlugin] Error loading Socket config: " + e.getMessage());
@@ -140,9 +137,6 @@ public class ReforgePlugin extends JavaPlugin {
         //this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
         //commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
         //commandRegistry.registerCommand(new ItemMetaCommand("showmeta", "Checks the metadata of the held item", false));
-        // Register socket commands
-        //commandRegistry.registerCommand(new SocketPunchCommand("socketpunch", "Open the socket punching UI"));
-        //commandRegistry.registerCommand(new EssenceSocketCommand("essencesocket", "Open the essence socketing UI"));
     }
 
     @Override
@@ -240,4 +234,3 @@ public class ReforgePlugin extends JavaPlugin {
         weaponSyncTimer.scheduleAtFixedRate(syncTask, thirtySeconds, thirtySeconds);
     }
 }
-
