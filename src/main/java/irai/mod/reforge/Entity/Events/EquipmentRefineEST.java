@@ -19,6 +19,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.EssenceEffect;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
 
 
 @SuppressWarnings("removal")
@@ -108,13 +111,23 @@ public class EquipmentRefineEST extends DamageEventSystem {
         if (attacker != null) {
             ItemStack weapon = findWeaponInHotbar(attacker);
             if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
-                String weaponId = getItemId(weapon);
+                float baseDamage = damage.getAmount();
                 int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
                 int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
-                double multiplier = getDamageMultiplier(clampedLevel);
+                double refinementMultiplier = getDamageMultiplier(clampedLevel);
+                double socketMultiplier = calculateSocketDamageBonus(weapon);
+                double socketFlat = calculateSocketFlatDamage(weapon);
 
-                float newDamage = (float) (damage.getAmount() * multiplier);
+                float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier) + socketFlat);
                 damage.setAmount(newDamage);
+
+                System.out.println("[SocketReforge][ATK_DMG] attacker=" + attacker.getUuid()
+                        + " weapon=" + weapon.getItemId()
+                        + " base=" + baseDamage
+                        + " refineMult=" + refinementMultiplier
+                        + " socketMult=" + socketMultiplier
+                        + " socketFlat=" + socketFlat
+                        + " final=" + newDamage);
             }
         }
 
@@ -245,5 +258,35 @@ public class EquipmentRefineEST extends DamageEventSystem {
             }
         }
         return null;
+    }
+
+    /**
+     * Reads socket percentage damage bonus from weapon metadata (with fallback).
+     */
+    private double calculateSocketDamageBonus(ItemStack weapon) {
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        if (socketData == null || socketData.getMaxSockets() == 0) {
+            return 1.0;
+        }
+        double[] bonuses = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.DAMAGE);
+        if (bonuses[0] == 0.0 && bonuses[1] == 0.0) {
+            bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DAMAGE, true);
+        }
+        return 1.0 + (bonuses[1] / 100.0);
+    }
+
+    /**
+     * Reads socket flat damage bonus from weapon metadata (with fallback).
+     */
+    private double calculateSocketFlatDamage(ItemStack weapon) {
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        if (socketData == null || socketData.getMaxSockets() == 0) {
+            return 0.0;
+        }
+        double[] bonuses = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.DAMAGE);
+        if (bonuses[0] == 0.0 && bonuses[1] == 0.0) {
+            bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DAMAGE, true);
+        }
+        return bonuses[0];
     }
 }

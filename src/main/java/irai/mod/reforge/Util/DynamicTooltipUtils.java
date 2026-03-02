@@ -9,6 +9,9 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.EssenceRegistry;
+
 /**
  * Utility class for interacting with DynamicTooltipsLib.
  * Uses Provider-based approach for per-item metadata tooltips.
@@ -193,6 +196,32 @@ public class DynamicTooltipUtils {
     
     public static void setDebugMode(boolean enabled) {
         debugMode = enabled;
+    }
+    
+    /**
+     * Register the equipment tooltip provider for showing metadata on inventory items
+     */
+    public static void registerEquipmentTooltipProvider() {
+        if (!isAvailable || tooltipApi == null) {
+            return;
+        }
+        
+        try {
+            // Get the TooltipProvider class
+            Class<?> providerClass = Class.forName("org.herolias.tooltips.api.TooltipProvider");
+            Class<?> tooltipDataClass = Class.forName("org.herolias.tooltips.api.TooltipData");
+            
+            // Create instance of our provider using reflection
+            Object provider = new EquipmentTooltipProvider();
+            
+            // Get the registerProvider method
+            Method registerMethod = tooltipApi.getClass().getMethod("registerProvider", providerClass);
+            registerMethod.invoke(tooltipApi, provider);
+            
+            logger.info("Equipment tooltip provider registered successfully");
+        } catch (Exception e) {
+            logger.warn("Failed to register equipment tooltip provider: " + e.getMessage());
+        }
     }
 
     /**
@@ -569,7 +598,7 @@ public class DynamicTooltipUtils {
                     // Get the color for this essence type
                     String color = getEssenceTooltipColor("Essence_" + effectType);
                     // Get the effect description
-                    String effectDesc = getEssenceEffectDescription(effectType, tier, itemId);
+                    String effectDesc = getEssenceEffectDescription(effectType, tier, itemId, metadata);
                     // Add the essence line
                     String essenceLine = color + effectType + " T" + tier + "</color> " + COLOR_GRAY + effectDesc;
                     tooltipLines.add(essenceLine);
@@ -852,43 +881,148 @@ public class DynamicTooltipUtils {
     /**
      * Get effect description for an essence type and tier
      */
-    private static String getEssenceEffectDescription(String effectType, int tier, String itemId) {
+    private static String getEssenceEffectDescription(String effectType, int tier, String itemId, String metadata) {
         // Determine if it's armor based on item ID
         boolean isArmor = itemId != null && itemId.startsWith("Armor_");
-        
-        switch (effectType.toUpperCase()) {
-            case "FIRE":
-                if (tier >= 5) return "+12% DMG or +15 Flat";
-                if (tier >= 3) return "+6% DMG or +8 Flat";
-                return "+2% DMG or +3 Flat";
-            case "ICE":
-                if (tier >= 5) return "+5% Freeze, +12 Cold DMG";
-                if (tier >= 3) return "+5% Slow, +6 Cold DMG";
-                return "+2% Slow, +2 Cold DMG";
-            case "LIGHTNING":
-                if (tier >= 5) return "+15% ATK Spd, +8% Crit";
-                if (tier >= 3) return "+7% ATK Spd, +4% Crit";
-                return "+3% ATK Spd, +2% Crit";
-            case "LIFE":
-                if (isArmor) {
-                    if (tier >= 5) return "+50 HP";
-                    if (tier >= 3) return "+25 HP";
-                    return "+10 HP";
-                } else {
-                    if (tier >= 5) return "+10% Lifesteal";
-                    if (tier >= 3) return "+5% Lifesteal";
-                    return "+2% Lifesteal";
-                }
-            case "VOID":
-                if (tier >= 5) return "+25% Crit DMG";
-                if (tier >= 3) return "+12% Crit DMG";
-                return "+5% Crit DMG";
-            case "WATER":
-                if (tier >= 5) return "+10% Evasion";
-                if (tier >= 3) return "+5% Evasion";
-                return "+2% Evasion";
-            default:
-                return "Unknown";
+        int safeTier = Math.max(1, Math.min(5, tier));
+
+        try {
+            switch (effectType.toUpperCase()) {
+                case "FIRE":
+                    if (isArmor) {
+                        double[] bonus = extractStoredBonus(metadata, "FIRE_DEFENSE");
+                        if (bonus != null && (bonus[1] != 0 || bonus[0] != 0)) {
+                            if (bonus[1] != 0 && bonus[0] != 0) {
+                                return "+" + formatBonus(bonus[1]) + "% Fire Defense, +" + formatBonus(bonus[0]);
+                            }
+                            if (bonus[1] != 0) {
+                                return "+" + formatBonus(bonus[1]) + "% Fire Defense";
+                            }
+                            return "+" + formatBonus(bonus[0]) + " Fire Defense";
+                        }
+                        return "+" + safeTier + "% Fire Defense";
+                    } else {
+                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
+                        double percent = bonus != null ? bonus[1] : (safeTier + 1) / 2.0;
+                        double flat = bonus != null ? bonus[0] : safeTier / 2.0;
+                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                    }
+                case "ICE":
+                    if (isArmor) {
+                        return "+" + safeTier + "% Slow";
+                    }
+                    {
+                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
+                        if (bonus != null && bonus[0] != 0) {
+                            return "+" + formatBonus(bonus[0]) + " Cold DMG";
+                        }
+                        return "+" + safeTier + " Cold DMG";
+                    }
+                case "LIGHTNING":
+                    if (isArmor) {
+                        double[] bonus = extractStoredBonus(metadata, "EVASION");
+                        if (bonus != null && bonus[1] != 0) {
+                            return "+" + formatBonus(bonus[1]) + "% Evasion";
+                        }
+                        return "+" + safeTier + "% Evasion";
+                    }
+                    return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
+                case "LIFE":
+                    if (isArmor) {
+                        double[] bonus = extractStoredBonus(metadata, "HEALTH");
+                        if (bonus != null && bonus[0] != 0) {
+                            return "+" + formatBonus(bonus[0]) + " HP";
+                        }
+                        return "+" + safeTier + " HP";
+                    }
+                    return "+" + safeTier + "% Lifesteal";
+                case "VOID":
+                    if (isArmor) {
+                        double[] bonus = extractStoredBonus(metadata, "DEFENSE");
+                        if (bonus != null && bonus[1] != 0) {
+                            return "+" + formatBonus(bonus[1]) + "% Defense";
+                        }
+                        return "+" + safeTier + "% Defense";
+                    }
+                    return "+" + safeTier + "% Crit DMG";
+                case "WATER":
+                    if (isArmor) {
+                        double[] bonus = extractStoredBonus(metadata, "REGENERATION");
+                        if (bonus != null && bonus[0] != 0) {
+                            return "+" + formatBonus(bonus[0]) + " Regeneration";
+                        }
+                        return "+" + safeTier + " Regeneration";
+                    } else {
+                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
+                        double percent = bonus != null ? bonus[1] : (safeTier + 1) / 2.0;
+                        double flat = bonus != null ? bonus[0] : safeTier / 2.0;
+                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                    }
+                default:
+                    return "Unknown";
+            }
+        } catch (Exception e) {
+            return "Error";
+        }
+    }
+
+    private static String formatBonus(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1e-9) {
+            return String.valueOf((int) Math.rint(value));
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
+    }
+
+    /**
+     * Reads one stat bonus from item metadata arrays:
+     * SocketReforge.Essence.Bonus.Stats / Flat / Percent.
+     * Returns [flat, percent], or null if not found.
+     */
+    private static double[] extractStoredBonus(String metadata, String statKey) {
+        if (metadata == null || metadata.isEmpty() || statKey == null || statKey.isEmpty()) {
+            return null;
+        }
+        String[] stats = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Stats");
+        String[] flats = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Flat");
+        String[] percents = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Percent");
+        if (stats == null || flats == null || percents == null) {
+            return null;
+        }
+        int count = Math.min(stats.length, Math.min(flats.length, percents.length));
+        for (int i = 0; i < count; i++) {
+            if (!statKey.equalsIgnoreCase(stats[i])) continue;
+            double flat = parseDoubleSafe(flats[i]);
+            double percent = parseDoubleSafe(percents[i]);
+            return new double[] {flat, percent};
+        }
+        return null;
+    }
+
+    private static String[] extractStringArray(String metadata, String searchKey) {
+        try {
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return null;
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) return null;
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            if (arrayContent.trim().isEmpty()) return new String[0];
+            String[] entries = arrayContent.split(",");
+            for (int i = 0; i < entries.length; i++) {
+                entries[i] = entries[i].trim().replace("\"", "");
+            }
+            return entries;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static double parseDoubleSafe(String value) {
+        if (value == null || value.isBlank()) return 0.0;
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            return 0.0;
         }
     }
     

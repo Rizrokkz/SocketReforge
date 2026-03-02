@@ -22,6 +22,7 @@ import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.SocketManager.PunchResult;
 import irai.mod.reforge.Socket.SocketManager.SupportMaterial;
+import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
@@ -69,6 +70,13 @@ public class SocketPunchBench extends SimpleInteraction {
 
         Player player = getPlayerFromContext(context);
         if (player == null) return;
+
+        // Prefer HyUI bench flow when available.
+        // Keeps old interaction behavior as automatic fallback.
+        if (SocketBenchUI.isAvailable()) {
+            SocketBenchUI.open(player);
+            return;
+        }
 
         // For now, use the player's inventory since we can't easily access the bench container
         // This interaction works with the held item

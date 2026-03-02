@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.5] - 2026-03-01
+
+### New Feature: HyUI Integration & Enhanced Socket System
+
+This update adds optional HyUI support for better UI experiences and introduces new socket management features.
+
+#### HyUI Integration
+
+- **Optional HyUI Support**
+  - UI now uses HyUI framework when available
+  - Falls back gracefully when HyUI is not installed
+  - Enhanced UI responsiveness and interactivity
+  - EquipmentListUI, SocketBenchUI, and EssenceBenchUI now leverage HyUI components
+
+#### Socket Management
+
+- **Iron Building Hammer**
+  - New item for clearing sockets from equipment
+  - Crafted at appropriate bench (configurable)
+  - Allows players to reset socket configurations
+  - Provides alternative to essence removal for socket management
+
+### Bug Fixes
+
+- **Damage Calculation Fixes**
+  - Fixed various damage calculation issues with socketed equipment
+  - Improved damage multiplier application for refined weapons
+  - Corrected essence effect damage application
+
+### New Effects & Enhancements
+
+- **Regeneration System**
+  - Added new regeneration effects for armor
+  - Life essence now provides HP regeneration on armor
+  - Water essence provides natural regen benefits
+
+- **Tier 5 Essence Effects Extended**
+  - **Fire Essence on Armor**: Now provides fire damage reflection/bonus
+  - **Ice Essence on Weapons**: Extended freeze effects at T5
+  - Full T5 effects now available for all essence types on both weapons and armor
+
+---
+
 ## [1.2.0] - 2026-02-27
 
 ### New Feature: Socket Punching & Essence Socketting

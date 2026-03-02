@@ -373,6 +373,89 @@
 
 <hr>
 
+<h2>🛠️ HyUI Integration</h2>
+
+<p>Socket Reforge now supports <strong>HyUI</strong> for enhanced user interfaces! When HyUI is installed, players get access to improved, responsive UI elements for all reforging and socketing operations.</p>
+
+<ul>
+  <li><strong>Optional Dependency</strong> — Works with or without HyUI installed</li>
+  <li><strong>Enhanced Equipment List</strong> — Improved equipment selection with real-time filtering</li>
+  <li><strong>Better Socket Previews</strong> — Visual socket state display with progress tracking</li>
+  <li><strong>Improved Event Handling</strong> — No more UI freezes or client locks</li>
+</ul>
+
+<p><em>Get HyUI from <a href="https://www.curseforge.com/hytale/mods/hyui">CurseForge</a> for the best experience!</em></p>
+
+<hr>
+
+<h2>🔨 Socket Management Tools</h2>
+
+<p>New tools for managing your socketed equipment!</p>
+
+<h3>Iron Building Hammer</h3>
+
+<p>Clear sockets from your equipment with the new <strong>Iron Building Hammer</strong>:</p>
+
+<ul>
+  <li>Removes all sockets from equipment</li>
+  <li>Useful for re-configuring your build</li>
+  <li>Alternative to essence removal when you want to start fresh</li>
+  <li>Craftable at appropriate benches</li>
+</ul>
+
+<hr>
+
+<h2>❤️ Regeneration & Enhanced Effects</h2>
+
+<p>Essences now provide additional benefits beyond combat stats!</p>
+
+<h3>Regeneration System</h3>
+
+<ul>
+  <li><strong>Life Essence Armor</strong> — Provides HP regeneration over time</li>
+  <li><strong>Water Essence</strong> — Grants natural regeneration benefits</li>
+  <li>Stack multiple Life essences for increased regen rates</li>
+</ul>
+
+<h3>Extended Tier 5 Effects</h3>
+
+<p>Tier 5 essences now have enhanced effects on both weapons AND armor:</p>
+
+<table>
+  <tr>
+    <th>Essence</th>
+    <th>Weapon T5 Effect</th>
+    <th>Armor T5 Effect</th>
+  </tr>
+  <tr>
+    <td><strong>Fire</strong></td>
+    <td>+12% Damage, +15 Fire DMG</td>
+    <td>+15% Fire DMG, Fire Reflection</td>
+  </tr>
+  <tr>
+    <td><strong>Ice</strong></td>
+    <td>+5% Freeze, +12 Cold DMG</td>
+    <td>+5% Freeze, +12 Cold DMG</td>
+  </tr>
+  <tr>
+    <td><strong>Life</strong></td>
+    <td>+10% Lifesteal</td>
+    <td>+50 HP, +5 HP/sec Regen</td>
+  </tr>
+  <tr>
+    <td><strong>Void</strong></td>
+    <td>+25% Crit Damage</td>
+    <td>+25% Crit Damage</td>
+  </tr>
+  <tr>
+    <td><strong>Water</strong></td>
+    <td>N/A (weapons)</td>
+    <td>+10% Evasion, +3 HP/sec Regen</td>
+  </tr>
+</table>
+
+<hr>
+
 <h2>📊 Weapon Stats UI</h2>
 
 <p>View your weapon's stats in a custom in-game UI panel showing:</p>
@@ -447,8 +530,11 @@
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
   <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
+  <li><strong>Extended T5 effects</strong> — Fire on armor, Ice on weapons with enhanced bonuses</li>
+  <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
+  <li><strong>Iron Building Hammer</strong> — Tool for clearing sockets from equipment</li>
   <li><strong>DynamicTooltips compatibility</strong> — socket and essence info displayed as in-game tooltips<br><em>(Requires <a href="https://www.curseforge.com/hytale/mods/dynamictooltipslib">DynamicTooltipsLib</a>)</em></li>
-  <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
+  <li><strong>HyUI Support</strong> — Optional enhanced UI when HyUI mod is installed</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
   <li><strong>Custom Stats UI</strong> with detailed upgrade information for weapons and armor</li>
   <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>

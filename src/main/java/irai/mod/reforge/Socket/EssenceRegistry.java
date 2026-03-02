@@ -3,6 +3,7 @@ package irai.mod.reforge.Socket;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * Singleton registry of all Essence definitions.
@@ -45,41 +46,46 @@ public class EssenceRegistry {
     // These are base type registrations for identification
 
     private void registerDefaults() {
-        // FIRE - T1 effects: +2% DMG or +3 Flat, T3: +6% or +8, T5: +12% or +15
+        // FIRE - T1: +1% DMG or +1 Flat, T3: +3% or +3, T5: +5% or +5
         register(new Essence("Essence_Fire", Essence.Tier.T1, Essence.Type.FIRE, List.of(
-            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 2.0),
-            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 3.0)
+            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.FIRE_DEFENSE, EssenceEffect.EffectType.PERCENTAGE, 1.0)
         )));
 
-        // ICE - T1: +2% Slow, +2 Cold DMG, T3: +5% Slow, +6 Cold DMG, T5: +5% Freeze, +12 Cold DMG
+        // ICE - T1: +1% Slow, +1 Cold DMG, T3: +3% Slow, +3 Cold DMG, T5: +5% Slow, +5 Cold DMG
         register(new Essence("Essence_Ice", Essence.Tier.T1, Essence.Type.ICE, List.of(
-            new EssenceEffect(EssenceEffect.StatType.MOVEMENT_SPEED, EssenceEffect.EffectType.PERCENTAGE, -2.0),
-            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 2.0)
+            new EssenceEffect(EssenceEffect.StatType.MOVEMENT_SPEED, EssenceEffect.EffectType.PERCENTAGE, -1.0),
+            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 1.0)
         )));
 
-        // LIGHTNING - T1: +3% ATK Spd, +2% Crit, T3: +7% ATK Spd, +4% Crit, T5: +15% ATK Spd, +8% Crit
+        // LIGHTNING - T1: +1% ATK Spd, +1% Crit, T3: +3% ATK Spd, +3% Crit, T5: +5% ATK Spd, +5% Crit
         register(new Essence("Essence_Lightning", Essence.Tier.T1, Essence.Type.LIGHTNING, List.of(
-            new EssenceEffect(EssenceEffect.StatType.ATTACK_SPEED, EssenceEffect.EffectType.PERCENTAGE, 3.0),
-            new EssenceEffect(EssenceEffect.StatType.CRIT_CHANCE, EssenceEffect.EffectType.PERCENTAGE, 2.0)
+            new EssenceEffect(EssenceEffect.StatType.ATTACK_SPEED, EssenceEffect.EffectType.PERCENTAGE, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.CRIT_CHANCE, EssenceEffect.EffectType.PERCENTAGE, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.EVASION, EssenceEffect.EffectType.PERCENTAGE, 1.0)
         )));
 
-        // LIFE - T1: Weapon +2% Lifesteal OR Armor +10 HP, T3: +5% or +25 HP, T5: +10% or +50 HP
+        // LIFE - T1: Weapon +1% Lifesteal OR Armor +1 HP, T3: +3% or +3 HP, T5: +5% or +5 HP
         // We'll handle weapon vs armor in the effect application
         register(new Essence("Essence_Life", Essence.Tier.T1, Essence.Type.LIFE, List.of(
-            new EssenceEffect(EssenceEffect.StatType.LIFE_STEAL, EssenceEffect.EffectType.PERCENTAGE, 2.0),
-            new EssenceEffect(EssenceEffect.StatType.HEALTH, EssenceEffect.EffectType.FLAT, 10.0)
+            new EssenceEffect(EssenceEffect.StatType.LIFE_STEAL, EssenceEffect.EffectType.PERCENTAGE, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.HEALTH, EssenceEffect.EffectType.FLAT, 1.0)
         )));
 
-        // VOID - T1: +5% Crit DMG, T3: +12% Crit DMG, T5: +25% Crit DMG
+        // VOID - T1: +1% Crit DMG, T3: +3% Crit DMG, T5: +5% Crit DMG
         register(new Essence("Essence_Void", Essence.Tier.T1, Essence.Type.VOID, List.of(
-            new EssenceEffect(EssenceEffect.StatType.CRIT_DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 5.0)
+            new EssenceEffect(EssenceEffect.StatType.CRIT_DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 1.0),
+            new EssenceEffect(EssenceEffect.StatType.DEFENSE, EssenceEffect.EffectType.PERCENTAGE, 1.0)
         )));
 
-        // WATER - T1: +2% Evasion (armor only), T3: +5% Evasion, T5: +10% Evasion
+        // WATER - T1: +1% Evasion (armor only), T3: +3% Evasion, T5: +5% Evasion
         register(new Essence("Essence_Water", Essence.Tier.T1, Essence.Type.WATER, List.of(
-            new EssenceEffect(EssenceEffect.StatType.EVASION, EssenceEffect.EffectType.PERCENTAGE, 2.0)
+            new EssenceEffect(EssenceEffect.StatType.REGENERATION, EssenceEffect.EffectType.FLAT, 1.0)
         )));
     }
+
+    private static final Random RNG = new Random();
 
     /**
      * Gets the tier effect values for an essence type at a given tier.
@@ -88,49 +94,117 @@ public class EssenceRegistry {
      * @param essenceType The essence type (FIRE, ICE, etc.)
      * @param tier The tier (1-5)
      * @param isWeapon True if the item is a weapon, false if armor
-     * @return The effect values [percentBonus, flatBonus]
+     * @return The effect values [percentBonus, flatBonus] with randomized increments
      */
     public static double[] getTierEffect(Essence.Type essenceType, int tier, boolean isWeapon) {
-        switch (essenceType) {
-            case FIRE:
-                if (tier >= 5) return new double[]{12.0, 15.0};
-                if (tier >= 3) return new double[]{6.0, 8.0};
-                return new double[]{2.0, 3.0};
-                
-            case ICE:
-                if (tier >= 5) return new double[]{5.0, 12.0}; // Freeze chance + Cold DMG
-                if (tier >= 3) return new double[]{5.0, 6.0};
-                return new double[]{2.0, 2.0};
-                
-            case LIGHTNING:
-                if (tier >= 5) return new double[]{15.0, 8.0}; // ATK Speed, Crit
-                if (tier >= 3) return new double[]{7.0, 4.0};
-                return new double[]{3.0, 2.0};
-                
-            case LIFE:
-                if (isWeapon) {
-                    if (tier >= 5) return new double[]{10.0, 0.0}; // Lifesteal
-                    if (tier >= 3) return new double[]{5.0, 0.0};
-                    return new double[]{2.0, 0.0};
-                } else {
-                    if (tier >= 5) return new double[]{0.0, 50.0}; // HP
-                    if (tier >= 3) return new double[]{0.0, 25.0};
-                    return new double[]{0.0, 10.0};
-                }
-                
-            case VOID:
-                if (tier >= 5) return new double[]{25.0, 0.0};
-                if (tier >= 3) return new double[]{12.0, 0.0};
-                return new double[]{5.0, 0.0};
-                
-            case WATER:
-                // Water only works on armor
-                if (tier >= 5) return new double[]{10.0, 0.0};
-                if (tier >= 3) return new double[]{5.0, 0.0};
-                return new double[]{2.0, 0.0};
-                
-            default:
-                return new double[]{0.0, 0.0};
+        // Randomize: Choose between Flat or Percentage damage type
+        boolean useFlat = RNG.nextBoolean();
+
+        // Percentage increment: Fixed +2% per tier (1% -> 3% -> 5%)
+        double percentTier = 1 + (tier - 1) * 2.0;
+        double percentFixed = percentTier;
+
+        // Helper to calculate base + random increments
+        java.util.function.DoubleBinaryOperator calcP = (base, inc) -> base + (tier - 1) * inc;
+        java.util.function.DoubleBinaryOperator calcF = (base, inc) -> base + (tier - 1) * 1.0; // Flat increments are 1.0 per tier (fixed)
+
+        // Only apply stats appropriate for the item type (weapon vs armor)
+        if (isWeapon) {
+            // Weapon Sockets: Damage, Crit, Lifesteal, Attack Speed, etc.
+            switch (essenceType) {
+                case FIRE:
+                    // Fire: Randomly choose between DAMAGE % or DAMAGE flat
+                    if (tier >= 5) return useFlat 
+                        ? new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) }
+                        : new double[]{ calcP.applyAsDouble(5.0, percentFixed), 0.0 };
+                    
+                case ICE:
+                    // Ice: COLD DAMAGE flat (Offensive)
+                    if (tier >= 5) return new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) };
+                    if (tier >= 3) return new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) };
+                    return new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) };
+                    
+                case LIGHTNING:
+                    // Lightning: Randomly choose between ATK_SPEED % or FLAT
+                    if (tier >= 5) return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) }
+                        : new double[]{ calcP.applyAsDouble(5.0, percentFixed), 0.0 };
+                    if (tier >= 3) return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) }
+                        : new double[]{ calcP.applyAsDouble(3.0, percentFixed), 0.0 };
+                    return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) }
+                        : new double[]{ calcP.applyAsDouble(1.0, percentFixed), 0.0 };
+                    
+                case LIFE:
+                    // Life: Lifesteal % (Offensive)
+                    if (tier >= 5) return new double[]{ percentFixed + 4.0, 0.0 };
+                    if (tier >= 3) return new double[]{ percentFixed + 2.0, 0.0 };
+                    return new double[]{ percentFixed, 0.0 };
+                    
+                case VOID:
+                    // Void: Crit Damage % (Offensive)
+                    if (tier >= 5) return new double[]{ calcP.applyAsDouble(9.0, percentTier), 0.0 };
+                    if (tier >= 3) return new double[]{ calcP.applyAsDouble(5.0, percentFixed), 0.0 };
+                    return new double[]{ calcP.applyAsDouble(1.0, percentFixed), 0.0 };
+                    
+                case WATER:
+                    // Water: DAMAGE % or FLAT (Offensive)
+                    if (tier >= 5) return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) }
+                        : new double[]{ percentFixed + 4.0, 0.0 };
+                    if (tier >= 3) return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) }
+                        : new double[]{ percentFixed + 2.0, 0.0 };
+                    return useFlat
+                        ? new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) }
+                        : new double[]{ percentFixed, 0.0 };
+                    
+                default:
+                    return new double[]{0.0, 0.0};
+            }
+        } else {
+            // Armor Sockets: Health, Defense, Evasion, Slow (debuff)
+            switch (essenceType) {
+                case FIRE:
+                    // Fire: FIRE DAMAGE REDUCTION % (Defensive)
+                    if (tier >= 5) return new double[]{ percentFixed + 4.0, 0.0 };
+                    if (tier >= 3) return new double[]{ percentFixed + 2.0, 0.0 };
+                    return new double[]{ percentFixed, 0.0 };
+                    
+                case ICE:
+                    // Ice: SLOW % (Debuff to enemies) - treat as defensive utility
+                    if (tier >= 5) return new double[]{ calcP.applyAsDouble(5.0, percentFixed), 0.0 };
+                    if (tier >= 3) return new double[]{ calcP.applyAsDouble(3.0, percentFixed), 0.0 };
+                    return new double[]{ calcP.applyAsDouble(1.0, percentFixed), 0.0 };
+                    
+                case LIGHTNING:
+                    // Lightning: EVASION % (Defensive)
+                    if (tier >= 5) return new double[]{ percentFixed + 4.0, 0.0 };
+                    if (tier >= 3) return new double[]{ percentFixed + 2.0, 0.0 };
+                    return new double[]{ percentFixed, 0.0 };
+                    
+                case LIFE:
+                    // Life: Health flat (Defensive)
+                    if (tier >= 5) return new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) };
+                    if (tier >= 3) return new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) };
+                    return new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) };
+                    
+                case VOID:
+                    // Void: DEFENSE % (Defensive)
+                    if (tier >= 5) return new double[]{ percentFixed + 4.0, 0.0 };
+                    if (tier >= 3) return new double[]{ percentFixed + 2.0, 0.0 };
+                    return new double[]{ percentFixed, 0.0 };
+                    
+                case WATER:
+                    // Water: REGENERATION (Flat HP) for Armor
+                    if (tier >= 5) return new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) };
+                    if (tier >= 3) return new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) };
+                    return new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) };
+                    
+                default:
+                    return new double[]{0.0, 0.0};
+            }
         }
     }
 }

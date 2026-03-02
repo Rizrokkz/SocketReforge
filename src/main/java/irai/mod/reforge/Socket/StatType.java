@@ -15,6 +15,8 @@ public enum StatType {
     HEALTH("Health", "HP"),
     DEFENSE("Defense", "DEF"),
     EVASION("Evasion", "EVA"),
+    REGENERATION("Regeneration", "REGEN"),
+    FIRE_DEFENSE("Fire Defense", "FIRE DEF"),
     
     // Utility Stats
     LIFE_STEAL("Life Steal", "LIFESTEAL"),
@@ -25,6 +27,7 @@ public enum StatType {
     COLD_DAMAGE("Cold Damage", "COLD DMG"),
     SLOW_EFFECT("Slow Effect", "SLOW"),
     FIRE_DAMAGE("Fire Damage", "FIRE DMG"),
+    FIRE_RESISTANCE("Fire Resistance", "FIRE RES"),
     LIGHTNING_DAMAGE("Lightning Damage", "LIGHT DMG");
     
     private final String displayName;

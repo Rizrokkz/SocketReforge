@@ -55,6 +55,11 @@ public class OpenGuiListener {
         // Scan storage inventory
         ItemContainer storage = player.getInventory().getStorage();
         registeredCount += scanContainer(storage);
+
+        // Scan equipped armor so join-time tooltip cache is rebuilt even when
+        // the player has no reforge/socket items in hotbar/storage.
+        ItemContainer armor = player.getInventory().getArmor();
+        registeredCount += scanContainer(armor);
         
         if (registeredCount > 0) {
             System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join, refreshing in 2 seconds...");

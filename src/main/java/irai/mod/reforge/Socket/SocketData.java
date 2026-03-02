@@ -1,7 +1,9 @@
 package irai.mod.reforge.Socket;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
@@ -229,9 +231,9 @@ public class SocketData {
         double total = 0;
 
         // Get tier map from SocketManager
-        java.util.Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
 
-        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+        for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
             Essence.Type type = entry.getKey();
             int tier = entry.getValue();
 
@@ -299,9 +301,30 @@ public class SocketData {
             case HEALTH: return StatType.HEALTH;
             case DEFENSE: return StatType.DEFENSE;
             case EVASION: return StatType.EVASION;
+            case REGENERATION: return StatType.REGENERATION;
+            case FIRE_DEFENSE: return StatType.FIRE_DEFENSE;
             case LIFE_STEAL: return StatType.LIFE_STEAL;
             case MOVEMENT_SPEED: return StatType.MOVEMENT_SPEED;
             case LUCK: return StatType.LUCK;
+            default: return null;
+        }
+    }
+
+    /** Converts SocketData.StatType to EssenceEffect.StatType. */
+    private EssenceEffect.StatType convertStatTypeToEffectStat(StatType stat) {
+        switch (stat) {
+            case ATTACK_SPEED: return EssenceEffect.StatType.ATTACK_SPEED;
+            case DAMAGE: return EssenceEffect.StatType.DAMAGE;
+            case CRIT_CHANCE: return EssenceEffect.StatType.CRIT_CHANCE;
+            case CRIT_DAMAGE: return EssenceEffect.StatType.CRIT_DAMAGE;
+            case HEALTH: return EssenceEffect.StatType.HEALTH;
+            case DEFENSE: return EssenceEffect.StatType.DEFENSE;
+            case EVASION: return EssenceEffect.StatType.EVASION;
+            case REGENERATION: return EssenceEffect.StatType.REGENERATION;
+            case FIRE_DEFENSE: return EssenceEffect.StatType.FIRE_DEFENSE;
+            case LIFE_STEAL: return EssenceEffect.StatType.LIFE_STEAL;
+            case MOVEMENT_SPEED: return EssenceEffect.StatType.MOVEMENT_SPEED;
+            case LUCK: return EssenceEffect.StatType.LUCK;
             default: return null;
         }
     }
@@ -360,9 +383,9 @@ public class SocketData {
         String[] effectTiers = SocketManager.getEssenceTiers(item);
         
         // Fall back to calculating from socket data if not in metadata
-        java.util.Map<Essence.Type, Integer> tierMap;
+        Map<Essence.Type, Integer> tierMap;
         if (effectTypes != null && effectTiers != null && effectTypes.length == effectTiers.length) {
-            tierMap = new java.util.LinkedHashMap<>();
+            tierMap = new LinkedHashMap<>();
             for (int i = 0; i < effectTypes.length; i++) {
                 try {
                     Essence.Type type = Essence.Type.valueOf(effectTypes[i]);
@@ -376,20 +399,21 @@ public class SocketData {
             tierMap = SocketManager.calculateConsecutiveTiers(this);
         }
 
-        // Add tiered stat bonuses from socketed essences as separate tooltip lines
-        java.util.List<String> statLines = new java.util.ArrayList<>();
+        // Add stat bonuses from metadata so tooltip values match applied gameplay values.
+        List<String> statLines = new ArrayList<>();
         for (StatType stat : StatType.values()) {
-            double tieredBonus = getTieredStatBonus(stat, isWeapon);
+            EssenceEffect.StatType effectStat = convertStatTypeToEffectStat(stat);
+            if (effectStat == null) continue;
 
-            if (tieredBonus != 0) {
-                // Determine if it's percentage or flat based on stat type
-                boolean isPercent = isPercentageStat(stat);
-                String prefix = stat.getDisplayName() + ": +";
-                if (isPercent) {
-                    statLines.add(prefix + (int)tieredBonus + "%");
-                } else {
-                    statLines.add(prefix + (int)tieredBonus);
-                }
+            double[] bonus = SocketManager.getStoredStatBonus(item, effectStat);
+            double flatBonus = bonus[0];
+            double percentBonus = bonus[1];
+
+            if (percentBonus != 0) {
+                statLines.add(stat.getDisplayName() + ": +" + (int) percentBonus + "%");
+            }
+            if (flatBonus != 0) {
+                statLines.add(stat.getDisplayName() + ": +" + (int) flatBonus);
             }
         }
 
@@ -400,7 +424,7 @@ public class SocketData {
         }
 
         // Add individual essence info for display with colors
-        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+        for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
             String essenceName = entry.getKey().name();
             int tier = entry.getValue();
             String color = getEssenceColor(entry.getKey());
@@ -437,10 +461,10 @@ public class SocketData {
         DynamicTooltipUtils.registerColoredSocketTooltip(itemId, null, maxSockets, socketColors, brokenSockets);
 
         // Calculate tier map
-        java.util.Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
 
         // Add stat bonuses
-        java.util.List<String> statLines = new java.util.ArrayList<>();
+        List<String> statLines = new ArrayList<>();
         for (StatType stat : StatType.values()) {
             double tieredBonus = getTieredStatBonus(stat, isWeapon);
             if (tieredBonus != 0) {
@@ -455,7 +479,7 @@ public class SocketData {
         }
 
         // Add essence info
-        for (java.util.Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
+        for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
             String color = getEssenceColor(entry.getKey());
             String coloredName = color + entry.getKey().name() + " T" + entry.getValue() + "</color>";
             DynamicTooltipUtils.addEssenceTooltip(itemId, coloredName, 
@@ -482,7 +506,7 @@ public class SocketData {
      * Overload for backward compatibility - assumes weapon by default.
      */
     public void registerTooltips(String itemId) {
-        registerTooltips(itemId, true);
+        registerTooltips(itemId, false);
     }
 
     /**
@@ -500,35 +524,58 @@ public class SocketData {
      * Uses actual values from EssenceRegistry to ensure consistency.
      */
     private String getEffectDescription(Essence.Type type, int tier, boolean isWeapon) {
-        double[] effects = EssenceRegistry.getTierEffect(type, tier, isWeapon);
-        double percentBonus = effects[0];
-        double flatBonus = effects[1];
+        int safeTier = Math.max(1, Math.min(5, tier));
         
         switch (type) {
             case FIRE:
-                // Fire gives either % Damage OR flat Damage
-                if (flatBonus > 0) {
-                    return "+" + (int)flatBonus + " Flat DMG";
+                if (isWeapon) {
+                    double percent = (safeTier + 1) / 2.0;
+                    double flat = safeTier / 2.0;
+                    return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                } else {
+                    // Armor: Fire Defense
+                    return "+" + safeTier + "% Fire Defense";
                 }
-                return "+" + (int)percentBonus + "% DMG";
             case ICE:
-                if (tier >= 5) {
-                    return "+" + (int)percentBonus + "% Freeze, +" + (int)flatBonus + " Cold DMG";
-                }
-                return "+" + (int)percentBonus + "% Slow, +" + (int)flatBonus + " Cold DMG";
+                if (isWeapon) return "+" + safeTier + " Cold DMG";
+                return "+" + safeTier + "% Slow";
             case LIGHTNING:
-                return "+" + (int)percentBonus + "% ATK Spd, +" + (int)flatBonus + "% Crit";
+                if (isWeapon) {
+                    return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
+                } else {
+                    // Armor: Evasion
+                    return "+" + safeTier + "% Evasion";
+                }
             case LIFE:
                 if (isWeapon) {
-                    return "+" + (int)percentBonus + "% Lifesteal";
+                    return "+" + safeTier + "% Lifesteal";
                 }
-                return "+" + (int)flatBonus + " HP";
+                return "+" + safeTier + " HP";
             case VOID:
-                return "+" + (int)percentBonus + "% Crit DMG";
+                if (isWeapon) {
+                    return "+" + safeTier + "% Crit DMG";
+                } else {
+                    // Armor: Defense
+                    return "+" + safeTier + "% Defense";
+                }
             case WATER:
-                return "+" + (int)percentBonus + "% Evasion";
+                if (isWeapon) {
+                    double percent = (safeTier + 1) / 2.0;
+                    double flat = safeTier / 2.0;
+                    return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                } else {
+                    // Armor: Regeneration
+                    return "+" + safeTier + " Regeneration";
+                }
             default:
                 return "Unknown";
         }
+    }
+
+    private String formatBonus(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1e-9) {
+            return String.valueOf((int) Math.rint(value));
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 }

@@ -15,7 +15,7 @@ repositories {
 dependencies {
     compileOnly(files("libs/HytaleServer.jar"))
     implementation(files("libs/HytaleServer.jar"))
-    implementation(files("server/mods/HyUI-0.9.0-2026.02.19.jar"))
+    implementation(files("libs/HyUI-0.9.0-2026.02.19.jar"))
     // Optional dependency - DynamicTooltipsLib (https://github.com/Herolias/DynamicTooltipsLib)
     compileOnly(files("libs/DynamicTooltipsLib-1.5.0.jar"))
     testImplementation(platform("org.junit:junit-bom:5.10.0"))

@@ -1,0 +1,46 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Essence Socket Bench" style="anchor-width: 920; anchor-height: 760;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+            <h2 style="text-align:center;">Essence Socket Bench Tool</h2>
+            <p style="text-align:center;">Select equipment, essence, and optional voidheart from inventory.</p>
+            <hr/>
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p><b>Equipment</b></p>
+            <select id="equipmentDropdown" data-hyui-showlabel="true">
+                {{equipmentOptions}}
+            </select>
+
+            <p><b>Essence Material</b></p>
+            <select id="essenceDropdown" data-hyui-showlabel="true">
+                {{essenceOptions}}
+            </select>
+
+            <p><b>Voidheart (Optional Repair)</b></p>
+            <select id="supportDropdown" data-hyui-showlabel="true">
+                {{supportOptions}}
+            </select>
+
+            <hr/>
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p><b>Socket Preview</b></p>
+            <div id="socketIconsRow">{{socketIcons}}</div>
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p><b>Socket Summary</b></p>
+            <p id="socketSummaryLabel">{{socketSummary}}</p>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p><b>Progress</b></p>
+            <progress id="socketProgress" max="100" value="{{progressValue}}" style="width:100%;"></progress>
+            <p id="statusLabel">{{statusText}}</p>
+
+            <hr/>
+            <p><b>Selected Item Metadata</b></p>
+            <p id="metadataLabel" style="white-space:pre-line;max-height:200px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">{{metadataText}}</p>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-size:11;">Consumes selected essence on success. Voidheart is consumed only when used to repair broken sockets.</p>
+            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>Socket Essence</button>
+        </div>
+    </div>
+</div>

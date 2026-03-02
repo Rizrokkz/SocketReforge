@@ -1,18 +1,17 @@
 {
   "Group": "irai.mod.reforge",
   "Name": "Socket Reforge",
-  "Version": "1.2.1",
+  "Version": "1.2.5",
   "Description": "",
   "Authors": [
     {
       "Name": "iRaiden",
-      "Email": "animus0416@gmail.com",
       "Url": "https://github.com/Rizrokkz"
     }
   ],
   "Website": "",
   "Dependencies": {},
-  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*"},
+  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*", "au.ellie:HyUI": "*"},
   "LoadBefore": {},
   "DisabledByDefault": false,
   "IncludesAssetPack": true,

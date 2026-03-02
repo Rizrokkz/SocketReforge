@@ -9,7 +9,6 @@ import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
-import com.hypixel.hytale.server.core.command.system.CommandRegistry;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
@@ -22,20 +21,28 @@ import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Entity.Events.LifeHealthSystem;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
+import irai.mod.reforge.Entity.Events.SocketStatSystem;
+import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
+import irai.mod.reforge.UI.EssenceBenchUI;
+import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
+    private final SocketStatSystem socketStatSystem;
+    private final LifeHealthSystem lifeHealthSystem;
+    private final WaterRegenSystem waterRegenSystem;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -54,6 +61,9 @@ public class ReforgePlugin extends JavaPlugin {
         instance = this;
         refineEST = new EquipmentRefineEST();
         socketEffectEST = new SocketEffectEST();
+        socketStatSystem = new SocketStatSystem();
+        lifeHealthSystem = new LifeHealthSystem();
+        waterRegenSystem = new WaterRegenSystem();
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
@@ -65,9 +75,14 @@ public class ReforgePlugin extends JavaPlugin {
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
         DynamicTooltipUtils.init();
+        // Initialize EquipmentListUI for HyUI integration
+        SocketBenchUI.initialize();
+        EssenceBenchUI.initialize();
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
+        
+        // Initialize Socket Stat System (handles both health bonus and regeneration)
 
         // Load SFX config first before creating ReforgeEquip
         try {
@@ -131,12 +146,11 @@ public class ReforgePlugin extends JavaPlugin {
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
+        this.getEntityStoreRegistry().registerSystem(socketStatSystem);
+        this.getEntityStoreRegistry().registerSystem(lifeHealthSystem);
+        this.getEntityStoreRegistry().registerSystem(waterRegenSystem);
 
-        // Register commands
-        CommandRegistry commandRegistry = this.getCommandRegistry();
-        //this.getCommandRegistry().registerCommand(new WeaponStatsCommand("weaponstats", "Display weapon stats and next upgrade values"));
-        //commandRegistry.registerCommand(new CheckNameCommand("checkname", "Checks the translation name of the held item", false));
-        //commandRegistry.registerCommand(new ItemMetaCommand("showmeta", "Checks the metadata of the held item", false));
+
     }
 
     @Override

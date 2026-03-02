@@ -6,7 +6,7 @@ public class EssenceEffect {
         // Offensive
         ATTACK_SPEED, DAMAGE, CRIT_CHANCE, CRIT_DAMAGE,
         // Defensive
-        HEALTH, DEFENSE, EVASION,
+        HEALTH, DEFENSE, EVASION, REGENERATION, FIRE_DEFENSE,
         // Utility
         LIFE_STEAL, MOVEMENT_SPEED, LUCK
     }

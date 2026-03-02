@@ -1,5 +1,11 @@
 package irai.mod.reforge.Interactions;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -17,9 +23,11 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.Essence.Type;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.UI.EssenceBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
@@ -51,7 +59,7 @@ public class EssenceSocketBench extends SimpleInteraction {
     };
     
     // Map essence item IDs to essence types
-    private static final java.util.Map<String, String> ESSENCE_TYPE_MAP = new java.util.HashMap<>();
+    private static final Map<String, String> ESSENCE_TYPE_MAP = new HashMap<>();
     static {
         ESSENCE_TYPE_MAP.put("Ingredient_Fire_Essence", "FIRE");
         ESSENCE_TYPE_MAP.put("Ingredient_Ice_Essence", "ICE");
@@ -80,6 +88,11 @@ public class EssenceSocketBench extends SimpleInteraction {
 
         Player player = getPlayerFromContext(context);
         if (player == null) return;
+
+        if (EssenceBenchUI.isAvailable()) {
+            EssenceBenchUI.open(player);
+            return;
+        }
 
         // For now, use the player's inventory since we can't easily access the bench container
         // This interaction works with the held item and inventory essences
@@ -199,7 +212,7 @@ public class EssenceSocketBench extends SimpleInteraction {
         player.sendMessage(Message.raw("  1 essence added!          "));
         
         // Display tiered effects
-        displayTieredEffects(player, socketData, isWeapon);
+        displayTieredEffects(player, updatedItem, socketData, isWeapon);
         
         player.sendMessage(Message.raw("  Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
         player.sendMessage(Message.raw("============================="));
@@ -294,7 +307,7 @@ public class EssenceSocketBench extends SimpleInteraction {
      */
     private String findOneEssenceInInventory(Player player) {
         // Collect all available essence types from inventory
-        java.util.List<String> availableEssences = new java.util.ArrayList<>();
+        List<String> availableEssences = new ArrayList<>();
         
         // Check hotbar
         ItemContainer hotbar = player.getInventory().getHotbar();
@@ -364,113 +377,122 @@ public class EssenceSocketBench extends SimpleInteraction {
     /**
      * Displays the tiered effects based on consecutive essence types.
      */
-    private void displayTieredEffects(Player player, SocketData socketData, boolean isWeapon) {
-        // Calculate tiered effects
-        java.util.Map<String, Integer> tierMap = calculateConsecutiveTiers(socketData);
+    private void displayTieredEffects(Player player, ItemStack itemWithMetadata, SocketData socketData, boolean isWeapon) {
+        // Calculate tiered effects using SocketManager
+        Map<String, Integer> tierMap = getTierMapFromSocketData(socketData);
         
         if (!tierMap.isEmpty()) {
             player.sendMessage(Message.raw("Active Effects:"));
-            for (java.util.Map.Entry<String, Integer> entry : tierMap.entrySet()) {
+            for (Map.Entry<String, Integer> entry : tierMap.entrySet()) {
                 String essenceType = entry.getKey();
                 int tier = entry.getValue();
-                player.sendMessage(Message.raw("  " + essenceType + " T" + tier + " (" + getEffectDescription(essenceType, tier, isWeapon) + ")"));
+                player.sendMessage(Message.raw("  " + essenceType + " T" + tier + " (" + getEffectDescription(itemWithMetadata, essenceType, tier, isWeapon) + ")"));
             }
         }
     }
 
     /**
-     * Calculates the tier for each essence type based on consecutive count.
-     * Returns a map of essence type -> tier.
+     * Converts SocketManager's tier map (Essence.Type -> Integer) to String -> Integer for display.
      */
-    private java.util.Map<String, Integer> calculateConsecutiveTiers(SocketData socketData) {
-        java.util.Map<String, Integer> tierMap = new java.util.LinkedHashMap<>();
-        
-        String currentType = null;
-        int consecutiveCount = 0;
-        
-        for (irai.mod.reforge.Socket.Socket socket : socketData.getSockets()) {
-            if (socket.isEmpty() || socket.isBroken()) {
-                // Reset on empty/broken socket
-                if (currentType != null && consecutiveCount > 0) {
-                    tierMap.put(currentType, Math.min(consecutiveCount, 5));
-                }
-                currentType = null;
-                consecutiveCount = 0;
-                continue;
-            }
-            
-            String essenceId = socket.getEssenceId();
-            Essence essence = EssenceRegistry.get().getById(essenceId);
-            if (essence == null) continue;
-            
-            String essenceType = essence.getType().name();
-            
-            if (essenceType.equals(currentType)) {
-                consecutiveCount++;
-            } else {
-                // Save previous type if any
-                if (currentType != null && consecutiveCount > 0) {
-                    tierMap.put(currentType, Math.min(consecutiveCount, 5));
-                }
-                currentType = essenceType;
-                consecutiveCount = 1;
-            }
+    private Map<String, Integer> getTierMapFromSocketData(SocketData socketData) {
+        Map<Type, Integer> typeTierMap = SocketManager.calculateConsecutiveTiers(socketData);
+        Map<String, Integer> result = new LinkedHashMap<>();
+        for (Map.Entry<Type, Integer> entry : typeTierMap.entrySet()) {
+            result.put(entry.getKey().name(), entry.getValue());
         }
-        
-        // Don't forget the last sequence
-        if (currentType != null && consecutiveCount > 0) {
-            tierMap.put(currentType, Math.min(consecutiveCount, 5));
-        }
-        
-        return tierMap;
+        return result;
     }
 
     /**
      * Gets the effect description for an essence type and tier.
      */
-    private String getEffectDescription(String essenceType, int tier, boolean isWeapon) {
-        switch (essenceType) {
-            case "FIRE":
-                if (tier >= 5) return "+12% DMG or +15 Flat";
-                if (tier >= 3) return "+6% DMG or +8 Flat";
-                return "+2% DMG or +3 Flat";
-            case "ICE":
-                if (tier >= 5) return "+5% Freeze, +12 Cold DMG";
-                if (tier >= 3) return "+5% Slow, +6 Cold DMG";
-                return "+2% Slow, +2 Cold DMG";
-            case "LIGHTNING":
-                if (tier >= 5) return "+15% ATK Spd, +8% Crit";
-                if (tier >= 3) return "+7% ATK Spd, +4% Crit";
-                return "+3% ATK Spd, +2% Crit";
-            case "LIFE":
-                if (isWeapon) {
-                    if (tier >= 5) return "+10% Lifesteal";
-                    if (tier >= 3) return "+5% Lifesteal";
-                    return "+2% Lifesteal";
-                } else {
-                    if (tier >= 5) return "+50 HP";
-                    if (tier >= 3) return "+25 HP";
-                    return "+10 HP";
-                }
-            case "VOID":
-                if (tier >= 5) return "+25% Crit DMG";
-                if (tier >= 3) return "+12% Crit DMG";
-                return "+5% Crit DMG";
-            case "WATER":
-                // Water only works on armor
-                if (tier >= 5) return "+10% Evasion";
-                if (tier >= 3) return "+5% Evasion";
-                return "+2% Evasion";
-            default:
-                return "Unknown";
+    private String getEffectDescription(ItemStack itemWithMetadata, String essenceType, int tier, boolean isWeapon) {
+        try {
+            int safeTier = Math.max(1, Math.min(5, tier));
+
+            switch (essenceType) {
+                case "FIRE":
+                    if (isWeapon) {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DAMAGE);
+                        double percent = bonus[1];
+                        double flat = bonus[0];
+                        if (percent == 0.0 && flat == 0.0) {
+                            percent = (safeTier + 1) / 2.0;
+                            flat = safeTier / 2.0;
+                        }
+                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                    } else {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.FIRE_DEFENSE);
+                        double percent = bonus[1];
+                        if (percent == 0.0) percent = safeTier;
+                        return "+" + formatBonus(percent) + "% Fire Defense";
+                    }
+                case "ICE":
+                    if (isWeapon) return "+" + safeTier + " Cold DMG";
+                    return "+" + safeTier + "% Slow";
+                case "LIGHTNING":
+                    if (isWeapon) {
+                        return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
+                    } else {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.EVASION);
+                        double percent = bonus[1];
+                        if (percent == 0.0) percent = safeTier;
+                        return "+" + formatBonus(percent) + "% Evasion";
+                    }
+                case "LIFE":
+                    if (isWeapon) {
+                        return "+" + safeTier + "% Lifesteal";
+                    } else {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.HEALTH);
+                        double flat = bonus[0];
+                        if (flat == 0.0) flat = safeTier;
+                        return "+" + formatBonus(flat) + " HP";
+                    }
+                case "VOID":
+                    if (isWeapon) {
+                        return "+" + safeTier + "% Crit DMG";
+                    } else {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DEFENSE);
+                        double percent = bonus[1];
+                        if (percent == 0.0) percent = safeTier;
+                        return "+" + formatBonus(percent) + "% Defense";
+                    }
+                case "WATER":
+                    if (isWeapon) {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DAMAGE);
+                        double percent = bonus[1];
+                        double flat = bonus[0];
+                        if (percent == 0.0 && flat == 0.0) {
+                            percent = (safeTier + 1) / 2.0;
+                            flat = safeTier / 2.0;
+                        }
+                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
+                    } else {
+                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.REGENERATION);
+                        double flat = bonus[0];
+                        if (flat == 0.0) flat = safeTier;
+                        return "+" + formatBonus(flat) + " Regeneration";
+                    }
+                default:
+                    return "Unknown";
+            }
+        } catch (Exception e) {
+            return "Error";
         }
+    }
+
+    private String formatBonus(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1e-9) {
+            return String.valueOf((int) Math.rint(value));
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 
     /**
      * Finds essence types in player's inventory (just finds, doesn't consume).
      */
-    private java.util.List<String> findEssenceTypesInInventory(Player player) {
-        java.util.List<String> foundEssences = new java.util.ArrayList<>();
+    private List<String> findEssenceTypesInInventory(Player player) {
+        List<String> foundEssences = new ArrayList<>();
         
         // Check hotbar
         ItemContainer hotbar = player.getInventory().getHotbar();
