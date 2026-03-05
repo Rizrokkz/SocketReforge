@@ -450,7 +450,11 @@ public class EssenceSocketBench extends SimpleInteraction {
                     }
                 case "VOID":
                     if (isWeapon) {
-                        return "+" + safeTier + "% Crit DMG";
+                        int critDmg = safeTier * 5;
+                        if (safeTier >= 5) {
+                            return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
+                        }
+                        return "+" + critDmg + "% Crit DMG";
                     } else {
                         double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DEFENSE);
                         double percent = bonus[1];

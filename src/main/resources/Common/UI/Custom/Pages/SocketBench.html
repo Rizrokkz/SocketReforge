@@ -19,7 +19,7 @@
             <select id="supportDropdown" data-hyui-showlabel="true">
                 {{supportOptions}}
             </select>
-
+            <p></p>    
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p><b>Socket Preview</b></p>
@@ -32,7 +32,12 @@
             
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p><b>Progress</b></p>
-            <progress id="socketProgress" max="100" value="{{progressValue}}" style="width:100%;"></progress>
+            <progress id="socketProgress"
+                      max="100"
+                      value="{{progressValue}}"
+                      data-hyui-bar-texture-path="boost_fill.png"
+                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+            </progress>
             <p id="statusLabel">{{statusText}}</p>
 
             <hr/>

@@ -20,6 +20,10 @@ import com.hypixel.hytale.server.core.util.Config;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
+import irai.mod.reforge.Commands.ReforgeAdminCommand;
+import irai.mod.reforge.Commands.SocketPunchCommand;
+import irai.mod.reforge.Commands.EssenceCommand;
+import irai.mod.reforge.Commands.WeaponPartsCommand;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
@@ -33,7 +37,9 @@ import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.EssenceBenchUI;
+import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.UI.SocketBenchUI;
+import irai.mod.reforge.UI.WeaponPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -78,6 +84,8 @@ public class ReforgePlugin extends JavaPlugin {
         // Initialize EquipmentListUI for HyUI integration
         SocketBenchUI.initialize();
         EssenceBenchUI.initialize();
+        ReforgeBenchUI.initialize();
+        WeaponPartsUI.initialize();
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
@@ -103,6 +111,7 @@ public class ReforgePlugin extends JavaPlugin {
         SFXConfig loadedSfx = this.sfxconfig.get();
         if (loadedSfx != null) {
             reforgeEquip.setSfxConfig(loadedSfx);
+            ReforgeBenchUI.setSfxConfig(loadedSfx);
         }
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
@@ -111,6 +120,10 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
+        this.getCommandRegistry().registerCommand(new WeaponPartsCommand("partsui", "Open modular weapon parts bench UI", false));
+        this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
+        this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
+        this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
 
         // Load refinement config and inject into systems
         try {
@@ -122,6 +135,7 @@ public class ReforgePlugin extends JavaPlugin {
 
                 // Inject config into ReforgeEquip
                 reforgeEquip.setRefinementConfig(refinement);
+                ReforgeBenchUI.setRefinementConfig(refinement);
             }
         } catch (Exception e) {
             System.err.println("[ReforgePlugin] Error loading Refinement config: " + e.getMessage());

@@ -25,6 +25,7 @@ public final class SocketArmorBonusHelper {
     private static final double DEFENSE_SCALE = 0.65;
     private static final double FIRE_DEFENSE_SCALE = 0.70;
     private static final double EVASION_SCALE = 0.60;
+    private static final double SLOW_SCALE = 0.60;
 
     // Hard caps after scaling.
     private static final double HEALTH_CAP = 40.0;
@@ -32,6 +33,7 @@ public final class SocketArmorBonusHelper {
     private static final double DEFENSE_CAP = 35.0;
     private static final double FIRE_DEFENSE_CAP = 40.0;
     private static final double EVASION_CAP = 25.0;
+    private static final double SLOW_CAP = 30.0;
 
     public static List<ItemStack> getEquippedArmor(Player player) {
         List<ItemStack> armorPieces = new ArrayList<>();
@@ -74,6 +76,7 @@ public final class SocketArmorBonusHelper {
             case DEFENSE -> Math.min(DEFENSE_CAP, raw * DEFENSE_SCALE);
             case FIRE_DEFENSE -> Math.min(FIRE_DEFENSE_CAP, raw * FIRE_DEFENSE_SCALE);
             case EVASION -> Math.min(EVASION_CAP, raw * EVASION_SCALE);
+            case MOVEMENT_SPEED -> Math.min(SLOW_CAP, raw * SLOW_SCALE);
             default -> raw;
         };
     }

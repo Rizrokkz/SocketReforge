@@ -9,9 +9,6 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import irai.mod.reforge.Socket.Essence;
-import irai.mod.reforge.Socket.EssenceRegistry;
-
 /**
  * Utility class for interacting with DynamicTooltipsLib.
  * Uses Provider-based approach for per-item metadata tooltips.
@@ -48,6 +45,13 @@ public class DynamicTooltipUtils {
     private static final String SOCKET_FILLED = "[o]";
     private static final String SOCKET_EMPTY = "[ ]";
     private static final String SOCKET_LOCKED = "[x]";
+
+    // Parts metadata keys
+    private static final String META_PARTS_WEAPON_TYPE = "SocketReforge.Parts.WeaponType";
+    private static final String META_PART1_TIER = "SocketReforge.Parts.Part1Tier";
+    private static final String META_PART2_TIER = "SocketReforge.Parts.Part2Tier";
+    private static final String META_PART3_TIER = "SocketReforge.Parts.Part3Tier";
+    private static final String BLOOD_PACT_PREFIX = "Blood Pact ";
     
     // ==================== Reforge Level ====================
     
@@ -518,9 +522,15 @@ public class DynamicTooltipUtils {
         // Parse socket data from metadata
         int socketMax = extractSocketMax(metadata);
         int socketFilled = extractSocketFilled(metadata);
+
+        // Parse modular parts metadata
+        String partsWeaponType = extractStringValue(metadata, META_PARTS_WEAPON_TYPE);
+        int part1Tier = extractIntValue(metadata, META_PART1_TIER);
+        int part2Tier = extractIntValue(metadata, META_PART2_TIER);
+        int part3Tier = extractIntValue(metadata, META_PART3_TIER);
         
-        // If neither reforge nor sockets, return null
-        if (reforgeLevel <= 0 && socketMax <= 0) {
+        // If no supported metadata is present, return null
+        if (reforgeLevel <= 0 && socketMax <= 0 && partsWeaponType == null) {
             return null;
         }
         
@@ -531,6 +541,11 @@ public class DynamicTooltipUtils {
         if (reforgeLevel > 0) {
             String baseItemId = extractBaseItemId(metadata);
             displayName = extractDisplayName(metadata);
+            if (displayName != null && !displayName.isEmpty()
+                    && shouldPrefixBloodPact(itemId, baseItemId, metadata)
+                    && !displayName.startsWith(BLOOD_PACT_PREFIX)) {
+                displayName = BLOOD_PACT_PREFIX + displayName;
+            }
             
             // Determine if it's armor or weapon based on base item ID
             boolean isArmor = baseItemId != null && baseItemId.startsWith("Armor_");
@@ -584,6 +599,12 @@ public class DynamicTooltipUtils {
             }
             String socketLine = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
             tooltipLines.add(socketLine);
+        }
+
+        // Add modular parts line if present
+        String partsLine = buildPartsTooltipLine(partsWeaponType, part1Tier, part2Tier, part3Tier);
+        if (partsLine != null) {
+            tooltipLines.add(partsLine);
         }
         
         // Add essence effects from metadata
@@ -877,7 +898,44 @@ public class DynamicTooltipUtils {
         
         return null;
     }
-    
+
+    private static boolean shouldPrefixBloodPact(String itemId, String baseItemId, String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return false;
+        }
+        String base = baseItemId;
+        if (base == null || base.isBlank()) {
+            base = itemId;
+        }
+        if (base == null || !base.startsWith("Weapon_")) {
+            return false;
+        }
+
+        String[] effects = extractEssenceEffects(metadata);
+        String[] tiers = extractEssenceTiers(metadata);
+        if (effects == null || tiers == null) {
+            return false;
+        }
+        int count = Math.min(effects.length, tiers.length);
+        for (int i = 0; i < count; i++) {
+            String effect = effects[i];
+            if (effect == null || !"VOID".equalsIgnoreCase(effect.trim())) {
+                continue;
+            }
+            String tierRaw = tiers[i];
+            if (tierRaw == null) {
+                continue;
+            }
+            try {
+                if (Integer.parseInt(tierRaw.trim()) >= 5) {
+                    return true;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return false;
+    }
+
     /**
      * Get effect description for an essence type and tier
      */
@@ -944,7 +1002,11 @@ public class DynamicTooltipUtils {
                         }
                         return "+" + safeTier + "% Defense";
                     }
-                    return "+" + safeTier + "% Crit DMG";
+                    int critDmg = safeTier * 5;
+                    if (safeTier >= 5) {
+                        return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
+                    }
+                    return "+" + critDmg + "% Crit DMG";
                 case "WATER":
                     if (isArmor) {
                         double[] bonus = extractStoredBonus(metadata, "REGENERATION");
@@ -1083,6 +1145,111 @@ public class DynamicTooltipUtils {
             return metadata.substring(quoteStart + 1, quoteEnd);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private static String extractStringValue(String metadata, String searchKey) {
+        if (metadata == null || metadata.isEmpty() || searchKey == null || searchKey.isBlank()) {
+            return null;
+        }
+        try {
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return null;
+            int colonIndex = metadata.indexOf(":", keyIndex);
+            if (colonIndex < 0) return null;
+            int quoteStart = metadata.indexOf("\"", colonIndex);
+            if (quoteStart < 0) return null;
+            int quoteEnd = metadata.indexOf("\"", quoteStart + 1);
+            if (quoteEnd < 0) return null;
+            String value = metadata.substring(quoteStart + 1, quoteEnd).trim();
+            return value.isEmpty() ? null : value;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int extractIntValue(String metadata, String searchKey) {
+        if (metadata == null || metadata.isEmpty() || searchKey == null || searchKey.isBlank()) {
+            return 0;
+        }
+        try {
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return 0;
+            int colonIndex = metadata.indexOf(":", keyIndex);
+            if (colonIndex < 0) return 0;
+            int numberStart = colonIndex + 1;
+            while (numberStart < metadata.length() &&
+                    (metadata.charAt(numberStart) == ' ' || metadata.charAt(numberStart) == '"')) {
+                numberStart++;
+            }
+            int numberEnd = numberStart;
+            if (numberEnd < metadata.length() && metadata.charAt(numberEnd) == '-') {
+                numberEnd++;
+            }
+            while (numberEnd < metadata.length() && Character.isDigit(metadata.charAt(numberEnd))) {
+                numberEnd++;
+            }
+            if (numberEnd > numberStart) {
+                return Integer.parseInt(metadata.substring(numberStart, numberEnd));
+            }
+        } catch (Exception e) {
+            return 0;
+        }
+        return 0;
+    }
+
+    private static String buildPartsTooltipLine(String weaponType, int t1, int t2, int t3) {
+        if (weaponType == null || weaponType.isBlank()) {
+            return null;
+        }
+
+        String normalized = weaponType.trim().toUpperCase(java.util.Locale.ROOT);
+        String[] glyphs = getPartGlyphs(normalized);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(COLOR_YELLOW).append("Parts: ").append(COLOR_WHITE)
+          .append(getTierColorTag(t1)).append(glyphs[0])
+          .append(COLOR_WHITE).append("")
+          .append(getTierColorTag(t2)).append(glyphs[1])
+          .append(COLOR_WHITE).append("")
+          .append(getTierColorTag(t3)).append(glyphs[2]);
+
+        return sb.toString();
+    }
+
+    private static String getTierColorTag(int tier) {
+        switch (tier) {
+            case 1:
+                return "<color is=\"#6B7280\">";
+            case 2:
+                return "<color is=\"#22C55E\">";
+            case 3:
+                return "<color is=\"#3B82F6\">";
+            case 4:
+                return "<color is=\"#A855F7\">";
+            case 5:
+                return "<color is=\"#F59E0B\">";
+            default:
+                return COLOR_DARK_GRAY;
+        }
+    }
+
+    private static String[] getPartGlyphs(String weaponType) {
+        switch (weaponType) {
+            case "SWORD":
+                return new String[] {"o=", "|", "===>"};
+            case "AXE":
+                return new String[] {"o=", "===", "[==]"};
+            case "MACE":
+                return new String[] {"o=", "===", "[*]"};
+            case "DAGGER":
+                return new String[] {"o=", ":-", "==>"};
+            case "BOW":
+                return new String[] {")=", "==", "=>"};
+            case "STAFF":
+                return new String[] {"o=", "====", "Q"};
+            default:
+                return new String[] {"o=", "|", "=="};
         }
     }
 

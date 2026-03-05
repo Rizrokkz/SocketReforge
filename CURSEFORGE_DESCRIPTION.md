@@ -1,6 +1,7 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
+<p><strong>Latest update highlights:</strong> improved HyUI bench pages, OP-only admin/bench commands, 1-second process bars, refinement hammer support, and expanded T5 Void behavior.</p>
 
 <hr>
 
@@ -159,6 +160,7 @@
 </table>
 
 <p><em>*All rates are fully configurable via JSON config files!*</em></p>
+<p><em>*Refinement support:</em> <strong>Tool_Hammer_Iron</strong> can be used as optional support in the Reforge Bench to reduce break chance. It loses <strong>5% durability</strong> per process and is consumed at 0 durability.</p>
 
 <hr>
 
@@ -271,7 +273,7 @@
   <tr>
     <td>⚡ <strong>Lightning</strong></td>
     <td>Crackles with energy</td>
-    <td>Attack Speed, Crit Chance</td>
+    <td>Attack Speed, Crit Chance, Evasion (Armor)</td>
   </tr>
   <tr>
     <td>💚 <strong>Life</strong></td>
@@ -286,7 +288,7 @@
   <tr>
     <td>💧 <strong>Water</strong></td>
     <td>Flows with clarity</td>
-    <td>Evasion (Armor Only)</td>
+    <td>Damage (Weapon), Regeneration (Armor)</td>
   </tr>
 </table>
 
@@ -315,9 +317,9 @@
   </tr>
   <tr>
     <td><strong>Lightning</strong></td>
-    <td>+3% ATK Speed, +2% Crit</td>
-    <td>+7% ATK Speed, +4% Crit</td>
-    <td>+15% ATK Speed, +8% Crit</td>
+    <td>Weapon: +3% ATK Speed, +2% Crit<br>Armor: +1% Evasion</td>
+    <td>Weapon: +7% ATK Speed, +4% Crit<br>Armor: +3% Evasion</td>
+    <td>Weapon: +15% ATK Speed, +8% Crit<br>Armor: +5% Evasion</td>
   </tr>
   <tr>
     <td><strong>Life</strong> (Weapon)</td>
@@ -339,9 +341,9 @@
   </tr>
   <tr>
     <td><strong>Water</strong> (Armor)</td>
-    <td>+2% Evasion</td>
-    <td>+5% Evasion</td>
-    <td>+10% Evasion</td>
+    <td>+1 Regeneration</td>
+    <td>+3 Regeneration</td>
+    <td>+5 Regeneration</td>
   </tr>
 </table>
 
@@ -367,7 +369,9 @@
 
 <ul>
   <li><strong>Socket Essence:</strong> Place an essence into an empty socket at Essence Socket Bench to gain its effects</li>
-  <li><strong>Remove Essence:</strong> 70% success rate to remove, 30% chance the essence is destroyed</li>
+  <li><strong>Remove/Clear Essence:</strong> Use <strong>Tool_Hammer_Iron</strong> as support to clear socketed essences</li>
+  <li><strong>Clear Roll:</strong> On failure, durability is still reduced and a random socket can break</li>
+  <li><strong>Hammer Wear:</strong> Clearing uses 10% hammer durability per process and consumes the hammer at 0 durability</li>
   <li><strong>Repair Broken Sockets:</strong> Use Voidheart to repair broken sockets</li>
 </ul>
 
@@ -394,13 +398,13 @@
 
 <h3>Iron Building Hammer</h3>
 
-<p>Clear sockets from your equipment with the new <strong>Iron Building Hammer</strong>:</p>
+<p>Manage socketed essences from your equipment with <strong>Iron Building Hammer</strong>:</p>
 
 <ul>
-  <li>Removes all sockets from equipment</li>
+  <li>Clears socketed essences without deleting the socket layout</li>
   <li>Useful for re-configuring your build</li>
-  <li>Alternative to essence removal when you want to start fresh</li>
-  <li>Craftable at appropriate benches</li>
+  <li>Failure can break a random socket</li>
+  <li>Hammer durability is consumed on each clear process</li>
 </ul>
 
 <hr>
@@ -444,29 +448,25 @@
   </tr>
   <tr>
     <td><strong>Void</strong></td>
-    <td>+25% Crit Damage</td>
+    <td>+25% Crit Damage + Blood Pact (HP sacrifice adds bonus damage)</td>
     <td>+25% Crit Damage</td>
   </tr>
   <tr>
     <td><strong>Water</strong></td>
     <td>N/A (weapons)</td>
-    <td>+10% Evasion, +3 HP/sec Regen</td>
+    <td>Regeneration bonus (no Evasion)</td>
   </tr>
 </table>
+<p><em>Armor identity prefixes at Tier 5:</em> Fire armor uses <strong>Infernal</strong> prefix and Ice armor uses <strong>Glacial</strong> prefix.</p>
 
-<hr>
-
-<h2>📊 Weapon Stats UI</h2>
-
-<p>View your weapon's stats in a custom in-game UI panel showing:</p>
+<h2>🔐 Server Commands (OP Only)</h2>
 
 <ul>
-  <li>Current weapon name and upgrade level</li>
-  <li>Damage multiplier with progress bar</li>
-  <li>Next level damage preview</li>
-  <li>Reforge outcome probabilities</li>
-  <li>Socket information and socketed essences</li>
-  <li>Max level comparison</li>
+  <li><code>/socketpunch</code> — Open Socket Punch bench UI directly</li>
+  <li><code>/essence</code> — Open Essence Socket bench UI directly</li>
+  <li><code>/reforgeadmin refine &lt;0-3&gt;</code> — Set held item refinement level</li>
+  <li><code>/reforgeadmin sockets &lt;current&gt; [max]</code> — Set held item sockets</li>
+  <li><code>/reforgeadmin addmax &lt;amount&gt;</code> — Increase held item max sockets</li>
 </ul>
 
 <hr>
@@ -488,7 +488,7 @@
   <li>Maximum sockets for weapons and armor</li>
   <li>Socket punch success chances per socket count</li>
   <li>Socket punch break chances per socket count</li>
-  <li>Essence removal success/destroy chances</li>
+  <li>Essence clear/removal success chance behavior</li>
 </ul>
 
 <h3>SFXConfig.json</h3>
@@ -515,11 +515,6 @@
   </li>
 </ol>
 
-<div style="background: #1a1a2e; border-left: 4px solid #4ade80; padding: 12px 16px; margin: 16px 0;">
-  <strong style="color: #4ade80;">✨ No Patching Required!</strong><br>
-  <span style="color: #a0a0a0;">The mod uses metadata-based refinement. Weapons and armor work out of the box — no <code>/patchassets</code> command needed!</span>
-</div>
-
 <hr>
 
 <h2>✨ Features at a Glance</h2>
@@ -527,21 +522,21 @@
 <ul>
   <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
   <li><strong>3 upgrade tiers</strong> with unique names and star ratings for weapons and armor</li>
+  <li><strong>Reforge preview UI</strong> with split current-vs-expected columns and process progress bar</li>
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
   <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
-  <li><strong>Extended T5 effects</strong> — Fire on armor, Ice on weapons with enhanced bonuses</li>
+  <li><strong>Extended T5 effects</strong> — includes Void Blood Pact bonus-damage behavior and armor prefixes</li>
   <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
-  <li><strong>Iron Building Hammer</strong> — Tool for clearing sockets from equipment</li>
+  <li><strong>Iron Building Hammer support</strong> — used in both Essence and Reforge benches with durability wear</li>
   <li><strong>DynamicTooltips compatibility</strong> — socket and essence info displayed as in-game tooltips<br><em>(Requires <a href="https://www.curseforge.com/hytale/mods/dynamictooltipslib">DynamicTooltipsLib</a>)</em></li>
   <li><strong>HyUI Support</strong> — Optional enhanced UI when HyUI mod is installed</li>
+  <li><strong>HyUI fallback safety</strong> — bench interactions remain usable if HyUI is unavailable</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
-  <li><strong>Custom Stats UI</strong> with detailed upgrade information for weapons and armor</li>
+  <li><strong>Bench preview UIs</strong> with detailed refinement/socket outcome information</li>
   <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>
   <li><strong>Essence Socketing UI</strong> for managing socketed essences</li>
   <li><strong>Configurable sound effects</strong> for every reforge event</li>
-  <li><strong>Auto-save</strong> every 5 minutes with data persistence</li>
-  <li><strong>Item display sync</strong> across all players every 30 seconds</li>
   <li><strong>Smart item detection</strong> via item ID, categories, and structure checks</li>
   <li><strong>Metadata-based refinement</strong> — no item duplication or patching required</li>
   <li><strong>Fully configurable</strong> rates, weights, multipliers, and sounds via JSON</li>

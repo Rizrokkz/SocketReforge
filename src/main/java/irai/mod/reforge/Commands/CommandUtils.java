@@ -1,5 +1,7 @@
 package irai.mod.reforge.Commands;
 
+import java.util.Set;
+
 import javax.annotation.Nonnull;
 
 import com.google.gson.JsonObject;
@@ -8,6 +10,8 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.CommandSender;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.permissions.HytalePermissions;
+import com.hypixel.hytale.server.core.permissions.PermissionsModule;
 
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
@@ -19,6 +23,7 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 public class CommandUtils {
 
     private static final String WEAPON_ID_PATTERN = "Weapon";
+    private static final String OP_GROUP = "OP";
 
     /**
      * Gets the player from the command context.
@@ -240,6 +245,38 @@ public class CommandUtils {
         } catch (Exception e) {
             // Default max stack
             return 1;
+        }
+    }
+
+    /**
+     * Returns true if the player is OP (via group or op command permissions).
+     */
+    public static boolean isOperator(Player player) {
+        if (player == null) {
+            return false;
+        }
+        try {
+            PermissionsModule permissionsModule = PermissionsModule.get();
+            if (permissionsModule != null) {
+                Set<String> groups = permissionsModule.getGroupsForUser(player.getUuid());
+                if (groups != null) {
+                    for (String group : groups) {
+                        if (OP_GROUP.equalsIgnoreCase(group)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall back to explicit permission checks below.
+        }
+
+        try {
+            return player.hasPermission(HytalePermissions.fromCommand("op.add"))
+                    || player.hasPermission(HytalePermissions.fromCommand("op.remove"))
+                    || player.hasPermission(HytalePermissions.fromCommand("op.self"));
+        } catch (Exception ignored) {
+            return false;
         }
     }
 }

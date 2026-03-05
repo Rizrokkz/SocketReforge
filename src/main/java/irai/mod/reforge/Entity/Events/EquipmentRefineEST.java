@@ -2,7 +2,10 @@ package irai.mod.reforge.Entity.Events;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
+import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
@@ -15,17 +18,25 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
+import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
+import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
+import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.EssenceEffect;
+import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 
 
 @SuppressWarnings("removal")
 public class EquipmentRefineEST extends DamageEventSystem {
+    private static final String META_PARTS_DAMAGE_MULTIPLIER = "SocketReforge.Parts.DamageMultiplier";
+    private static final double VOID_T5_HP_SACRIFICE_RATE_PER_ESSENCE = 0.01d;
 
     // Refinement config - will be injected from plugin
     private RefinementConfig refinementConfig;
@@ -117,8 +128,30 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 double refinementMultiplier = getDamageMultiplier(clampedLevel);
                 double socketMultiplier = calculateSocketDamageBonus(weapon);
                 double socketFlat = calculateSocketFlatDamage(weapon);
+                double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
+                double partsMultiplier = getPartsDamageMultiplier(weapon);
+                int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
+                double critChancePercent = calculateSocketCritChancePercent(weapon);
+                double critDamagePercent = calculateSocketCritDamagePercent(weapon);
 
-                float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier) + socketFlat);
+                float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier * partsMultiplier) + socketFlat);
+                if (attackSpeedPercent > 0.0) {
+                    // Runtime fallback: convert attack speed bonus into effective DPS multiplier.
+                    newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
+                }
+
+                boolean isCrit = critChancePercent > 0.0
+                        && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent;
+                if (isCrit && critDamagePercent > 0.0) {
+                    newDamage = (float) (newDamage * (1.0 + (critDamagePercent / 100.0)));
+                }
+
+                int equippedVoidEssenceCount = countEquippedVoidEssences(attacker, weapon);
+                float bloodPactDamage = applyVoidTierFiveBloodPact(store, attackerRef, voidTier, equippedVoidEssenceCount);
+                if (bloodPactDamage > 0f) {
+                    newDamage += bloodPactDamage;
+                }
+
                 damage.setAmount(newDamage);
 
                 System.out.println("[SocketReforge][ATK_DMG] attacker=" + attacker.getUuid()
@@ -126,7 +159,15 @@ public class EquipmentRefineEST extends DamageEventSystem {
                         + " base=" + baseDamage
                         + " refineMult=" + refinementMultiplier
                         + " socketMult=" + socketMultiplier
+                        + " partsMult=" + partsMultiplier
                         + " socketFlat=" + socketFlat
+                        + " atkSpd=" + attackSpeedPercent
+                        + " critChance=" + critChancePercent
+                        + " critDamage=" + critDamagePercent
+                        + " critApplied=" + isCrit
+                        + " voidTier=" + voidTier
+                        + " voidEssences=" + equippedVoidEssenceCount
+                        + " bloodPact=" + bloodPactDamage
                         + " final=" + newDamage);
             }
         }
@@ -288,5 +329,160 @@ public class EquipmentRefineEST extends DamageEventSystem {
             bonuses = SocketManager.calculateTieredBonus(socketData, EssenceEffect.StatType.DAMAGE, true);
         }
         return bonuses[0];
+    }
+
+    /**
+     * Deterministic attack speed from Lightning tier.
+     * Tier scaling: +1% per tier (T1..T5 => 1..5%).
+     */
+    private double calculateSocketAttackSpeedPercent(ItemStack weapon) {
+        double[] stored = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.ATTACK_SPEED);
+        if (stored[1] > 0.0) {
+            return Math.max(0.0, Math.min(100.0, stored[1]));
+        }
+        int lightningTier = getEssenceTier(weapon, Essence.Type.LIGHTNING);
+        return Math.max(0.0, Math.min(100.0, lightningTier));
+    }
+
+    /**
+     * Deterministic crit chance from Lightning tier.
+     * Tier scaling: +1% per tier (T1..T5 => 1..5%).
+     */
+    private double calculateSocketCritChancePercent(ItemStack weapon) {
+        double[] stored = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.CRIT_CHANCE);
+        if (stored[1] > 0.0) {
+            return Math.max(0.0, Math.min(100.0, stored[1]));
+        }
+        int lightningTier = getEssenceTier(weapon, Essence.Type.LIGHTNING);
+        return Math.max(0.0, Math.min(100.0, lightningTier));
+    }
+
+    /**
+     * Deterministic crit damage from Void tier.
+     * Tier scaling: +5% per tier (T1..T5 => 5..25%).
+     */
+    private double calculateSocketCritDamagePercent(ItemStack weapon) {
+        int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
+        return Math.max(0.0, Math.min(25.0, voidTier * 5.0));
+    }
+
+    private int getEssenceTier(ItemStack weapon, Essence.Type type) {
+        if (weapon == null || weapon.isEmpty() || type == null) return 0;
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        if (socketData == null || socketData.getMaxSockets() == 0) return 0;
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(socketData);
+        Integer tier = tierMap.get(type);
+        if (tier == null) return 0;
+        return Math.max(0, Math.min(5, tier));
+    }
+
+    /**
+     * Void T5 blood pact:
+     * consumes 1% of attacker's max HP per equipped Void essence
+     * (weapon + equipped armor) and adds that amount to outgoing damage.
+     */
+    private float applyVoidTierFiveBloodPact(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             int voidTier,
+                                             int equippedVoidEssenceCount) {
+        if (voidTier < 5 || equippedVoidEssenceCount <= 0 || store == null || attackerRef == null) {
+            return 0f;
+        }
+        EntityStatMap statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        if (statMap == null) {
+            return 0f;
+        }
+
+        int healthStatIndex = getHealthStatIndex(statMap);
+        if (healthStatIndex < 0) {
+            return 0f;
+        }
+
+        EntityStatValue health = statMap.get(healthStatIndex);
+        if (health == null || health.get() <= 0f) {
+            return 0f;
+        }
+
+        float currentHealth = health.get();
+        float maxHealth = health.getMax();
+        if (maxHealth <= 0f) {
+            return 0f;
+        }
+        double hpCostRate = VOID_T5_HP_SACRIFICE_RATE_PER_ESSENCE * equippedVoidEssenceCount;
+        float hpCost = (float) (maxHealth * hpCostRate);
+        if (hpCost <= 0f) {
+            return 0f;
+        }
+
+        // All-or-nothing: do not scale down at low HP.
+        // Keep a tiny buffer to avoid immediate self-KO from this effect alone.
+        float maxSpendable = Math.max(0f, currentHealth - 0.1f);
+        if (hpCost > maxSpendable) {
+            return 0f;
+        }
+
+        statMap.addStatValue(healthStatIndex, -hpCost);
+        return hpCost;
+    }
+
+    private int countEquippedVoidEssences(Player attacker, ItemStack weapon) {
+        int total = countVoidEssences(weapon);
+        if (attacker == null) {
+            return total;
+        }
+        for (ItemStack armor : getAllEquippedArmor(attacker)) {
+            total += countVoidEssences(armor);
+        }
+        return total;
+    }
+
+    private int countVoidEssences(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return 0;
+        }
+        SocketData socketData = SocketManager.getSocketData(item);
+        if (socketData == null || socketData.getSockets().isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isBroken() || socket.isLocked()) {
+                continue;
+            }
+            String essenceId = socket.getEssenceId();
+            if (essenceId == null || essenceId.isBlank()) {
+                continue;
+            }
+            Essence essence = EssenceRegistry.get().getById(essenceId);
+            if (essence != null && essence.getType() == Essence.Type.VOID) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int getHealthStatIndex(EntityStatMap statMap) {
+        int byDefault = DefaultEntityStatTypes.getHealth();
+        if (byDefault >= 0) {
+            EntityStatValue value = statMap.get(byDefault);
+            if (value != null) return value.getIndex();
+        }
+        String[] aliases = {"health", "Health", "HP", "hp"};
+        for (String alias : aliases) {
+            EntityStatValue value = statMap.get(alias);
+            if (value != null) return value.getIndex();
+        }
+        return -1;
+    }
+
+    private double getPartsDamageMultiplier(ItemStack weapon) {
+        if (weapon == null || weapon.isEmpty()) {
+            return 1.0;
+        }
+        Double value = weapon.getFromMetadataOrNull(META_PARTS_DAMAGE_MULTIPLIER, Codec.DOUBLE);
+        if (value == null) {
+            return 1.0;
+        }
+        return Math.max(0.5, Math.min(2.0, value));
     }
 }

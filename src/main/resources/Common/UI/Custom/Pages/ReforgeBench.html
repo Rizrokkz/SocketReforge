@@ -1,0 +1,73 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Refinement Bench" style="anchor-width: 920; anchor-height: 760;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+            <h2 style="text-align:center;">Refinement Bench</h2>
+            <p style="text-align:center;">Refinement Globs in inventory: {{materialCountText}}</p>
+
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Equipment</p>
+            <select id="equipmentDropdown" data-hyui-showlabel="true">
+                {{equipmentOptions}}
+            </select>
+
+            <p style="font-weight:bold;">Refinement Material</p>
+            <select id="materialDropdown" data-hyui-showlabel="true">
+                {{materialOptions}}
+            </select>
+
+            <p style="font-weight:bold;">Support Material (Optional)</p>
+            <select id="supportDropdown" data-hyui-showlabel="true">
+                {{supportOptions}}
+            </select>
+
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <div style="layout-mode: Left; spacing: 14;">
+                <div style="flex-weight:1; layout-mode:Top; min-width:0;">
+                    <p style="font-weight:bold;">Selected Item Metadata</p>
+                    <div id="metadataLabel" style="layout-mode:Top;max-height:220px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">
+                        <p>Name : {{metadataNameText}}</p>
+                        <p>Refinement Level : {{metadataLevelText}}</p>
+                        <p>{{metadataCurrentStatText}}</p>
+                    </div>
+                </div>
+
+                <div style="flex-weight:1; layout-mode:Top; min-width:0;">
+                    <p style="font-weight:bold;">Expected Outcome Before Refinement</p>
+                    <div id="expectedStatsLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                        <p>Break : {{chanceBreakText}}</p>
+                        <p>Degrade : {{chanceDegradeText}}</p>
+                        <p>Same : {{chanceSameText}}</p>
+                        <p>Upgrade : {{chanceUpgradeText}}</p>
+                        <p>Jackpot : {{chanceJackpotText}}</p>
+                        <p>{{chanceNoteText}}</p>
+                    </div>
+
+                    <img src="divider.png" style="anchor-width: 440; anchor-height: 3;">
+                    <p style="font-weight:bold;">Expected Damage Outcome</p>
+                    <div id="expectedDamageLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                        <p>{{expectedDamageLine1Text}}</p>
+                        <p>{{expectedDamageLine2Text}}</p>
+                        <p>{{expectedDamageLine3Text}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-weight:bold;">Refine Progress</p>
+            <progress id="refineProgress"
+                      max="100"
+                      value="{{progressValue}}"
+                      data-hyui-bar-texture-path="boost_fill.png"
+                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+            </progress>
+            <p id="statusLabel">{{statusText}}</p>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-size:11px;">Consumes 3 Refinement Globs per attempt. Iron Hammer support reduces break chance and loses 5% durability each process.</p>
+            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>Refine Equipment</button>
+        </div>
+    </div>
+</div>

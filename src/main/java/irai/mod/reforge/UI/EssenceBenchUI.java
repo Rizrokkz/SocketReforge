@@ -64,6 +64,8 @@ public final class EssenceBenchUI {
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> processingPlayers = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private static final int PROCESS_DURATION_MS = 1000;
+    private static final int PROGRESS_TICK_MS = 50;
 
     private enum ContainerKind {
         HOTBAR,
@@ -327,9 +329,20 @@ public final class EssenceBenchUI {
 
                         processingPlayers.put(finalPlayer.getPlayerRef(), true);
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, "Processing in 1 second...", 25, true));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, "Processing...", 0, true));
                         sfxConfig.playReforgeStart(finalPlayer);
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+
+                        for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
+                            final int delay = elapsed;
+                            final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
+                            scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                                if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
+                                pendingSelections.put(finalPlayer.getPlayerRef(),
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, "Processing...", timedProgress, true));
+                                openWithSync(finalPlayer);
+                            }), delay, TimeUnit.MILLISECONDS);
+                        }
 
                         scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                             try {
@@ -340,7 +353,7 @@ public final class EssenceBenchUI {
                                 processingPlayers.remove(finalPlayer.getPlayerRef());
                                 openWithSync(finalPlayer);
                             }
-                        }), 1, TimeUnit.SECONDS);
+                        }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
                     });
 
             pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
@@ -360,6 +373,9 @@ public final class EssenceBenchUI {
         boolean processing = state != null && state.processing;
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
         String status = state != null && state.statusText != null ? state.statusText : "Idle";
+        if (!processing) {
+            progress = 0;
+        }
 
         Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
         if (!processing && "Idle".equals(status) && isFilled(selectedEquipment)) {

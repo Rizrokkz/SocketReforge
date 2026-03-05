@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.6] - 2026-03-04
+
+### Added
+
+- **OP-only Bench Commands**
+  - Added `/socketpunch` to open Socket Punch UI
+  - Added `/essence` to open Essence Socket UI
+  - Added `/reforgeadmin` (alias `/rfadmin`) for held-item admin edits:
+    - `/reforgeadmin refine <0-3>`
+    - `/reforgeadmin sockets <current> [max]`
+    - `/reforgeadmin addmax <amount>`
+  - Admin edits now refresh related socket/refinement tooltips after updates
+
+- **Reforge Bench HyUI Page**
+  - Added external HTML-driven Reforge bench page (`ReforgeBench.html`)
+  - Keeps compatibility with existing refinement logic and SFX pipeline
+
+### Changed
+
+- **Reforge Bench UI Layout**
+  - Refined preview data is now split into clearer sections/columns
+  - Key metadata is shown in dedicated lines (`Name`, `Refinement Level`, current stat line)
+  - Refinement chances are listed line-by-line
+  - Expected damage outcome text is split into separate lines for readability
+
+- **Process Bar/Timing Updates**
+  - Reforge process now uses a timed 1-second progress flow
+  - Reforge progress bar uses `boost_fill.png` with `boost_track.png` as track
+  - Process button is disabled during active processing
+
+- **Refinement Support Item**
+  - `Tool_Hammer_Iron` can be used as optional support material in refinement
+  - Hammer reduces break chance and loses 5% durability per refinement process
+  - Hammer is consumed when durability reaches zero
+
+### Fixed
+
+- **Socket/Essence Bench Behavior**
+  - Fixed `Ingredient_Voidheart` support detection in Essence bench UI dropdowns
+  - Fixed post-process tooltip refresh issues after socket/essence updates
+  - Fixed handling for broken sockets: repair-first flow now applies when required
+  - Essence socketing can proceed when there is at least one available non-broken socket
+  - Added hammer-based essence clearing failure behavior: durability still drops on fail and a random socket can break
+
+- **Effect/Combat Corrections**
+  - Updated Void essence crit-damage progression to tiered 5% intervals up to 25% at T5
+  - Added T5 Void Blood Pact behavior (HP sacrifice contributes to bonus damage)
+  - Added T5 armor name prefixes for essence states:
+    - Fire T5: `Infernal`
+    - Ice T5: `Glacial`
+  - Corrected several effect application paths (including lightning/defensive checks) in ECS handlers
+
+- **Logging**
+  - Removed noisy Reforge bench template-path info spam from server logs
+
+---
+
 ## [1.2.5] - 2026-03-01
 
 ### New Feature: HyUI Integration & Enhanced Socket System

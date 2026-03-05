@@ -28,6 +28,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 
@@ -110,6 +111,13 @@ public class ReforgeEquip extends SimpleInteraction {
         Player player = getPlayerFromContext(context);
         if (player == null) return;
         //yif (!isValidReforgebench(context)) {return ;}
+
+        // Prefer HyUI bench flow when available.
+        // Keeps legacy held-item flow as fallback.
+        if (ReforgeBenchUI.isAvailable()) {
+            ReforgeBenchUI.open(player);
+            return;
+        }
 
         ItemStack heldItem = context.getHeldItem();
         if (heldItem == null) return;

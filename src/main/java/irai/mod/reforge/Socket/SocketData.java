@@ -553,7 +553,11 @@ public class SocketData {
                 return "+" + safeTier + " HP";
             case VOID:
                 if (isWeapon) {
-                    return "+" + safeTier + "% Crit DMG";
+                    int critDmg = safeTier * 5;
+                    if (safeTier >= 5) {
+                        return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
+                    }
+                    return "+" + critDmg + "% Crit DMG";
                 } else {
                     // Armor: Defense
                     return "+" + safeTier + "% Defense";

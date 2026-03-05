@@ -61,7 +61,27 @@ public class SocketStatSystem extends EntityTickingSystem<EntityStore> {
     public static DefensiveBonuses getDefensiveBonuses(Player player) {
         if (player == null) return new DefensiveBonuses(0.0, 0.0, 0.0);
         UUID uuid = player.getUuid();
-        if (uuid == null) return new DefensiveBonuses(0.0, 0.0, 0.0);
-        return DEFENSIVE_CACHE.getOrDefault(uuid, new DefensiveBonuses(0.0, 0.0, 0.0));
+        if (uuid == null) {
+            return computeLiveDefensiveBonuses(player);
+        }
+
+        DefensiveBonuses cached = DEFENSIVE_CACHE.get(uuid);
+        if (cached != null) {
+            return cached;
+        }
+
+        // Fallback for first-hit / stale-cache scenarios:
+        // compute directly from equipped armor so defensive effects (especially evasion)
+        // still apply even before the ticking system refreshes this player.
+        DefensiveBonuses live = computeLiveDefensiveBonuses(player);
+        DEFENSIVE_CACHE.put(uuid, live);
+        return live;
+    }
+
+    private static DefensiveBonuses computeLiveDefensiveBonuses(Player player) {
+        double defense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.DEFENSE);
+        double fireDefense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.FIRE_DEFENSE);
+        double evasion = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.EVASION);
+        return new DefensiveBonuses(defense, fireDefense, evasion);
     }
 }

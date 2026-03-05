@@ -5,6 +5,11 @@ import org.bson.BsonDocument;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
+import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
+
 /**
  * Utility class for resolving item names from translation properties.
  * Provides standalone methods to get actual localized names from items.
@@ -14,6 +19,9 @@ public final class NameResolver {
     // Metadata keys for stored display names
     public static final String KEY_DISPLAY_NAME = "SocketReforge.Refinement.DisplayName";
     public static final String KEY_LEVEL = "SocketReforge.Refinement.Level";
+    private static final String BLOOD_PACT_PREFIX = "Blood Pact ";
+    private static final String FIRE_WARD_PREFIX = "Infernal ";
+    private static final String ICE_WARD_PREFIX = "Glacial ";
 
     private NameResolver() {} // Prevent instantiation
 
@@ -64,15 +72,15 @@ public final class NameResolver {
             
             // Append level if > 0
             if (level > 0) {
-                return localizedName + " +" + level;
+                return applySpecialPrefix(itemStack, localizedName + " +" + level);
             }
-            return localizedName;
+            return applySpecialPrefix(itemStack, localizedName);
         }
 
         // Get translation key from item
         Item item = itemStack.getItem();
         if (item == null || item == Item.UNKNOWN) {
-            return itemStack.getItemId();
+            return applySpecialPrefix(itemStack, itemStack.getItemId());
         }
 
         try {
@@ -81,16 +89,16 @@ public final class NameResolver {
                 // Resolve the translation key to get the actual localized name
                 String localizedName = resolveTranslationKey(translationKey);
                 if (localizedName != null && !localizedName.isEmpty()) {
-                    return localizedName;
+                    return applySpecialPrefix(itemStack, localizedName);
                 }
                 // Return translation key as fallback
-                return translationKey;
+                return applySpecialPrefix(itemStack, translationKey);
             }
         } catch (Exception e) {
             // Fall through to item ID fallback
         }
 
-        return itemStack.getItemId();
+        return applySpecialPrefix(itemStack, itemStack.getItemId());
     }
 
     /**
@@ -188,5 +196,123 @@ public final class NameResolver {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /**
+     * Applies any conditional name prefixes driven by item state.
+     */
+    private static String applySpecialPrefix(ItemStack itemStack, String resolvedName) {
+        String base = resolvedName == null ? "" : resolvedName;
+        if (itemStack == null || itemStack.isEmpty()) {
+            return base;
+        }
+
+        if (ReforgeEquip.isWeapon(itemStack)) {
+            if (base.startsWith(BLOOD_PACT_PREFIX)) {
+                return base;
+            }
+            if (hasBloodPactTierFive(itemStack)) {
+                return BLOOD_PACT_PREFIX + base;
+            }
+            return base;
+        }
+
+        if (ReforgeEquip.isArmor(itemStack)) {
+            boolean hasFireTierFive = hasArmorTierFive(itemStack, Essence.Type.FIRE);
+            boolean hasIceTierFive = hasArmorTierFive(itemStack, Essence.Type.ICE);
+
+            if (!hasFireTierFive && !hasIceTierFive) {
+                return base;
+            }
+
+            StringBuilder prefix = new StringBuilder();
+            if (hasFireTierFive && !base.startsWith(FIRE_WARD_PREFIX)) {
+                prefix.append(FIRE_WARD_PREFIX);
+            }
+            if (hasIceTierFive && !base.startsWith(ICE_WARD_PREFIX)) {
+                prefix.append(ICE_WARD_PREFIX);
+            }
+            if (prefix.isEmpty()) {
+                return base;
+            }
+            return prefix + base;
+        }
+
+        return base;
+    }
+
+    /**
+     * Blood Pact is active for weapons with VOID essence tier 5.
+     */
+    private static boolean hasBloodPactTierFive(ItemStack itemStack) {
+        if (itemStack == null || itemStack.isEmpty()) {
+            return false;
+        }
+        if (!ReforgeEquip.isWeapon(itemStack)) {
+            return false;
+        }
+
+        // Prefer persisted tier metadata first (works even when legacy items
+        // have effect metadata but incomplete socket layout metadata).
+        if (hasTierFiveFromMetadata(itemStack, Essence.Type.VOID)) {
+            return true;
+        }
+
+        SocketData socketData = SocketManager.getSocketData(itemStack);
+        if (socketData == null || socketData.getCurrentSocketCount() <= 0) {
+            return false;
+        }
+        Integer voidTier = SocketManager.calculateConsecutiveTiers(socketData).get(Essence.Type.VOID);
+        return voidTier != null && voidTier >= 5;
+    }
+
+    private static boolean hasArmorTierFive(ItemStack itemStack, Essence.Type type) {
+        if (itemStack == null || itemStack.isEmpty() || type == null) {
+            return false;
+        }
+        if (!ReforgeEquip.isArmor(itemStack)) {
+            return false;
+        }
+        if (hasTierFiveFromMetadata(itemStack, type)) {
+            return true;
+        }
+
+        SocketData socketData = SocketManager.getSocketData(itemStack);
+        if (socketData == null || socketData.getCurrentSocketCount() <= 0) {
+            return false;
+        }
+        Integer tier = SocketManager.calculateConsecutiveTiers(socketData).get(type);
+        return tier != null && tier >= 5;
+    }
+
+    private static boolean hasTierFiveFromMetadata(ItemStack itemStack, Essence.Type expectedType) {
+        if (itemStack == null || itemStack.isEmpty() || expectedType == null) {
+            return false;
+        }
+        try {
+            String[] effectTypes = SocketManager.getEssenceEffects(itemStack);
+            String[] effectTiers = SocketManager.getEssenceTiers(itemStack);
+            if (effectTypes == null || effectTiers == null) {
+                return false;
+            }
+            int count = Math.min(effectTypes.length, effectTiers.length);
+            for (int i = 0; i < count; i++) {
+                String type = effectTypes[i];
+                if (type == null || !expectedType.name().equalsIgnoreCase(type.trim())) {
+                    continue;
+                }
+                String tierRaw = effectTiers[i];
+                if (tierRaw == null) {
+                    continue;
+                }
+                int tier = Integer.parseInt(tierRaw.trim());
+                if (tier >= 5) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+            // Ignore malformed metadata and fall back to socket decoding.
+        }
+        return false;
     }
 }

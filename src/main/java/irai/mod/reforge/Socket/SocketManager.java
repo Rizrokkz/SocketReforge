@@ -242,8 +242,19 @@ public class SocketManager {
                     case ICE -> {
                         addFlat(totals, EssenceEffect.StatType.DAMAGE, tierValue);
                     }
+                    case LIFE -> {
+                        // Weapon LIFE essences provide lifesteal%.
+                        double[] life = EssenceRegistry.getTierEffect(type, tierValue, true);
+                        addPercent(totals, EssenceEffect.StatType.LIFE_STEAL, life[0]);
+                    }
+                    case LIGHTNING -> {
+                        // Weapon LIGHTNING provides attack speed% and crit chance%.
+                        // Tier scaling: +1% per tier (T1..T5 => 1..5%).
+                        addPercent(totals, EssenceEffect.StatType.ATTACK_SPEED, tierValue);
+                        addPercent(totals, EssenceEffect.StatType.CRIT_CHANCE, tierValue);
+                    }
                     default -> {
-                        // Other weapon stats are not yet consumed by runtime combat.
+                        // No persisted weapon stat metadata for this essence type.
                     }
                 }
             } else {
@@ -251,6 +262,7 @@ public class SocketManager {
                     case LIFE -> addFlat(totals, EssenceEffect.StatType.HEALTH, tierValue);
                     case WATER -> addFlat(totals, EssenceEffect.StatType.REGENERATION, tierValue);
                     case FIRE -> addPercent(totals, EssenceEffect.StatType.FIRE_DEFENSE, tierValue);
+                    case ICE -> addPercent(totals, EssenceEffect.StatType.MOVEMENT_SPEED, tierValue);
                     case LIGHTNING -> addPercent(totals, EssenceEffect.StatType.EVASION, tierValue);
                     case VOID -> addPercent(totals, EssenceEffect.StatType.DEFENSE, tierValue);
                     default -> {
@@ -552,7 +564,8 @@ public class SocketManager {
             if (socket.isEmpty() || socket.isBroken()) {
                 // Reset on empty/broken socket
                 if (currentType != null && consecutiveCount > 0) {
-                    tierMap.put(currentType, Math.min(consecutiveCount, 5));
+                    int previous = tierMap.getOrDefault(currentType, 0);
+                    tierMap.put(currentType, Math.max(previous, Math.min(consecutiveCount, 5)));
                 }
                 currentType = null;
                 consecutiveCount = 0;
@@ -570,7 +583,8 @@ public class SocketManager {
             } else {
                 // Save previous type if any
                 if (currentType != null && consecutiveCount > 0) {
-                    tierMap.put(currentType, Math.min(consecutiveCount, 5));
+                    int previous = tierMap.getOrDefault(currentType, 0);
+                    tierMap.put(currentType, Math.max(previous, Math.min(consecutiveCount, 5)));
                 }
                 currentType = essenceType;
                 consecutiveCount = 1;
@@ -579,7 +593,8 @@ public class SocketManager {
 
         // Don't forget the last sequence
         if (currentType != null && consecutiveCount > 0) {
-            tierMap.put(currentType, Math.min(consecutiveCount, 5));
+            int previous = tierMap.getOrDefault(currentType, 0);
+            tierMap.put(currentType, Math.max(previous, Math.min(consecutiveCount, 5)));
         }
 
         return tierMap;

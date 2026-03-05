@@ -1,0 +1,73 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Weapon Parts Bench" style="anchor-width: 920; anchor-height: 760;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+            <h2 style="text-align:center;">Weapon Parts Bench</h2>
+            <p style="text-align:center;">Equipment: <b>{{equipmentName}}</b></p>
+            <p style="text-align:center;">Detected type: <b>{{weaponType}}</b></p>
+
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p><b>Equipment</b></p>
+            <select id="equipmentDropdown" data-hyui-showlabel="true">
+                {{equipmentOptions}}
+            </select>
+
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p><b>Part Slots</b></p>
+            <div style="layout-mode: Left; spacing: 4;">
+                <div style="flex-weight:1;"></div>
+                <div style="anchor-width:186; layout-mode:Top; background-color:#171c2f; padding:3;">
+                    <div style="anchor-width:184; anchor-height:94; background-color:{{slot1Color}}; background-image:url(slot_bg.png); background-size:180 90; background-position:center; background-repeat:no-repeat; layout-mode:Left;">
+                        <div style="flex-weight:1;"></div>
+                        <img src="{{slot1Image}}" width="180" height="90">
+                        <div style="flex-weight:1;"></div>
+                    </div>
+                    <p style="font-size:11; text-align:center;"><b>{{slot1Label}}</b></p>
+                    <p style="font-size:14; text-align:center;"><b>{{slot1Tier}}</b></p>
+                </div>
+                <div style="anchor-width:186; layout-mode:Top; background-color:#171c2f; padding:3;">
+                    <div style="anchor-width:184; anchor-height:94; background-color:{{slot2Color}}; background-image:url(slot_bg.png); background-size:180 90; background-position:center; background-repeat:no-repeat; layout-mode:Left;">
+                        <div style="flex-weight:1;"></div>
+                        <img src="{{slot2Image}}" width="180" height="90">
+                        <div style="flex-weight:1;"></div>
+                    </div>
+                    <p style="font-size:11; text-align:center;"><b>{{slot2Label}}</b></p>
+                    <p style="font-size:14; text-align:center;"><b>{{slot2Tier}}</b></p>
+                </div>
+                <div style="anchor-width:186; layout-mode:Top; background-color:#171c2f; padding:3;">
+                    <div style="anchor-width:184; anchor-height:94; background-color:{{slot3Color}}; background-image:url(slot_bg.png); background-size:180 90; background-position:center; background-repeat:no-repeat; layout-mode:Left;">
+                        <div style="flex-weight:1;"></div>
+                        <img src="{{slot3Image}}" width="180" height="90">
+                        <div style="flex-weight:1;"></div>
+                    </div>
+                    <p style="font-size:11; text-align:center;"><b>{{slot3Label}}</b></p>
+                    <p style="font-size:14; text-align:center;"><b>{{slot3Tier}}</b></p>
+                </div>
+                <div style="flex-weight:1;"></div>
+            </div>
+
+            <p><b>{{slot1Label}}</b></p>
+            <select id="slot1Dropdown" data-hyui-showlabel="true">
+                {{slot1Options}}
+            </select>
+
+            <p><b>{{slot2Label}}</b></p>
+            <select id="slot2Dropdown" data-hyui-showlabel="true">
+                {{slot2Options}}
+            </select>
+
+            <p><b>{{slot3Label}}</b></p>
+            <select id="slot3Dropdown" data-hyui-showlabel="true">
+                {{slot3Options}}
+            </select>
+
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p id="statusLabel">{{statusText}}</p>
+            <p style="font-size:11px;">Consumes 1 material from each selected slot and applies parts metadata to selected equipment.</p>
+            <button id="applyPartsButton" style="width:100%;height:40px;">Apply Parts</button>
+        </div>
+    </div>
+</div>

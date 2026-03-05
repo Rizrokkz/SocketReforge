@@ -73,7 +73,8 @@ public class EssenceRegistry {
             new EssenceEffect(EssenceEffect.StatType.HEALTH, EssenceEffect.EffectType.FLAT, 1.0)
         )));
 
-        // VOID - T1: +1% Crit DMG, T3: +3% Crit DMG, T5: +5% Crit DMG
+        // VOID (Weapon): Crit Damage scales by tier in +5% steps
+        // T1:+5%, T2:+10%, T3:+15%, T4:+20%, T5:+25%
         register(new Essence("Essence_Void", Essence.Tier.T1, Essence.Type.VOID, List.of(
             new EssenceEffect(EssenceEffect.StatType.CRIT_DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 1.0),
             new EssenceEffect(EssenceEffect.StatType.DEFENSE, EssenceEffect.EffectType.PERCENTAGE, 1.0)
@@ -144,9 +145,7 @@ public class EssenceRegistry {
                     
                 case VOID:
                     // Void: Crit Damage % (Offensive)
-                    if (tier >= 5) return new double[]{ calcP.applyAsDouble(9.0, percentTier), 0.0 };
-                    if (tier >= 3) return new double[]{ calcP.applyAsDouble(5.0, percentFixed), 0.0 };
-                    return new double[]{ calcP.applyAsDouble(1.0, percentFixed), 0.0 };
+                    return new double[]{ Math.min(25.0, Math.max(1, tier) * 5.0), 0.0 };
                     
                 case WATER:
                     // Water: DAMAGE % or FLAT (Offensive)

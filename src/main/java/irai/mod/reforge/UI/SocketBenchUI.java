@@ -56,6 +56,8 @@ public class SocketBenchUI {
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> processingPlayers = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService processScheduler = Executors.newSingleThreadScheduledExecutor();
+    private static final int PROCESS_DURATION_MS = 1000;
+    private static final int PROGRESS_TICK_MS = 50;
 
     private enum ContainerKind {
         HOTBAR,
@@ -294,16 +296,29 @@ public class SocketBenchUI {
                                             keyOf(selectedEquipment),
                                             keyOf(selectedPuncher),
                                             keyOf(selectedSupport),
-                                            "Processing in 1 second...",
-                                            20,
+                                            "Processing...",
+                                            0,
                                             true));
-
-                            Object startCmd = finalUiCommandClass.getDeclaredConstructor().newInstance();
-                            safeSetInt(finalUiCommandClass, startCmd, "#socketProgress.value", 20);
-                            setMessage(finalUiCommandClass, startCmd, "#statusLabel", "Processing in 1 second...");
-                            sendUpdate(ctxObj, startCmd);
                             sfxConfig.playReforgeStart(finalPlayer);
                             finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+
+                            for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
+                                final int delay = elapsed;
+                                final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
+                                processScheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                                    if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
+                                    pendingSelections.put(
+                                            finalPlayer.getPlayerRef(),
+                                            new SelectionState(
+                                                    keyOf(selectedEquipment),
+                                                    keyOf(selectedPuncher),
+                                                    keyOf(selectedSupport),
+                                                    "Processing...",
+                                                    timedProgress,
+                                                    true));
+                                    openWithSync(finalPlayer);
+                                }), delay, TimeUnit.MILLISECONDS);
+                            }
 
                             processScheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                                 try {
@@ -325,7 +340,7 @@ public class SocketBenchUI {
                                     System.err.println("[SocketReforge] SocketBenchUI delayed process failed: " + ex.getMessage());
                                     ex.printStackTrace();
                                 }
-                            }), 1, TimeUnit.SECONDS);
+                            }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
                         } catch (Exception e) {
                             System.err.println("[SocketReforge] SocketBenchUI process failed: " + e.getMessage());
                             e.printStackTrace();
@@ -349,6 +364,9 @@ public class SocketBenchUI {
         String statusText = selectionState != null && selectionState.statusText != null ? selectionState.statusText : "Idle";
         int progressValue = selectionState != null ? Math.max(0, Math.min(100, selectionState.progressValue)) : 0;
         boolean isProcessing = selectionState != null && selectionState.processing;
+        if (!isProcessing) {
+            progressValue = 0;
+        }
         String equipmentOptions = buildEquipmentOptions(snapshot.equipments, selectedEquipmentKey);
         String puncherOptions = buildMaterialOptions(snapshot.punchers, "No Socket Puncher found", selectedPuncherKey);
         String supportOptions = buildSupportOptions(snapshot.supports, selectedSupportKey);
@@ -576,7 +594,7 @@ public class SocketBenchUI {
                     : (!isPunched ? "slot_bg.png" : (isFilled ? filledIconName : "socket_empty.png"));
 
             sb.append("<div style=\"").append(tileStyle).append("\">")
-                    .append("<img src=\"").append(icon).append("\" width=\"75\" height=\"75\"/>")
+                    .append("<img src=\"").append(icon).append("\" width=\"90\" height=\"90\"/>")
                     .append("</div>");
         }
         sb.append("<div style=\"flex-weight:1;\"></div></div>");
