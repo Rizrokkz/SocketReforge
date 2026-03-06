@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.9] - 2026-03-06
+
+### Hotfix
+
+- **Salvage Bench Metadata Compatibility**
+  - Fixed salvage processing for equipment that contains SocketReforge metadata.
+  - Fixed salvage processing for items with tooltip-related metadata overlays.
+  - Salvage input now sanitizes metadata in-place for recipe matching.
+  - Salvage recipe refresh now happens immediately after sanitize (no need to remove/re-add item).
+
+- **Metadata Safety on Cancel**
+  - Original item metadata is now restored when salvage is canceled and the item is taken back.
+  - Prevents permanent metadata loss when players change their mind before processing.
+
+- **Logging**
+  - Removed per-tick salvage compatibility debug spam from normal runtime logs.
+  - Kept one-time reflection failure diagnostics for troubleshooting.
+
+---
+
 ## [1.2.8] - 2026-03-05
 
 ### Added

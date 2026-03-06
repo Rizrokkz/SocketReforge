@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import irai.mod.reforge.Common.ItemTypeUtils;
+
 /**
  * Utility class for interacting with DynamicTooltipsLib.
  * Uses Provider-based approach for per-item metadata tooltips.
@@ -537,7 +539,7 @@ public class DynamicTooltipUtils {
         boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
         
         // If no supported metadata is present, return null
-        if (reforgeLevel <= 0 && socketMax <= 0 && partsWeaponType == null && !hasResonance) {
+        if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsWeaponType == null && !hasResonance) {
             return null;
         }
         
@@ -561,8 +563,8 @@ public class DynamicTooltipUtils {
         
         // Add reforge line if present
         if (reforgeLevel > 0) {
-            // Determine if it's armor or weapon based on base item ID
-            boolean isArmor = baseItemId != null && baseItemId.startsWith("Armor_");
+            // Determine if it's armor or weapon using metadata-first checks.
+            boolean isArmor = isArmorType(baseItemId, itemId);
             
             String upgradeName = isArmor ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
             double multiplier = isArmor ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
@@ -576,9 +578,9 @@ public class DynamicTooltipUtils {
         }
         
         // Add socket line if present
-        if (socketMax > 0) {
-            // Use Values array length as total socket count (not Max)
-            int actualSocketCount = socketFilled; // Now returns array length
+        if (socketMax > 0 || socketFilled > 0) {
+            // Prefer values-array length since it reflects the actual serialized slot count.
+            int actualSocketCount = socketFilled > 0 ? socketFilled : socketMax;
             
             // Parse each socket entry in order
             String[] socketEntries = new String[0];
@@ -600,15 +602,21 @@ public class DynamicTooltipUtils {
             }
             
             StringBuilder socketDisplay = new StringBuilder();
-            for (String entry : socketEntries) {
-                String trimmed = entry.trim().replace("\"", "");
-                if (trimmed.equals("x")) {
-                    socketDisplay.append(COLOR_RED + SOCKET_LOCKED);
-                } else if (!trimmed.isEmpty()) {
-                    // Apply color based on essence type
-                    socketDisplay.append(getEssenceTooltipColor(trimmed) + SOCKET_FILLED + "</color>");
-                } else {
-                    socketDisplay.append(COLOR_DARK_GRAY + SOCKET_EMPTY);
+            if (socketEntries.length == 0 && actualSocketCount > 0) {
+                for (int i = 0; i < actualSocketCount; i++) {
+                    socketDisplay.append(COLOR_DARK_GRAY).append(SOCKET_EMPTY);
+                }
+            } else {
+                for (String entry : socketEntries) {
+                    String trimmed = entry.trim().replace("\"", "");
+                    if (trimmed.equals("x")) {
+                        socketDisplay.append(COLOR_RED).append(SOCKET_LOCKED);
+                    } else if (!trimmed.isEmpty()) {
+                        // Apply color based on essence type
+                        socketDisplay.append(getEssenceTooltipColor(trimmed)).append(SOCKET_FILLED).append("</color>");
+                    } else {
+                        socketDisplay.append(COLOR_DARK_GRAY).append(SOCKET_EMPTY);
+                    }
                 }
             }
             String socketLine = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
@@ -771,42 +779,7 @@ public class DynamicTooltipUtils {
      * Extract socket max count from JSON metadata
      */
     private static int extractSocketMax(String metadata) {
-        if (metadata == null || metadata.isEmpty()) {
-            return 0;
-        }
-        
-        try {
-            String searchKey = "SocketReforge.Socket.Max";
-            int keyIndex = metadata.indexOf(searchKey);
-            if (keyIndex < 0) {
-                return 0;
-            }
-            
-            int colonIndex = metadata.indexOf(":", keyIndex);
-            if (colonIndex < 0) {
-                return 0;
-            }
-            
-            int numberStart = colonIndex + 1;
-            while (numberStart < metadata.length() && 
-                   (metadata.charAt(numberStart) == ' ' || metadata.charAt(numberStart) == '"')) {
-                numberStart++;
-            }
-            
-            int numberEnd = numberStart;
-            while (numberEnd < metadata.length() && 
-                   Character.isDigit(metadata.charAt(numberEnd))) {
-                numberEnd++;
-            }
-            
-            if (numberEnd > numberStart) {
-                return Integer.parseInt(metadata.substring(numberStart, numberEnd));
-            }
-        } catch (Exception e) {
-            // Ignore
-        }
-        
-        return 0;
+        return extractFirstIntegerNearKey(metadata, "SocketReforge.Socket.Max");
     }
     
     /**
@@ -842,6 +815,39 @@ public class DynamicTooltipUtils {
             // Ignore
         }
         
+        return 0;
+    }
+
+    /**
+     * Extracts the first positive integer near a metadata key.
+     * Works with both plain values and BSON extended JSON wrappers.
+     */
+    private static int extractFirstIntegerNearKey(String metadata, String key) {
+        if (metadata == null || metadata.isEmpty() || key == null || key.isEmpty()) {
+            return 0;
+        }
+        int keyIndex = metadata.indexOf(key);
+        if (keyIndex < 0) {
+            return 0;
+        }
+
+        int start = Math.min(metadata.length(), keyIndex + key.length());
+        int end = Math.min(metadata.length(), start + 96);
+        for (int i = start; i < end; i++) {
+            char c = metadata.charAt(i);
+            if (!Character.isDigit(c)) {
+                continue;
+            }
+            int numberEnd = i + 1;
+            while (numberEnd < end && Character.isDigit(metadata.charAt(numberEnd))) {
+                numberEnd++;
+            }
+            try {
+                return Integer.parseInt(metadata.substring(i, numberEnd));
+            } catch (Exception ignored) {
+                return 0;
+            }
+        }
         return 0;
     }
     
@@ -965,7 +971,7 @@ public class DynamicTooltipUtils {
         if (base == null || base.isBlank()) {
             base = itemId;
         }
-        if (base == null || !base.startsWith("Weapon_")) {
+        if (!ItemTypeUtils.isWeaponItemId(base)) {
             return false;
         }
 
@@ -998,8 +1004,7 @@ public class DynamicTooltipUtils {
      * Get effect description for an essence type and tier
      */
     private static String getEssenceEffectDescription(String effectType, int tier, String itemId, String metadata) {
-        // Determine if it's armor based on item ID
-        boolean isArmor = itemId != null && itemId.startsWith("Armor_");
+        boolean isArmor = ItemTypeUtils.isArmorItemId(itemId);
         int safeTier = Math.max(1, Math.min(5, tier));
 
         try {
@@ -1419,10 +1424,35 @@ public class DynamicTooltipUtils {
     }
     
     /**
-     * Legacy method - no longer used
+     * Triggers DynamicTooltipsLib to refresh tooltips for all connected players.
      */
     public static void refreshAllPlayers() {
-        // Provider approach handles this automatically
+        if (!isAvailable || tooltipApi == null) {
+            return;
+        }
+
+        try {
+            if (refreshAllPlayersMethod == null) {
+                refreshAllPlayersMethod = tooltipApi.getClass().getMethod("refreshAllPlayers");
+            }
+            refreshAllPlayersMethod.setAccessible(true);
+            refreshAllPlayersMethod.invoke(tooltipApi);
+        } catch (NoSuchMethodException e) {
+            if (debugMode) {
+                logger.warn("refreshAllPlayers method not found in loaded tooltip API");
+            }
+        } catch (Exception e) {
+            if (debugMode) {
+                logger.warn("Failed to refresh tooltips: " + e.getMessage());
+            }
+        }
+    }
+
+    private static boolean isArmorType(String baseItemId, String itemId) {
+        if (ItemTypeUtils.isArmorItemId(baseItemId)) {
+            return true;
+        }
+        return ItemTypeUtils.isArmorItemId(itemId);
     }
     
     /**

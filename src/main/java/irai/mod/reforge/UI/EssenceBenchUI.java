@@ -1,15 +1,10 @@
 package irai.mod.reforge.UI;
 
-import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -23,6 +18,10 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 
+import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
+import irai.mod.reforge.Common.UI.UIInventoryUtils;
+import irai.mod.reforge.Common.UI.UIItemUtils;
+import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
@@ -31,7 +30,6 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
-import irai.mod.reforge.Util.NameResolver;
 
 /**
  * HyUI essence socketing page, with reflection-based loading so plugin still works
@@ -141,15 +139,7 @@ public final class EssenceBenchUI {
     }
 
     public static void initialize() {
-        try {
-            Class.forName(HYUI_PAGE_BUILDER);
-            Class.forName(HYUI_PLUGIN);
-            hyuiAvailable = true;
-            System.out.println("[SocketReforge] EssenceBenchUI: HyUI loaded.");
-        } catch (ClassNotFoundException e) {
-            hyuiAvailable = false;
-            System.out.println("[SocketReforge] EssenceBenchUI: HyUI unavailable.");
-        }
+        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "EssenceBenchUI");
     }
 
     public static boolean isAvailable() {
@@ -197,10 +187,7 @@ public final class EssenceBenchUI {
             if (stack == null || stack.isEmpty()) continue;
             String itemId = stack.getItemId();
             if (itemId == null || itemId.isEmpty()) continue;
-            String name = NameResolver.getDisplayName(stack);
-            if (name == null || name.isEmpty() || "Unknown Item".equals(name)) {
-                name = itemId;
-            }
+            String name = UIItemUtils.displayNameOrItemId(stack);
             Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), name);
 
             if (ReforgeEquip.isWeapon(stack) || ReforgeEquip.isArmor(stack)) {
@@ -235,23 +222,12 @@ public final class EssenceBenchUI {
         if (itemId.toLowerCase(Locale.ROOT).contains("voidheart")) {
             return true;
         }
-        String normalized = normalizeItemId(itemId);
+        String normalized = UIItemUtils.normalizeItemId(itemId);
         return normalized.contains("voidheart") || normalized.endsWith("ingredientvoidheart");
     }
 
     private static boolean isHammerItem(String itemId) {
-        if (itemId == null || itemId.isEmpty()) {
-            return false;
-        }
-        if (HAMMER_ID.equalsIgnoreCase(itemId)) {
-            return true;
-        }
-        String normalized = normalizeItemId(itemId);
-        return normalized.contains("toolhammeriron") || normalized.contains("hammeriron");
-    }
-
-    private static String normalizeItemId(String itemId) {
-        return itemId == null ? "" : itemId.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        return UIItemUtils.isIronHammerItem(itemId, HAMMER_ID);
     }
 
     private static void openPage(Player player, Snapshot snapshot, SelectionState state) {
@@ -536,43 +512,11 @@ public final class EssenceBenchUI {
     }
 
     private static String resolveFilledSocketIconName() {
-        String[] candidates = {"socket_fille.png", "socket_filled.png"};
-        for (String candidate : candidates) {
-            try {
-                Path fs = Paths.get("src", "main", "resources", "Common", "UI", "Custom", candidate);
-                if (Files.exists(fs) && Files.isRegularFile(fs)) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-            try (InputStream in = EssenceBenchUI.class.getClassLoader().getResourceAsStream("Common/UI/Custom/" + candidate)) {
-                if (in != null) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "socket_empty.png";
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
     }
 
     private static String resolveBrokenSocketIconName() {
-        String[] candidates = {"socket_broken.png", "socket_Broken.png"};
-        for (String candidate : candidates) {
-            try {
-                Path fs = Paths.get("src", "main", "resources", "Common", "UI", "Custom", candidate);
-                if (Files.exists(fs) && Files.isRegularFile(fs)) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-            try (InputStream in = EssenceBenchUI.class.getClassLoader().getResourceAsStream("Common/UI/Custom/" + candidate)) {
-                if (in != null) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "socket_empty.png";
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
     }
 
     private static boolean isFilled(Entry equipment) {
@@ -728,67 +672,39 @@ public final class EssenceBenchUI {
 
     private static ItemStack equipmentItem(Entry equipment, Player player) {
         if (equipment == null) return null;
-        if (player == null) {
-            return null;
-        }
-        ItemContainer container = getContainer(player, equipment.kind);
-        return container == null ? null : container.getItemStack(equipment.slot);
+        return UIInventoryUtils.readItem(player, equipment.kind == ContainerKind.HOTBAR, equipment.slot);
     }
 
     private static void writeStack(Player player, Entry entry, ItemStack stack) {
-        ItemContainer container = getContainer(player, entry.kind);
-        if (container != null) {
-            container.setItemStackForSlot(entry.slot, stack);
-        }
+        UIInventoryUtils.writeItem(player, entry.kind == ContainerKind.HOTBAR, entry.slot, stack);
     }
 
     private static boolean consumeMaterial(Player player, Entry entry, int amount) {
         if (entry == null || amount <= 0) return false;
-        ItemContainer container = getContainer(player, entry.kind);
-        if (container == null) return false;
-        ItemStack current = container.getItemStack(entry.slot);
-        if (current == null || current.isEmpty()) return false;
-        if (!entry.itemId.equalsIgnoreCase(current.getItemId())) return false;
-        if (current.getQuantity() < amount) return false;
-        container.removeItemStackFromSlot(entry.slot, amount, false, false);
-        return true;
+        return UIInventoryUtils.consumeItem(player, entry.kind == ContainerKind.HOTBAR, entry.slot, entry.itemId, amount);
     }
 
     private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry) {
         if (player == null || hammerEntry == null || !isHammerItem(hammerEntry.itemId)) {
             return new HammerUseResult(false, false);
         }
-        ItemContainer container = getContainer(player, hammerEntry.kind);
+        ItemContainer container = UIInventoryUtils.getContainer(player, hammerEntry.kind == ContainerKind.HOTBAR);
         if (container == null) {
             return new HammerUseResult(false, false);
         }
-        ItemStack hammer = container.getItemStack(hammerEntry.slot);
-        if (hammer == null || hammer.isEmpty() || !isHammerItem(hammer.getItemId())) {
+        UIItemUtils.HammerWearResult wear = UIItemUtils.applyHammerWear(
+                container,
+                hammerEntry.slot,
+                0.10d,
+                itemId -> isHammerItem(itemId));
+        if (!wear.ok()) {
             return new HammerUseResult(false, false);
         }
-
-        double max = hammer.getMaxDurability();
-        double cur = hammer.getDurability();
-        if (max <= 0) {
-            // If durability is not available, consume one hammer use as fallback.
-            container.removeItemStackFromSlot(hammerEntry.slot, 1, false, false);
-            return new HammerUseResult(true, true);
-        }
-
-        double loss = Math.max(1.0, max * 0.10d);
-        double next = Math.max(0.0, cur - loss);
-        if (next <= 0.0) {
-            container.removeItemStackFromSlot(hammerEntry.slot, 1, false, false);
-            return new HammerUseResult(true, true);
-        }
-
-        container.setItemStackForSlot(hammerEntry.slot, hammer.withDurability(next));
-        return new HammerUseResult(true, false);
+        return new HammerUseResult(true, wear.consumed());
     }
 
     private static ItemContainer getContainer(Player player, ContainerKind kind) {
-        if (player == null || player.getInventory() == null) return null;
-        return kind == ContainerKind.HOTBAR ? player.getInventory().getHotbar() : player.getInventory().getStorage();
+        return UIInventoryUtils.getContainer(player, kind == ContainerKind.HOTBAR);
     }
 
     private static String buildSocketSummary(Entry equipment) {
@@ -842,27 +758,11 @@ public final class EssenceBenchUI {
     }
 
     private static String loadTemplate() {
-        String fileSystemPath = "src/main/resources/" + TEMPLATE_PATH;
-        try {
-            Path path = Paths.get(fileSystemPath);
-            if (Files.exists(path)) {
-                String html = Files.readString(path, StandardCharsets.UTF_8);
-                return html;
-            }
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] EssenceBenchUI failed to read filesystem template: " + e.getMessage());
-        }
-
-        try (InputStream in = EssenceBenchUI.class.getClassLoader().getResourceAsStream(TEMPLATE_PATH)) {
-            if (in != null) {
-                byte[] bytes = in.readAllBytes();
-                return new String(bytes, StandardCharsets.UTF_8);
-            }
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] EssenceBenchUI failed to read classpath template: " + e.getMessage());
-        }
-
-        return "<div><p>Essence Bench UI template missing.</p></div>";
+        return UITemplateUtils.loadTemplate(
+                EssenceBenchUI.class,
+                TEMPLATE_PATH,
+                "<div><p>Essence Bench UI template missing.</p></div>",
+                "EssenceBenchUI");
     }
 
     private static Entry findByKey(List<Entry> entries, String key) {
@@ -870,14 +770,7 @@ public final class EssenceBenchUI {
     }
 
     private static Entry resolveSelection(List<Entry> entries, String value) {
-        if (value == null || value.isEmpty()) return null;
-        try {
-            int idx = Integer.parseInt(value.trim());
-            if (idx < 0 || idx >= entries.size()) return null;
-            return entries.get(idx);
-        } catch (NumberFormatException ex) {
-            return null;
-        }
+        return HyUIReflectionUtils.resolveIndexSelection(entries, value);
     }
 
     private static String getEssenceTypeFromItem(String itemId) {
@@ -898,54 +791,22 @@ public final class EssenceBenchUI {
     }
 
     private static String extractEventValue(Object eventObj) {
-        if (eventObj == null) return null;
-        try {
-            Method getValue = eventObj.getClass().getMethod("getValue");
-            Object value = getValue.invoke(eventObj);
-            return value != null ? value.toString() : null;
-        } catch (Exception e) {
-            return eventObj.toString();
-        }
+        return HyUIReflectionUtils.extractEventValue(eventObj);
     }
 
     private static String getContextValue(Object ctxObj, String... keys) {
-        if (ctxObj == null || keys == null) return null;
-        for (String key : keys) {
-            try {
-                Method getValue = ctxObj.getClass().getMethod("getValue", String.class);
-                Object optObj = getValue.invoke(ctxObj, key);
-                if (!(optObj instanceof Optional<?> optional) || optional.isEmpty()) {
-                    continue;
-                }
-                Object value = optional.get();
-                if (value != null) return value.toString();
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
+        return HyUIReflectionUtils.getContextValue(ctxObj, keys);
     }
 
     private static Object getStore(PlayerRef playerRef) throws Exception {
-        Method getReference = playerRef.getClass().getMethod("getReference");
-        Object ref = getReference.invoke(playerRef);
-        Method getStore = ref.getClass().getMethod("getStore");
-        return getStore.invoke(ref);
+        return HyUIReflectionUtils.getStore(playerRef);
     }
 
     private static void closePageIfOpen(PlayerRef playerRef) {
-        Object page = openPages.remove(playerRef);
-        if (page == null) return;
-        try {
-            page.getClass().getMethod("close").invoke(page);
-        } catch (Exception ignored) {
-        }
+        HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
     }
 
     private static String escapeHtml(String text) {
-        if (text == null) return "";
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return UITemplateUtils.escapeHtml(text);
     }
 }

@@ -52,6 +52,18 @@ public class SocketConfig {
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.essenceRemovalDestroyChance = v[0]; },
                     cfg -> new double[]{ cfg.essenceRemovalDestroyChance }
             ).add()
+            // Bonus chance to add an extra socket when punching near cap
+            .append(
+                    new KeyedCodec<>("BONUS_SOCKET_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.bonusSocketChance = v[0]; },
+                    cfg -> new double[]{ cfg.bonusSocketChance }
+            ).add()
+            // Chance to reduce max sockets after a break event
+            .append(
+                    new KeyedCodec<>("MAX_REDUCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.maxReduceChance = v[0]; },
+                    cfg -> new double[]{ cfg.maxReduceChance }
+            ).add()
             .build();
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -120,4 +132,6 @@ public class SocketConfig {
     public void setPunchBreakChances(double[] v)          { punchBreakChances = v; }
     public void setEssenceRemovalSuccessChance(double v)  { essenceRemovalSuccessChance = v; }
     public void setEssenceRemovalDestroyChance(double v)  { essenceRemovalDestroyChance  = v; }
+    public void setBonusSocketChance(double v)            { bonusSocketChance = v; }
+    public void setMaxReduceChance(double v)              { maxReduceChance = v; }
 }

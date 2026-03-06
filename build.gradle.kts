@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "irai.mod.reforge"
-version = "1.2.8"
+version = "1.2.9"
 
 repositories {
     mavenCentral()
@@ -29,7 +29,8 @@ tasks.test {
 
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    destinationDirectory.set(file("F:\\XboxGames\\Hytale\\UserData\\Mods"))
+    // Output to local build directory first, then copy tasks handle distribution
+    destinationDirectory.set(file("build/libs"))
     // Auto-copy to server mods directory for mdevtools auto-reload
     finalizedBy("copyToServerMods")
     finalizedBy("copyServerResources")
@@ -37,9 +38,11 @@ tasks.jar {
 
 // Task to copy the built mod to the server mods directory
 tasks.register<Copy>("copyToServerMods") {
-    from(tasks.jar)
+    from(tasks.named<Jar>("jar").map { it.archiveFile })
     into(file("server/mods"))
     rename { "irai.mod.reforge_SocketReforge.jar" }
+    // Disable up-to-date check to ensure copy always happens
+    outputs.upToDateWhen { false }
     // Ensure this runs after compile tasks to avoid conflict with HyUI dependency
     mustRunAfter(tasks.compileJava)
     mustRunAfter(tasks.compileTestJava)

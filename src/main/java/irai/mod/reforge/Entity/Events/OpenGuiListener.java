@@ -3,6 +3,7 @@ package irai.mod.reforge.Entity.Events;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -23,6 +24,7 @@ public class OpenGuiListener {
 
     // Scheduler for delayed tooltip refresh
     private static final ScheduledExecutorService tooltipScheduler = Executors.newSingleThreadScheduledExecutor();
+    private static final AtomicBoolean refreshQueued = new AtomicBoolean(false);
 
     public static void openGui(PlayerReadyEvent event) {
         Player player = event.getPlayer();
@@ -63,13 +65,37 @@ public class OpenGuiListener {
         
         if (registeredCount > 0) {
             System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join, refreshing in 2 seconds...");
-            
-            // Add delay before refreshing players to ensure client is ready
-            tooltipScheduler.schedule(() -> {
+            scheduleRefresh(5, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * Scans a non-inventory container (e.g. open chest window) and triggers a debounced tooltip refresh.
+     */
+    public static void scanAndRegisterTooltipsForContainer(ItemContainer container) {
+        if (!DynamicTooltipUtils.isAvailable() || container == null) {
+            return;
+        }
+
+        int registeredCount = scanContainer(container);
+        if (registeredCount > 0) {
+            // Short delay helps ensure update-window packets are already in flight.
+            scheduleRefresh(300, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void scheduleRefresh(long delay, TimeUnit unit) {
+        if (!refreshQueued.compareAndSet(false, true)) {
+            return;
+        }
+        tooltipScheduler.schedule(() -> {
+            try {
                 DynamicTooltipUtils.refreshAllPlayers();
                 System.out.println("[SocketReforge] Tooltip refresh completed");
-            }, 5, TimeUnit.SECONDS);
-        }
+            } finally {
+                refreshQueued.set(false);
+            }
+        }, delay, unit);
     }
     
     /**

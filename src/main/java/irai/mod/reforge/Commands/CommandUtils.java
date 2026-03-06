@@ -1,7 +1,5 @@
 package irai.mod.reforge.Commands;
 
-import java.util.Set;
-
 import javax.annotation.Nonnull;
 
 import com.google.gson.JsonObject;
@@ -10,9 +8,10 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.CommandSender;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
-import com.hypixel.hytale.server.core.permissions.HytalePermissions;
-import com.hypixel.hytale.server.core.permissions.PermissionsModule;
 
+import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.PermissionUtils;
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
 /**
@@ -21,9 +20,6 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
  * Provides static methods for player validation, item retrieval, and weapon checking.
  */
 public class CommandUtils {
-
-    private static final String WEAPON_ID_PATTERN = "Weapon";
-    private static final String OP_GROUP = "OP";
 
     /**
      * Gets the player from the command context.
@@ -58,12 +54,7 @@ public class CommandUtils {
      * @return The selected ItemStack, or null if unable to get
      */
     public static ItemStack getSelectedItem(@Nonnull Player player) {
-        try {
-            short selectedSlot = player.getInventory().getActiveHotbarSlot();
-            return player.getInventory().getHotbar().getItemStack(selectedSlot);
-        } catch (Exception e) {
-            return null;
-        }
+        return PlayerInventoryUtils.getSelectedHotbarItem(player);
     }
 
     /**
@@ -103,11 +94,7 @@ public class CommandUtils {
      * @return true if it's a weapon, false otherwise
      */
     public static boolean isWeapon(ItemStack itemStack) {
-        if (itemStack == null) {
-            return false;
-        }
-        String itemId = itemStack.getItemId();
-        return itemId != null && itemId.contains(WEAPON_ID_PATTERN);
+        return ItemTypeUtils.isWeapon(itemStack);
     }
 
     /**
@@ -132,11 +119,7 @@ public class CommandUtils {
      * @return The slot number, or -1 if unable to get
      */
     public static short getSelectedSlot(Player player) {
-        try {
-            return player.getInventory().getActiveHotbarSlot();
-        } catch (Exception e) {
-            return -1;
-        }
+        return PlayerInventoryUtils.getSelectedHotbarSlot(player);
     }
 
     /**
@@ -252,31 +235,6 @@ public class CommandUtils {
      * Returns true if the player is OP (via group or op command permissions).
      */
     public static boolean isOperator(Player player) {
-        if (player == null) {
-            return false;
-        }
-        try {
-            PermissionsModule permissionsModule = PermissionsModule.get();
-            if (permissionsModule != null) {
-                Set<String> groups = permissionsModule.getGroupsForUser(player.getUuid());
-                if (groups != null) {
-                    for (String group : groups) {
-                        if (OP_GROUP.equalsIgnoreCase(group)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            // Fall back to explicit permission checks below.
-        }
-
-        try {
-            return player.hasPermission(HytalePermissions.fromCommand("op.add"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.remove"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.self"));
-        } catch (Exception ignored) {
-            return false;
-        }
+        return PermissionUtils.isOperator(player);
     }
 }

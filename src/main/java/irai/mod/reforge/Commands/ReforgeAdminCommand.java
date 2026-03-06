@@ -1,7 +1,6 @@
 package irai.mod.reforge.Commands;
 
 import java.util.Locale;
-import java.util.Set;
 
 import javax.annotation.Nonnull;
 
@@ -16,8 +15,8 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
-import com.hypixel.hytale.server.core.permissions.PermissionsModule;
 
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -32,8 +31,6 @@ import irai.mod.reforge.Util.NameResolver;
  * /reforgeadmin addmax <amount>
  */
 public class ReforgeAdminCommand extends CommandBase {
-    private static final String OP_GROUP = "OP";
-
     private final RequiredArg<String> actionArg;
     private final RequiredArg<Integer> valueArg;
     private final OptionalArg<Integer> maxArg;
@@ -54,7 +51,7 @@ public class ReforgeAdminCommand extends CommandBase {
         if (player == null) {
             return;
         }
-        if (!isOperator(player)) {
+        if (!CommandUtils.isOperator(player)) {
             context.sendMessage(Message.raw("OP only command."));
             return;
         }
@@ -173,37 +170,7 @@ public class ReforgeAdminCommand extends CommandBase {
     }
 
     private void setHeldItem(Player player, ItemStack itemStack) {
-        short slot = player.getInventory().getActiveHotbarSlot();
-        player.getInventory().getHotbar().setItemStackForSlot(slot, itemStack);
-    }
-
-    private boolean isOperator(Player player) {
-        if (player == null) {
-            return false;
-        }
-        try {
-            PermissionsModule permissionsModule = PermissionsModule.get();
-            if (permissionsModule != null) {
-                Set<String> groups = permissionsModule.getGroupsForUser(player.getUuid());
-                if (groups != null) {
-                    for (String group : groups) {
-                        if (OP_GROUP.equalsIgnoreCase(group)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-            // Fall back to explicit permission checks below.
-        }
-
-        try {
-            return player.hasPermission(HytalePermissions.fromCommand("op.add"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.remove"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.self"));
-        } catch (Exception ignored) {
-            return false;
-        }
+        PlayerInventoryUtils.setSelectedHotbarItem(player, itemStack);
     }
 
     private void sendUsage(CommandContext context) {

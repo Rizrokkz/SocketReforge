@@ -21,9 +21,12 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
+import irai.mod.reforge.Common.UI.UIInventoryUtils;
+import irai.mod.reforge.Common.UI.UIItemUtils;
+import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
-import irai.mod.reforge.Util.NameResolver;
 
 public final class WeaponPartsUI {
     private WeaponPartsUI() {}
@@ -101,15 +104,7 @@ public final class WeaponPartsUI {
     }
 
     public static void initialize() {
-        try {
-            Class.forName(HYUI_PAGE_BUILDER);
-            Class.forName(HYUI_PLUGIN);
-            hyuiAvailable = true;
-            System.out.println("[SocketReforge] WeaponPartsUI: HyUI loaded.");
-        } catch (ClassNotFoundException e) {
-            hyuiAvailable = false;
-            System.out.println("[SocketReforge] WeaponPartsUI: HyUI unavailable.");
-        }
+        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "WeaponPartsUI");
     }
 
     public static void open(Player player) {
@@ -149,8 +144,7 @@ public final class WeaponPartsUI {
             if (s == null || s.isEmpty()) continue;
             String id = s.getItemId();
             if (id == null || id.isBlank()) continue;
-            String name = NameResolver.getDisplayName(s);
-            if (name == null || name.isBlank() || "Unknown Item".equals(name)) name = id;
+            String name = UIItemUtils.displayNameOrItemId(s);
             if (ReforgeEquip.isWeapon(s)) {
                 String p1 = s.getFromMetadataOrNull(META_PART1_ID, Codec.STRING);
                 String p2 = s.getFromMetadataOrNull(META_PART2_ID, Codec.STRING);
@@ -445,73 +439,42 @@ public final class WeaponPartsUI {
         return null;
     }
 
-    private static ItemContainer container(Player p, ContainerKind kind) { return kind == ContainerKind.HOTBAR ? p.getInventory().getHotbar() : p.getInventory().getStorage(); }
+    private static ItemContainer container(Player p, ContainerKind kind) {
+        return UIInventoryUtils.getContainer(p, kind == ContainerKind.HOTBAR);
+    }
 
     private static ItemStack readWeapon(Player p, EquipmentEntry eq) {
-        ItemContainer c = container(p, eq.container);
-        return c == null ? null : c.getItemStack(eq.slot);
+        return UIInventoryUtils.readItem(p, eq.container == ContainerKind.HOTBAR, eq.slot);
     }
 
     private static void writeWeapon(Player p, EquipmentEntry eq, ItemStack s) {
-        ItemContainer c = container(p, eq.container);
-        if (c != null) c.setItemStackForSlot(eq.slot, s);
+        UIInventoryUtils.writeItem(p, eq.container == ContainerKind.HOTBAR, eq.slot, s);
     }
 
     private static boolean hasMaterial(Player p, MaterialEntry m, int amount) {
-        ItemContainer c = container(p, m.container);
-        if (c == null) return false;
-        ItemStack s = c.getItemStack(m.slot);
-        if (s == null || s.isEmpty()) return false;
-        if (!m.itemId.equalsIgnoreCase(s.getItemId())) return false;
-        return s.getQuantity() >= amount;
+        return UIInventoryUtils.hasItemAmount(p, m.container == ContainerKind.HOTBAR, m.slot, m.itemId, amount);
     }
 
     private static boolean consume(Player p, MaterialEntry m, int amount) {
-        ItemContainer c = container(p, m.container);
-        if (c == null) return false;
-        ItemStack s = c.getItemStack(m.slot);
-        if (s == null || s.isEmpty() || s.getQuantity() < amount) return false;
-        if (!m.itemId.equalsIgnoreCase(s.getItemId())) return false;
-        c.removeItemStackFromSlot(m.slot, amount, false, false);
-        return true;
+        return UIInventoryUtils.consumeItem(p, m.container == ContainerKind.HOTBAR, m.slot, m.itemId, amount);
     }
 
     private static String loadTemplate() {
-        try {
-            Path path = Paths.get("src/main/resources/" + TEMPLATE_PATH);
-            if (Files.exists(path)) return Files.readString(path, StandardCharsets.UTF_8);
-        } catch (Exception ignored) {}
-        try (InputStream in = WeaponPartsUI.class.getClassLoader().getResourceAsStream(TEMPLATE_PATH)) {
-            if (in != null) return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {}
-        return "<div><p>Weapon parts UI template missing.</p></div>";
+        return UITemplateUtils.loadTemplate(
+                WeaponPartsUI.class,
+                TEMPLATE_PATH,
+                "<div><p>Weapon parts UI template missing.</p></div>",
+                "WeaponPartsUI");
     }
 
     private static String extractEventValue(Object eventObj) {
-        if (eventObj == null) return null;
-        try {
-            Method m = eventObj.getClass().getMethod("getValue");
-            Object v = m.invoke(eventObj);
-            return v == null ? null : v.toString();
-        } catch (Exception e) {
-            return eventObj.toString();
-        }
+        return HyUIReflectionUtils.extractEventValue(eventObj);
     }
 
     private static String getCtx(Object ctxObj, String id) { return getContextValue(ctxObj, id, "#" + id + ".value"); }
 
     private static String getContextValue(Object ctxObj, String... keys) {
-        if (ctxObj == null || keys == null) return null;
-        for (String key : keys) {
-            try {
-                Method m = ctxObj.getClass().getMethod("getValue", String.class);
-                Object opt = m.invoke(ctxObj, key);
-                if (!(opt instanceof Optional<?> o) || o.isEmpty()) continue;
-                Object v = o.get();
-                if (v != null) return v.toString();
-            } catch (Exception ignored) {}
-        }
-        return null;
+        return HyUIReflectionUtils.getContextValue(ctxObj, keys);
     }
 
     private static String pickValue(String preferred, String fallback, String defaultValue) {
@@ -524,20 +487,14 @@ public final class WeaponPartsUI {
     private static String materialKeyOf(MaterialEntry e) { return e == null ? null : e.container + "|" + e.slot + "|" + e.itemId; }
 
     private static Object getStore(PlayerRef ref) throws Exception {
-        Method getReference = ref.getClass().getMethod("getReference");
-        Object r = getReference.invoke(ref);
-        Method getStore = r.getClass().getMethod("getStore");
-        return getStore.invoke(r);
+        return HyUIReflectionUtils.getStore(ref);
     }
 
     private static void closePageIfOpen(PlayerRef ref) {
-        Object page = openPages.remove(ref);
-        if (page == null) return;
-        try { page.getClass().getMethod("close").invoke(page); } catch (Exception ignored) {}
+        HyUIReflectionUtils.closePageIfOpen(openPages, ref);
     }
 
     private static String esc(String t) {
-        if (t == null) return "";
-        return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+        return UITemplateUtils.escapeHtml(t);
     }
 }

@@ -33,6 +33,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
@@ -144,7 +145,7 @@ public class SocketEffectEST extends DamageEventSystem {
                 ItemStack weapon = findWeaponInHotbar(attacker);
                 if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
                     attackerWeapon = weapon;
-                    attackerResonanceType = parseResonanceType(SocketManager.getResonanceType(weapon));
+                    attackerResonanceType = resolveResonanceType(weapon);
                     // NOTE: attacker damage (refine + sockets) is applied in EquipmentRefineEST
                     // to avoid multi-system write races on Damage amount.
                 }
@@ -242,6 +243,28 @@ public class SocketEffectEST extends DamageEventSystem {
         } catch (IllegalArgumentException ignored) {
             return ResonanceSystem.ResonanceType.NONE;
         }
+    }
+
+    /**
+     * Resolves resonance from live socket layout first, then falls back to stored metadata.
+     * This keeps ECS behavior resilient when legacy items are missing resonance metadata.
+     */
+    private ResonanceSystem.ResonanceType resolveResonanceType(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return ResonanceSystem.ResonanceType.NONE;
+        }
+        try {
+            SocketData socketData = SocketManager.getSocketData(item);
+            if (socketData != null) {
+                ResonanceSystem.ResonanceResult result = ResonanceSystem.evaluate(item, socketData);
+                if (result != null && result.active() && result.type() != null) {
+                    return result.type();
+                }
+            }
+        } catch (Throwable ignored) {
+            // Fall through to metadata-based resolution.
+        }
+        return parseResonanceType(SocketManager.getResonanceType(item));
     }
 
     private void applyWeaponResonanceOnHit(Store<EntityStore> store,
@@ -494,7 +517,7 @@ public class SocketEffectEST extends DamageEventSystem {
             return false;
         }
         for (ItemStack armor : armorPieces) {
-            ResonanceSystem.ResonanceType found = parseResonanceType(SocketManager.getResonanceType(armor));
+            ResonanceSystem.ResonanceType found = resolveResonanceType(armor);
             if (found == expected) {
                 return true;
             }
@@ -1215,51 +1238,13 @@ public class SocketEffectEST extends DamageEventSystem {
      * Looks in the player's hotbar for the currently held weapon.
      */
     private ItemStack findWeaponInHotbar(Player player) {
-        try {
-            ItemContainer hotbar = player.getInventory().getHotbar();
-            short selectedSlot = player.getInventory().getActiveHotbarSlot();
-            ItemStack selectedItem = hotbar.getItemStack(selectedSlot);
-
-            if (selectedItem != null && !selectedItem.isEmpty() && ReforgeEquip.isWeapon(selectedItem)) {
-                return selectedItem;
-            }
-
-            // Fallback: search entire hotbar
-            for (short slot = 0; slot < hotbar.getCapacity(); slot++) {
-                ItemStack stack = hotbar.getItemStack(slot);
-                if (stack != null && !stack.isEmpty() && ReforgeEquip.isWeapon(stack)) {
-                    return stack;
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("[SocketEffectEST] Error finding weapon: " + e.getMessage());
-        }
-
-        return null;
+        return PlayerInventoryUtils.findFirstInHotbar(player, ReforgeEquip::isWeapon);
     }
 
     /**
      * Gets all equipped armor pieces from the player.
      */
     private List<ItemStack> getAllEquippedArmor(Player player) {
-        ArrayList<ItemStack> armorPieces = new ArrayList<>();
-
-        try {
-            // Check armor container
-            ItemContainer armorContainer = player.getInventory().getArmor();
-            if (armorContainer != null) {
-                for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
-                    ItemStack stack = armorContainer.getItemStack(slot);
-                    if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
-                        armorPieces.add(stack);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("[SocketEffectEST] Error getting armor: " + e.getMessage());
-        }
-
-        return armorPieces;
+        return PlayerInventoryUtils.getEquippedArmor(player, ReforgeEquip::isArmor);
     }
 }

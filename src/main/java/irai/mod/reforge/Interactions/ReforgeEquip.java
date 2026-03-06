@@ -1,7 +1,6 @@
 package irai.mod.reforge.Interactions;
 
 import java.io.File;
-import java.util.regex.Pattern;
 
 import org.bson.BsonDocument;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
@@ -13,7 +12,6 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.BlockPosition;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -26,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Common.ItemTypeUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.UI.ReforgeBenchUI;
@@ -55,9 +54,6 @@ public class ReforgeEquip extends SimpleInteraction {
             0.050,  // 1 → 2: 15% break chance
             0.075,  // 2 → 3: 20% break chance
     };
-
-    private static final Pattern WEAPON_PATTERN = Pattern.compile("^(?!.*Arrow).*[Ww]eapon.*$");
-    private static final Pattern ARMOR_PATTERN  = Pattern.compile("^.*[Aa]rmor.*$");
 
     // Static cache for item category/structure checks to avoid repeated reflection
     private static final java.util.Map<String, Boolean> weaponCheckCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -473,62 +469,12 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     /**
-     * Checks if an item ID belongs to a weapon.
-     * Arrows are always excluded from refinement.
-     */
-    private boolean isWeapon(String itemId) {
-        if (itemId == null) return false;
-        if (itemId.contains("Arrow") || itemId.toLowerCase().contains("arrow")) return false;
-        if (itemId.toLowerCase().startsWith("weapon_")) return true;
-        return false;
-    }
-
-    /**
      * Checks if an ItemStack is a weapon using proper category checks.
      * This method checks if the item has a weapon configuration.
      * Excludes arrows, projectiles, bombs, deployables, and other non-weapon items.
      */
     public static boolean isWeapon(ItemStack itemStack) {
-        if (itemStack == null || itemStack.isEmpty()) return false;
-        
-        String itemId = itemStack.getItemId();
-        Item item = itemStack.getItem();
-        if (item == null || item == Item.UNKNOWN) return false;
-        
-        // Check getWeapon() - returns non-null for weapons
-        Object weapon = item.getWeapon();
-        
-        // If getWeapon() returns non-null, apply arrow filters
-        if (weapon != null) {
-            if (itemId != null) {
-                String itemIdLower = itemId.toLowerCase();
-                // Exclude arrows and projectiles (whole word check)
-                if (itemIdLower.contains("arrow") || itemIdLower.contains("bolt") || 
-                    itemIdLower.contains("projectile") || itemIdLower.contains("ammo") ||
-                    itemIdLower.contains("ammunition")) {
-                    return false;
-                }
-                // Exclude bombs and explosives - use word boundaries
-                if (itemIdLower.contains("_bomb") || itemIdLower.contains("bomb_") ||
-                    itemIdLower.contains("_tnt") || itemIdLower.contains("tnt_") ||
-                    itemIdLower.contains("_dynamite") || itemIdLower.contains("dynamite_") ||
-                    itemIdLower.contains("explosive") || itemIdLower.contains("_mine")) {
-                    return false;
-                }
-                // Exclude deployables and placeables
-                if (itemIdLower.contains("deployable") || itemIdLower.contains("placeable") ||
-                    itemIdLower.contains("turret") || itemIdLower.contains("trap") ||
-                    itemIdLower.contains("totem") || itemIdLower.contains("banner") ||
-                    itemIdLower.contains("flag") || itemIdLower.contains("ward")) {
-                    return false;
-                }
-            }
-            // getWeapon() is non-null and item passed filters
-            return true;
-        }
-        
-        // getWeapon() returned null - pass through to other checks (armor, category, etc.)
-        return false;
+        return ItemTypeUtils.isWeapon(itemStack);
     }
 
     /**
@@ -536,15 +482,7 @@ public class ReforgeEquip extends SimpleInteraction {
      * This method checks if the item has an armor configuration.
      */
     public static boolean isArmor(ItemStack itemStack) {
-        if (itemStack == null || itemStack.isEmpty()) return false;
-        Item item = itemStack.getItem();
-        if (item == null || item == Item.UNKNOWN) return false;
-        
-        // Check getArmor() first
-        if (item.getArmor() != null) return true;
-        
-        // Fallback: check category metadata (handles modded items)
-        return hasArmorCategory(itemStack);
+        return ItemTypeUtils.isArmor(itemStack);
     }
 
     /**
@@ -807,6 +745,7 @@ public class ReforgeEquip extends SimpleInteraction {
         weaponCheckCache.clear();
         armorCheckCache.clear();
         cacheTimestamps.clear();
+        ItemTypeUtils.clearCaches();
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -1120,7 +1059,7 @@ public class ReforgeEquip extends SimpleInteraction {
         if (level <= 0) return;
         
         String itemId = item.getItemId();
-        boolean isArmor = itemId != null && ARMOR_PATTERN.matcher(itemId).matches();
+        boolean isArmor = ItemTypeUtils.isArmor(item);
         
         // Use utility class for DynamicTooltipsLib integration
         if (!DynamicTooltipUtils.isAvailable()) {

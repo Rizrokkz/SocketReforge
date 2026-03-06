@@ -1,12 +1,11 @@
 package irai.mod.reforge.Entity.Events;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
-import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketManager;
@@ -36,19 +35,7 @@ public final class SocketArmorBonusHelper {
     private static final double SLOW_CAP = 30.0;
 
     public static List<ItemStack> getEquippedArmor(Player player) {
-        List<ItemStack> armorPieces = new ArrayList<>();
-        if (player == null || player.getInventory() == null) return armorPieces;
-
-        ItemContainer armorContainer = player.getInventory().getArmor();
-        if (armorContainer == null) return armorPieces;
-
-        for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
-            ItemStack stack = armorContainer.getItemStack(slot);
-            if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
-                armorPieces.add(stack);
-            }
-        }
-        return armorPieces;
+        return PlayerInventoryUtils.getEquippedArmor(player, ReforgeEquip::isArmor);
     }
 
     public static double getScaledFlatBonus(Player player, EssenceEffect.StatType stat) {

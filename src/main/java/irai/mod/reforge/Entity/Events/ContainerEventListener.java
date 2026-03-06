@@ -4,6 +4,7 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
 @SuppressWarnings("removal")
@@ -55,9 +56,11 @@ public class ContainerEventListener {
     public static boolean hasUpgradedWeapons(Player player) {
         if (player == null) return false;
 
-        short currentSlot = player.getInventory().getActiveHotbarSlot();
-        ItemStack currentItem = player.getInventory().getHotbar().getItemStack(currentSlot);
-        return currentItem != null && ReforgeEquip.getUpgradeLevel(player, currentItem, currentSlot) > 0;
+        short currentSlot = PlayerInventoryUtils.getSelectedHotbarSlot(player);
+        ItemStack currentItem = PlayerInventoryUtils.getSelectedHotbarItem(player);
+        return currentSlot >= 0
+                && currentItem != null
+                && ReforgeEquip.getUpgradeLevel(player, currentItem, currentSlot) > 0;
     }
 
     /**
@@ -86,7 +89,8 @@ public class ContainerEventListener {
         if (player == null || item == null) return;
         if (!isReforgeable(item)) return;
 
-        short slot = player.getInventory().getActiveHotbarSlot();
+        short slot = PlayerInventoryUtils.getSelectedHotbarSlot(player);
+        if (slot < 0) return;
         int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
 
         if (level > 0 && false) { // Set to true for debug

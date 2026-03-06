@@ -1,6 +1,5 @@
 package irai.mod.reforge.Entity.Events;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -14,7 +13,6 @@ import com.hypixel.hytale.component.SystemGroup;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
-import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
@@ -24,6 +22,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -200,30 +199,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
      * Looks in the player's hotbar for the currently held weapon.
      */
     private ItemStack findWeaponInHotbar(Player player) {
-        try {
-            ItemContainer hotbar = player.getInventory().getHotbar();
-
-            // Try to get currently selected slot first
-            short selectedSlot = player.getInventory().getActiveHotbarSlot();
-            ItemStack selectedItem = hotbar.getItemStack(selectedSlot);
-
-            if (selectedItem != null && !selectedItem.isEmpty() && ReforgeEquip.isWeapon(selectedItem)) {
-                return selectedItem;
-            }
-
-            // Fallback: search entire hotbar
-            for (short slot = 0; slot < hotbar.getCapacity(); slot++) {
-                ItemStack stack = hotbar.getItemStack(slot);
-                if (stack != null && !stack.isEmpty() && ReforgeEquip.isWeapon(stack)) {
-                    return stack;
-                }
-            }
-
-        } catch (Exception e) {
-            System.err.println("[EquipmentRefineEST] Error finding weapon: " + e.getMessage());
-        }
-
-        return null;
+        return PlayerInventoryUtils.findFirstInHotbar(player, ReforgeEquip::isWeapon);
     }
 
     /**
@@ -232,24 +208,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
      * Returns a list of armor ItemStacks.
      */
     private List<ItemStack> getAllEquippedArmor(Player player) {
-        List<ItemStack> armorPieces = new ArrayList<>();
-
-        try {
-            // Only check player's armor equipment slots (helmet, chestplate, leggings, boots)
-            ItemContainer armorContainer = player.getInventory().getArmor();
-            if (armorContainer != null) {
-                for (short slot = 0; slot < armorContainer.getCapacity(); slot++) {
-                    ItemStack stack = armorContainer.getItemStack(slot);
-                    if (stack != null && !stack.isEmpty() && ReforgeEquip.isArmor(stack)) {
-                        armorPieces.add(stack);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("[EquipmentRefineEST] Error getting equipped armor: " + e.getMessage());
-        }
-
-        return armorPieces;
+        return PlayerInventoryUtils.getEquippedArmor(player, ReforgeEquip::isArmor);
     }
 
     /**

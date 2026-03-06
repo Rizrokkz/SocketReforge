@@ -1,14 +1,9 @@
 package irai.mod.reforge.UI;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -24,6 +19,10 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
+import irai.mod.reforge.Common.UI.UIInventoryUtils;
+import irai.mod.reforge.Common.UI.UIItemUtils;
+import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Socket;
@@ -32,7 +31,6 @@ import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.SocketManager.PunchResult;
 import irai.mod.reforge.Socket.SocketManager.SupportMaterial;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
-import irai.mod.reforge.Util.NameResolver;
 
 /**
  * HyUI socket bench page opened through command.
@@ -113,15 +111,7 @@ public class SocketBenchUI {
     }
 
     public static void initialize() {
-        try {
-            Class.forName(HYUI_PAGE_BUILDER);
-            Class.forName(HYUI_PLUGIN);
-            hyuiAvailable = true;
-            System.out.println("[SocketReforge] SocketBenchUI: HyUI loaded.");
-        } catch (ClassNotFoundException e) {
-            hyuiAvailable = false;
-            System.out.println("[SocketReforge] SocketBenchUI: HyUI unavailable.");
-        }
+        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "SocketBenchUI");
     }
 
     public static boolean isAvailable() {
@@ -179,10 +169,7 @@ public class SocketBenchUI {
                 continue;
             }
 
-            String name = NameResolver.getDisplayName(stack);
-            if (name == null || name.isEmpty() || "Unknown Item".equals(name)) {
-                name = itemId;
-            }
+            String name = UIItemUtils.displayNameOrItemId(stack);
 
             Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), name);
 
@@ -443,23 +430,7 @@ public class SocketBenchUI {
         if (path == null || path.isBlank()) {
             return null;
         }
-        // Dev-first: read directly from workspace resources so HTML edits apply immediately.
-        try {
-            Path fsPath = Paths.get("src", "main", "resources").resolve(path.replace("/", java.io.File.separator));
-            if (Files.exists(fsPath) && Files.isRegularFile(fsPath)) {
-                return Files.readString(fsPath, StandardCharsets.UTF_8);
-            }
-        } catch (Exception ignored) {
-        }
-
-        try (InputStream in = SocketBenchUI.class.getClassLoader().getResourceAsStream(path)) {
-            if (in == null) {
-                return null;
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
-            return null;
-        }
+        return UITemplateUtils.loadTemplate(SocketBenchUI.class, path, null, "SocketBenchUI");
     }
 
     private static String buildEquipmentOptions(List<Entry> equipments, String selectedKey) {
@@ -593,44 +564,11 @@ public class SocketBenchUI {
     }
 
     private static String resolveFilledSocketIconName() {
-        // Prefer the user-requested file name first.
-        String preferred = "socket_filled.png";
-        String fallback = "socket_filled.png";
-
-        try {
-            Path preferredFs = Paths.get("src", "main", "resources", "Common", "UI", "Custom", preferred);
-            if (Files.exists(preferredFs) && Files.isRegularFile(preferredFs)) {
-                return preferred;
-            }
-        } catch (Exception ignored) {
-        }
-        try (InputStream in = SocketBenchUI.class.getClassLoader().getResourceAsStream("Common/UI/Custom/" + preferred)) {
-            if (in != null) {
-                return preferred;
-            }
-        } catch (Exception ignored) {
-        }
-        return fallback;
+        return UITemplateUtils.resolveCustomUiAsset("socket_filled.png", "socket_filled.png");
     }
 
     private static String resolveBrokenSocketIconName() {
-        String[] candidates = {"socket_broken.png", "socket_Broken.png"};
-        for (String candidate : candidates) {
-            try {
-                Path fs = Paths.get("src", "main", "resources", "Common", "UI", "Custom", candidate);
-                if (Files.exists(fs) && Files.isRegularFile(fs)) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-            try (InputStream in = SocketBenchUI.class.getClassLoader().getResourceAsStream("Common/UI/Custom/" + candidate)) {
-                if (in != null) {
-                    return candidate;
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "socket_empty.png";
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
     }
 
     private static void updateMetadataAndProgress(
@@ -739,10 +677,7 @@ public class SocketBenchUI {
 
     private static void writeUpdatedEquipment(Player player, Entry equipment, ItemStack original, SocketData socketData) {
         ItemStack updated = SocketManager.withSocketData(original, socketData);
-        ItemContainer container = getContainer(player, equipment.containerKind);
-        if (container != null) {
-            container.setItemStackForSlot(equipment.slot, updated);
-        }
+        UIInventoryUtils.writeItem(player, equipment.containerKind == ContainerKind.HOTBAR, equipment.slot, updated);
 
         String itemId = updated.getItemId();
         boolean isWeapon = ReforgeEquip.isWeapon(updated);
@@ -751,55 +686,31 @@ public class SocketBenchUI {
     }
 
     private static ItemStack readCurrentStack(Player player, Entry entry) {
-        ItemContainer container = getContainer(player, entry.containerKind);
-        if (container == null) {
+        ItemStack stack = UIInventoryUtils.readItem(player, entry.containerKind == ContainerKind.HOTBAR, entry.slot);
+        if (stack == null || stack.isEmpty()) {
             return null;
         }
-        return container.getItemStack(entry.slot);
+        return stack;
     }
 
     private static boolean consumeMaterial(Player player, Entry entry, int amount) {
         if (entry == null || amount <= 0) {
             return false;
         }
-        ItemContainer container = getContainer(player, entry.containerKind);
-        if (container == null) {
-            return false;
-        }
-        ItemStack stack = container.getItemStack(entry.slot);
-        if (stack == null || stack.isEmpty()) {
-            return false;
-        }
-        if (!entry.itemId.equalsIgnoreCase(stack.getItemId())) {
-            return false;
-        }
-        if (stack.getQuantity() < amount) {
-            return false;
-        }
-        container.removeItemStackFromSlot(entry.slot, amount, false, false);
-        return true;
+        return UIInventoryUtils.consumeItem(
+                player,
+                entry.containerKind == ContainerKind.HOTBAR,
+                entry.slot,
+                entry.itemId,
+                amount);
     }
 
     private static ItemContainer getContainer(Player player, ContainerKind kind) {
-        if (player == null || player.getInventory() == null) {
-            return null;
-        }
-        return kind == ContainerKind.HOTBAR ? player.getInventory().getHotbar() : player.getInventory().getStorage();
+        return UIInventoryUtils.getContainer(player, kind == ContainerKind.HOTBAR);
     }
 
     private static Entry resolveSelection(List<Entry> entries, String selectedValue) {
-        if (selectedValue == null) {
-            return null;
-        }
-        try {
-            int idx = Integer.parseInt(selectedValue.trim());
-            if (idx < 0 || idx >= entries.size()) {
-                return null;
-            }
-            return entries.get(idx);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return HyUIReflectionUtils.resolveIndexSelection(entries, selectedValue);
     }
 
     private static String buildMetadataText(ItemStack item, Entry entry) {
@@ -857,40 +768,11 @@ public class SocketBenchUI {
     }
 
     private static String extractEventValue(Object eventObj) {
-        if (eventObj == null) {
-            return null;
-        }
-        try {
-            Method getValue = eventObj.getClass().getMethod("getValue");
-            Object value = getValue.invoke(eventObj);
-            return value != null ? value.toString() : null;
-        } catch (Exception e) {
-            return eventObj.toString();
-        }
+        return HyUIReflectionUtils.extractEventValue(eventObj);
     }
 
     private static String getContextValue(Object ctxObj, String... keys) {
-        if (ctxObj == null || keys == null) {
-            return null;
-        }
-        for (String key : keys) {
-            try {
-                Method getValue = ctxObj.getClass().getMethod("getValue", String.class);
-                Object optObj = getValue.invoke(ctxObj, key);
-                if (!(optObj instanceof Optional<?> optional)) {
-                    continue;
-                }
-                if (optional.isEmpty()) {
-                    continue;
-                }
-                Object value = optional.get();
-                if (value != null) {
-                    return value.toString();
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return null;
+        return HyUIReflectionUtils.getContextValue(ctxObj, keys);
     }
 
     private static StatPreview calculatePreview(BenchSnapshot snapshot, String equipmentValue, String supportValue) {
@@ -1013,31 +895,15 @@ public class SocketBenchUI {
     }
 
     private static Object getStore(PlayerRef playerRef) throws Exception {
-        Method getReference = playerRef.getClass().getMethod("getReference");
-        Object ref = getReference.invoke(playerRef);
-        Method getStore = ref.getClass().getMethod("getStore");
-        return getStore.invoke(ref);
+        return HyUIReflectionUtils.getStore(playerRef);
     }
 
     private static void closePageIfOpen(PlayerRef playerRef) {
-        Object page = openPages.remove(playerRef);
-        if (page == null) {
-            return;
-        }
-        try {
-            page.getClass().getMethod("close").invoke(page);
-        } catch (Exception ignored) {
-        }
+        HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
     }
 
     private static String escapeHtml(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return UITemplateUtils.escapeHtml(text);
     }
 
     private static final class ProcessResult {

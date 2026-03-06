@@ -5,30 +5,40 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.util.Config;
+import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
 
+import irai.mod.reforge.Config.ConfigService;
+import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
+import irai.mod.reforge.Commands.SpawnEquipChestCommand;
+import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.WeaponPartsCommand;
+import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
+import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
+import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
+import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
+import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -49,6 +59,9 @@ public class ReforgePlugin extends JavaPlugin {
     private final SocketStatSystem socketStatSystem;
     private final LifeHealthSystem lifeHealthSystem;
     private final WaterRegenSystem waterRegenSystem;
+    private final SalvageMetadataCompatEST salvageMetadataCompatEST;
+    private final ChestWindowSocketLootEST chestWindowSocketLootEST;
+    private final NPCLootSocketDropEST npcLootSocketDropEST;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -61,6 +74,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<SFXConfig> sfxconfig;
     private final Config<RefinementConfig> refinementConfig;
     private final Config<SocketConfig> socketConfig;
+    private final Config<LootSocketRollConfig> lootSocketRollConfig;
+    private final ConfigService configService;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
         super(init);
@@ -70,9 +85,37 @@ public class ReforgePlugin extends JavaPlugin {
         socketStatSystem = new SocketStatSystem();
         lifeHealthSystem = new LifeHealthSystem();
         waterRegenSystem = new WaterRegenSystem();
+        salvageMetadataCompatEST = new SalvageMetadataCompatEST();
+        chestWindowSocketLootEST = new ChestWindowSocketLootEST();
+        npcLootSocketDropEST = new NPCLootSocketDropEST();
+        this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
+        this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
+
+        this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
+            if (reforgeEquip != null) {
+                reforgeEquip.setSfxConfig(cfg);
+            }
+            ReforgeBenchUI.setSfxConfig(cfg);
+            socketEffectEST.setSfxConfig(cfg);
+        });
+
+        this.configService.register("RefinementConfig", this.refinementConfig, cfg -> {
+            refineEST.setRefinementConfig(cfg);
+            if (reforgeEquip != null) {
+                reforgeEquip.setRefinementConfig(cfg);
+            }
+            ReforgeBenchUI.setRefinementConfig(cfg);
+        });
+
+        this.configService.register("SocketConfig", this.socketConfig, cfg -> {
+            SocketManager.initialize(cfg);
+            EssenceRegistry.initialize();
+        });
+
+        this.configService.register("LootSocketRollConfig", this.lootSocketRollConfig, LootSocketRoller::setConfig);
     }
 
     @Override
@@ -90,30 +133,11 @@ public class ReforgePlugin extends JavaPlugin {
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
         
-        // Initialize Socket Stat System (handles both health bonus and regeneration)
-
-        // Load SFX config first before creating ReforgeEquip
-        try {
-            this.sfxconfig.save();
-            SFXConfig cfg = this.sfxconfig.get();
-            if (cfg != null) {
-                Logger.getLogger("System: ").info("SFX Loaded!");
-            }
-        } catch (Exception e) {
-            System.err.println("[ReforgePlugin] Error loading SFX config: " + e.getMessage());
-            e.printStackTrace();
-        }
-
         // Register interaction
         reforgeEquip = new ReforgeEquip();
-        
-        // Inject the loaded SFXConfig into ReforgeEquip
-        SFXConfig loadedSfx = this.sfxconfig.get();
-        if (loadedSfx != null) {
-            reforgeEquip.setSfxConfig(loadedSfx);
-            ReforgeBenchUI.setSfxConfig(loadedSfx);
-            socketEffectEST.setSfxConfig(loadedSfx);
-        }
+
+        // Load and apply all registered configs.
+        this.configService.loadAll();
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
         
@@ -121,42 +145,14 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
+        this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, TreasureChestSocketLootListener::onPlayerInteract);
+        this.getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, TreasureChestSocketLootListener::onTreasureChestOpening);
         this.getCommandRegistry().registerCommand(new WeaponPartsCommand("partsui", "Open modular weapon parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
-
-        // Load refinement config and inject into systems
-        try {
-            this.refinementConfig.save();
-            RefinementConfig refinement = this.refinementConfig.get();
-            if (refinement != null) {
-                // Inject config into EquipmentRefineEST
-                refineEST.setRefinementConfig(refinement);
-
-                // Inject config into ReforgeEquip
-                reforgeEquip.setRefinementConfig(refinement);
-                ReforgeBenchUI.setRefinementConfig(refinement);
-            }
-        } catch (Exception e) {
-            System.err.println("[ReforgePlugin] Error loading Refinement config: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        // Load socket config and initialize socket system
-        try {
-            this.socketConfig.save();
-            SocketConfig socketCfg = this.socketConfig.get();
-            if (socketCfg != null) {
-                // Initialize socket system
-                SocketManager.initialize(socketCfg);
-                EssenceRegistry.initialize();
-
-            }
-        } catch (Exception e) {
-            System.err.println("[ReforgePlugin] Error loading Socket config: " + e.getMessage());
-            e.printStackTrace();
-        }
+        this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
+        this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
 
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
@@ -164,14 +160,17 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
         this.getEntityStoreRegistry().registerSystem(lifeHealthSystem);
         this.getEntityStoreRegistry().registerSystem(waterRegenSystem);
+        this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
+        this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
+        this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
 
 
     }
 
     @Override
     protected void start() {
-        // Refresh all players to ensure tooltip changes are applied
-        startTooltipRefreshTimer();
+        // One-time refresh on startup. Further refreshes are event-driven.
+        DynamicTooltipUtils.refreshAllPlayers();
     }
 
     protected void stop() {
@@ -192,21 +191,6 @@ public class ReforgePlugin extends JavaPlugin {
         return sfxconfig;
     }
 
-    
-    private Timer tooltipRefreshTimer;
-    private void startTooltipRefreshTimer() {
-        tooltipRefreshTimer = new Timer("RefreshTooltips", true);
-        tooltipRefreshTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    DynamicTooltipUtils.refreshAllPlayers();
-                } catch (Exception e) {
-                    System.err.println("Tooltips Refresh failed: " + e.getMessage());
-                }
-            }
-        }, 0, 3000);
-    }
     /**
      * Starts the auto-save task that periodically saves weapon data.
      * Runs every 5 minutes.
