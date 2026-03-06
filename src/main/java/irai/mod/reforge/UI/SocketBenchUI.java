@@ -391,7 +391,6 @@ public class SocketBenchUI {
 
         String template = loadTemplate(SOCKET_BENCH_TEMPLATE_PATH);
         if (template != null && !template.isBlank()) {
-            System.out.println("[SocketReforge] SocketBenchUI using external HTML: " + SOCKET_BENCH_TEMPLATE_PATH);
             return template
                     .replace("{{equipmentOptions}}", equipmentOptions)
                     .replace("{{puncherOptions}}", puncherOptions)
@@ -406,7 +405,6 @@ public class SocketBenchUI {
                     .replace("{{metadataText}}", escapeHtml(defaultMetadata));
         }
 
-        System.out.println("[SocketReforge] SocketBenchUI using inline fallback HTML.");
         return "<div class=\"page-overlay\">"
                 + "<div class=\"decorated-container\" data-hyui-title=\"Socket Punch Bench\" style=\"anchor-width: 920; anchor-height: 760;\">"
                 + "<div class=\"container-contents\" style=\"anchor-full: 14; overflow-y:auto;\">"
@@ -449,24 +447,17 @@ public class SocketBenchUI {
         try {
             Path fsPath = Paths.get("src", "main", "resources").resolve(path.replace("/", java.io.File.separator));
             if (Files.exists(fsPath) && Files.isRegularFile(fsPath)) {
-                String html = Files.readString(fsPath, StandardCharsets.UTF_8);
-                System.out.println("[SocketReforge] SocketBenchUI template loaded from filesystem: " + fsPath.toAbsolutePath());
-                return html;
+                return Files.readString(fsPath, StandardCharsets.UTF_8);
             }
-            System.out.println("[SocketReforge] SocketBenchUI filesystem template not found: " + fsPath.toAbsolutePath());
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] SocketBenchUI filesystem template load failed: " + e.getMessage());
+        } catch (Exception ignored) {
         }
 
         try (InputStream in = SocketBenchUI.class.getClassLoader().getResourceAsStream(path)) {
             if (in == null) {
-                System.err.println("[SocketReforge] SocketBenchUI template missing on classpath: " + path);
                 return null;
             }
-            System.out.println("[SocketReforge] SocketBenchUI template found on classpath: " + path);
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] SocketBenchUI template load failed: " + e.getMessage());
+        } catch (Exception ignored) {
             return null;
         }
     }

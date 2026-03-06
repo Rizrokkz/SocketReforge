@@ -1,7 +1,7 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
-<p><strong>Latest update highlights:</strong> improved HyUI bench pages, OP-only admin/bench commands, 1-second process bars, refinement hammer support, and expanded T5 Void behavior.</p>
+<p><strong>Latest update highlights:</strong> NEW 5-socket resonance effects, dagger/bow/crossbow support, bug fixes, and cleaner UI logs!</p>
 
 <hr>
 
@@ -377,6 +377,41 @@
 
 <hr>
 
+<h2>✨ Resonance System</h2>
+
+<p>Unlock <strong>powerful hidden effects</strong> by socketting specific essence combinations! The Resonance System is inspired by runewords — certain essence orders trigger unique bonuses that aren't available from individual essences alone.</p>
+
+<h3>How Resonance Works</h3>
+
+<ul>
+  <li><strong>Fill All Sockets:</strong> Resonance only activates when every socket on your equipment contains an essence</li>
+  <li><strong>Order Matters:</strong> The sequence of essences determines which resonance effect you get</li>
+  <li><strong>Quality Tiers:</strong> Higher socket counts can unlock rarer resonance qualities</li>
+  <li><strong>Free Power:</strong> Once discovered, resonance effects require no extra materials!</li>
+  <li><strong>Multiple Weapons:</strong> Works with swords, daggers, bows, crossbows, and more!</li>
+</ul>
+
+<h3>Discover Hidden Combinations</h3>
+
+<p>There are <strong>many resonance effects</strong> waiting to be discovered across different socket counts and weapon types:</p>
+
+<ul>
+  <li><strong>On-Crit Effects:</strong> Some resonances trigger powerful effects when you land a critical hit</li>
+  <li><strong>On-Hit Effects:</strong> Certain combinations cause effects on every hit</li>
+  <li><strong>Chain Effects:</strong> Some resonances chain damage to nearby enemies</li>
+  <li><strong>Defensive Bonuses:</strong> Thorns, dodge, and shield effects</li>
+  <li><strong>Execute Mechanics:</strong> Deal extra damage to low-health enemies</li>
+  <li><strong>Aura Effects:</strong> Burn enemies around you</li>
+  <li><strong>Survival:</strong> Chance to cheat death or surge heal</li>
+  <li><strong>Elemental:</strong> Lightning strikes, frost novas, and more</li>
+</ul>
+
+<p><strong>Example:</strong> A sword with Fire + Lightning + Life essences creates "Kingsbrand" — granting +8% Damage, +6% Crit Chance, +2% Lifesteal, and a chance to call lightning strikes on hit!</p>
+
+<p><em>Hint: Try different essence orders with 3, 4, and 5 sockets! Experiment with different combinations — share your discoveries with the community!</em></p>
+
+<hr>
+
 <h2>🛠️ HyUI Integration</h2>
 
 <p>Socket Reforge now supports <strong>HyUI</strong> for enhanced user interfaces! When HyUI is installed, players get access to improved, responsive UI elements for all reforging and socketing operations.</p>
@@ -526,6 +561,7 @@
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
   <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
+  <li><strong>Resonance System</strong> — discover hidden effects by finding specific essence combinations</li>
   <li><strong>Extended T5 effects</strong> — includes Void Blood Pact bonus-damage behavior and armor prefixes</li>
   <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
   <li><strong>Iron Building Hammer support</strong> — used in both Essence and Reforge benches with durability wear</li>

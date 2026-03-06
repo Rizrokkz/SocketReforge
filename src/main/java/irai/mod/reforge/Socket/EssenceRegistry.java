@@ -66,7 +66,7 @@ public class EssenceRegistry {
             new EssenceEffect(EssenceEffect.StatType.EVASION, EssenceEffect.EffectType.PERCENTAGE, 1.0)
         )));
 
-        // LIFE - T1: Weapon +1% Lifesteal OR Armor +1 HP, T3: +3% or +3 HP, T5: +5% or +5 HP
+        // LIFE - Weapon lifesteal and Armor health scaling by tier bands.
         // We'll handle weapon vs armor in the effect application
         register(new Essence("Essence_Life", Essence.Tier.T1, Essence.Type.LIFE, List.of(
             new EssenceEffect(EssenceEffect.StatType.LIFE_STEAL, EssenceEffect.EffectType.PERCENTAGE, 1.0),
@@ -185,9 +185,9 @@ public class EssenceRegistry {
                     
                 case LIFE:
                     // Life: Health flat (Defensive)
-                    if (tier >= 5) return new double[]{ 0.0, calcF.applyAsDouble(5.0, 1.0) };
-                    if (tier >= 3) return new double[]{ 0.0, calcF.applyAsDouble(3.0, 1.0) };
-                    return new double[]{ 0.0, calcF.applyAsDouble(1.0, 1.0) };
+                    if (tier >= 5) return new double[]{ 0.0, 50.0 };
+                    if (tier >= 3) return new double[]{ 0.0, 25.0 };
+                    return new double[]{ 0.0, 10.0 };
                     
                 case VOID:
                     // Void: DEFENSE % (Defensive)

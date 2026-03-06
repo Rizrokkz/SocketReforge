@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.8] - 2026-03-05
+
+### Added
+
+- **Extended Resonance System**
+  - Added 3 new resonance effects for 5-socket configurations
+  - Added dagger weapon class support for resonance
+  - Added bow weapon class support for resonance
+  - Added crossbow weapon class support for resonance
+
+### Fixed
+
+- **Life Essence Values**
+  - Fixed Life essence adding incorrect stat values
+  - Corrected HP bonus calculations for armor Life essences
+
+- **UI Log Spam**
+  - Removed verbose logging from bench UI operations
+  - Cleaned up server console output for Socket Punch, Essence, and Reforge bench UIs
+
+---
+
+## [1.2.7] - 2026-03-05
+
+### New Feature: Resonance System
+
+This update introduces the **Resonance System** — a runeword-like mechanic that activates powerful special effects when specific essence combinations are socketed in exact order.
+
+#### How Resonance Works
+
+- Resonance activates only when **all sockets are filled** with essences
+- The essence **order matters** — different sequences produce different results
+- Higher quality resonances unlock at higher socket counts
+- Legendary-quality resonances provide the most powerful effects
+
+#### Resonance Features
+
+- **11 Unique Resonance Effects** — Each with distinct combat bonuses
+- **Quality Levels** — Common, Rare, Epic, and Legendary tiers
+- **Weapon & Armor Specific** — Different resonances for different equipment types
+- **No Extra Items Required** — Resonance is free once the right combination is found!
+
+#### Examples (Discover the rest yourself!)
+
+- Some resonances trigger on critical hits
+- Some provide chain effects to nearby enemies
+- Some grant defensive bonuses like thorns or dodge
+- Some have execute mechanics for finishing enemies
+
+<em>Experiment with different essence orders to discover all resonance combinations!</em>
+
+---
+
 ## [1.2.6] - 2026-03-04
 
 ### Added

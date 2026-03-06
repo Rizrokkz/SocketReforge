@@ -182,9 +182,6 @@ public final class EssenceBenchUI {
         List<Entry> voidhearts = new ArrayList<>();
         collectFromContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, essences, voidhearts);
         collectFromContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, essences, voidhearts);
-        System.out.println("[SocketReforge] EssenceBenchUI snapshot -> equipment=" + equipments.size()
-                + ", essence=" + essences.size()
-                + ", voidheart=" + voidhearts.size());
         return new Snapshot(equipments, essences, voidhearts);
     }
 
@@ -200,10 +197,6 @@ public final class EssenceBenchUI {
             if (stack == null || stack.isEmpty()) continue;
             String itemId = stack.getItemId();
             if (itemId == null || itemId.isEmpty()) continue;
-            if (itemId.toLowerCase(Locale.ROOT).contains("void")) {
-                System.out.println("[SocketReforge] EssenceBenchUI inventory item with 'void': " + itemId
-                        + " (" + kind + ":" + slot + ")");
-            }
             String name = NameResolver.getDisplayName(stack);
             if (name == null || name.isEmpty() || "Unknown Item".equals(name)) {
                 name = itemId;
@@ -221,8 +214,6 @@ public final class EssenceBenchUI {
             }
             if (isVoidheartItem(itemId) || isHammerItem(itemId)) {
                 voidhearts.add(entry);
-                System.out.println("[SocketReforge] EssenceBenchUI support detected: " + itemId
-                        + " (" + kind + ":" + slot + ")");
             }
         }
     }
@@ -856,7 +847,6 @@ public final class EssenceBenchUI {
             Path path = Paths.get(fileSystemPath);
             if (Files.exists(path)) {
                 String html = Files.readString(path, StandardCharsets.UTF_8);
-                System.out.println("[SocketReforge] EssenceBenchUI using HTML template (filesystem): " + path.toAbsolutePath());
                 return html;
             }
         } catch (Exception e) {
@@ -866,7 +856,6 @@ public final class EssenceBenchUI {
         try (InputStream in = EssenceBenchUI.class.getClassLoader().getResourceAsStream(TEMPLATE_PATH)) {
             if (in != null) {
                 byte[] bytes = in.readAllBytes();
-                System.out.println("[SocketReforge] EssenceBenchUI using HTML template (classpath): " + TEMPLATE_PATH);
                 return new String(bytes, StandardCharsets.UTF_8);
             }
         } catch (Exception e) {

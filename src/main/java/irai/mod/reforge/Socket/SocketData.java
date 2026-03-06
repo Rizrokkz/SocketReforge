@@ -550,7 +550,9 @@ public class SocketData {
                 if (isWeapon) {
                     return "+" + safeTier + "% Lifesteal";
                 }
-                return "+" + safeTier + " HP";
+                if (safeTier >= 5) return "+50 HP";
+                if (safeTier >= 3) return "+25 HP";
+                return "+10 HP";
             case VOID:
                 if (isWeapon) {
                     int critDmg = safeTier * 5;

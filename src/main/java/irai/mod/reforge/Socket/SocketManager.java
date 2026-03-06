@@ -106,6 +106,10 @@ public class SocketManager {
 
         String[] encoded = encodeSockets(socketData);
         boolean isWeapon = ReforgeEquip.isWeapon(item);
+        ResonanceSystem.ResonanceResult resonance = ResonanceSystem.evaluate(item, socketData);
+        String resonanceTooltipEffect = resonance.active()
+                ? ResonanceSystem.buildDetailedEffect(resonance, isWeapon)
+                : "";
         
         // Calculate tier map and effects for metadata storage
         Map<Essence.Type, Integer> tierMap = calculateConsecutiveTiers(socketData);
@@ -120,7 +124,7 @@ public class SocketManager {
         }
 
         // Store deterministic stat bonuses in metadata so runtime systems do not recalculate random values.
-        Map<EssenceEffect.StatType, double[]> statBonuses = calculateDeterministicBonuses(socketData, isWeapon);
+        Map<EssenceEffect.StatType, double[]> statBonuses = calculateDeterministicBonuses(item, socketData, isWeapon);
         List<String> statKeys = new ArrayList<>();
         List<String> flatValues = new ArrayList<>();
         List<String> percentValues = new ArrayList<>();
@@ -142,7 +146,14 @@ public class SocketManager {
                 .withMetadata(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
                 .withMetadata(META_ESSENCE_BONUS_STATS, Codec.STRING_ARRAY, statKeys.toArray(String[]::new))
                 .withMetadata(META_ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY, flatValues.toArray(String[]::new))
-                .withMetadata(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY, percentValues.toArray(String[]::new));
+                .withMetadata(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY, percentValues.toArray(String[]::new))
+                .withMetadata(ResonanceSystem.META_RESONANCE_NAME, Codec.STRING, resonance.active() ? resonance.name() : "")
+                .withMetadata(ResonanceSystem.META_RESONANCE_EFFECT, Codec.STRING, resonanceTooltipEffect)
+                .withMetadata(ResonanceSystem.META_RESONANCE_TYPE, Codec.STRING, resonance.active() ? resonance.type().name() : ResonanceSystem.ResonanceType.NONE.name())
+                .withMetadata(ResonanceSystem.META_RESONANCE_QUALITY, Codec.STRING, resonance.active() ? ResonanceSystem.LEGENDARY_QUALITY : "")
+                // Best effort: there is no runtime ItemStack quality setter, so we persist a metadata flag.
+                .withMetadata(ResonanceSystem.META_RESONANCE_QUALITY_INDEX, Codec.INTEGER,
+                        resonance.active() ? ResonanceSystem.LEGENDARY_QUALITY_INDEX : 0);
     }
     
     /**
@@ -161,6 +172,38 @@ public class SocketManager {
     public static String[] getEssenceTiers(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
         return item.getFromMetadataOrNull(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY);
+    }
+
+    public static String getResonanceName(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+        String value = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_NAME, Codec.STRING);
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    public static String getResonanceEffect(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+        String value = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_EFFECT, Codec.STRING);
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    public static String getResonanceType(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+        String value = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_TYPE, Codec.STRING);
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    public static boolean hasResonance(ItemStack item) {
+        return getResonanceName(item) != null;
+    }
+
+    public static boolean isResonanceLegendary(ItemStack item) {
+        if (item == null || item.isEmpty()) return false;
+        String quality = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_QUALITY, Codec.STRING);
+        if (quality != null && ResonanceSystem.LEGENDARY_QUALITY.equalsIgnoreCase(quality.trim())) {
+            return true;
+        }
+        Integer qualityIndex = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_QUALITY_INDEX, Codec.INTEGER);
+        return qualityIndex != null && qualityIndex >= ResonanceSystem.LEGENDARY_QUALITY_INDEX;
     }
 
     /**
@@ -185,6 +228,15 @@ public class SocketManager {
                 }
                 double flat = parseDoubleOrZero(flatValues[i]);
                 double percent = parseDoubleOrZero(percentValues[i]);
+                // Backward compatibility:
+                // Older armor metadata stored LIFE health as raw tier (1..5) instead of
+                // the intended value bands (10/25/50). Recompute deterministically.
+                if (stat == EssenceEffect.StatType.HEALTH
+                        && ReforgeEquip.isArmor(item)
+                        && flat > 0.0
+                        && flat <= 5.0) {
+                    break;
+                }
                 return new double[] {flat, percent};
             }
             // Metadata exists but does not contain the requested stat.
@@ -198,7 +250,7 @@ public class SocketManager {
         }
 
         boolean isWeapon = ReforgeEquip.isWeapon(item);
-        Map<EssenceEffect.StatType, double[]> computed = calculateDeterministicBonuses(socketData, isWeapon);
+        Map<EssenceEffect.StatType, double[]> computed = calculateDeterministicBonuses(item, socketData, isWeapon);
         return computed.getOrDefault(stat, new double[] {0.0, 0.0});
     }
 
@@ -213,7 +265,7 @@ public class SocketManager {
         }
     }
 
-    private static Map<EssenceEffect.StatType, double[]> calculateDeterministicBonuses(SocketData socketData, boolean isWeapon) {
+    private static Map<EssenceEffect.StatType, double[]> calculateDeterministicBonuses(ItemStack item, SocketData socketData, boolean isWeapon) {
         Map<EssenceEffect.StatType, double[]> totals = new EnumMap<>(EssenceEffect.StatType.class);
 
         if (socketData == null) {
@@ -259,7 +311,10 @@ public class SocketManager {
                 }
             } else {
                 switch (type) {
-                    case LIFE -> addFlat(totals, EssenceEffect.StatType.HEALTH, tierValue);
+                    case LIFE -> {
+                        double[] life = EssenceRegistry.getTierEffect(type, tierValue, false);
+                        addFlat(totals, EssenceEffect.StatType.HEALTH, life[1]);
+                    }
                     case WATER -> addFlat(totals, EssenceEffect.StatType.REGENERATION, tierValue);
                     case FIRE -> addPercent(totals, EssenceEffect.StatType.FIRE_DEFENSE, tierValue);
                     case ICE -> addPercent(totals, EssenceEffect.StatType.MOVEMENT_SPEED, tierValue);
@@ -268,6 +323,22 @@ public class SocketManager {
                     default -> {
                         // No defensive stat metadata for this essence type.
                     }
+                }
+            }
+        }
+
+        ResonanceSystem.ResonanceResult resonance = ResonanceSystem.evaluate(item, socketData);
+        if (resonance.active()) {
+            for (Map.Entry<EssenceEffect.StatType, double[]> entry : resonance.bonuses().entrySet()) {
+                double[] values = entry.getValue();
+                if (values == null) {
+                    continue;
+                }
+                if (values[0] != 0.0) {
+                    addFlat(totals, entry.getKey(), values[0]);
+                }
+                if (values[1] != 0.0) {
+                    addPercent(totals, entry.getKey(), values[1]);
                 }
             }
         }

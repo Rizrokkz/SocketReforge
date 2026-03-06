@@ -112,6 +112,7 @@ public class ReforgePlugin extends JavaPlugin {
         if (loadedSfx != null) {
             reforgeEquip.setSfxConfig(loadedSfx);
             ReforgeBenchUI.setSfxConfig(loadedSfx);
+            socketEffectEST.setSfxConfig(loadedSfx);
         }
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);

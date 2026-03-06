@@ -52,6 +52,9 @@ public class DynamicTooltipUtils {
     private static final String META_PART2_TIER = "SocketReforge.Parts.Part2Tier";
     private static final String META_PART3_TIER = "SocketReforge.Parts.Part3Tier";
     private static final String BLOOD_PACT_PREFIX = "Blood Pact ";
+    private static final String META_RESONANCE_NAME = "SocketReforge.Resonance.Name";
+    private static final String META_RESONANCE_EFFECT = "SocketReforge.Resonance.Effect";
+    private static final String META_RESONANCE_QUALITY = "SocketReforge.Resonance.Quality";
     
     // ==================== Reforge Level ====================
     
@@ -528,25 +531,36 @@ public class DynamicTooltipUtils {
         int part1Tier = extractIntValue(metadata, META_PART1_TIER);
         int part2Tier = extractIntValue(metadata, META_PART2_TIER);
         int part3Tier = extractIntValue(metadata, META_PART3_TIER);
+        String resonanceName = extractStringValue(metadata, META_RESONANCE_NAME);
+        String resonanceEffect = extractStringValue(metadata, META_RESONANCE_EFFECT);
+        String resonanceQuality = extractStringValue(metadata, META_RESONANCE_QUALITY);
+        boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
         
         // If no supported metadata is present, return null
-        if (reforgeLevel <= 0 && socketMax <= 0 && partsWeaponType == null) {
+        if (reforgeLevel <= 0 && socketMax <= 0 && partsWeaponType == null && !hasResonance) {
             return null;
         }
         
         List<String> tooltipLines = new ArrayList<>();
-        String displayName = null;
+        String displayName = extractDisplayName(metadata);
+        String baseItemId = extractBaseItemId(metadata);
+        boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
+        if ((shouldBloodPrefix || hasResonance) && (displayName == null || displayName.isEmpty())) {
+            displayName = buildFallbackDisplayName(baseItemId, itemId);
+        }
+        if (displayName != null && !displayName.isEmpty()
+                && shouldBloodPrefix
+                && !displayName.startsWith(BLOOD_PACT_PREFIX)) {
+            displayName = BLOOD_PACT_PREFIX + displayName;
+        }
+        if (displayName != null && !displayName.isEmpty()
+                && hasResonance
+                && !displayName.startsWith(resonanceName + " ")) {
+            displayName = resonanceName + " " + displayName;
+        }
         
         // Add reforge line if present
         if (reforgeLevel > 0) {
-            String baseItemId = extractBaseItemId(metadata);
-            displayName = extractDisplayName(metadata);
-            if (displayName != null && !displayName.isEmpty()
-                    && shouldPrefixBloodPact(itemId, baseItemId, metadata)
-                    && !displayName.startsWith(BLOOD_PACT_PREFIX)) {
-                displayName = BLOOD_PACT_PREFIX + displayName;
-            }
-            
             // Determine if it's armor or weapon based on base item ID
             boolean isArmor = baseItemId != null && baseItemId.startsWith("Armor_");
             
@@ -599,6 +613,14 @@ public class DynamicTooltipUtils {
             }
             String socketLine = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
             tooltipLines.add(socketLine);
+        }
+
+        if (hasResonance) {
+            String shownEffect = resonanceEffect != null && !resonanceEffect.isBlank() ? resonanceEffect : resonanceName;
+            tooltipLines.add(COLOR_ORANGE + "Resonance: " + COLOR_WHITE + shownEffect);
+        }
+        if (resonanceQuality != null && !resonanceQuality.isBlank()) {
+            tooltipLines.add(COLOR_YELLOW + "Quality: " + COLOR_WHITE + resonanceQuality);
         }
 
         // Add modular parts line if present
@@ -899,6 +921,42 @@ public class DynamicTooltipUtils {
         return null;
     }
 
+    private static String buildFallbackDisplayName(String baseItemId, String itemId) {
+        String source = baseItemId;
+        if (source == null || source.isBlank()) {
+            source = itemId;
+        }
+        if (source == null || source.isBlank()) {
+            return null;
+        }
+
+        String normalizedId = source.trim();
+        String[] keyCandidates = {
+                "items." + normalizedId + ".name",
+                "server.items." + normalizedId + ".name",
+                "wanmine.items." + normalizedId + ".name"
+        };
+
+        for (String key : keyCandidates) {
+            String localized = LangLoader.getTranslation(key);
+            if (localized != null && !localized.isBlank()) {
+                return localized;
+            }
+        }
+
+        // Fallback through NameResolver path to keep behavior close to refinement resolution.
+        String resolved = NameResolver.resolveTranslationKey("items." + normalizedId + ".name");
+        if (resolved != null && !resolved.isBlank()) {
+            return resolved;
+        }
+
+        String replaced = normalizedId.replace('_', ' ').trim();
+        if (!replaced.isEmpty()) {
+            return replaced;
+        }
+        return null;
+    }
+
     private static boolean shouldPrefixBloodPact(String itemId, String baseItemId, String metadata) {
         if (metadata == null || metadata.isEmpty()) {
             return false;
@@ -989,9 +1047,15 @@ public class DynamicTooltipUtils {
                     if (isArmor) {
                         double[] bonus = extractStoredBonus(metadata, "HEALTH");
                         if (bonus != null && bonus[0] != 0) {
-                            return "+" + formatBonus(bonus[0]) + " HP";
+                            double health = bonus[0];
+                            // Backward compatibility for older metadata that stored tier value (1..5).
+                            if (health > 0 && health <= 5.0) {
+                                health = safeTier >= 5 ? 50.0 : (safeTier >= 3 ? 25.0 : 10.0);
+                            }
+                            return "+" + formatBonus(health) + " HP";
                         }
-                        return "+" + safeTier + " HP";
+                        double fallbackHealth = safeTier >= 5 ? 50.0 : (safeTier >= 3 ? 25.0 : 10.0);
+                        return "+" + formatBonus(fallbackHealth) + " HP";
                     }
                     return "+" + safeTier + "% Lifesteal";
                 case "VOID":
@@ -1380,3 +1444,4 @@ public class DynamicTooltipUtils {
         return COLOR_WHITE;
     }
 }
+

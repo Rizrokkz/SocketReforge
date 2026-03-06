@@ -209,12 +209,12 @@ public final class NameResolver {
 
         if (ReforgeEquip.isWeapon(itemStack)) {
             if (base.startsWith(BLOOD_PACT_PREFIX)) {
-                return base;
+                return applyResonancePrefix(itemStack, base);
             }
             if (hasBloodPactTierFive(itemStack)) {
-                return BLOOD_PACT_PREFIX + base;
+                return applyResonancePrefix(itemStack, BLOOD_PACT_PREFIX + base);
             }
-            return base;
+            return applyResonancePrefix(itemStack, base);
         }
 
         if (ReforgeEquip.isArmor(itemStack)) {
@@ -222,7 +222,7 @@ public final class NameResolver {
             boolean hasIceTierFive = hasArmorTierFive(itemStack, Essence.Type.ICE);
 
             if (!hasFireTierFive && !hasIceTierFive) {
-                return base;
+                return applyResonancePrefix(itemStack, base);
             }
 
             StringBuilder prefix = new StringBuilder();
@@ -233,12 +233,28 @@ public final class NameResolver {
                 prefix.append(ICE_WARD_PREFIX);
             }
             if (prefix.isEmpty()) {
-                return base;
+                return applyResonancePrefix(itemStack, base);
             }
-            return prefix + base;
+            return applyResonancePrefix(itemStack, prefix + base);
         }
 
-        return base;
+        return applyResonancePrefix(itemStack, base);
+    }
+
+    private static String applyResonancePrefix(ItemStack itemStack, String value) {
+        if (itemStack == null || itemStack.isEmpty()) {
+            return value;
+        }
+        String base = value == null ? "" : value;
+        String resonanceName = SocketManager.getResonanceName(itemStack);
+        if (resonanceName == null || resonanceName.isBlank()) {
+            return base;
+        }
+        String prefix = resonanceName.trim() + " ";
+        if (base.startsWith(prefix)) {
+            return base;
+        }
+        return prefix + base;
     }
 
     /**

@@ -1,0 +1,641 @@
+package irai.mod.reforge.Socket;
+
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+
+import irai.mod.reforge.Interactions.ReforgeEquip;
+
+/**
+ * Runeword-like resonance matching for socket combinations.
+ * Resonance activates only when all sockets are filled and match an exact order.
+ */
+public final class ResonanceSystem {
+
+    public static final String META_RESONANCE_NAME = "SocketReforge.Resonance.Name";
+    public static final String META_RESONANCE_EFFECT = "SocketReforge.Resonance.Effect";
+    public static final String META_RESONANCE_TYPE = "SocketReforge.Resonance.Type";
+    public static final String META_RESONANCE_QUALITY = "SocketReforge.Resonance.Quality";
+    public static final String META_RESONANCE_QUALITY_INDEX = "qualityIndex";
+
+    public static final String LEGENDARY_QUALITY = "Legendary";
+    public static final int LEGENDARY_QUALITY_INDEX = 3;
+
+    public enum ResonanceType {
+        NONE,
+        BURN_ON_CRIT,
+        CHAIN_SLOW,
+        EXECUTE,
+        ARMOR_SHRED,
+        THUNDER_STRIKE,
+        MULTISHOT_BARRAGE,
+        CROSSBOW_AUTO_RELOAD,
+        PLUNDERING_BLADE,
+        FROST_NOVA_ON_HIT,
+        THORNS_SHOCK,
+        CHEAT_DEATH,
+        HEAL_SURGE,
+        SHOCK_DODGE,
+        AURA_BURN
+    }
+
+    public record ResonanceResult(
+            String name,
+            String effect,
+            ResonanceType type,
+            Map<EssenceEffect.StatType, double[]> bonuses) {
+        public static final ResonanceResult NONE = new ResonanceResult("", "", ResonanceType.NONE, Map.of());
+
+        public boolean active() {
+            return name != null && !name.isBlank();
+        }
+    }
+
+    private enum Scope {
+        WEAPON,
+        ARMOR
+    }
+
+    private enum WeaponClass {
+        SWORD,
+        AXE,
+        MACE,
+        DAGGER,
+        BOW,
+        CROSSBOW,
+        STAFF,
+        GENERIC
+    }
+
+    private record Bonus(EssenceEffect.StatType stat, double flat, double percent) {}
+
+    private static final class Definition {
+        final String name;
+        final String effect;
+        final ResonanceType type;
+        final Scope scope;
+        final WeaponClass requiredWeaponClass;
+        final Essence.Type[] pattern;
+        final Map<EssenceEffect.StatType, double[]> bonuses;
+
+        Definition(String name,
+                   String effect,
+                   ResonanceType type,
+                   Scope scope,
+                   WeaponClass requiredWeaponClass,
+                   Essence.Type[] pattern,
+                   Map<EssenceEffect.StatType, double[]> bonuses) {
+            this.name = name;
+            this.effect = effect;
+            this.type = type;
+            this.scope = scope;
+            this.requiredWeaponClass = requiredWeaponClass;
+            this.pattern = pattern;
+            this.bonuses = bonuses;
+        }
+
+        boolean matches(List<Essence.Type> sequence, boolean isWeapon, boolean isArmor, WeaponClass weaponClass) {
+            if (scope == Scope.WEAPON && !isWeapon) return false;
+            if (scope == Scope.ARMOR && !isArmor) return false;
+            if (requiredWeaponClass != null && !matchesWeaponClass(requiredWeaponClass, weaponClass)) return false;
+            if (sequence.size() != pattern.length) return false;
+            for (int i = 0; i < pattern.length; i++) {
+                if (sequence.get(i) != pattern[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private boolean matchesWeaponClass(WeaponClass expected, WeaponClass actual) {
+            if (expected == WeaponClass.BOW) {
+                // Keep existing bow resonances valid for crossbows for backwards compatibility.
+                return actual == WeaponClass.BOW || actual == WeaponClass.CROSSBOW;
+            }
+            return expected == actual;
+        }
+
+        ResonanceResult toResult() {
+            EnumMap<EssenceEffect.StatType, double[]> copy = new EnumMap<>(EssenceEffect.StatType.class);
+            for (Map.Entry<EssenceEffect.StatType, double[]> entry : bonuses.entrySet()) {
+                double[] v = entry.getValue();
+                copy.put(entry.getKey(), new double[] {v[0], v[1]});
+            }
+            return new ResonanceResult(name, effect, type, copy);
+        }
+    }
+
+    private static final List<Definition> DEFINITIONS = List.of(
+            // Sword
+            def("Kingsbrand", "Damage and crit enhanced; hits can call a lightning strike.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.SWORD,
+                    b(EssenceEffect.StatType.DAMAGE, 0, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    b(EssenceEffect.StatType.LIFE_STEAL, 0, 2),
+                    Essence.Type.FIRE, Essence.Type.LIGHTNING, Essence.Type.LIFE),
+            def("Oathblade", "Burning crits with heavy damage scaling.",
+                    ResonanceType.BURN_ON_CRIT, Scope.WEAPON, WeaponClass.SWORD,
+                    b(EssenceEffect.StatType.DAMAGE, 0, 12),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 10),
+                    Essence.Type.FIRE, Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.LIFE),
+            def("Winter Duelist", "Hits chain slow and punish chilled targets.",
+                    ResonanceType.CHAIN_SLOW, Scope.WEAPON, WeaponClass.SWORD,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 6),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
+                    Essence.Type.ICE, Essence.Type.LIGHTNING, Essence.Type.ICE, Essence.Type.WATER),
+
+            // Axe
+            def("Butcher's Mark", "Execute bonus against low-health enemies.",
+                    ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.AXE,
+                    b(EssenceEffect.StatType.DAMAGE, 0, 10),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 8),
+                    Essence.Type.VOID, Essence.Type.FIRE, Essence.Type.FIRE),
+            def("Warhowl", "Armor-shredding impacts with aggressive tempo.",
+                    ResonanceType.ARMOR_SHRED, Scope.WEAPON, WeaponClass.AXE,
+                    b(EssenceEffect.StatType.DAMAGE, 0, 8),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 6),
+                    Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.LIGHTNING, Essence.Type.FIRE),
+            def("Red Harvest", "Sustain spikes during combat momentum.",
+                    ResonanceType.HEAL_SURGE, Scope.WEAPON, WeaponClass.AXE,
+                    b(EssenceEffect.StatType.DAMAGE, 0, 10),
+                    b(EssenceEffect.StatType.LIFE_STEAL, 0, 5),
+                    Essence.Type.LIFE, Essence.Type.VOID, Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.LIGHTNING),
+
+            // Mace
+            def("Stormmaul", "Crushing blows can trigger shock strikes.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.MACE,
+                    b(EssenceEffect.StatType.DAMAGE, 3, 7),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 5),
+                    Essence.Type.LIGHTNING, Essence.Type.LIGHTNING, Essence.Type.ICE),
+            def("Tomb Bell", "Execution pressure with dark impact.",
+                    ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.MACE,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 10),
+                    Essence.Type.VOID, Essence.Type.ICE, Essence.Type.VOID, Essence.Type.LIFE),
+            def("Siege Psalm", "Balanced offense and thunder proc potential.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.MACE,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 9),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 5),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 5),
+                    Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.LIGHTNING, Essence.Type.ICE, Essence.Type.VOID),
+
+            // Dagger
+            def("Nightneedle", "Rapid crit pressure with execution finish.",
+                    ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.DAGGER,
+                    b(EssenceEffect.StatType.DAMAGE, 1, 5),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 8),
+                    Essence.Type.VOID, Essence.Type.LIGHTNING, Essence.Type.WATER),
+            def("Frostfang", "Crits apply chilling pressure.",
+                    ResonanceType.CHAIN_SLOW, Scope.WEAPON, WeaponClass.DAGGER,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 6),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    Essence.Type.ICE, Essence.Type.VOID, Essence.Type.LIGHTNING, Essence.Type.ICE),
+            def("Ghoststep", "High tempo with sustain surges.",
+                    ResonanceType.HEAL_SURGE, Scope.WEAPON, WeaponClass.DAGGER,
+                    b(EssenceEffect.StatType.DAMAGE, 1, 6),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 10),
+                    b(EssenceEffect.StatType.LIFE_STEAL, 0, 3),
+                    Essence.Type.LIGHTNING, Essence.Type.WATER, Essence.Type.VOID, Essence.Type.LIFE, Essence.Type.ICE),
+            def("Plundering Blade", "Strikes can steal loot directly from enemy drop tables.",
+                    ResonanceType.PLUNDERING_BLADE, Scope.WEAPON, WeaponClass.DAGGER,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 7),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 8),
+                    b(EssenceEffect.StatType.LUCK, 0, 6),
+                    Essence.Type.VOID, Essence.Type.LIFE, Essence.Type.WATER, Essence.Type.LIGHTNING, Essence.Type.FIRE),
+
+            // Bow
+            def("Gale String", "Fast volleys with shock strikes.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.BOW,
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 10),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    Essence.Type.LIGHTNING, Essence.Type.WATER, Essence.Type.LIGHTNING),
+            def("Frostline", "Arrows punish targets with chained slow.",
+                    ResonanceType.CHAIN_SLOW, Scope.WEAPON, WeaponClass.BOW,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
+                    Essence.Type.ICE, Essence.Type.WATER, Essence.Type.ICE, Essence.Type.LIGHTNING),
+            def("Sunshot", "Explosive burn-style crit spikes.",
+                    ResonanceType.BURN_ON_CRIT, Scope.WEAPON, WeaponClass.BOW,
+                    b(EssenceEffect.StatType.DAMAGE, 3, 12),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 12),
+                    Essence.Type.FIRE, Essence.Type.LIGHTNING, Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.VOID),
+            def("Storm Quiver", "Charged bow shots can split into a 3-arrow multishot burst.",
+                    ResonanceType.MULTISHOT_BARRAGE, Scope.WEAPON, WeaponClass.BOW,
+                    b(EssenceEffect.StatType.DAMAGE, 3, 9),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 5),
+                    Essence.Type.LIGHTNING, Essence.Type.ICE, Essence.Type.WATER, Essence.Type.LIGHTNING, Essence.Type.LIFE),
+            def("Clockwork Loader", "Crossbow bolts can be refunded directly back into your quiver.",
+                    ResonanceType.CROSSBOW_AUTO_RELOAD, Scope.WEAPON, WeaponClass.CROSSBOW,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 6),
+                    Essence.Type.VOID, Essence.Type.LIGHTNING, Essence.Type.WATER, Essence.Type.LIFE, Essence.Type.VOID),
+
+            // Staff
+            def("Sagebind", "Spellflow sustain and utility.",
+                    ResonanceType.HEAL_SURGE, Scope.WEAPON, WeaponClass.STAFF,
+                    b(EssenceEffect.StatType.DAMAGE, 1, 5),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 6),
+                    b(EssenceEffect.StatType.LIFE_STEAL, 0, 4),
+                    Essence.Type.LIFE, Essence.Type.ICE, Essence.Type.LIGHTNING),
+            def("Riftbranch", "Void-channel lightning bursts.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.STAFF,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 7),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    Essence.Type.VOID, Essence.Type.WATER, Essence.Type.LIGHTNING, Essence.Type.ICE),
+            def("Star Conduit", "All-round legendary spell weapon profile.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.STAFF,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 10),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 6),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 8),
+                    Essence.Type.LIFE, Essence.Type.FIRE, Essence.Type.ICE, Essence.Type.LIGHTNING, Essence.Type.VOID),
+
+            // Generic weapon
+            def("Merciless", "Reliable execute-focused offense.",
+                    ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.GENERIC,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 10),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 6),
+                    Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.LIGHTNING),
+            def("Trinity Edge", "Balanced universal weapon resonance.",
+                    ResonanceType.THUNDER_STRIKE, Scope.WEAPON, WeaponClass.GENERIC,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 4),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 6),
+                    b(EssenceEffect.StatType.LIFE_STEAL, 0, 3),
+                    Essence.Type.FIRE, Essence.Type.ICE, Essence.Type.LIGHTNING, Essence.Type.LIFE, Essence.Type.VOID),
+
+            // Armor
+            def("Tideguard", "Max health and regeneration surge.",
+                    ResonanceType.HEAL_SURGE, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.HEALTH, 20, 0),
+                    b(EssenceEffect.StatType.REGENERATION, 2, 0),
+                    Essence.Type.WATER, Essence.Type.LIFE, Essence.Type.WATER),
+            def("Cryobastion", "Defensive shell with frost nova retaliation.",
+                    ResonanceType.FROST_NOVA_ON_HIT, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.DEFENSE, 0, 8),
+                    b(EssenceEffect.StatType.FIRE_DEFENSE, 0, 4),
+                    Essence.Type.ICE, Essence.Type.ICE, Essence.Type.LIFE),
+            def("Stormweave", "Evasion-biased anti-melee defense.",
+                    ResonanceType.SHOCK_DODGE, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.EVASION, 0, 10),
+                    b(EssenceEffect.StatType.DEFENSE, 0, 4),
+                    Essence.Type.LIGHTNING, Essence.Type.WATER, Essence.Type.ICE),
+            def("Black Bulwark", "Thorns-style retaliation package.",
+                    ResonanceType.THORNS_SHOCK, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.DEFENSE, 0, 10),
+                    b(EssenceEffect.StatType.HEALTH, 12, 0),
+                    Essence.Type.VOID, Essence.Type.LIFE, Essence.Type.VOID, Essence.Type.WATER),
+            def("Sunplate", "Burning aura defensive profile.",
+                    ResonanceType.AURA_BURN, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.FIRE_DEFENSE, 0, 10),
+                    b(EssenceEffect.StatType.DEFENSE, 0, 6),
+                    Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.WATER, Essence.Type.FIRE),
+            def("Grave Mantle", "Cold retaliation with resilience.",
+                    ResonanceType.FROST_NOVA_ON_HIT, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.DEFENSE, 0, 8),
+                    b(EssenceEffect.StatType.HEALTH, 10, 0),
+                    Essence.Type.VOID, Essence.Type.ICE, Essence.Type.LIFE, Essence.Type.WATER),
+            def("Glacier Heart", "Frost nova chance on taking hits.",
+                    ResonanceType.FROST_NOVA_ON_HIT, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.DEFENSE, 0, 10),
+                    b(EssenceEffect.StatType.REGENERATION, 2, 0),
+                    Essence.Type.ICE, Essence.Type.WATER, Essence.Type.ICE, Essence.Type.LIFE, Essence.Type.VOID),
+            def("Tempest Shell", "Evasion package with shock retaliation.",
+                    ResonanceType.THORNS_SHOCK, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.EVASION, 0, 12),
+                    b(EssenceEffect.StatType.DEFENSE, 0, 6),
+                    Essence.Type.LIGHTNING, Essence.Type.LIGHTNING, Essence.Type.WATER, Essence.Type.ICE, Essence.Type.LIFE),
+            def("Phoenix Aegis", "Cheat-death shield with high mitigation.",
+                    ResonanceType.CHEAT_DEATH, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.DEFENSE, 0, 12),
+                    b(EssenceEffect.StatType.FIRE_DEFENSE, 0, 12),
+                    b(EssenceEffect.StatType.HEALTH, 20, 0),
+                    Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.FIRE, Essence.Type.WATER, Essence.Type.VOID),
+            def("Worldskin", "Tank package: health, regen, mitigation.",
+                    ResonanceType.HEAL_SURGE, Scope.ARMOR, null,
+                    b(EssenceEffect.StatType.HEALTH, 30, 0),
+                    b(EssenceEffect.StatType.REGENERATION, 3, 0),
+                    b(EssenceEffect.StatType.DEFENSE, 0, 10),
+                    Essence.Type.LIFE, Essence.Type.WATER, Essence.Type.LIFE, Essence.Type.ICE, Essence.Type.LIGHTNING)
+    );
+
+    private ResonanceSystem() {}
+
+    public static ResonanceResult evaluate(ItemStack item, SocketData socketData) {
+        if (item == null || item.isEmpty() || socketData == null || socketData.getSockets().isEmpty()) {
+            return ResonanceResult.NONE;
+        }
+
+        List<Essence.Type> sequence = extractFilledSequence(socketData);
+        if (sequence.isEmpty()) {
+            return ResonanceResult.NONE;
+        }
+
+        boolean isWeapon = ReforgeEquip.isWeapon(item);
+        boolean isArmor = !isWeapon && ReforgeEquip.isArmor(item);
+        if (!isWeapon && !isArmor) {
+            return ResonanceResult.NONE;
+        }
+
+        WeaponClass weaponClass = classifyWeapon(item.getItemId());
+        for (Definition definition : DEFINITIONS) {
+            if (definition.matches(sequence, isWeapon, isArmor, weaponClass)) {
+                return definition.toResult();
+            }
+        }
+
+        return ResonanceResult.NONE;
+    }
+
+    /**
+     * Builds a tooltip-friendly detailed effect string for active resonances.
+     */
+    public static String buildDetailedEffect(ResonanceResult resonance, boolean isWeapon) {
+        if (resonance == null || !resonance.active()) {
+            return "";
+        }
+
+        String stats = formatBonusSummary(resonance.bonuses());
+        String proc = describeProc(resonance.type(), isWeapon);
+        String flavor = resonance.effect() == null ? "" : resonance.effect().trim();
+
+        if (!stats.isBlank() && !proc.isBlank()) {
+            return "Stats: " + stats + ". " + proc;
+        }
+        if (!stats.isBlank()) {
+            return "Stats: " + stats + ".";
+        }
+        if (!proc.isBlank()) {
+            return proc;
+        }
+        return flavor;
+    }
+
+    private static List<Essence.Type> extractFilledSequence(SocketData socketData) {
+        if (socketData == null || socketData.getSockets().isEmpty()) {
+            return List.of();
+        }
+        List<Essence.Type> result = new ArrayList<>();
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isBroken() || socket.isLocked() || socket.isEmpty()) {
+                return List.of();
+            }
+            Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+            if (essence == null || essence.getType() == null) {
+                return List.of();
+            }
+            result.add(essence.getType());
+        }
+        return result;
+    }
+
+    private static String describeProc(ResonanceType type, boolean isWeapon) {
+        if (type == null || type == ResonanceType.NONE) {
+            return "";
+        }
+        return switch (type) {
+            case BURN_ON_CRIT -> "On hit: 22% chance (0.7s cooldown) to deal +8% bonus damage (min +1).";
+            case CHAIN_SLOW -> "On hit: 25% chance (2.0s cooldown) to freeze target for 1.5s.";
+            case EXECUTE -> "On hit: deal +20% damage to targets at or below 25% HP.";
+            case ARMOR_SHRED -> "On hit: 30% chance (0.9s cooldown) to deal +10% damage.";
+            case THUNDER_STRIKE -> "On hit: 20% chance (1.2s cooldown) to deal +10% bonus damage (min +1).";
+            case MULTISHOT_BARRAGE -> "On projectile hit: 20% chance (1.6s cooldown) to fire 2 extra arrows at 35% damage each.";
+            case CROSSBOW_AUTO_RELOAD -> "On projectile hit: 35% chance to refund 1 arrow/bolt to inventory.";
+            case PLUNDERING_BLADE -> "On hit: 15% chance (2.5s cooldown) to steal an item roll from NPC drop table.";
+            case FROST_NOVA_ON_HIT -> "When hit: 25% chance (4.0s cooldown) to freeze attacker for 1.5s.";
+            case THORNS_SHOCK -> "When hit: reflect 6% of incoming damage as Shock (min 1).";
+            case CHEAT_DEATH -> "Lethal hit prevention: once every 60s, survive at 1 HP.";
+            case HEAL_SURGE -> isWeapon
+                    ? "On hit: heal for 10% of damage dealt (min 1) every 1.8s."
+                    : "When hit: heal for 5% of incoming damage (min 1) every 5.0s.";
+            case SHOCK_DODGE -> "On dodge: 20% chance (3.5s cooldown) to retaliate for 4% of incoming damage (min 1).";
+            case AURA_BURN -> "When hit: 20% chance (0.9s cooldown) to burn attacker for 5% of incoming damage (min 1).";
+            case NONE -> "";
+        };
+    }
+
+    private static String formatBonusSummary(Map<EssenceEffect.StatType, double[]> bonuses) {
+        if (bonuses == null || bonuses.isEmpty()) {
+            return "";
+        }
+
+        List<String> parts = new ArrayList<>();
+        for (EssenceEffect.StatType stat : EssenceEffect.StatType.values()) {
+            double[] values = bonuses.get(stat);
+            if (values == null || values.length < 2) {
+                continue;
+            }
+            double flat = values[0];
+            double percent = values[1];
+            String label = formatStatLabel(stat);
+            if (Math.abs(flat) > 1.0E-9) {
+                parts.add((flat > 0 ? "+" : "") + formatNumber(flat) + " " + label);
+            }
+            if (Math.abs(percent) > 1.0E-9) {
+                parts.add((percent > 0 ? "+" : "") + formatNumber(percent) + "% " + label);
+            }
+        }
+        return String.join(", ", parts);
+    }
+
+    private static String formatStatLabel(EssenceEffect.StatType stat) {
+        if (stat == null) {
+            return "Stat";
+        }
+        return switch (stat) {
+            case DAMAGE -> "Damage";
+            case DEFENSE -> "Defense";
+            case FIRE_DEFENSE -> "Fire Defense";
+            case HEALTH -> "Health";
+            case MOVEMENT_SPEED -> "Slow";
+            case REGENERATION -> "Regen";
+            case CRIT_CHANCE -> "Crit Chance";
+            case CRIT_DAMAGE -> "Crit Damage";
+            case ATTACK_SPEED -> "Attack Speed";
+            case LIFE_STEAL -> "Lifesteal";
+            case EVASION -> "Evasion";
+            case LUCK -> "Luck";
+        };
+    }
+
+    private static String formatNumber(double value) {
+        if (Math.abs(value - Math.rint(value)) < 1.0E-9) {
+            return String.valueOf((int) Math.rint(value));
+        }
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static WeaponClass classifyWeapon(String itemId) {
+        String id = itemId == null ? "" : itemId.toLowerCase(java.util.Locale.ROOT);
+        if (id.contains("sword")) return WeaponClass.SWORD;
+        if (id.contains("battleaxe") || id.contains("axe")) return WeaponClass.AXE;
+        if (id.contains("mace") || id.contains("club")) return WeaponClass.MACE;
+        if (id.contains("dagger") || id.contains("knife")) return WeaponClass.DAGGER;
+        if (id.contains("crossbow")) return WeaponClass.CROSSBOW;
+        if (id.contains("bow")) return WeaponClass.BOW;
+        if (id.contains("staff") || id.contains("spear")) return WeaponClass.STAFF;
+        return WeaponClass.GENERIC;
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3}, bonusMap(b1));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3}, bonusMap(b1, b2));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Bonus b3,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3}, bonusMap(b1, b2, b3));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4}, bonusMap(b1, b2));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Bonus b3,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4}, bonusMap(b1, b2, b3));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4,
+                                  Essence.Type p5) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4, p5}, bonusMap(b1, b2));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Bonus b3,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4,
+                                  Essence.Type p5) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4, p5}, bonusMap(b1, b2, b3));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Bonus b3,
+                                  Bonus b4,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4,
+                                  Essence.Type p5) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4, p5}, bonusMap(b1, b2, b3, b4));
+    }
+
+    private static Definition def(String name,
+                                  String effect,
+                                  ResonanceType type,
+                                  Scope scope,
+                                  WeaponClass weaponClass,
+                                  Bonus b1,
+                                  Bonus b2,
+                                  Bonus b3,
+                                  Bonus b4,
+                                  Bonus b5,
+                                  Essence.Type p1,
+                                  Essence.Type p2,
+                                  Essence.Type p3,
+                                  Essence.Type p4,
+                                  Essence.Type p5) {
+        return new Definition(name, effect, type, scope, weaponClass, new Essence.Type[] {p1, p2, p3, p4, p5}, bonusMap(b1, b2, b3, b4, b5));
+    }
+
+    private static Bonus b(EssenceEffect.StatType stat, double flat, double percent) {
+        return new Bonus(stat, flat, percent);
+    }
+
+    private static Map<EssenceEffect.StatType, double[]> bonusMap(Bonus... bonuses) {
+        EnumMap<EssenceEffect.StatType, double[]> map = new EnumMap<>(EssenceEffect.StatType.class);
+        if (bonuses == null) {
+            return map;
+        }
+        for (Bonus bonus : bonuses) {
+            if (bonus == null || bonus.stat() == null) {
+                continue;
+            }
+            double[] values = map.computeIfAbsent(bonus.stat(), ignored -> new double[] {0.0, 0.0});
+            values[0] += bonus.flat();
+            values[1] += bonus.percent();
+        }
+        return map;
+    }
+}

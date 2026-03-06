@@ -362,6 +362,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
      * Tier scaling: +5% per tier (T1..T5 => 5..25%).
      */
     private double calculateSocketCritDamagePercent(ItemStack weapon) {
+        double[] stored = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.CRIT_DAMAGE);
+        if (stored[1] > 0.0) {
+            return Math.max(0.0, Math.min(200.0, stored[1]));
+        }
         int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
         return Math.max(0.0, Math.min(25.0, voidTier * 5.0));
     }
