@@ -9,7 +9,11 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
 
 /**
  * Utility class for interacting with DynamicTooltipsLib.
@@ -45,14 +49,18 @@ public class DynamicTooltipUtils {
     
     // ASCII socket symbols - always work in any font
     private static final String SOCKET_FILLED = "[o]";
+    private static final String SOCKET_GREATER = "[0]";
     private static final String SOCKET_EMPTY = "[ ]";
     private static final String SOCKET_LOCKED = "[x]";
 
     // Parts metadata keys
+    private static final String META_PARTS_PROFILE_TYPE = "SocketReforge.Parts.ProfileType";
     private static final String META_PARTS_WEAPON_TYPE = "SocketReforge.Parts.WeaponType";
     private static final String META_PART1_TIER = "SocketReforge.Parts.Part1Tier";
     private static final String META_PART2_TIER = "SocketReforge.Parts.Part2Tier";
     private static final String META_PART3_TIER = "SocketReforge.Parts.Part3Tier";
+    private static final String META_PARTS_DAMAGE_MULTIPLIER = "SocketReforge.Parts.DamageMultiplier";
+    private static final String META_ESSENCE_EFFECT_LINES = "SocketReforge.Essence.EffectLines";
     private static final String BLOOD_PACT_PREFIX = "Blood Pact ";
     private static final String META_RESONANCE_NAME = "SocketReforge.Resonance.Name";
     private static final String META_RESONANCE_EFFECT = "SocketReforge.Resonance.Effect";
@@ -182,6 +190,19 @@ public class DynamicTooltipUtils {
     
     public static boolean isAvailable() {
         return isAvailable;
+    }
+
+    /**
+     * Ensures the dynamic tooltip provider is registered even when no tooltip lines
+     * have been pre-cached this session.
+     */
+    public static void ensureProviderRegistered() {
+        if (!isAvailable || tooltipApi == null) {
+            return;
+        }
+        if (!providerRegistered) {
+            registerTooltipProvider();
+        }
     }
     
     /**
@@ -529,23 +550,29 @@ public class DynamicTooltipUtils {
         int socketFilled = extractSocketFilled(metadata);
 
         // Parse modular parts metadata
-        String partsWeaponType = extractStringValue(metadata, META_PARTS_WEAPON_TYPE);
+        String partsProfileType = extractStringValue(metadata, META_PARTS_PROFILE_TYPE);
+        if (partsProfileType == null || partsProfileType.isBlank()) {
+            partsProfileType = extractStringValue(metadata, META_PARTS_WEAPON_TYPE);
+        }
         int part1Tier = extractIntValue(metadata, META_PART1_TIER);
         int part2Tier = extractIntValue(metadata, META_PART2_TIER);
         int part3Tier = extractIntValue(metadata, META_PART3_TIER);
+        double partsDamageMultiplier = extractDoubleValue(metadata, META_PARTS_DAMAGE_MULTIPLIER, 1.0);
         String resonanceName = extractStringValue(metadata, META_RESONANCE_NAME);
         String resonanceEffect = extractStringValue(metadata, META_RESONANCE_EFFECT);
         String resonanceQuality = extractStringValue(metadata, META_RESONANCE_QUALITY);
         boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
+        String baseItemId = extractBaseItemId(metadata);
+        String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
+        boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         
         // If no supported metadata is present, return null
-        if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsWeaponType == null && !hasResonance) {
+        if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null && !hasResonance && !isEquipmentItem) {
             return null;
         }
         
         List<String> tooltipLines = new ArrayList<>();
         String displayName = extractDisplayName(metadata);
-        String baseItemId = extractBaseItemId(metadata);
         boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
         if ((shouldBloodPrefix || hasResonance) && (displayName == null || displayName.isEmpty())) {
             displayName = buildFallbackDisplayName(baseItemId, itemId);
@@ -561,17 +588,41 @@ public class DynamicTooltipUtils {
             displayName = resonanceName + " " + displayName;
         }
         
+        boolean isArmorItem = isArmorType(baseItemId, itemId);
+        String[] socketEntries = extractSocketEntries(metadata);
+        SocketData parsedSocketData = buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries);
+        boolean hasRefineOrSocketedEssence = reforgeLevel > 0 || hasSocketedEssence(socketEntries);
+
+        if (isEquipmentItem && !isArmorItem) {
+            EquipmentDamageTooltipMath.StatSummary summary = EquipmentDamageTooltipMath.computeWeaponDamageSummary(
+                    effectiveItemId,
+                    reforgeLevel,
+                    parsedSocketData,
+                    partsDamageMultiplier
+            );
+            if (hasRefineOrSocketedEssence) {
+                tooltipLines.add(
+                        COLOR_WHITE + "Damage : "
+                                + COLOR_RED + formatDamageValue(summary.getBaseValue())
+                                + COLOR_WHITE + " -> "
+                                + COLOR_GREEN + formatDamageValue(summary.getBuffedValue())
+                );
+            } else {
+                tooltipLines.add(
+                        COLOR_WHITE + "Damage : "
+                                + COLOR_GREEN + formatDamageValue(summary.getBaseValue())
+                );
+            }
+        }
+
         // Add reforge line if present
         if (reforgeLevel > 0) {
-            // Determine if it's armor or weapon using metadata-first checks.
-            boolean isArmor = isArmorType(baseItemId, itemId);
-            
-            String upgradeName = isArmor ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
-            double multiplier = isArmor ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
+            String upgradeName = isArmorItem ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
+            double multiplier = isArmorItem ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
             int percentBonus = (int) ((multiplier - 1.0) * 100);
             
             ReforgeLevel reforgeLevelEnum = ReforgeLevel.fromLevel(reforgeLevel);
-            String statType = isArmor ? "defense" : "damage";
+            String statType = isArmorItem ? "defense" : "damage";
             String line = COLOR_WHITE + "Refine Grade: " + reforgeLevelEnum.getColor() + upgradeName 
                     + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
             tooltipLines.add(line);
@@ -582,25 +633,6 @@ public class DynamicTooltipUtils {
             // Prefer values-array length since it reflects the actual serialized slot count.
             int actualSocketCount = socketFilled > 0 ? socketFilled : socketMax;
             
-            // Parse each socket entry in order
-            String[] socketEntries = new String[0];
-            try {
-                String searchKey = "SocketReforge.Socket.Values";
-                int keyIndex = metadata.indexOf(searchKey);
-                if (keyIndex >= 0) {
-                    int bracketStart = metadata.indexOf("[", keyIndex);
-                    int bracketEnd = metadata.indexOf("]", bracketStart);
-                    if (bracketStart >= 0 && bracketEnd >= 0) {
-                        String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
-                        if (!arrayContent.trim().isEmpty()) {
-                            socketEntries = arrayContent.split(",");
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore
-            }
-            
             StringBuilder socketDisplay = new StringBuilder();
             if (socketEntries.length == 0 && actualSocketCount > 0) {
                 for (int i = 0; i < actualSocketCount; i++) {
@@ -608,12 +640,13 @@ public class DynamicTooltipUtils {
                 }
             } else {
                 for (String entry : socketEntries) {
-                    String trimmed = entry.trim().replace("\"", "");
+                    String trimmed = normalizeSocketEntry(entry);
                     if (trimmed.equals("x")) {
                         socketDisplay.append(COLOR_RED).append(SOCKET_LOCKED);
                     } else if (!trimmed.isEmpty()) {
                         // Apply color based on essence type
-                        socketDisplay.append(getEssenceTooltipColor(trimmed)).append(SOCKET_FILLED).append("</color>");
+                        String symbol = isGreaterEssenceEntry(trimmed) ? SOCKET_GREATER : SOCKET_FILLED;
+                        socketDisplay.append(getEssenceTooltipColor(trimmed)).append(symbol).append("</color>");
                     } else {
                         socketDisplay.append(COLOR_DARK_GRAY).append(SOCKET_EMPTY);
                     }
@@ -632,30 +665,29 @@ public class DynamicTooltipUtils {
         }
 
         // Add modular parts line if present
-        String partsLine = buildPartsTooltipLine(partsWeaponType, part1Tier, part2Tier, part3Tier);
+        String partsLine = buildPartsTooltipLine(partsProfileType, part1Tier, part2Tier, part3Tier);
         if (partsLine != null) {
             tooltipLines.add(partsLine);
         }
         
-        // Add essence effects from metadata
-        String[] effectTypes = extractEssenceEffects(metadata);
-        String[] effectTiers = extractEssenceTiers(metadata);
-        if (effectTypes != null && effectTiers != null && effectTypes.length == effectTiers.length) {
-            for (int i = 0; i < effectTypes.length; i++) {
-                String effectType = effectTypes[i].trim();
-                String tierStr = effectTiers[i].trim();
-                try {
-                    int tier = Integer.parseInt(tierStr);
-                    // Get the color for this essence type
-                    String color = getEssenceTooltipColor("Essence_" + effectType);
-                    // Get the effect description
-                    String effectDesc = getEssenceEffectDescription(effectType, tier, itemId, metadata);
-                    // Add the essence line
-                    String essenceLine = color + effectType + " T" + tier + "</color> " + COLOR_GRAY + effectDesc;
-                    tooltipLines.add(essenceLine);
-                } catch (Exception e) {
-                    // Ignore invalid tier
+        // Add essence effects from the current socket entries so tooltip math always
+        // matches live gameplay math.
+        java.util.Map<Essence.Type, Integer> liveTiers = SocketManager.calculateConsecutiveTiers(parsedSocketData);
+        if (!liveTiers.isEmpty()) {
+            for (java.util.Map.Entry<Essence.Type, Integer> entry : liveTiers.entrySet()) {
+                Essence.Type type = entry.getKey();
+                if (type == null) {
+                    continue;
                 }
+                int tier = entry.getValue() == null ? 0 : entry.getValue();
+                if (tier <= 0) {
+                    continue;
+                }
+                String effectType = type.name();
+                String color = getEssenceTooltipColor("Essence_" + effectType);
+                String effectDesc = SocketManager.describeEssenceEffect(type, tier, !isArmorItem, parsedSocketData);
+                String essenceLine = color + effectType + " T" + tier + "</color> " + COLOR_GRAY + effectDesc;
+                tooltipLines.add(essenceLine);
             }
         }
         
@@ -818,6 +850,82 @@ public class DynamicTooltipUtils {
         return 0;
     }
 
+    private static String[] extractSocketEntries(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return new String[0];
+        }
+        try {
+            String searchKey = "SocketReforge.Socket.Values";
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) {
+                return new String[0];
+            }
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) {
+                return new String[0];
+            }
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            if (arrayContent.trim().isEmpty()) {
+                return new String[0];
+            }
+            return arrayContent.split(",");
+        } catch (Exception e) {
+            return new String[0];
+        }
+    }
+
+    private static String normalizeSocketEntry(String entry) {
+        if (entry == null) {
+            return "";
+        }
+        return entry.trim().replace("\"", "");
+    }
+
+    private static boolean isGreaterEssenceEntry(String normalizedSocketEntry) {
+        if (normalizedSocketEntry == null || normalizedSocketEntry.isBlank()) {
+            return false;
+        }
+        return SocketManager.isGreaterEssenceId(normalizedSocketEntry);
+    }
+
+    private static boolean hasSocketedEssence(String[] socketEntries) {
+        if (socketEntries == null || socketEntries.length == 0) {
+            return false;
+        }
+        for (String entry : socketEntries) {
+            String normalized = normalizeSocketEntry(entry);
+            if (!normalized.isEmpty() && !"x".equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static SocketData buildSocketDataFromMetadata(int socketMax, int socketFilled, String[] socketEntries) {
+        int resolvedMax = Math.max(0, socketMax);
+        int entryCount = socketEntries == null ? 0 : socketEntries.length;
+        int maxSockets = Math.max(resolvedMax, Math.max(socketFilled, entryCount));
+        SocketData socketData = new SocketData(maxSockets);
+        if (entryCount == 0) {
+            return socketData;
+        }
+
+        for (int i = 0; i < entryCount; i++) {
+            socketData.addSocket();
+            String entry = normalizeSocketEntry(socketEntries[i]);
+            if (entry.isEmpty()) {
+                continue;
+            }
+            if ("x".equals(entry)) {
+                socketData.getSockets().get(i).setBroken(true);
+                continue;
+            }
+            socketData.setEssenceAt(i, entry);
+        }
+        return socketData;
+    }
+
     /**
      * Extracts the first positive integer near a metadata key.
      * Works with both plain values and BSON extended JSON wrappers.
@@ -849,6 +957,10 @@ public class DynamicTooltipUtils {
             }
         }
         return 0;
+    }
+
+    private static String[] extractEssenceEffectLines(String metadata) {
+        return extractStringArray(metadata, META_ESSENCE_EFFECT_LINES);
     }
     
     /**
@@ -1003,130 +1115,19 @@ public class DynamicTooltipUtils {
     /**
      * Get effect description for an essence type and tier
      */
-    private static String getEssenceEffectDescription(String effectType, int tier, String itemId, String metadata) {
-        boolean isArmor = ItemTypeUtils.isArmorItemId(itemId);
-        int safeTier = Math.max(1, Math.min(5, tier));
-
+    private static String getEssenceEffectDescription(String effectType,
+                                                      int tier,
+                                                      String itemId,
+                                                      String metadata,
+                                                      SocketData socketData) {
         try {
-            switch (effectType.toUpperCase()) {
-                case "FIRE":
-                    if (isArmor) {
-                        double[] bonus = extractStoredBonus(metadata, "FIRE_DEFENSE");
-                        if (bonus != null && (bonus[1] != 0 || bonus[0] != 0)) {
-                            if (bonus[1] != 0 && bonus[0] != 0) {
-                                return "+" + formatBonus(bonus[1]) + "% Fire Defense, +" + formatBonus(bonus[0]);
-                            }
-                            if (bonus[1] != 0) {
-                                return "+" + formatBonus(bonus[1]) + "% Fire Defense";
-                            }
-                            return "+" + formatBonus(bonus[0]) + " Fire Defense";
-                        }
-                        return "+" + safeTier + "% Fire Defense";
-                    } else {
-                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
-                        double percent = bonus != null ? bonus[1] : (safeTier + 1) / 2.0;
-                        double flat = bonus != null ? bonus[0] : safeTier / 2.0;
-                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                    }
-                case "ICE":
-                    if (isArmor) {
-                        return "+" + safeTier + "% Slow";
-                    }
-                    {
-                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
-                        if (bonus != null && bonus[0] != 0) {
-                            return "+" + formatBonus(bonus[0]) + " Cold DMG";
-                        }
-                        return "+" + safeTier + " Cold DMG";
-                    }
-                case "LIGHTNING":
-                    if (isArmor) {
-                        double[] bonus = extractStoredBonus(metadata, "EVASION");
-                        if (bonus != null && bonus[1] != 0) {
-                            return "+" + formatBonus(bonus[1]) + "% Evasion";
-                        }
-                        return "+" + safeTier + "% Evasion";
-                    }
-                    return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
-                case "LIFE":
-                    if (isArmor) {
-                        double[] bonus = extractStoredBonus(metadata, "HEALTH");
-                        if (bonus != null && bonus[0] != 0) {
-                            double health = bonus[0];
-                            // Backward compatibility for older metadata that stored tier value (1..5).
-                            if (health > 0 && health <= 5.0) {
-                                health = safeTier >= 5 ? 50.0 : (safeTier >= 3 ? 25.0 : 10.0);
-                            }
-                            return "+" + formatBonus(health) + " HP";
-                        }
-                        double fallbackHealth = safeTier >= 5 ? 50.0 : (safeTier >= 3 ? 25.0 : 10.0);
-                        return "+" + formatBonus(fallbackHealth) + " HP";
-                    }
-                    return "+" + safeTier + "% Lifesteal";
-                case "VOID":
-                    if (isArmor) {
-                        double[] bonus = extractStoredBonus(metadata, "DEFENSE");
-                        if (bonus != null && bonus[1] != 0) {
-                            return "+" + formatBonus(bonus[1]) + "% Defense";
-                        }
-                        return "+" + safeTier + "% Defense";
-                    }
-                    int critDmg = safeTier * 5;
-                    if (safeTier >= 5) {
-                        return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
-                    }
-                    return "+" + critDmg + "% Crit DMG";
-                case "WATER":
-                    if (isArmor) {
-                        double[] bonus = extractStoredBonus(metadata, "REGENERATION");
-                        if (bonus != null && bonus[0] != 0) {
-                            return "+" + formatBonus(bonus[0]) + " Regeneration";
-                        }
-                        return "+" + safeTier + " Regeneration";
-                    } else {
-                        double[] bonus = extractStoredBonus(metadata, "DAMAGE");
-                        double percent = bonus != null ? bonus[1] : (safeTier + 1) / 2.0;
-                        double flat = bonus != null ? bonus[0] : safeTier / 2.0;
-                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                    }
-                default:
-                    return "Unknown";
-            }
+            Essence.Type type = Essence.Type.valueOf(effectType.toUpperCase(java.util.Locale.ROOT));
+            boolean isArmor = ItemTypeUtils.isArmorItemId(itemId);
+            SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
+            return SocketManager.describeEssenceEffect(type, tier, !isArmor, safeSocketData);
         } catch (Exception e) {
             return "Error";
         }
-    }
-
-    private static String formatBonus(double value) {
-        if (Math.abs(value - Math.rint(value)) < 1e-9) {
-            return String.valueOf((int) Math.rint(value));
-        }
-        return String.format(java.util.Locale.ROOT, "%.1f", value);
-    }
-
-    /**
-     * Reads one stat bonus from item metadata arrays:
-     * SocketReforge.Essence.Bonus.Stats / Flat / Percent.
-     * Returns [flat, percent], or null if not found.
-     */
-    private static double[] extractStoredBonus(String metadata, String statKey) {
-        if (metadata == null || metadata.isEmpty() || statKey == null || statKey.isEmpty()) {
-            return null;
-        }
-        String[] stats = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Stats");
-        String[] flats = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Flat");
-        String[] percents = extractStringArray(metadata, "SocketReforge.Essence.Bonus.Percent");
-        if (stats == null || flats == null || percents == null) {
-            return null;
-        }
-        int count = Math.min(stats.length, Math.min(flats.length, percents.length));
-        for (int i = 0; i < count; i++) {
-            if (!statKey.equalsIgnoreCase(stats[i])) continue;
-            double flat = parseDoubleSafe(flats[i]);
-            double percent = parseDoubleSafe(percents[i]);
-            return new double[] {flat, percent};
-        }
-        return null;
     }
 
     private static String[] extractStringArray(String metadata, String searchKey) {
@@ -1145,15 +1146,6 @@ public class DynamicTooltipUtils {
             return entries;
         } catch (Exception e) {
             return null;
-        }
-    }
-
-    private static double parseDoubleSafe(String value) {
-        if (value == null || value.isBlank()) return 0.0;
-        try {
-            return Double.parseDouble(value);
-        } catch (NumberFormatException e) {
-            return 0.0;
         }
     }
     
@@ -1267,12 +1259,56 @@ public class DynamicTooltipUtils {
         return 0;
     }
 
-    private static String buildPartsTooltipLine(String weaponType, int t1, int t2, int t3) {
-        if (weaponType == null || weaponType.isBlank()) {
+    private static double extractDoubleValue(String metadata, String searchKey, double defaultValue) {
+        if (metadata == null || metadata.isEmpty() || searchKey == null || searchKey.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return defaultValue;
+            int colonIndex = metadata.indexOf(":", keyIndex);
+            if (colonIndex < 0) return defaultValue;
+            int numberStart = colonIndex + 1;
+            while (numberStart < metadata.length()
+                    && (metadata.charAt(numberStart) == ' ' || metadata.charAt(numberStart) == '"')) {
+                numberStart++;
+            }
+            int numberEnd = numberStart;
+            if (numberEnd < metadata.length() && metadata.charAt(numberEnd) == '-') {
+                numberEnd++;
+            }
+            while (numberEnd < metadata.length()) {
+                char c = metadata.charAt(numberEnd);
+                if (Character.isDigit(c) || c == '.') {
+                    numberEnd++;
+                    continue;
+                }
+                break;
+            }
+            if (numberEnd > numberStart) {
+                return Double.parseDouble(metadata.substring(numberStart, numberEnd));
+            }
+        } catch (Exception ignored) {
+            // Keep default
+        }
+        return defaultValue;
+    }
+
+    private static String formatDamageValue(double value) {
+        double safe = Math.max(0.0, value);
+        long rounded = Math.round(safe);
+        if (Math.abs(safe - rounded) < 0.05) {
+            return Long.toString(rounded);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", safe);
+    }
+
+    private static String buildPartsTooltipLine(String profileType, int t1, int t2, int t3) {
+        if (profileType == null || profileType.isBlank()) {
             return null;
         }
 
-        String normalized = weaponType.trim().toUpperCase(java.util.Locale.ROOT);
+        String normalized = profileType.trim().toUpperCase(java.util.Locale.ROOT);
         String[] glyphs = getPartGlyphs(normalized);
 
         StringBuilder sb = new StringBuilder();
@@ -1303,11 +1339,12 @@ public class DynamicTooltipUtils {
         }
     }
 
-    private static String[] getPartGlyphs(String weaponType) {
-        switch (weaponType) {
+    private static String[] getPartGlyphs(String profileType) {
+        switch (profileType) {
             case "SWORD":
                 return new String[] {"o=", "|", "===>"};
             case "AXE":
+            case "HATCHET":
                 return new String[] {"o=", "===", "[==]"};
             case "MACE":
                 return new String[] {"o=", "===", "[*]"};
@@ -1317,6 +1354,18 @@ public class DynamicTooltipUtils {
                 return new String[] {")=", "==", "=>"};
             case "STAFF":
                 return new String[] {"o=", "====", "Q"};
+            case "PICKAXE":
+                return new String[] {"o=", "||", "T>"};
+            case "SHOVEL":
+                return new String[] {"o=", "||", "[_]"}; 
+            case "HOE":
+                return new String[] {"o=", "||", "_|"};
+            case "SICKLE":
+                return new String[] {"o=", "o", ")>"};
+            case "SHEARS":
+                return new String[] {"o", "X", "o"};
+            case "MULTITOOL":
+                return new String[] {"o=", "<>", "[#]"};
             default:
                 return new String[] {"o=", "|", "=="};
         }

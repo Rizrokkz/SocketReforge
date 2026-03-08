@@ -228,67 +228,15 @@ public class SocketData {
      * @return The total bonus value
      */
     public double getTieredStatBonus(StatType statType, boolean isWeapon) {
-        double total = 0;
-
-        // Get tier map from SocketManager
-        Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
-
-        for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
-            Essence.Type type = entry.getKey();
-            int tier = entry.getValue();
-
-            double[] effects = EssenceRegistry.getTierEffect(type, tier, isWeapon);
-
-            // Map stat type to effect
-            switch (statType) {
-                case DAMAGE:
-                    if (type == Essence.Type.FIRE) {
-                        total += effects[1]; // flat damage
-                    } else if (type == Essence.Type.ICE) {
-                        total += effects[1]; // cold damage
-                    }
-                    break;
-                case ATTACK_SPEED:
-                    if (type == Essence.Type.LIGHTNING) {
-                        total += effects[0];
-                    }
-                    break;
-                case CRIT_CHANCE:
-                    if (type == Essence.Type.LIGHTNING) {
-                        total += effects[1];
-                    }
-                    break;
-                case CRIT_DAMAGE:
-                    if (type == Essence.Type.VOID) {
-                        total += effects[0];
-                    }
-                    break;
-                case LIFE_STEAL:
-                    if (type == Essence.Type.LIFE && isWeapon) {
-                        total += effects[0];
-                    }
-                    break;
-                case HEALTH:
-                    if (type == Essence.Type.LIFE && !isWeapon) {
-                        total += effects[1];
-                    }
-                    break;
-                case EVASION:
-                    if (type == Essence.Type.WATER && !isWeapon) {
-                        total += effects[0];
-                    }
-                    break;
-                case MOVEMENT_SPEED:
-                    if (type == Essence.Type.ICE) {
-                        total += effects[0]; // slow (negative)
-                    }
-                    break;
-                default:
-                    break;
-            }
+        EssenceEffect.StatType effectStat = convertStatTypeToEffectStat(statType);
+        if (effectStat == null) {
+            return 0.0;
         }
-
-        return total;
+        double[] bonus = SocketManager.calculateTieredBonus(this, effectStat, isWeapon);
+        if (bonus == null) {
+            return 0.0;
+        }
+        return isPercentageStat(statType) ? bonus[1] : bonus[0];
     }
 
     /** Converts EssenceEffect.StatType to SocketData.StatType */
@@ -524,64 +472,6 @@ public class SocketData {
      * Uses actual values from EssenceRegistry to ensure consistency.
      */
     private String getEffectDescription(Essence.Type type, int tier, boolean isWeapon) {
-        int safeTier = Math.max(1, Math.min(5, tier));
-        
-        switch (type) {
-            case FIRE:
-                if (isWeapon) {
-                    double percent = (safeTier + 1) / 2.0;
-                    double flat = safeTier / 2.0;
-                    return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                } else {
-                    // Armor: Fire Defense
-                    return "+" + safeTier + "% Fire Defense";
-                }
-            case ICE:
-                if (isWeapon) return "+" + safeTier + " Cold DMG";
-                return "+" + safeTier + "% Slow";
-            case LIGHTNING:
-                if (isWeapon) {
-                    return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
-                } else {
-                    // Armor: Evasion
-                    return "+" + safeTier + "% Evasion";
-                }
-            case LIFE:
-                if (isWeapon) {
-                    return "+" + safeTier + "% Lifesteal";
-                }
-                if (safeTier >= 5) return "+50 HP";
-                if (safeTier >= 3) return "+25 HP";
-                return "+10 HP";
-            case VOID:
-                if (isWeapon) {
-                    int critDmg = safeTier * 5;
-                    if (safeTier >= 5) {
-                        return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
-                    }
-                    return "+" + critDmg + "% Crit DMG";
-                } else {
-                    // Armor: Defense
-                    return "+" + safeTier + "% Defense";
-                }
-            case WATER:
-                if (isWeapon) {
-                    double percent = (safeTier + 1) / 2.0;
-                    double flat = safeTier / 2.0;
-                    return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                } else {
-                    // Armor: Regeneration
-                    return "+" + safeTier + " Regeneration";
-                }
-            default:
-                return "Unknown";
-        }
-    }
-
-    private String formatBonus(double value) {
-        if (Math.abs(value - Math.rint(value)) < 1e-9) {
-            return String.valueOf((int) Math.rint(value));
-        }
-        return String.format(java.util.Locale.ROOT, "%.1f", value);
+        return SocketManager.describeEssenceEffect(type, tier, isWeapon, this);
     }
 }

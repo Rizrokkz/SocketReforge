@@ -10,14 +10,14 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
-import irai.mod.reforge.UI.WeaponPartsUI;
+import irai.mod.reforge.UI.ToolPartsUI;
 
 /**
- * Opens the modular weapon-parts bench UI for the executing player.
+ * Opens the modular tool-parts bench UI for the executing player.
  */
-public class WeaponPartsCommand extends CommandBase {
+public class ToolPartsCommand extends CommandBase {
 
-    public WeaponPartsCommand(@NonNullDecl String name, @NonNullDecl String description, boolean requiresConfirmation) {
+    public ToolPartsCommand(@NonNullDecl String name, @NonNullDecl String description, boolean requiresConfirmation) {
         super(name, description, requiresConfirmation);
         this.requirePermission(HytalePermissions.fromCommand("op.add"));
     }
@@ -32,6 +32,6 @@ public class WeaponPartsCommand extends CommandBase {
             context.sendMessage(Message.raw("OP only command."));
             return;
         }
-        WeaponPartsUI.open(player);
+        ToolPartsUI.open(player);
     }
 }

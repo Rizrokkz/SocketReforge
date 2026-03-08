@@ -348,7 +348,12 @@ public final class ResonanceSystem {
         WeaponClass weaponClass = classifyWeapon(item.getItemId());
         for (Definition definition : DEFINITIONS) {
             if (definition.matches(sequence, isWeapon, isArmor, weaponClass)) {
-                return definition.toResult();
+                ResonanceResult result = definition.toResult();
+                double multiplier = getResonanceGreaterMultiplier(socketData);
+                if (multiplier > 1.0) {
+                    return scaleResultBonuses(result, multiplier);
+                }
+                return result;
             }
         }
 
@@ -471,6 +476,43 @@ public final class ResonanceSystem {
             return String.valueOf((int) Math.rint(value));
         }
         return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static double getResonanceGreaterMultiplier(SocketData socketData) {
+        if (socketData == null || socketData.getSockets().isEmpty()) {
+            return 1.0;
+        }
+        int total = 0;
+        int greater = 0;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken()) {
+                continue;
+            }
+            total++;
+            if (SocketManager.isGreaterEssenceId(socket.getEssenceId())) {
+                greater++;
+            }
+        }
+        if (total <= 0) {
+            return 1.0;
+        }
+        double ratio = (double) greater / (double) total;
+        return 1.0 + (0.5 * ratio);
+    }
+
+    private static ResonanceResult scaleResultBonuses(ResonanceResult result, double multiplier) {
+        if (result == null || result.bonuses() == null || result.bonuses().isEmpty() || multiplier == 1.0) {
+            return result;
+        }
+        EnumMap<EssenceEffect.StatType, double[]> scaled = new EnumMap<>(EssenceEffect.StatType.class);
+        for (Map.Entry<EssenceEffect.StatType, double[]> entry : result.bonuses().entrySet()) {
+            double[] values = entry.getValue();
+            if (values == null || values.length < 2) {
+                continue;
+            }
+            scaled.put(entry.getKey(), new double[] {values[0] * multiplier, values[1] * multiplier});
+        }
+        return new ResonanceResult(result.name(), result.effect(), result.type(), scaled);
     }
 
     private static WeaponClass classifyWeapon(String itemId) {

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-03-08
+
+### New Feature: Socket Loot System
+
+Equipment with sockets can now drop from various sources in the game world!
+
+- **NPC Loot Drops** — Defeated enemies can now drop socketed equipment
+- **Treasure Chests** — Found chests have a chance to contain socketed gear
+- **Configurable Rolls** — Server operators can configure drop rates and socket chances
+
+### New Feature: Enhanced Tooltips
+
+- **Average Damage Display** — Tooltips now show average damage calculations for weapons
+- Takes into account base damage, refinement bonuses, socket bonuses, and essence effects
+- Helps players understand their weapon's true damage output
+
+### New Feature: Greater Essences
+
+- **Concentrated Essences** — New higher-tier essence variants available
+- Provides stronger effects than regular essences
+- Crafted through the essence bench system
+
+### Optimization
+
+- **Plugin Loading** — Optimized startup performance
+- Reduced initialization time and memory footprint
+
+---
+
 ## [1.2.9] - 2026-03-06
 
 ### Hotfix

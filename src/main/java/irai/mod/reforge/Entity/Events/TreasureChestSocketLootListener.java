@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -23,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
 import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
+import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
 /**
@@ -33,6 +35,12 @@ public final class TreasureChestSocketLootListener {
     private static final Logger LOGGER = Logger.getLogger("SocketReforge.WorldLoot");
     private static final Set<String> ROLLED_CHESTS = ConcurrentHashMap.newKeySet();
     private static final Set<String> LOGGED_SKIPPED_CHESTS = ConcurrentHashMap.newKeySet();
+    private static final List<LootInjectionUtils.LootInjectionRule> CHEST_LOOT_INJECTION_RULES = List.of(
+            LootInjectionUtils.rule("Refinement_Glob", 0.15d, 1, 30),
+            LootInjectionUtils.rule("Socket_Puncher", 0.15d, 1, 30),
+            LootInjectionUtils.rule("Socket_Stabilizer", 0.15d, 1, 5),
+            LootInjectionUtils.rule("Ingredient_Voidheart", 0.05d, 1, 2)
+    );
     private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             "furniture_temple_",
             "treasure_chest",
@@ -135,7 +143,7 @@ public final class TreasureChestSocketLootListener {
             }
 
             RollResult result = applyLootSocketsToContainer(containerBlockWindow.getItemContainer());
-            if (result.changedCount > 0) {
+            if (result.changedCount > 0 || result.injectedCount > 0) {
                 // Force this window to rebuild so tooltip packet adapters see updated chest items.
                 refreshChestWindow(player, containerBlockWindow);
             }
@@ -151,6 +159,7 @@ public final class TreasureChestSocketLootListener {
                             + ", lootSlots=" + result.nonEmptyLootCount
                             + ", eligibleLoot=" + result.eligibleCount
                             + ", socketedLoot=" + result.changedCount
+                            + ", injectedLoot=" + result.injectedCount
                             + ", foundLoot=[" + result.foundLoot + "]");
                 }
                 LOGGED_SKIPPED_CHESTS.remove(chestKey);
@@ -198,6 +207,7 @@ public final class TreasureChestSocketLootListener {
         int changedCount = 0;
         int eligibleCount = 0;
         int nonEmptyLootCount = 0;
+        int injectedCount = 0;
         Set<String> foundLootIds = new LinkedHashSet<>();
         for (short slot = 0; slot < container.getCapacity(); slot++) {
             ItemStack stack = container.getItemStack(slot);
@@ -220,7 +230,22 @@ public final class TreasureChestSocketLootListener {
             container.setItemStackForSlot(slot, updated);
             changedCount++;
         }
-        return new RollResult(eligibleCount, changedCount, nonEmptyLootCount, String.join(", ", foundLootIds));
+
+        // Inject additional configured loot only after chest loot has materialized.
+        if (nonEmptyLootCount > 0) {
+            Map<String, Integer> injected = LootInjectionUtils.injectByRules(container, CHEST_LOOT_INJECTION_RULES);
+            for (Map.Entry<String, Integer> entry : injected.entrySet()) {
+                String itemId = entry.getKey();
+                Integer qty = entry.getValue();
+                if (itemId == null || itemId.isBlank() || qty == null || qty <= 0) {
+                    continue;
+                }
+                injectedCount += qty;
+                foundLootIds.add(itemId + " x" + qty);
+            }
+        }
+
+        return new RollResult(eligibleCount, changedCount, nonEmptyLootCount, injectedCount, String.join(", ", foundLootIds));
     }
 
     private static boolean isEquipment(ItemStack stack) {
@@ -354,16 +379,18 @@ public final class TreasureChestSocketLootListener {
     }
 
     private static final class RollResult {
-        private static final RollResult EMPTY = new RollResult(0, 0, 0, "");
+        private static final RollResult EMPTY = new RollResult(0, 0, 0, 0, "");
         private final int eligibleCount;
         private final int changedCount;
         private final int nonEmptyLootCount;
+        private final int injectedCount;
         private final String foundLoot;
 
-        private RollResult(int eligibleCount, int changedCount, int nonEmptyLootCount, String foundLoot) {
+        private RollResult(int eligibleCount, int changedCount, int nonEmptyLootCount, int injectedCount, String foundLoot) {
             this.eligibleCount = eligibleCount;
             this.changedCount = changedCount;
             this.nonEmptyLootCount = nonEmptyLootCount;
+            this.injectedCount = injectedCount;
             this.foundLoot = foundLoot == null ? "" : foundLoot;
         }
     }

@@ -1,7 +1,7 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
-<p><strong>Latest update highlights:</strong> NEW 5-socket resonance effects, dagger/bow/crossbow support, bug fixes, and cleaner UI logs!</p>
+<p><strong>Latest update highlights:</strong> NEW Socket Loot System — enemies and chests can now drop socketed gear! Average damage in tooltips, Greater essences, and performance optimizations.</p>
 
 <hr>
 
@@ -358,6 +358,16 @@
   <li><strong>Elemental:</strong> Cold Damage, Slow Effect, Fire Damage, Lightning Damage</li>
 </ul>
 
+<h3>Greater Essences</h3>
+
+<p>In addition to regular essences, <strong>Greater (Concentrated) Essences</strong> are available with enhanced power:</p>
+
+<ul>
+  <li>Stronger stat bonuses than regular essences</li>
+  <li>Available for all 6 essence types</li>
+  <li>Craftable through the Essence Socket Bench</li>
+</ul>
+
 <h3>How to Craft</h3>
 
 <p><strong>Essence Socket Bench</strong> — Craft at Workbench (Tier 2):</p>
@@ -409,6 +419,30 @@
 <p><strong>Example:</strong> A sword with Fire + Lightning + Life essences creates "Kingsbrand" — granting +8% Damage, +6% Crit Chance, +2% Lifesteal, and a chance to call lightning strikes on hit!</p>
 
 <p><em>Hint: Try different essence orders with 3, 4, and 5 sockets! Experiment with different combinations — share your discoveries with the community!</em></p>
+
+<hr>
+
+<h2>💎 Socket Loot System</h2>
+
+<p>Socketed equipment can now be found throughout the game world! No need to punch sockets yourself — find them as loot!</p>
+
+<h3>Loot Sources</h3>
+
+<ul>
+  <li><strong>Enemy Drops</strong> — Defeated NPCs have a chance to drop equipment with sockets</li>
+  <li><strong>Treasure Chests</strong> — Found chests may contain socketed gear as rewards</li>
+  <li><strong>Leaf Saplings</strong> — Harvesting leaves can yield socketed equipment</li>
+</ul>
+
+<h3>Loot Rarity</h3>
+
+<ul>
+  <li>Higher socket counts are rarer to find</li>
+  <li>Essence-filled sockets are more valuable</li>
+  <li>Some loot may have broken sockets that can be repaired</li>
+</ul>
+
+<p><em>Explore the world to find the best socketed equipment!</em></p>
 
 <hr>
 
@@ -557,11 +591,13 @@
 <ul>
   <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
   <li><strong>3 upgrade tiers</strong> with unique names and star ratings for weapons and armor</li>
-  <li><strong>Reforge preview UI</strong> with split current-vs-expected columns and process progress bar</li>
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
+  <li><strong>Greater Essences</strong> — Concentrated higher-tier essence variants</li>
   <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
-  <li><strong>Resonance System</strong> — discover hidden effects by finding specific essence combinations</li>
+  <li><strong>Resonance System</strong> — discover hidden runeword-like effects by finding specific essence combinations</li>
+  <li><strong>Socket Loot System</strong> — enemies, chests, and trees can drop socketed equipment</li>
+  <li><strong>Average Damage Tooltips</strong> — see true weapon damage output in tooltips</li>
   <li><strong>Extended T5 effects</strong> — includes Void Blood Pact bonus-damage behavior and armor prefixes</li>
   <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
   <li><strong>Iron Building Hammer support</strong> — used in both Essence and Reforge benches with durability wear</li>
@@ -637,6 +673,7 @@
 <ul>
   <li><strong>Source:</strong> <a href="https://github.com/Rizrokkz">GitHub</a></li>
   <li><strong>Test Video:</strong> <a href="https://www.youtube.com/watch?v=QZYTjpr7mms">YouTube</a></li>
+  <li><strong>Discord:</strong> <a href="https://discord.gg/ATXAqrKGF4">Discord</a></li>
   <li><strong>Support:</strong> <a href="https://ko-fi.com/P5P41T8LCR"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi"></a></li>
 </ul>
 

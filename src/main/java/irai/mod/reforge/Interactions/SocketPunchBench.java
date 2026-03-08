@@ -187,8 +187,7 @@ public class SocketPunchBench extends SimpleInteraction {
                 }
                 
                 // Register tooltip for the socketed item
-                String itemId = equipment.getItemId();
-                socketData.registerTooltips(itemId, isWeapon);
+                socketData.registerTooltips(updatedItem, updatedItem.getItemId(), isWeapon);
                 DynamicTooltipUtils.refreshAllPlayers();
                 //SFXConfig.playSuccess(player);
                 player.sendMessage(Message.raw(""));
@@ -220,7 +219,7 @@ public class SocketPunchBench extends SimpleInteraction {
                 player.getInventory().getHotbar().setItemStackForSlot(brokenSlot, brokenItem);
                 
                 // Update tooltip
-                socketData.registerTooltips(equipment.getItemId());
+                socketData.registerTooltips(brokenItem, brokenItem.getItemId(), isWeapon);
                 DynamicTooltipUtils.refreshAllPlayers();
                 
                 int brokenCount = (int) socketData.getSockets().stream().filter(Socket::isBroken).count();

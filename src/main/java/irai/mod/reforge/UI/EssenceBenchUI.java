@@ -50,7 +50,13 @@ public final class EssenceBenchUI {
             "Ingredient_Life_Essence",
             "Ingredient_Lightning_Essence",
             "Ingredient_Void_Essence",
-            "Ingredient_Water_Essence"
+            "Ingredient_Water_Essence",
+            "Ingredient_Fire_Essence_Concentrated",
+            "Ingredient_Ice_Essence_Concentrated",
+            "Ingredient_Life_Essence_Concentrated",
+            "Ingredient_Lightning_Essence_Concentrated",
+            "Ingredient_Void_Essence_Concentrated",
+            "Ingredient_Water_Essence_Concentrated"
     };
     private static final String VOIDHEART_ID = "Ingredient_Voidheart";
     private static final String HAMMER_ID = "Tool_Hammer_Iron";
@@ -588,8 +594,6 @@ public final class EssenceBenchUI {
             ItemStack cleared = SocketManager.withSocketData(item, socketData);
             writeStack(player, equipment, cleared);
             socketData.registerTooltips(cleared, cleared.getItemId(), isWeapon);
-            socketData.registerTooltips(cleared.getItemId(), isWeapon);
-            socketData.registerTooltips(cleared.getItemId());
             DynamicTooltipUtils.refreshAllPlayers();
             if (success) {
                 sfxConfig.playSuccess(player);
@@ -633,8 +637,6 @@ public final class EssenceBenchUI {
             ItemStack repaired = SocketManager.withSocketData(item, socketData);
             writeStack(player, equipment, repaired);
             socketData.registerTooltips(repaired, repaired.getItemId(), isWeapon);
-            socketData.registerTooltips(repaired.getItemId(), isWeapon);
-            socketData.registerTooltips(repaired.getItemId());
             DynamicTooltipUtils.refreshAllPlayers();
             sfxConfig.playSuccess(player);
             return new ProcessResult("Socket repaired. Process again to socket essence.", 100);
@@ -648,11 +650,11 @@ public final class EssenceBenchUI {
             return new ProcessResult("Selected essence stack changed; reselect and try again.", 0);
         }
 
-        String essenceType = getEssenceTypeFromItem(essence.itemId);
-        if (essenceType == null) {
+        String essenceType = SocketManager.resolveEssenceTypeFromItemId(essence.itemId);
+        String essenceId = SocketManager.resolveEssenceIdFromItemId(essence.itemId);
+        if (essenceType == null || essenceId == null) {
             return new ProcessResult("Invalid essence selected.", 0);
         }
-        String essenceId = "Essence_" + capitalize(essenceType);
         if (!EssenceRegistry.get().exists(essenceId)) {
             return new ProcessResult("Essence not found: " + essenceId, 0);
         }
@@ -663,8 +665,6 @@ public final class EssenceBenchUI {
         ItemStack updated = SocketManager.withSocketData(item, socketData);
         writeStack(player, equipment, updated);
         socketData.registerTooltips(updated, updated.getItemId(), isWeapon);
-        socketData.registerTooltips(updated.getItemId(), isWeapon);
-        socketData.registerTooltips(updated.getItemId());
         DynamicTooltipUtils.refreshAllPlayers();
         sfxConfig.playSuccess(player);
         return new ProcessResult("Essence socketed successfully.", 100);
@@ -775,14 +775,7 @@ public final class EssenceBenchUI {
 
     private static String getEssenceTypeFromItem(String itemId) {
         if (itemId == null) return null;
-        String lower = itemId.toLowerCase(Locale.ROOT);
-        if (lower.contains("fire")) return "FIRE";
-        if (lower.contains("ice")) return "ICE";
-        if (lower.contains("life")) return "LIFE";
-        if (lower.contains("lightning")) return "LIGHTNING";
-        if (lower.contains("void")) return "VOID";
-        if (lower.contains("water")) return "WATER";
-        return null;
+        return SocketManager.resolveEssenceTypeFromItemId(itemId);
     }
 
     private static String capitalize(String text) {

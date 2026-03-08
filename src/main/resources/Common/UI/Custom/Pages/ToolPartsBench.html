@@ -1,14 +1,14 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Weapon Parts Bench" style="anchor-width: 920; anchor-height: 760;">
+    <div class="decorated-container" data-hyui-title="Tool Parts Bench" style="anchor-width: 920; anchor-height: 760;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">Weapon Parts Bench</h2>
-            <p style="text-align:center;">Equipment: <b>{{equipmentName}}</b></p>
-            <p style="text-align:center;">Detected type: <b>{{weaponType}}</b></p>
+            <h2 style="text-align:center;">Tool Parts Bench</h2>
+            <p style="text-align:center;">Tool: <b>{{toolName}}</b></p>
+            <p style="text-align:center;">Detected type: <b>{{toolType}}</b></p>
 
             <hr/>
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p><b>Equipment</b></p>
+            <p><b>Tool</b></p>
             <select id="equipmentDropdown" data-hyui-showlabel="true">
                 {{equipmentOptions}}
             </select>
@@ -66,7 +66,7 @@
             <hr/>
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p id="statusLabel">{{statusText}}</p>
-            <p style="font-size:11px;">Consumes 1 material from each selected slot and applies parts metadata to selected equipment.</p>
+            <p style="font-size:11px;">Consumes 1 material from each selected slot and applies parts metadata to the selected tool.</p>
             <button id="applyPartsButton" style="width:100%;height:40px;">Apply Parts</button>
         </div>
     </div>

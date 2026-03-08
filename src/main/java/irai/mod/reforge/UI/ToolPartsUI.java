@@ -21,22 +21,23 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.ToolAbilityUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
-import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
-public final class WeaponPartsUI {
-    private WeaponPartsUI() {}
+public final class ToolPartsUI {
+    private ToolPartsUI() {}
 
     private static final String HYUI_PAGE_BUILDER = "au.ellie.hyui.builders.PageBuilder";
     private static final String HYUI_PLUGIN = "au.ellie.hyui.HyUIPlugin";
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
-    private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/WeaponPartsBench.html";
+    private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/ToolPartsBench.html";
 
-    private static final String META_PARTS_TYPE = "SocketReforge.Parts.WeaponType";
+    private static final String META_PARTS_TYPE = "SocketReforge.Parts.ProfileType";
     private static final String META_PART1_ID = "SocketReforge.Parts.Part1Id";
     private static final String META_PART2_ID = "SocketReforge.Parts.Part2Id";
     private static final String META_PART3_ID = "SocketReforge.Parts.Part3Id";
@@ -53,16 +54,16 @@ public final class WeaponPartsUI {
 
     private enum MaterialKind { WOOD, STONE, METAL }
     private enum ContainerKind { HOTBAR, STORAGE }
-    private enum WeaponKind { SWORD, AXE, MACE, DAGGER, BOW, STAFF, GENERIC }
+    private enum ToolKind { PICKAXE, HATCHET, SHOVEL, HOE, SICKLE, SHEARS, MULTITOOL, GENERIC }
 
     private static final class PartSlot {
         final String name; final MaterialKind kind;
         PartSlot(String name, MaterialKind kind) { this.name = name; this.kind = kind; }
     }
 
-    private static final class WeaponProfile {
-        final WeaponKind kind; final PartSlot slot1; final PartSlot slot2; final PartSlot slot3;
-        WeaponProfile(WeaponKind kind, PartSlot slot1, PartSlot slot2, PartSlot slot3) {
+    private static final class ToolProfile {
+        final ToolKind kind; final PartSlot slot1; final PartSlot slot2; final PartSlot slot3;
+        ToolProfile(ToolKind kind, PartSlot slot1, PartSlot slot2, PartSlot slot3) {
             this.kind = kind; this.slot1 = slot1; this.slot2 = slot2; this.slot3 = slot3;
         }
     }
@@ -104,7 +105,7 @@ public final class WeaponPartsUI {
     }
 
     public static void initialize() {
-        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "WeaponPartsUI");
+        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "ToolPartsUI");
     }
 
     public static void open(Player player) {
@@ -120,12 +121,15 @@ public final class WeaponPartsUI {
 
     private static void openWithSync(Player player) {
         Snapshot snap = snapshot(player);
-        if (snap.equipments.isEmpty()) return;
+        if (snap.equipments.isEmpty()) {
+            player.sendMessage(Message.raw("<color=#FF5555>No valid tools found."));
+            return;
+        }
         PlayerRef ref = player.getPlayerRef();
         SelectionState st = pendingSelections.remove(ref);
         if (st == null) st = new SelectionState(equipmentKeyOf(snap.equipments.get(0)), null, null, null);
         String status = pendingStatus.remove(ref);
-        if (status == null || status.isBlank()) status = "Select equipment, choose 3 materials, then apply.";
+        if (status == null || status.isBlank()) status = "Select a tool, choose 3 materials, then apply.";
         openPage(player, snap, st, status);
     }
 
@@ -145,7 +149,7 @@ public final class WeaponPartsUI {
             String id = s.getItemId();
             if (id == null || id.isBlank()) continue;
             String name = UIItemUtils.displayNameOrItemId(s);
-            if (ReforgeEquip.isWeapon(s)) {
+            if (ItemTypeUtils.isTool(s)) {
                 String p1 = s.getFromMetadataOrNull(META_PART1_ID, Codec.STRING);
                 String p2 = s.getFromMetadataOrNull(META_PART2_ID, Codec.STRING);
                 String p3 = s.getFromMetadataOrNull(META_PART3_ID, Codec.STRING);
@@ -160,15 +164,16 @@ public final class WeaponPartsUI {
         }
     }
 
-    private static WeaponProfile profileOf(String itemId) {
+    private static ToolProfile profileOf(String itemId) {
         String v = itemId == null ? "" : itemId.toLowerCase(Locale.ROOT);
-        if (v.contains("sword")) return new WeaponProfile(WeaponKind.SWORD, new PartSlot("Hilt", MaterialKind.WOOD), new PartSlot("Guard", MaterialKind.STONE), new PartSlot("Blade", MaterialKind.METAL));
-        if (v.contains("axe") || v.contains("battleaxe")) return new WeaponProfile(WeaponKind.AXE, new PartSlot("Haft", MaterialKind.WOOD), new PartSlot("Wedge", MaterialKind.STONE), new PartSlot("Axe Head", MaterialKind.METAL));
-        if (v.contains("mace") || v.contains("club")) return new WeaponProfile(WeaponKind.MACE, new PartSlot("Shaft", MaterialKind.WOOD), new PartSlot("Counterweight", MaterialKind.STONE), new PartSlot("Head", MaterialKind.METAL));
-        if (v.contains("dagger")) return new WeaponProfile(WeaponKind.DAGGER, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Guard", MaterialKind.STONE), new PartSlot("Blade", MaterialKind.METAL));
-        if (v.contains("bow") || v.contains("crossbow")) return new WeaponProfile(WeaponKind.BOW, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Limb Core", MaterialKind.WOOD), new PartSlot("Reinforcement", MaterialKind.METAL));
-        if (v.contains("staff") || v.contains("spear")) return new WeaponProfile(WeaponKind.STAFF, new PartSlot("Shaft", MaterialKind.WOOD), new PartSlot("Focus", MaterialKind.STONE), new PartSlot("Tip", MaterialKind.METAL));
-        return new WeaponProfile(WeaponKind.GENERIC, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Core", MaterialKind.STONE), new PartSlot("Main Head", MaterialKind.METAL));
+        if (v.contains("multitool")) return new ToolProfile(ToolKind.MULTITOOL, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Core", MaterialKind.STONE), new PartSlot("Tool Head", MaterialKind.METAL));
+        if (v.contains("pickaxe")) return new ToolProfile(ToolKind.PICKAXE, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Binding", MaterialKind.STONE), new PartSlot("Pick Head", MaterialKind.METAL));
+        if (v.contains("hatchet")) return new ToolProfile(ToolKind.HATCHET, new PartSlot("Haft", MaterialKind.WOOD), new PartSlot("Wedge", MaterialKind.STONE), new PartSlot("Hatchet Head", MaterialKind.METAL));
+        if (v.contains("shovel")) return new ToolProfile(ToolKind.SHOVEL, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Collar", MaterialKind.STONE), new PartSlot("Spade Head", MaterialKind.METAL));
+        if (v.contains("hoe")) return new ToolProfile(ToolKind.HOE, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Brace", MaterialKind.STONE), new PartSlot("Hoe Head", MaterialKind.METAL));
+        if (v.contains("sickle")) return new ToolProfile(ToolKind.SICKLE, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Rivet", MaterialKind.STONE), new PartSlot("Blade", MaterialKind.METAL));
+        if (v.contains("shears")) return new ToolProfile(ToolKind.SHEARS, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Pivot", MaterialKind.STONE), new PartSlot("Blades", MaterialKind.METAL));
+        return new ToolProfile(ToolKind.GENERIC, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Core", MaterialKind.STONE), new PartSlot("Head", MaterialKind.METAL));
     }
 
     private static MaterialKind kindOf(String id) {
@@ -209,7 +214,7 @@ public final class WeaponPartsUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         PlayerRef ref = fp.getPlayerRef();
                         pendingSelections.put(ref, new SelectionState(extractEventValue(eventObj), null, null, null));
-                        pendingStatus.put(ref, "Equipment changed.");
+                        pendingStatus.put(ref, "Tool changed.");
                         fp.getWorld().execute(() -> openWithSync(fp));
                     });
 
@@ -254,7 +259,7 @@ public final class WeaponPartsUI {
             Object page = openMethod.invoke(pageBuilder, getStore(player.getPlayerRef()));
             openPages.put(player.getPlayerRef(), page);
         } catch (Exception e) {
-            System.err.println("[SocketReforge] WeaponPartsUI open error: " + e.getMessage());
+            System.err.println("[SocketReforge] ToolPartsUI open error: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -270,7 +275,7 @@ public final class WeaponPartsUI {
     private static String buildHtml(Snapshot snap, SelectionState state, String statusText) {
         EquipmentEntry eq = resolveEquipment(snap.equipments, state.equipmentKey);
         if (eq == null) eq = snap.equipments.get(0);
-        WeaponProfile p = profileOf(eq.itemId);
+        ToolProfile p = profileOf(eq.itemId);
 
         String s1 = resolveSlotSelectionKey(snap.materials, p.slot1.kind, state.s1, eq.part1Id);
         String s2 = resolveSlotSelectionKey(snap.materials, p.slot2.kind, state.s2, eq.part2Id);
@@ -287,8 +292,8 @@ public final class WeaponPartsUI {
         String tpl = loadTemplate();
         return tpl
                 .replace("{{equipmentOptions}}", equipmentOptions(snap.equipments, equipmentKeyOf(eq)))
-                .replace("{{equipmentName}}", esc(eq.name))
-                .replace("{{weaponType}}", esc(p.kind.name()))
+                .replace("{{toolName}}", esc(eq.name))
+                .replace("{{toolType}}", esc(p.kind.name()))
                 .replace("{{slot1Label}}", esc(p.slot1.name))
                 .replace("{{slot2Label}}", esc(p.slot2.name))
                 .replace("{{slot3Label}}", esc(p.slot3.name))
@@ -360,8 +365,8 @@ public final class WeaponPartsUI {
     private static int clampTier(int tier) { return Math.max(0, Math.min(5, tier)); }
     private static String applyParts(Player player, Snapshot snap, SelectionState state) {
         EquipmentEntry eq = resolveEquipment(snap.equipments, state.equipmentKey);
-        if (eq == null) return "Select a valid equipment.";
-        WeaponProfile p = profileOf(eq.itemId);
+        if (eq == null) return "Select a valid tool.";
+        ToolProfile p = profileOf(eq.itemId);
 
         MaterialEntry m1 = resolveMaterial(snap.materials, state.s1, p.slot1.kind);
         MaterialEntry m2 = resolveMaterial(snap.materials, state.s2, p.slot2.kind);
@@ -373,15 +378,14 @@ public final class WeaponPartsUI {
             return "Missing valid materials (need " + p.slot1.kind + ", " + p.slot2.kind + ", " + p.slot3.kind + ").";
         }
 
-        ItemStack current = readWeapon(player, eq);
-        if (current == null || current.isEmpty() || !ReforgeEquip.isWeapon(current)) return "Selected equipment changed.";
+        ItemStack current = readTool(player, eq);
+        if (current == null || current.isEmpty() || !ItemTypeUtils.isTool(current)) return "Selected tool changed.";
         if (!hasMaterial(player, m1, 1) || !hasMaterial(player, m2, 1) || !hasMaterial(player, m3, 1)) return "Material stack changed. Retry.";
 
         consume(player, m1, 1);
         consume(player, m2, 1);
         consume(player, m3, 1);
 
-        double mult = Math.min(1.35, 1.0 + m1.tier * 0.010 + m2.tier * 0.006 + m3.tier * 0.020 + ((p.kind == WeaponKind.BOW || p.kind == WeaponKind.DAGGER) ? 0.008 : 0.0));
         ItemStack updated = current
                 .withMetadata(META_PARTS_TYPE, Codec.STRING, p.kind.name())
                 .withMetadata(META_PART1_ID, Codec.STRING, m1.itemId)
@@ -389,13 +393,19 @@ public final class WeaponPartsUI {
                 .withMetadata(META_PART3_ID, Codec.STRING, m3.itemId)
                 .withMetadata(META_PART1_TIER, Codec.INTEGER, m1.tier)
                 .withMetadata(META_PART2_TIER, Codec.INTEGER, m2.tier)
-                .withMetadata(META_PART3_TIER, Codec.INTEGER, m3.tier)
-                .withMetadata(META_DAMAGE_MULTIPLIER, Codec.DOUBLE, mult);
-        writeWeapon(player, eq, updated);
+                .withMetadata(META_PART3_TIER, Codec.INTEGER, m3.tier);
+        updated = ToolAbilityUtils.applyAbilityMetadata(updated, p.kind.name(), m1.tier, m2.tier, m3.tier);
+        ToolAbilityUtils.HatchetThrowStats partStats = ToolAbilityUtils.getHatchetThrowStats(updated);
+        updated = updated.withMetadata(META_DAMAGE_MULTIPLIER, Codec.DOUBLE, partStats.breakPowerMultiplier);
+        writeTool(player, eq, updated);
         DynamicTooltipUtils.refreshAllPlayers();
 
-        return String.format(Locale.ROOT, "Applied parts on %s -> %s[%d] %s[%d] %s[%d], DMG x%.3f", eq.name,
-                m1.itemId, m1.tier, m2.itemId, m2.tier, m3.itemId, m3.tier, mult);
+        return String.format(Locale.ROOT, "Applied parts on %s -> %s[%d] %s[%d] %s[%d], speed x%.2f, save %.0f%%, power x%.2f%s", eq.name,
+                m1.itemId, m1.tier, m2.itemId, m2.tier, m3.itemId, m3.tier,
+                partStats.swingSpeedMultiplier,
+                partStats.durabilitySaveChance * 100.0d,
+                partStats.breakPowerMultiplier,
+                ToolAbilityUtils.describeHatchetThrowStatus(p.kind.name(), m1.tier, m2.tier, m3.tier));
     }
 
     private static EquipmentEntry resolveEquipment(List<EquipmentEntry> entries, String key) {
@@ -443,11 +453,11 @@ public final class WeaponPartsUI {
         return UIInventoryUtils.getContainer(p, kind == ContainerKind.HOTBAR);
     }
 
-    private static ItemStack readWeapon(Player p, EquipmentEntry eq) {
+    private static ItemStack readTool(Player p, EquipmentEntry eq) {
         return UIInventoryUtils.readItem(p, eq.container == ContainerKind.HOTBAR, eq.slot);
     }
 
-    private static void writeWeapon(Player p, EquipmentEntry eq, ItemStack s) {
+    private static void writeTool(Player p, EquipmentEntry eq, ItemStack s) {
         UIInventoryUtils.writeItem(p, eq.container == ContainerKind.HOTBAR, eq.slot, s);
     }
 
@@ -461,10 +471,10 @@ public final class WeaponPartsUI {
 
     private static String loadTemplate() {
         return UITemplateUtils.loadTemplate(
-                WeaponPartsUI.class,
+                ToolPartsUI.class,
                 TEMPLATE_PATH,
-                "<div><p>Weapon parts UI template missing.</p></div>",
-                "WeaponPartsUI");
+                "<div><p>Tool parts UI template missing.</p></div>",
+                "ToolPartsUI");
     }
 
     private static String extractEventValue(Object eventObj) {

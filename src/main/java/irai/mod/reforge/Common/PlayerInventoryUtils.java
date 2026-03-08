@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.Inventory;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
@@ -12,6 +13,39 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
  * Shared helpers for reading and updating player inventory state.
  */
 public final class PlayerInventoryUtils {
+    public static final class HeldItemContext {
+        private final int sectionId;
+        private final short slot;
+        private final ItemContainer container;
+        private final ItemStack itemStack;
+
+        public HeldItemContext(int sectionId, short slot, ItemContainer container, ItemStack itemStack) {
+            this.sectionId = sectionId;
+            this.slot = slot;
+            this.container = container;
+            this.itemStack = itemStack;
+        }
+
+        public int getSectionId() {
+            return sectionId;
+        }
+
+        public short getSlot() {
+            return slot;
+        }
+
+        public ItemContainer getContainer() {
+            return container;
+        }
+
+        public ItemStack getItemStack() {
+            return itemStack;
+        }
+
+        public boolean isValid() {
+            return itemStack != null && !itemStack.isEmpty();
+        }
+    }
 
     private PlayerInventoryUtils() {}
 
@@ -73,6 +107,54 @@ public final class PlayerInventoryUtils {
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    public static ItemStack getHeldItem(Player player) {
+        HeldItemContext context = getHeldItemContext(player);
+        return context == null ? null : context.getItemStack();
+    }
+
+    public static HeldItemContext getHeldItemContext(Player player) {
+        if (player == null || player.getInventory() == null) {
+            return new HeldItemContext(-1, (short) -1, null, null);
+        }
+
+        Inventory inventory = player.getInventory();
+
+        try {
+            if (inventory.usingToolsItem()) {
+                ItemContainer tools = inventory.getTools();
+                short slot = inventory.getActiveToolsSlot();
+                ItemStack stack = readContainerItem(tools, slot);
+                if (stack != null && !stack.isEmpty()) {
+                    return new HeldItemContext(Inventory.TOOLS_SECTION_ID, slot, tools, stack);
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall through to hotbar lookup.
+        }
+
+        try {
+            ItemContainer hotbar = inventory.getHotbar();
+            short slot = inventory.getActiveHotbarSlot();
+            ItemStack stack = readContainerItem(hotbar, slot);
+            if (stack != null && !stack.isEmpty()) {
+                return new HeldItemContext(Inventory.HOTBAR_SECTION_ID, slot, hotbar, stack);
+            }
+        } catch (Exception ignored) {
+            // Fall through to generic in-hand lookup.
+        }
+
+        try {
+            ItemStack inHand = inventory.getItemInHand();
+            if (inHand != null && !inHand.isEmpty()) {
+                return new HeldItemContext(-1, (short) -1, null, inHand);
+            }
+        } catch (Exception ignored) {
+            return new HeldItemContext(-1, (short) -1, null, null);
+        }
+
+        return new HeldItemContext(-1, (short) -1, null, null);
     }
 
     public static ItemStack findFirstInHotbar(Player player, Predicate<ItemStack> matcher) {
@@ -143,5 +225,16 @@ public final class PlayerInventoryUtils {
 
     private static boolean isMatching(ItemStack stack, Predicate<ItemStack> matcher) {
         return stack != null && !stack.isEmpty() && matcher.test(stack);
+    }
+
+    private static ItemStack readContainerItem(ItemContainer container, short slot) {
+        if (container == null || slot < 0 || slot >= container.getCapacity()) {
+            return null;
+        }
+        try {
+            return container.getItemStack(slot);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

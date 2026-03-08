@@ -1,5 +1,5 @@
 {
-    "MAX_SOCKETS": ["4", "2"],
+    "MAX_SOCKETS": ["4", "4"],
     "PUNCH_SUCCESS_CHANCES": [0.90, 0.75, 0.55, 0.35],
     "PUNCH_BREAK_CHANCES": [0.02, 0.05, 0.10, 0.18],
     "ESSENCE_REMOVAL_SUCCESS": [0.70],

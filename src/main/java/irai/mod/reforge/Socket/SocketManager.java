@@ -6,6 +6,7 @@ import java.util.Random;
 import java.util.EnumMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -28,10 +29,11 @@ public class SocketManager {
     private static final String META_SOCKETS_VALUES = "SocketReforge.Socket.Values";
     private static final String META_ESSENCE_EFFECTS = "SocketReforge.Essence.Effects";
     private static final String META_ESSENCE_TIER_MAP = "SocketReforge.Essence.TierMap";
+    private static final String META_ESSENCE_EFFECT_LINES = "SocketReforge.Essence.EffectLines";
     private static final String META_ESSENCE_BONUS_STATS = "SocketReforge.Essence.Bonus.Stats";
     private static final String META_ESSENCE_BONUS_FLAT = "SocketReforge.Essence.Bonus.Flat";
     private static final String META_ESSENCE_BONUS_PERCENT = "SocketReforge.Essence.Bonus.Percent";
-    private static final double WEAPON_FLAT_DAMAGE_CHANCE = 0.25; // 25% flat, 75% percent
+    private static final String GREATER_ESSENCE_SUFFIX = "_Concentrated";
 
     // ── Config ────────────────────────────────────────────────────────────────
 
@@ -115,11 +117,15 @@ public class SocketManager {
         Map<Essence.Type, Integer> tierMap = calculateConsecutiveTiers(socketData);
         String[] effectTypes = new String[tierMap.size()];
         String[] effectTiers = new String[tierMap.size()];
+        String[] effectLines = new String[tierMap.size()];
         
         int idx = 0;
         for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
-            effectTypes[idx] = entry.getKey().name();
-            effectTiers[idx] = String.valueOf(entry.getValue());
+            Essence.Type type = entry.getKey();
+            int tier = SocketEffectMath.clampTier(entry.getValue());
+            effectTypes[idx] = type.name();
+            effectTiers[idx] = String.valueOf(tier);
+            effectLines[idx] = describeEssenceEffect(type, tier, isWeapon, socketData);
             idx++;
         }
 
@@ -144,6 +150,7 @@ public class SocketManager {
                 .withMetadata(META_SOCKETS_VALUES, Codec.STRING_ARRAY, encoded)
                 .withMetadata(META_ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
                 .withMetadata(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
+                .withMetadata(META_ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY, effectLines)
                 .withMetadata(META_ESSENCE_BONUS_STATS, Codec.STRING_ARRAY, statKeys.toArray(String[]::new))
                 .withMetadata(META_ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY, flatValues.toArray(String[]::new))
                 .withMetadata(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY, percentValues.toArray(String[]::new))
@@ -172,6 +179,73 @@ public class SocketManager {
     public static String[] getEssenceTiers(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
         return item.getFromMetadataOrNull(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY);
+    }
+
+    public static String[] getEssenceEffectLines(ItemStack item) {
+        if (item == null || item.isEmpty()) return null;
+        return item.getFromMetadataOrNull(META_ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY);
+    }
+
+    public static String describeEssenceEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData) {
+        double multiplier = getTypeEffectMultiplier(socketData, type);
+        return SocketEffectMath.describeEffect(type, tier, isWeapon, socketData, multiplier);
+    }
+
+    public static boolean isGreaterEssenceId(String essenceId) {
+        if (essenceId == null || essenceId.isBlank()) {
+            return false;
+        }
+        String lower = essenceId.trim().toLowerCase(Locale.ROOT);
+        return lower.contains("_concentrated") || lower.contains("greater");
+    }
+
+    public static boolean isGreaterEssenceItemId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return false;
+        }
+        String lower = itemId.trim().toLowerCase(Locale.ROOT);
+        return (lower.contains("essence") && lower.contains("concentrated")) || lower.contains("greater");
+    }
+
+    public static String buildEssenceId(String essenceType, boolean isGreater) {
+        if (essenceType == null || essenceType.isBlank()) {
+            return null;
+        }
+        String cleaned = essenceType.trim();
+        if (cleaned.startsWith("Essence_")) {
+            cleaned = cleaned.substring("Essence_".length());
+        }
+        if (cleaned.endsWith("_Concentrated")) {
+            cleaned = cleaned.substring(0, cleaned.length() - "_Concentrated".length());
+        }
+        String lower = cleaned.toLowerCase(Locale.ROOT);
+        if (lower.isEmpty()) {
+            return null;
+        }
+        String canonical = Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+        return "Essence_" + canonical + (isGreater ? GREATER_ESSENCE_SUFFIX : "");
+    }
+
+    public static String resolveEssenceTypeFromItemId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        String lower = itemId.toLowerCase(Locale.ROOT);
+        if (lower.contains("fire")) return "FIRE";
+        if (lower.contains("ice")) return "ICE";
+        if (lower.contains("life")) return "LIFE";
+        if (lower.contains("lightning")) return "LIGHTNING";
+        if (lower.contains("void")) return "VOID";
+        if (lower.contains("water")) return "WATER";
+        return null;
+    }
+
+    public static String resolveEssenceIdFromItemId(String itemId) {
+        String type = resolveEssenceTypeFromItemId(itemId);
+        if (type == null) {
+            return null;
+        }
+        return buildEssenceId(type, isGreaterEssenceItemId(itemId));
     }
 
     public static String getResonanceName(ItemStack item) {
@@ -216,6 +290,20 @@ public class SocketManager {
             return new double[] {0.0, 0.0};
         }
 
+        // Prefer live deterministic recomputation from current socket layout so gameplay
+        // stays in sync even if older metadata was generated with previous formulas.
+        SocketData socketData = getSocketData(item);
+        if (socketData != null) {
+            boolean isWeapon = ReforgeEquip.isWeapon(item);
+            Map<EssenceEffect.StatType, double[]> computed = calculateDeterministicBonuses(item, socketData, isWeapon);
+            double[] live = computed.get(stat);
+            if (live != null) {
+                return new double[] {live[0], live[1]};
+            }
+            return new double[] {0.0, 0.0};
+        }
+
+        // Fallback: if socket parsing is unavailable, use persisted metadata values.
         String[] statKeys = item.getFromMetadataOrNull(META_ESSENCE_BONUS_STATS, Codec.STRING_ARRAY);
         String[] flatValues = item.getFromMetadataOrNull(META_ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY);
         String[] percentValues = item.getFromMetadataOrNull(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY);
@@ -228,30 +316,10 @@ public class SocketManager {
                 }
                 double flat = parseDoubleOrZero(flatValues[i]);
                 double percent = parseDoubleOrZero(percentValues[i]);
-                // Backward compatibility:
-                // Older armor metadata stored LIFE health as raw tier (1..5) instead of
-                // the intended value bands (10/25/50). Recompute deterministically.
-                if (stat == EssenceEffect.StatType.HEALTH
-                        && ReforgeEquip.isArmor(item)
-                        && flat > 0.0
-                        && flat <= 5.0) {
-                    break;
-                }
                 return new double[] {flat, percent};
             }
-            // Metadata exists but does not contain the requested stat.
-            // Fall through to deterministic recalculation for backward compatibility
-            // with items generated before the stat was persisted.
         }
-
-        SocketData socketData = getSocketData(item);
-        if (socketData == null) {
-            return new double[] {0.0, 0.0};
-        }
-
-        boolean isWeapon = ReforgeEquip.isWeapon(item);
-        Map<EssenceEffect.StatType, double[]> computed = calculateDeterministicBonuses(item, socketData, isWeapon);
-        return computed.getOrDefault(stat, new double[] {0.0, 0.0});
+        return new double[] {0.0, 0.0};
     }
 
     private static double parseDoubleOrZero(String value) {
@@ -266,65 +334,9 @@ public class SocketManager {
     }
 
     private static Map<EssenceEffect.StatType, double[]> calculateDeterministicBonuses(ItemStack item, SocketData socketData, boolean isWeapon) {
-        Map<EssenceEffect.StatType, double[]> totals = new EnumMap<>(EssenceEffect.StatType.class);
-
+        Map<EssenceEffect.StatType, double[]> totals = calculateBaseTierBonuses(socketData, isWeapon);
         if (socketData == null) {
             return totals;
-        }
-
-        Map<Essence.Type, Integer> tiers = calculateConsecutiveTiers(socketData);
-        for (Map.Entry<Essence.Type, Integer> entry : tiers.entrySet()) {
-            Essence.Type type = entry.getKey();
-            int tierValue = Math.max(0, Math.min(entry.getValue(), 5));
-            if (tierValue <= 0) {
-                continue;
-            }
-
-            if (isWeapon) {
-                // Persist weapon DAMAGE contributions so combat can read deterministic
-                // values instead of recalculating per hit.
-                switch (type) {
-                    case FIRE, WATER -> {
-                        double[] split = splitWeaponDamagePoints(socketData, type, tierValue);
-                        double percentPart = split[0];
-                        double flatPart = split[1];
-                        addPercent(totals, EssenceEffect.StatType.DAMAGE, percentPart);
-                        addFlat(totals, EssenceEffect.StatType.DAMAGE, flatPart);
-                    }
-                    case ICE -> {
-                        addFlat(totals, EssenceEffect.StatType.DAMAGE, tierValue);
-                    }
-                    case LIFE -> {
-                        // Weapon LIFE essences provide lifesteal%.
-                        double[] life = EssenceRegistry.getTierEffect(type, tierValue, true);
-                        addPercent(totals, EssenceEffect.StatType.LIFE_STEAL, life[0]);
-                    }
-                    case LIGHTNING -> {
-                        // Weapon LIGHTNING provides attack speed% and crit chance%.
-                        // Tier scaling: +1% per tier (T1..T5 => 1..5%).
-                        addPercent(totals, EssenceEffect.StatType.ATTACK_SPEED, tierValue);
-                        addPercent(totals, EssenceEffect.StatType.CRIT_CHANCE, tierValue);
-                    }
-                    default -> {
-                        // No persisted weapon stat metadata for this essence type.
-                    }
-                }
-            } else {
-                switch (type) {
-                    case LIFE -> {
-                        double[] life = EssenceRegistry.getTierEffect(type, tierValue, false);
-                        addFlat(totals, EssenceEffect.StatType.HEALTH, life[1]);
-                    }
-                    case WATER -> addFlat(totals, EssenceEffect.StatType.REGENERATION, tierValue);
-                    case FIRE -> addPercent(totals, EssenceEffect.StatType.FIRE_DEFENSE, tierValue);
-                    case ICE -> addPercent(totals, EssenceEffect.StatType.MOVEMENT_SPEED, tierValue);
-                    case LIGHTNING -> addPercent(totals, EssenceEffect.StatType.EVASION, tierValue);
-                    case VOID -> addPercent(totals, EssenceEffect.StatType.DEFENSE, tierValue);
-                    default -> {
-                        // No defensive stat metadata for this essence type.
-                    }
-                }
-            }
         }
 
         ResonanceSystem.ResonanceResult resonance = ResonanceSystem.evaluate(item, socketData);
@@ -346,6 +358,53 @@ public class SocketManager {
         return totals;
     }
 
+    private static Map<EssenceEffect.StatType, double[]> calculateBaseTierBonuses(SocketData socketData, boolean isWeapon) {
+        Map<EssenceEffect.StatType, double[]> totals = new EnumMap<>(EssenceEffect.StatType.class);
+        if (socketData == null) {
+            return totals;
+        }
+
+        Map<Essence.Type, Integer> tiers = calculateConsecutiveTiers(socketData);
+        for (Map.Entry<Essence.Type, Integer> entry : tiers.entrySet()) {
+            Essence.Type type = entry.getKey();
+            int tierValue = SocketEffectMath.clampTier(entry.getValue());
+            double multiplier = getTypeEffectMultiplier(socketData, type);
+
+            if (isWeapon) {
+                switch (type) {
+                    case FIRE, WATER -> {
+                        double[] split = SocketEffectMath.splitWeaponDamagePoints(socketData, type, tierValue);
+                        addPercent(totals, EssenceEffect.StatType.DAMAGE, split[0] * multiplier);
+                        addFlat(totals, EssenceEffect.StatType.DAMAGE, split[1] * multiplier);
+                    }
+                    case ICE -> addFlat(totals, EssenceEffect.StatType.DAMAGE, SocketEffectMath.weaponIceDamageFlat(tierValue) * multiplier);
+                    case LIFE -> addPercent(totals, EssenceEffect.StatType.LIFE_STEAL, SocketEffectMath.weaponLifeStealPercent(tierValue) * multiplier);
+                    case LIGHTNING -> {
+                        addPercent(totals, EssenceEffect.StatType.ATTACK_SPEED, SocketEffectMath.weaponLightningAttackSpeedPercent(tierValue) * multiplier);
+                        addPercent(totals, EssenceEffect.StatType.CRIT_CHANCE, SocketEffectMath.weaponLightningCritChancePercent(tierValue) * multiplier);
+                    }
+                    case VOID -> addPercent(totals, EssenceEffect.StatType.CRIT_DAMAGE, SocketEffectMath.weaponVoidCritDamagePercent(tierValue) * multiplier);
+                    default -> {
+                        // No weapon stat persisted for this essence type.
+                    }
+                }
+            } else {
+                switch (type) {
+                    case LIFE -> addFlat(totals, EssenceEffect.StatType.HEALTH, SocketEffectMath.armorLifeHealthFlat(tierValue) * multiplier);
+                    case WATER -> addFlat(totals, EssenceEffect.StatType.REGENERATION, SocketEffectMath.armorWaterRegenFlat(tierValue) * multiplier);
+                    case FIRE -> addPercent(totals, EssenceEffect.StatType.FIRE_DEFENSE, SocketEffectMath.armorFireDefensePercent(tierValue) * multiplier);
+                    case ICE -> addPercent(totals, EssenceEffect.StatType.MOVEMENT_SPEED, SocketEffectMath.armorIceSlowPercent(tierValue) * multiplier);
+                    case LIGHTNING -> addPercent(totals, EssenceEffect.StatType.EVASION, SocketEffectMath.armorLightningEvasionPercent(tierValue) * multiplier);
+                    case VOID -> addPercent(totals, EssenceEffect.StatType.DEFENSE, SocketEffectMath.armorVoidDefensePercent(tierValue) * multiplier);
+                    default -> {
+                        // No armor stat persisted for this essence type.
+                    }
+                }
+            }
+        }
+        return totals;
+    }
+
     private static void addFlat(Map<EssenceEffect.StatType, double[]> totals, EssenceEffect.StatType stat, double value) {
         double[] values = totals.computeIfAbsent(stat, ignored -> new double[] {0.0, 0.0});
         values[0] += value;
@@ -356,38 +415,30 @@ public class SocketManager {
         values[1] += value;
     }
 
-    /**
-     * Split tier points into [% damage points, flat damage points] with lower flat odds.
-     * Uses a deterministic seed derived from current socket layout.
-     */
-    private static double[] splitWeaponDamagePoints(SocketData socketData, Essence.Type type, int tierValue) {
-        if (tierValue <= 0) {
-            return new double[] {0.0, 0.0};
+    private static double getTypeEffectMultiplier(SocketData socketData, Essence.Type type) {
+        if (socketData == null || type == null) {
+            return 1.0;
         }
-
-        long seed = 1125899906842597L;
-        if (socketData != null) {
-            for (Socket socket : socketData.getSockets()) {
-                seed = seed * 31 + socket.getSlotIndex();
-                seed = seed * 31 + (socket.isBroken() ? 1 : 0);
-                String essenceId = socket.getEssenceId();
-                seed = seed * 31 + (essenceId != null ? essenceId.hashCode() : 0);
+        int totalForType = 0;
+        int greaterForType = 0;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken()) {
+                continue;
+            }
+            Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+            if (essence == null || essence.getType() != type) {
+                continue;
+            }
+            totalForType++;
+            if (isGreaterEssenceId(socket.getEssenceId())) {
+                greaterForType++;
             }
         }
-        seed = seed * 31 + type.ordinal();
-        seed = seed * 31 + tierValue;
-
-        Random seeded = new Random(seed);
-        int flatPoints = 0;
-        int percentPoints = 0;
-        for (int i = 0; i < tierValue; i++) {
-            if (seeded.nextDouble() < WEAPON_FLAT_DAMAGE_CHANCE) {
-                flatPoints++;
-            } else {
-                percentPoints++;
-            }
+        if (totalForType <= 0) {
+            return 1.0;
         }
-        return new double[] {percentPoints, flatPoints};
+        double ratio = (double) greaterForType / (double) totalForType;
+        return 1.0 + (0.5 * ratio);
     }
 
     private static String[] encodeSockets(SocketData socketData) {
@@ -499,13 +550,14 @@ public class SocketManager {
             if (socket.isEmpty()) continue;
             Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
             if (essence == null) continue;
+            double multiplier = isGreaterEssenceId(socket.getEssenceId()) ? 1.5 : 1.0;
 
             for (EssenceEffect effect : essence.getEffects()) {
                 if (effect.getStat() != stat) continue;
                 if (effect.getType() == EssenceEffect.EffectType.FLAT) {
-                    flat += effect.getValue();
+                    flat += effect.getValue() * multiplier;
                 } else {
-                    percent += effect.getValue();
+                    percent += effect.getValue() * multiplier;
                 }
             }
         }
@@ -529,96 +581,11 @@ public class SocketManager {
             EssenceEffect.StatType stat,
             boolean isWeapon
     ) {
-        double flat = 0;
-        double percent = 0;
-
-        // Calculate consecutive tiers
-        Map<Essence.Type, Integer> tierMap = calculateConsecutiveTiers(socketData);
-
-        for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
-            Essence.Type type = entry.getKey();
-            int tier = entry.getValue();
-
-            double[] effects = EssenceRegistry.getTierEffect(type, tier, isWeapon);
-
-            // Map stat type to effect index
-            switch (stat) {
-                case DAMAGE:
-                    if (type == Essence.Type.FIRE || type == Essence.Type.ICE) {
-                        if (type == Essence.Type.FIRE) {
-                            double[] split = splitWeaponDamagePoints(socketData, type, tier);
-                            percent += split[0];
-                            flat += split[1];
-                        } else {
-                            // Ice contributes flat "cold" damage on weapons.
-                            flat += tier;
-                        }
-                    }
-                    if (type == Essence.Type.WATER) {
-                        double[] split = splitWeaponDamagePoints(socketData, type, tier);
-                        percent += split[0];
-                        flat += split[1];
-                    }
-                    break;
-                case ATTACK_SPEED:
-                    if (type == Essence.Type.LIGHTNING) {
-                        percent += effects[0]; // ATK Speed %
-                    }
-                    break;
-                case CRIT_CHANCE:
-                    if (type == Essence.Type.LIGHTNING) {
-                        percent += effects[1]; // Crit %
-                    }
-                    break;
-                case CRIT_DAMAGE:
-                    if (type == Essence.Type.VOID) {
-                        percent += effects[0];
-                    }
-                    break;
-                case LIFE_STEAL:
-                    if (type == Essence.Type.LIFE && isWeapon) {
-                        percent += effects[0];
-                    }
-                    break;
-                case HEALTH:
-                    if (type == Essence.Type.LIFE && !isWeapon) {
-                        flat += effects[1];
-                    }
-                    break;
-                case EVASION:
-                    if (type == Essence.Type.LIGHTNING && !isWeapon) {
-                        percent += effects[0];
-                    }
-                    break;
-                case REGENERATION:
-                    if (type == Essence.Type.WATER && !isWeapon) {
-                        flat += effects[1];
-                    }
-                    break;
-                case DEFENSE:
-                    if (type == Essence.Type.FIRE && !isWeapon) {
-                        percent += effects[0];
-                    }
-                    if (type == Essence.Type.VOID && !isWeapon) {
-                        percent += effects[0];
-                    }
-                    break;
-                case FIRE_DEFENSE:
-                    if (type == Essence.Type.FIRE && !isWeapon) {
-                        percent += effects[0];
-                    }
-                    break;
-                case MOVEMENT_SPEED:
-                    if (type == Essence.Type.ICE) {
-                        percent += effects[0]; // Slow % (negative)
-                    }
-                    break;
-                default:
-                    break;
-            }
+        if (socketData == null || stat == null) {
+            return new double[] {0.0, 0.0};
         }
-
-        return new double[]{ flat, percent };
+        Map<EssenceEffect.StatType, double[]> base = calculateBaseTierBonuses(socketData, isWeapon);
+        return base.getOrDefault(stat, new double[] {0.0, 0.0});
     }
 
     /**

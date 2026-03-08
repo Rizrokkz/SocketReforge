@@ -2,45 +2,62 @@ package irai.mod.reforge;
 
 import java.io.File;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.lang.reflect.Field;
 
 import javax.annotation.Nonnull;
 
+import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
+import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
+import com.hypixel.hytale.event.EventPriority;
+import com.hypixel.hytale.protocol.InteractionType;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
+import com.hypixel.hytale.server.core.event.events.player.DrainPlayerFromWorldEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerMouseButtonEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.InteractionConfiguration;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.util.Config;
-import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
 
+import irai.mod.reforge.Commands.EssenceCommand;
+import irai.mod.reforge.Commands.ItemMetaCommand;
+import irai.mod.reforge.Commands.ReforgeAdminCommand;
+import irai.mod.reforge.Commands.SocketPunchCommand;
+import irai.mod.reforge.Commands.SpawnEquipChestCommand;
+import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
+import irai.mod.reforge.Commands.ToolPartsCommand;
+import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
-import irai.mod.reforge.Commands.ReforgeAdminCommand;
-import irai.mod.reforge.Commands.SpawnEquipChestCommand;
-import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
-import irai.mod.reforge.Commands.SocketPunchCommand;
-import irai.mod.reforge.Commands.EssenceCommand;
-import irai.mod.reforge.Commands.WeaponPartsCommand;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Entity.Events.HatchetThrowEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
+import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
-import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
+import irai.mod.reforge.Interactions.HatchetThrowUse;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -49,7 +66,7 @@ import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.EssenceBenchUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.UI.SocketBenchUI;
-import irai.mod.reforge.UI.WeaponPartsUI;
+import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -59,6 +76,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final SocketStatSystem socketStatSystem;
     private final LifeHealthSystem lifeHealthSystem;
     private final WaterRegenSystem waterRegenSystem;
+    private final HatchetThrowEST hatchetThrowEST;
     private final SalvageMetadataCompatEST salvageMetadataCompatEST;
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
@@ -85,6 +103,7 @@ public class ReforgePlugin extends JavaPlugin {
         socketStatSystem = new SocketStatSystem();
         lifeHealthSystem = new LifeHealthSystem();
         waterRegenSystem = new WaterRegenSystem();
+        hatchetThrowEST = new HatchetThrowEST();
         salvageMetadataCompatEST = new SalvageMetadataCompatEST();
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
@@ -128,7 +147,7 @@ public class ReforgePlugin extends JavaPlugin {
         SocketBenchUI.initialize();
         EssenceBenchUI.initialize();
         ReforgeBenchUI.initialize();
-        WeaponPartsUI.initialize();
+        ToolPartsUI.initialize();
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
@@ -144,22 +163,30 @@ public class ReforgePlugin extends JavaPlugin {
         // Register Bench interactions
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
         this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, TreasureChestSocketLootListener::onPlayerInteract);
         this.getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, TreasureChestSocketLootListener::onTreasureChestOpening);
-        this.getCommandRegistry().registerCommand(new WeaponPartsCommand("partsui", "Open modular weapon parts bench UI", false));
+        System.out.println("[SocketReforge] Hatchet input listeners registered");
+        this.getCommandRegistry().registerCommand(new ToolPartsCommand("toolpartsui", "Open modular tool parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
-
+        this.getCommandRegistry().registerCommand(new ItemMetaCommand("itemmeta", "View or modify item metadata", false));
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
         this.getEntityStoreRegistry().registerSystem(lifeHealthSystem);
         this.getEntityStoreRegistry().registerSystem(waterRegenSystem);
+        this.getEntityStoreRegistry().registerSystem(hatchetThrowEST);
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
@@ -169,8 +196,7 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void start() {
-        // One-time refresh on startup. Further refreshes are event-driven.
-        DynamicTooltipUtils.refreshAllPlayers();
+        injectHatchetUseInteractions();
     }
 
     protected void stop() {
@@ -245,5 +271,104 @@ public class ReforgePlugin extends JavaPlugin {
         // Schedule: 30 seconds delay, then every 30 seconds
         long thirtySeconds = 30 * 1000;
         weaponSyncTimer.scheduleAtFixedRate(syncTask, thirtySeconds, thirtySeconds);
+    }
+
+    private void injectHatchetUseInteractions() {
+        try {
+            DefaultAssetMap<String, Item> assetMap = Item.getAssetMap();
+            if (assetMap == null || assetMap.getAssetMap() == null) {
+                System.out.println("[SocketReforge] Hatchet interaction injection skipped: item asset map unavailable");
+                return;
+            }
+
+            int hatchetCount = 0;
+            int updatedCount = 0;
+            for (Map.Entry<String, Item> entry : assetMap.getAssetMap().entrySet()) {
+                if (!isHatchetItem(entry.getKey(), entry.getValue())) {
+                    continue;
+                }
+                hatchetCount++;
+                boolean changed = false;
+                changed |= ensureItemInteraction(entry.getValue(), InteractionType.Secondary, "HatchetThrowUse");
+                changed |= removeItemInteraction(entry.getValue(), InteractionType.Use, "HatchetThrowUse");
+                if (changed) {
+                    updatedCount++;
+                }
+            }
+
+            System.out.println("[SocketReforge] Hatchet secondary interaction ready for "
+                    + hatchetCount
+                    + " items ("
+                    + updatedCount
+                    + " updated)");
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Failed to inject hatchet interactions: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static boolean isHatchetItem(String itemId, Item item) {
+        if (item == null || item == Item.UNKNOWN || item.getTool() == null) {
+            return false;
+        }
+        return itemId != null && itemId.toLowerCase(Locale.ROOT).contains("hatchet");
+    }
+
+    private static boolean ensureItemInteraction(Item item, InteractionType type, String rootInteractionId)
+            throws ReflectiveOperationException {
+        Map<InteractionType, String> currentInteractions = item.getInteractions();
+        String currentRootId = currentInteractions == null ? null : currentInteractions.get(type);
+        InteractionConfiguration interactionConfig = item.getInteractionConfig();
+
+        if (rootInteractionId.equals(currentRootId) && interactionConfig != null) {
+            return false;
+        }
+
+        EnumMap<InteractionType, String> updatedInteractions = new EnumMap<>(InteractionType.class);
+        if (currentInteractions != null) {
+            updatedInteractions.putAll(currentInteractions);
+        }
+        updatedInteractions.put(type, rootInteractionId);
+
+        setField(item, "interactions", updatedInteractions);
+        if (interactionConfig == null) {
+            setField(item, "interactionConfig", InteractionConfiguration.DEFAULT);
+        }
+        setField(item, "cachedPacket", null);
+        return true;
+    }
+
+    private static boolean removeItemInteraction(Item item, InteractionType type, String rootInteractionId)
+            throws ReflectiveOperationException {
+        Map<InteractionType, String> currentInteractions = item.getInteractions();
+        if (currentInteractions == null || !rootInteractionId.equals(currentInteractions.get(type))) {
+            return false;
+        }
+
+        EnumMap<InteractionType, String> updatedInteractions = new EnumMap<>(InteractionType.class);
+        updatedInteractions.putAll(currentInteractions);
+        updatedInteractions.remove(type);
+
+        setField(item, "interactions", updatedInteractions);
+        setField(item, "cachedPacket", null);
+        return true;
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws ReflectiveOperationException {
+        Field field = findField(target.getClass(), fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private static Field findField(Class<?> type, String fieldName) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                return current.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
     }
 }

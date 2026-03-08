@@ -55,7 +55,13 @@ public class EssenceSocketBench extends SimpleInteraction {
         "Ingredient_Life_Essence",
         "Ingredient_Lightning_Essence",
         "Ingredient_Void_Essence",
-        "Ingredient_Water_Essence"
+        "Ingredient_Water_Essence",
+        "Ingredient_Fire_Essence_Concentrated",
+        "Ingredient_Ice_Essence_Concentrated",
+        "Ingredient_Life_Essence_Concentrated",
+        "Ingredient_Lightning_Essence_Concentrated",
+        "Ingredient_Void_Essence_Concentrated",
+        "Ingredient_Water_Essence_Concentrated"
     };
     
     // Map essence item IDs to essence types
@@ -67,6 +73,12 @@ public class EssenceSocketBench extends SimpleInteraction {
         ESSENCE_TYPE_MAP.put("Ingredient_Lightning_Essence", "LIGHTNING");
         ESSENCE_TYPE_MAP.put("Ingredient_Void_Essence", "VOID");
         ESSENCE_TYPE_MAP.put("Ingredient_Water_Essence", "WATER");
+        ESSENCE_TYPE_MAP.put("Ingredient_Fire_Essence_Concentrated", "FIRE");
+        ESSENCE_TYPE_MAP.put("Ingredient_Ice_Essence_Concentrated", "ICE");
+        ESSENCE_TYPE_MAP.put("Ingredient_Life_Essence_Concentrated", "LIFE");
+        ESSENCE_TYPE_MAP.put("Ingredient_Lightning_Essence_Concentrated", "LIGHTNING");
+        ESSENCE_TYPE_MAP.put("Ingredient_Void_Essence_Concentrated", "VOID");
+        ESSENCE_TYPE_MAP.put("Ingredient_Water_Essence_Concentrated", "WATER");
     }
     
     private SFXConfig sfxConfig;
@@ -159,9 +171,9 @@ public class EssenceSocketBench extends SimpleInteraction {
         // If broken socket but no voidheart, will skip it and fill the next empty socket
 
         // Find ONE essence in inventory (just find, don't consume yet)
-        String foundEssence = findOneEssenceInInventory(player);
+        String foundEssenceItemId = findOneEssenceInInventory(player);
         
-        if (foundEssence == null) {
+        if (foundEssenceItemId == null) {
             player.sendMessage(Message.raw("No essences found in inventory!"));
             player.sendMessage(Message.raw("Add an essence (Fire, Ice, Life, Lightning, Void, Water) to your inventory"));
             return;
@@ -171,8 +183,12 @@ public class EssenceSocketBench extends SimpleInteraction {
         displaySocketStatus(player, socketData);
         
         // Socket only ONE essence at a time
-        String essenceType = foundEssence;
-        String essenceId = "Essence_" + capitalize(essenceType);
+        String essenceType = SocketManager.resolveEssenceTypeFromItemId(foundEssenceItemId);
+        String essenceId = SocketManager.resolveEssenceIdFromItemId(foundEssenceItemId);
+        if (essenceType == null || essenceId == null) {
+            player.sendMessage(Message.raw("Invalid essence selected: " + foundEssenceItemId));
+            return;
+        }
         
         // Debug: show what we're looking for
         player.sendMessage(Message.raw("Looking for: " + essenceId));
@@ -190,7 +206,7 @@ public class EssenceSocketBench extends SimpleInteraction {
         }
         
         // Consume the essence after successful socket
-        consumeOneEssence(player, essenceType);
+        consumeOneEssence(player, foundEssenceItemId);
 
         // Update the equipment with socketed data
         short heldSlot = context.getHeldItemSlot();
@@ -306,7 +322,7 @@ public class EssenceSocketBench extends SimpleInteraction {
      * Returns a random essence if multiple are available.
      */
     private String findOneEssenceInInventory(Player player) {
-        // Collect all available essence types from inventory
+        // Collect available essence item IDs from inventory
         List<String> availableEssences = new ArrayList<>();
         
         // Check hotbar
@@ -314,9 +330,10 @@ public class EssenceSocketBench extends SimpleInteraction {
         for (short i = 0; i < hotbar.getCapacity(); i++) {
             ItemStack stack = hotbar.getItemStack(i);
             if (stack != null && !stack.isEmpty()) {
-                String essenceType = getEssenceTypeFromItem(stack.getItemId());
-                if (essenceType != null && !availableEssences.contains(essenceType)) {
-                    availableEssences.add(essenceType);
+                String essenceItemId = stack.getItemId();
+                String essenceType = getEssenceTypeFromItem(essenceItemId);
+                if (essenceType != null && !availableEssences.contains(essenceItemId)) {
+                    availableEssences.add(essenceItemId);
                 }
             }
         }
@@ -326,9 +343,10 @@ public class EssenceSocketBench extends SimpleInteraction {
         for (short i = 0; i < storage.getCapacity(); i++) {
             ItemStack stack = storage.getItemStack(i);
             if (stack != null && !stack.isEmpty()) {
-                String essenceType = getEssenceTypeFromItem(stack.getItemId());
-                if (essenceType != null && !availableEssences.contains(essenceType)) {
-                    availableEssences.add(essenceType);
+                String essenceItemId = stack.getItemId();
+                String essenceType = getEssenceTypeFromItem(essenceItemId);
+                if (essenceType != null && !availableEssences.contains(essenceItemId)) {
+                    availableEssences.add(essenceItemId);
                 }
             }
         }
@@ -408,88 +426,15 @@ public class EssenceSocketBench extends SimpleInteraction {
      */
     private String getEffectDescription(ItemStack itemWithMetadata, String essenceType, int tier, boolean isWeapon) {
         try {
-            int safeTier = Math.max(1, Math.min(5, tier));
-
-            switch (essenceType) {
-                case "FIRE":
-                    if (isWeapon) {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DAMAGE);
-                        double percent = bonus[1];
-                        double flat = bonus[0];
-                        if (percent == 0.0 && flat == 0.0) {
-                            percent = (safeTier + 1) / 2.0;
-                            flat = safeTier / 2.0;
-                        }
-                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                    } else {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.FIRE_DEFENSE);
-                        double percent = bonus[1];
-                        if (percent == 0.0) percent = safeTier;
-                        return "+" + formatBonus(percent) + "% Fire Defense";
-                    }
-                case "ICE":
-                    if (isWeapon) return "+" + safeTier + " Cold DMG";
-                    return "+" + safeTier + "% Slow";
-                case "LIGHTNING":
-                    if (isWeapon) {
-                        return "+" + safeTier + "% ATK Spd, +" + safeTier + "% Crit";
-                    } else {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.EVASION);
-                        double percent = bonus[1];
-                        if (percent == 0.0) percent = safeTier;
-                        return "+" + formatBonus(percent) + "% Evasion";
-                    }
-                case "LIFE":
-                    if (isWeapon) {
-                        return "+" + safeTier + "% Lifesteal";
-                    } else {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.HEALTH);
-                        double flat = bonus[0];
-                        if (flat == 0.0) flat = safeTier;
-                        return "+" + formatBonus(flat) + " HP";
-                    }
-                case "VOID":
-                    if (isWeapon) {
-                        int critDmg = safeTier * 5;
-                        if (safeTier >= 5) {
-                            return "+" + critDmg + "% Crit DMG, Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)";
-                        }
-                        return "+" + critDmg + "% Crit DMG";
-                    } else {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DEFENSE);
-                        double percent = bonus[1];
-                        if (percent == 0.0) percent = safeTier;
-                        return "+" + formatBonus(percent) + "% Defense";
-                    }
-                case "WATER":
-                    if (isWeapon) {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.DAMAGE);
-                        double percent = bonus[1];
-                        double flat = bonus[0];
-                        if (percent == 0.0 && flat == 0.0) {
-                            percent = (safeTier + 1) / 2.0;
-                            flat = safeTier / 2.0;
-                        }
-                        return "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG";
-                    } else {
-                        double[] bonus = SocketManager.getStoredStatBonus(itemWithMetadata, irai.mod.reforge.Socket.EssenceEffect.StatType.REGENERATION);
-                        double flat = bonus[0];
-                        if (flat == 0.0) flat = safeTier;
-                        return "+" + formatBonus(flat) + " Regeneration";
-                    }
-                default:
-                    return "Unknown";
+            Type type = Type.valueOf(essenceType);
+            SocketData socketData = SocketManager.getSocketData(itemWithMetadata);
+            if (socketData == null) {
+                socketData = new SocketData(0);
             }
+            return SocketManager.describeEssenceEffect(type, tier, isWeapon, socketData);
         } catch (Exception e) {
             return "Error";
         }
-    }
-
-    private String formatBonus(double value) {
-        if (Math.abs(value - Math.rint(value)) < 1e-9) {
-            return String.valueOf((int) Math.rint(value));
-        }
-        return String.format(java.util.Locale.ROOT, "%.1f", value);
     }
 
     /**
@@ -526,17 +471,16 @@ public class EssenceSocketBench extends SimpleInteraction {
     }
 
     /**
-     * Consumes one essence of the specified type from player's inventory.
+     * Consumes one essence item from player's inventory.
      */
-    private void consumeOneEssence(Player player, String essenceType) {
-        String itemId = getItemIdFromEssenceType(essenceType);
-        if (itemId == null) return;
+    private void consumeOneEssence(Player player, String essenceItemId) {
+        if (essenceItemId == null || essenceItemId.isBlank()) return;
         
         // Try hotbar first
         ItemContainer hotbar = player.getInventory().getHotbar();
         for (short i = 0; i < hotbar.getCapacity(); i++) {
             ItemStack stack = hotbar.getItemStack(i);
-            if (stack != null && !stack.isEmpty() && stack.getItemId().equals(itemId)) {
+            if (stack != null && !stack.isEmpty() && stack.getItemId().equals(essenceItemId)) {
                 hotbar.removeItemStackFromSlot(i, 1, false, false);
                 return;
             }
@@ -546,7 +490,7 @@ public class EssenceSocketBench extends SimpleInteraction {
         ItemContainer storage = player.getInventory().getStorage();
         for (short i = 0; i < storage.getCapacity(); i++) {
             ItemStack stack = storage.getItemStack(i);
-            if (stack != null && !stack.isEmpty() && stack.getItemId().equals(itemId)) {
+            if (stack != null && !stack.isEmpty() && stack.getItemId().equals(essenceItemId)) {
                 storage.removeItemStackFromSlot(i, 1, false, false);
                 return;
             }
@@ -554,22 +498,14 @@ public class EssenceSocketBench extends SimpleInteraction {
     }
 
     /**
-     * Gets the item ID from essence type.
-     */
-    private String getItemIdFromEssenceType(String essenceType) {
-        for (java.util.Map.Entry<String, String> entry : ESSENCE_TYPE_MAP.entrySet()) {
-            if (entry.getValue().equalsIgnoreCase(essenceType)) {
-                return entry.getKey();
-            }
-        }
-        return null;
-    }
-
-    /**
      * Gets the essence type from an item ID.
      */
     private String getEssenceTypeFromItem(String itemId) {
-        return ESSENCE_TYPE_MAP.get(itemId);
+        String fromMap = ESSENCE_TYPE_MAP.get(itemId);
+        if (fromMap != null) {
+            return fromMap;
+        }
+        return SocketManager.resolveEssenceTypeFromItemId(itemId);
     }
 
     /**

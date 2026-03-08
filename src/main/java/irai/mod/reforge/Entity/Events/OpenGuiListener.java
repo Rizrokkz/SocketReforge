@@ -47,6 +47,9 @@ public class OpenGuiListener {
         if (!DynamicTooltipUtils.isAvailable()) {
             return;
         }
+
+        // Ensure the dynamic metadata provider is registered.
+        DynamicTooltipUtils.ensureProviderRegistered();
         
         int registeredCount = 0;
         
@@ -63,10 +66,14 @@ public class OpenGuiListener {
         ItemContainer armor = player.getInventory().getArmor();
         registeredCount += scanContainer(armor);
         
+        // Always refresh after player join so dynamic metadata tooltips are rebuilt,
+        // even if there were no pre-cached tooltip lines this session.
         if (registeredCount > 0) {
-            System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join, refreshing in 2 seconds...");
-            scheduleRefresh(5, TimeUnit.SECONDS);
+            System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join; refreshing shortly...");
+        } else {
+            System.out.println("[SocketReforge] Player join tooltip refresh queued (provider-only path).");
         }
+        scheduleRefresh(1200, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -116,23 +123,21 @@ public class OpenGuiListener {
                 continue;
             }
             
+            boolean hasRelevantMetadata = false;
+
             // Check for reforge level
             int reforgeLevel = ReforgeEquip.getLevelFromItem(item);
             if (reforgeLevel > 0) {
-                String itemId = item.getItemId();
-                boolean isArmor = ReforgeEquip.isArmor(item);
-                
-                DynamicTooltipUtils.registerReforgeTooltip(itemId, reforgeLevel, isArmor);
-                count++;
+                hasRelevantMetadata = true;
             }
-            
+
             // Check for socket data
             SocketData socketData = SocketManager.getSocketData(item);
             if (socketData != null && socketData.getCurrentSocketCount() > 0) {
-                String itemId = item.getItemId();
-                
-                // Use SocketData's built-in method to register all tooltips
-                socketData.registerTooltips(itemId);
+                hasRelevantMetadata = true;
+            }
+
+            if (hasRelevantMetadata) {
                 count++;
             }
         }
