@@ -34,6 +34,7 @@ import com.hypixel.hytale.server.core.util.Config;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
+import irai.mod.reforge.Commands.RuntimeConfigCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
@@ -44,6 +45,7 @@ import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
+import irai.mod.reforge.Config.WeatherEventConfig;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
@@ -54,6 +56,7 @@ import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
+import irai.mod.reforge.Entity.Events.SpiritThunderRainSystem;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
@@ -65,6 +68,7 @@ import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.EssenceBenchUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
+import irai.mod.reforge.UI.RuntimeConfigUI;
 import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
@@ -80,6 +84,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final SalvageMetadataCompatEST salvageMetadataCompatEST;
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
+    private final SpiritThunderRainSystem spiritThunderRainSystem;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -93,6 +98,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<RefinementConfig> refinementConfig;
     private final Config<SocketConfig> socketConfig;
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
+    private final Config<WeatherEventConfig> weatherEventConfig;
     private final ConfigService configService;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
@@ -107,11 +113,13 @@ public class ReforgePlugin extends JavaPlugin {
         salvageMetadataCompatEST = new SalvageMetadataCompatEST();
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
+        spiritThunderRainSystem = new SpiritThunderRainSystem();
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
+        this.weatherEventConfig = this.withConfig("WeatherEventConfig", WeatherEventConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -135,6 +143,7 @@ public class ReforgePlugin extends JavaPlugin {
         });
 
         this.configService.register("LootSocketRollConfig", this.lootSocketRollConfig, LootSocketRoller::setConfig);
+        this.configService.register("WeatherEventConfig", this.weatherEventConfig, SpiritThunderRainSystem::setConfig);
     }
 
     @Override
@@ -148,6 +157,7 @@ public class ReforgePlugin extends JavaPlugin {
         EssenceBenchUI.initialize();
         ReforgeBenchUI.initialize();
         ToolPartsUI.initialize();
+        RuntimeConfigUI.initialize(this);
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
@@ -176,6 +186,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new ToolPartsCommand("toolpartsui", "Open modular tool parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
+        this.getCommandRegistry().registerCommand(new RuntimeConfigCommand("reforgeconfig", "Open live runtime config UI", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
@@ -190,6 +201,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
+        this.getEntityStoreRegistry().registerSystem(spiritThunderRainSystem);
 
 
     }
@@ -215,6 +227,30 @@ public class ReforgePlugin extends JavaPlugin {
      */
     public Config<SFXConfig> getSfxconfig() {
         return sfxconfig;
+    }
+
+    public static ReforgePlugin getInstance() {
+        return instance;
+    }
+
+    public ConfigService getConfigService() {
+        return configService;
+    }
+
+    public SocketConfig getSocketRuntimeConfig() {
+        return socketConfig.get();
+    }
+
+    public RefinementConfig getRefinementRuntimeConfig() {
+        return refinementConfig.get();
+    }
+
+    public WeatherEventConfig getWeatherEventRuntimeConfig() {
+        return weatherEventConfig.get();
+    }
+
+    public LootSocketRollConfig getLootSocketRollRuntimeConfig() {
+        return lootSocketRollConfig.get();
     }
 
     /**

@@ -46,6 +46,7 @@ public class SocketBenchUI {
 
     private static final String PUNCHER_ITEM_ID = "Socket_Puncher";
     private static final String SUPPORT_ITEM_ID = "Socket_Stabilizer";
+    private static final String NONE_SUPPORT_KEY = "__NONE_SUPPORT__";
 
     private static boolean hyuiAvailable = false;
     private static final SFXConfig sfxConfig = new SFXConfig();
@@ -230,7 +231,7 @@ public class SocketBenchUI {
                                     new SelectionState(
                                             keyOf(selectedEquipment),
                                             keyOf(selectedPuncher),
-                                            keyOf(selectedSupport),
+                                            supportSelectionKey(supportSelected, selectedSupport),
                                             null,
                                             0,
                                             false));
@@ -254,7 +255,7 @@ public class SocketBenchUI {
                                     new SelectionState(
                                             keyOf(selectedEquipment),
                                             keyOf(selectedPuncher),
-                                            keyOf(selectedSupport),
+                                            supportSelectionKey(supportSelected, selectedSupport),
                                             null,
                                             0,
                                             false));
@@ -276,13 +277,14 @@ public class SocketBenchUI {
                             Entry selectedEquipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
                             Entry selectedPuncher = resolveSelection(finalSnapshot.punchers, puncherVal);
                             Entry selectedSupport = resolveSelection(finalSnapshot.supports, supportVal);
+                            String selectedSupportKey = supportSelectionKey(supportVal, selectedSupport);
                             processingPlayers.put(finalPlayer.getPlayerRef(), true);
                             pendingSelections.put(
                                     finalPlayer.getPlayerRef(),
                                     new SelectionState(
                                             keyOf(selectedEquipment),
                                             keyOf(selectedPuncher),
-                                            keyOf(selectedSupport),
+                                            selectedSupportKey,
                                             "Processing...",
                                             0,
                                             true));
@@ -299,7 +301,7 @@ public class SocketBenchUI {
                                             new SelectionState(
                                                     keyOf(selectedEquipment),
                                                     keyOf(selectedPuncher),
-                                                    keyOf(selectedSupport),
+                                                    selectedSupportKey,
                                                     "Processing...",
                                                     timedProgress,
                                                     true));
@@ -316,7 +318,7 @@ public class SocketBenchUI {
                                             new SelectionState(
                                                     keyOf(selectedEquipment),
                                                     keyOf(selectedPuncher),
-                                                    keyOf(selectedSupport),
+                                                    selectedSupportKey,
                                                     result.statusLine,
                                                     result.progressValue,
                                                     false));
@@ -475,13 +477,14 @@ public class SocketBenchUI {
 
     private static String buildSupportOptions(List<Entry> supports, String selectedKey) {
         StringBuilder sb = new StringBuilder();
-        boolean hasSelected = selectedKey != null && findByKey(supports, selectedKey) != null;
-        boolean selectNone = supports.isEmpty() || (!hasSelected && selectedKey != null && selectedKey.equals("NONE"));
+        boolean noneSelected = NONE_SUPPORT_KEY.equals(selectedKey);
+        boolean hasSelected = !noneSelected && selectedKey != null && findByKey(supports, selectedKey) != null;
+        boolean selectNone = supports.isEmpty() || noneSelected;
         sb.append("<option value=\"-1\"").append(selectNone ? " selected" : "").append(">None</option>");
         for (int i = 0; i < supports.size(); i++) {
             Entry e = supports.get(i);
             String label = e.itemId + " x" + e.quantity + " (" + locationText(e) + " slot " + e.slot + ")";
-            boolean isSelected = hasSelected ? selectedKey.equals(keyOf(e)) : (supports.size() > 0 && i == 0);
+            boolean isSelected = hasSelected ? selectedKey.equals(keyOf(e)) : (!noneSelected && supports.size() > 0 && i == 0);
             sb.append("<option value=\"").append(i).append("\"")
                     .append(isSelected ? " selected" : "")
                     .append(">")
@@ -711,6 +714,13 @@ public class SocketBenchUI {
 
     private static Entry resolveSelection(List<Entry> entries, String selectedValue) {
         return HyUIReflectionUtils.resolveIndexSelection(entries, selectedValue);
+    }
+
+    private static String supportSelectionKey(String selectedValue, Entry selectedSupport) {
+        if ("-1".equals(selectedValue)) {
+            return NONE_SUPPORT_KEY;
+        }
+        return keyOf(selectedSupport);
     }
 
     private static String buildMetadataText(ItemStack item, Entry entry) {

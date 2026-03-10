@@ -5,6 +5,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
@@ -329,6 +330,66 @@ public final class ResonanceSystem {
 
     private ResonanceSystem() {}
 
+    /**
+     * Builds a fully socketed resonance layout for the given item, or null if none apply.
+     */
+    public static SocketData buildRandomResonanceSocketData(ItemStack item) {
+        return buildRandomResonanceSocketData(item, 0.0d);
+    }
+
+    /**
+     * Builds a fully socketed resonance layout for the given item, with an optional chance
+     * for each socket to be a greater (concentrated) essence.
+     */
+    public static SocketData buildRandomResonanceSocketData(ItemStack item, double greaterEssenceChance) {
+        if (item == null || item.isEmpty()) {
+            return null;
+        }
+
+        boolean isWeapon = ReforgeEquip.isWeapon(item);
+        boolean isArmor = !isWeapon && ReforgeEquip.isArmor(item);
+        if (!isWeapon && !isArmor) {
+            return null;
+        }
+
+        WeaponClass weaponClass = classifyWeapon(item.getItemId());
+        List<Definition> candidates = new ArrayList<>();
+        for (Definition definition : DEFINITIONS) {
+            if (definition == null || definition.pattern == null || definition.pattern.length == 0) {
+                continue;
+            }
+            if (!definitionApplies(definition, isWeapon, isArmor, weaponClass)) {
+                continue;
+            }
+            candidates.add(definition);
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        Definition chosen = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        Essence.Type[] pattern = chosen.pattern;
+        SocketData socketData = new SocketData(pattern.length);
+        for (int i = 0; i < pattern.length; i++) {
+            Essence.Type type = pattern[i];
+            if (type == null || !socketData.addSocket()) {
+                return null;
+            }
+            boolean useGreater = ThreadLocalRandom.current().nextDouble() < Math.max(0.0d, Math.min(1.0d, greaterEssenceChance));
+            String essenceId = SocketManager.buildEssenceId(type.name(), useGreater);
+            if (essenceId == null || !EssenceRegistry.get().exists(essenceId)) {
+                essenceId = SocketManager.buildEssenceId(type.name(), false);
+            }
+            if (essenceId == null || !EssenceRegistry.get().exists(essenceId)) {
+                return null;
+            }
+            socketData.setEssenceAt(i, essenceId);
+        }
+
+        return socketData;
+    }
+
     public static ResonanceResult evaluate(ItemStack item, SocketData socketData) {
         if (item == null || item.isEmpty() || socketData == null || socketData.getSockets().isEmpty()) {
             return ResonanceResult.NONE;
@@ -358,6 +419,14 @@ public final class ResonanceSystem {
         }
 
         return ResonanceResult.NONE;
+    }
+
+    private static boolean definitionApplies(Definition definition, boolean isWeapon, boolean isArmor, WeaponClass weaponClass) {
+        if (definition == null || definition.pattern == null) {
+            return false;
+        }
+        List<Essence.Type> sequence = List.of(definition.pattern);
+        return definition.matches(sequence, isWeapon, isArmor, weaponClass);
     }
 
     /**

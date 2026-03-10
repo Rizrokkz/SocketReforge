@@ -160,7 +160,7 @@
 </table>
 
 <p><em>*All rates are fully configurable via JSON config files!*</em></p>
-<p><em>*Refinement support:</em> <strong>Tool_Hammer_Iron</strong> can be used as optional support in the Reforge Bench to reduce break chance. It loses <strong>5% durability</strong> per process and is consumed at 0 durability.</p>
+<p><em>*Refinement support:</em> <strong>Tool_Hammer_Iron</strong> reduces break chance (5% durability per use). <strong>Tool_Hammer_Thorium</strong> reduces break chance further (15% durability per use). Both are consumed at 0 durability.</p>
 
 <hr>
 
@@ -431,7 +431,6 @@
 <ul>
   <li><strong>Enemy Drops</strong> — Defeated NPCs have a chance to drop equipment with sockets</li>
   <li><strong>Treasure Chests</strong> — Found chests may contain socketed gear as rewards</li>
-  <li><strong>Leaf Saplings</strong> — Harvesting leaves can yield socketed equipment</li>
 </ul>
 
 <h3>Loot Rarity</h3>
@@ -439,7 +438,7 @@
 <ul>
   <li>Higher socket counts are rarer to find</li>
   <li>Essence-filled sockets are more valuable</li>
-  <li>Some loot may have broken sockets that can be repaired</li>
+  <li>All looted equipment have broken sockets that can be repaired in order to be used</li>
 </ul>
 
 <p><em>Explore the world to find the best socketed equipment!</em></p>
@@ -485,7 +484,7 @@
 <h3>Regeneration System</h3>
 
 <ul>
-  <li><strong>Life Essence Armor</strong> — Provides HP regeneration over time</li>
+  <li><strong>Life Essence Armor</strong> — Provides Max HP increase</li>
   <li><strong>Water Essence</strong> — Grants natural regeneration benefits</li>
   <li>Stack multiple Life essences for increased regen rates</li>
 </ul>
@@ -523,7 +522,7 @@
   <tr>
     <td><strong>Water</strong></td>
     <td>N/A (weapons)</td>
-    <td>Regeneration bonus (no Evasion)</td>
+    <td>Regeneration bonus</td>
   </tr>
 </table>
 <p><em>Armor identity prefixes at Tier 5:</em> Fire armor uses <strong>Infernal</strong> prefix and Ice armor uses <strong>Glacial</strong> prefix.</p>
@@ -533,9 +532,9 @@
 <ul>
   <li><code>/socketpunch</code> — Open Socket Punch bench UI directly</li>
   <li><code>/essence</code> — Open Essence Socket bench UI directly</li>
-  <li><code>/reforgeadmin refine &lt;0-3&gt;</code> — Set held item refinement level</li>
-  <li><code>/reforgeadmin sockets &lt;current&gt; [max]</code> — Set held item sockets</li>
-  <li><code>/reforgeadmin addmax &lt;amount&gt;</code> — Increase held item max sockets</li>
+  <li><code>/rfadmin refine &lt;0-3&gt;</code> — Set held item refinement level</li>
+  <li><code>/rfadmin sockets &lt;current&gt; [max]</code> — Set held item sockets</li>
+  <li><code>/rfadmin addmax &lt;amount&gt;</code> — Increase held item max sockets</li>
 </ul>
 
 <hr>
@@ -596,7 +595,7 @@
   <li><strong>Greater Essences</strong> — Concentrated higher-tier essence variants</li>
   <li><strong>Consecutive tier system</strong> — stack same-type essences for higher bonuses</li>
   <li><strong>Resonance System</strong> — discover hidden runeword-like effects by finding specific essence combinations</li>
-  <li><strong>Socket Loot System</strong> — enemies, chests, and trees can drop socketed equipment</li>
+  <li><strong>Socket Loot System</strong> — enemies and chests can now drop socketed equipment!</li>
   <li><strong>Average Damage Tooltips</strong> — see true weapon damage output in tooltips</li>
   <li><strong>Extended T5 effects</strong> — includes Void Blood Pact bonus-damage behavior and armor prefixes</li>
   <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
@@ -662,7 +661,7 @@
   <tr>
     <td><strong>Essence Crafting</strong></td>
     <td>Craft and upgrade essences</td>
-    <td>🔄 Planned</td>
+    <td>✅ Available</td>
   </tr>
 </table>
 

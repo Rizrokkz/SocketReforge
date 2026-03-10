@@ -3,6 +3,7 @@ package irai.mod.reforge.UI;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,6 +61,8 @@ public final class EssenceBenchUI {
     };
     private static final String VOIDHEART_ID = "Ingredient_Voidheart";
     private static final String HAMMER_ID = "Tool_Hammer_Iron";
+    private static final String HAMMER_THORIUM_ID = "Tool_Hammer_Thorium";
+    private static final double THORIUM_MAX_SOCKET_REDUCE_CHANCE = 0.02d;
 
     private static final SFXConfig sfxConfig = new SFXConfig();
     private static boolean hyuiAvailable = false;
@@ -233,7 +236,15 @@ public final class EssenceBenchUI {
     }
 
     private static boolean isHammerItem(String itemId) {
+        return isIronHammerItem(itemId) || isThoriumHammerItem(itemId);
+    }
+
+    private static boolean isIronHammerItem(String itemId) {
         return UIItemUtils.isIronHammerItem(itemId, HAMMER_ID);
+    }
+
+    private static boolean isThoriumHammerItem(String itemId) {
+        return itemId != null && HAMMER_THORIUM_ID.equalsIgnoreCase(itemId);
     }
 
     private static void openPage(Player player, Snapshot snapshot, SelectionState state) {
@@ -351,6 +362,7 @@ public final class EssenceBenchUI {
         }
 
         Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
+        Entry selectedSupport = resolveSelection(snapshot.voidhearts, supportKey);
         if (!processing && "Idle".equals(status) && isFilled(selectedEquipment)) {
             status = "All sockets are filled.";
         }
@@ -359,12 +371,12 @@ public final class EssenceBenchUI {
         html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, "No socketed equipment found", equipmentKey));
         html = html.replace("{{essenceOptions}}", buildOptions(snapshot.essences, "No essence found", essenceKey));
         html = html.replace("{{supportOptions}}", buildSupportOptions(snapshot.voidhearts, supportKey));
+        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(selectedSupport)));
         html = html.replace("{{socketIcons}}", buildSocketIconsHtml(selectedEquipment));
         html = html.replace("{{socketSummary}}", escapeHtml(buildSocketSummary(selectedEquipment)));
         html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
-        Entry selectedSupport = resolveSelection(snapshot.voidhearts, supportKey);
         html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, essenceKey, selectedSupport) ? "disabled=\"true\"" : "");
         return html;
     }
@@ -558,6 +570,21 @@ public final class EssenceBenchUI {
                 return new ProcessResult("No socketed essences to clear.", 100);
             }
 
+            boolean isThoriumHammer = isThoriumHammerItem(support.itemId);
+            Map<String, Integer> refundCounts = new LinkedHashMap<>();
+            if (isThoriumHammer) {
+                for (Socket socket : socketData.getSockets()) {
+                    if (socket.isBroken() || socket.isEmpty()) {
+                        continue;
+                    }
+                    String essenceId = socket.getEssenceId();
+                    if (essenceId == null || essenceId.isBlank()) {
+                        continue;
+                    }
+                    refundCounts.merge(essenceId, 1, Integer::sum);
+                }
+            }
+
             HammerUseResult hammerUse = applyHammerWear(player, support);
             if (!hammerUse.ok) {
                 return new ProcessResult("Selected hammer stack changed; reselect and try again.", 0);
@@ -568,6 +595,7 @@ public final class EssenceBenchUI {
                     : 0.70;
             boolean success = Math.random() < successChance;
 
+            boolean reducedMaxSockets = false;
             int removed = 0;
             if (success) {
                 for (Socket socket : socketData.getSockets()) {
@@ -590,26 +618,36 @@ public final class EssenceBenchUI {
                     broken.setEssenceId(null);
                 }
             }
+            if (isThoriumHammer && socketData.getMaxSockets() > 1
+                    && Math.random() < THORIUM_MAX_SOCKET_REDUCE_CHANCE) {
+                reducedMaxSockets = socketData.reduceMaxSockets();
+            }
 
             ItemStack cleared = SocketManager.withSocketData(item, socketData);
             writeStack(player, equipment, cleared);
             socketData.registerTooltips(cleared, cleared.getItemId(), isWeapon);
             DynamicTooltipUtils.refreshAllPlayers();
             if (success) {
+                int refunded = isThoriumHammer ? refundEssences(player, refundCounts) : 0;
                 sfxConfig.playSuccess(player);
-                return new ProcessResult(
-                        hammerUse.consumed
-                                ? "Clear succeeded: removed " + removed + ". Hammer broke."
-                                : "Clear succeeded: removed " + removed + " socketed essence(s).",
-                        100);
+                String successStatus = hammerUse.consumed
+                        ? "Clear succeeded: removed " + removed + ". Hammer broke."
+                        : "Clear succeeded: removed " + removed + " socketed essence(s).";
+                successStatus += (isThoriumHammer ? buildRefundSuffix(removed, refunded) : "");
+                if (reducedMaxSockets) {
+                    successStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
+                }
+                return new ProcessResult(successStatus, 100);
             }
 
             sfxConfig.playShatter(player);
-            return new ProcessResult(
-                    hammerUse.consumed
-                            ? "Clear failed: a random socket broke. Hammer broke."
-                            : "Clear failed: a random socket broke.",
-                    100);
+            String failureStatus = hammerUse.consumed
+                    ? "Clear failed: a random socket broke. Hammer broke."
+                    : "Clear failed: a random socket broke.";
+            if (reducedMaxSockets) {
+                failureStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
+            }
+            return new ProcessResult(failureStatus, 100);
         }
 
         if (essence == null) return new ProcessResult("Pick an essence first.", 0);
@@ -684,6 +722,60 @@ public final class EssenceBenchUI {
         return UIInventoryUtils.consumeItem(player, entry.kind == ContainerKind.HOTBAR, entry.slot, entry.itemId, amount);
     }
 
+    private static int refundEssences(Player player, Map<String, Integer> refundCounts) {
+        if (player == null || refundCounts == null || refundCounts.isEmpty()) {
+            return 0;
+        }
+        int refunded = 0;
+        for (Map.Entry<String, Integer> entry : refundCounts.entrySet()) {
+            String itemId = resolveEssenceItemId(entry.getKey());
+            Integer qty = entry.getValue();
+            if (itemId == null || itemId.isBlank() || qty == null || qty <= 0) {
+                continue;
+            }
+            ItemStack stack = new ItemStack(itemId, qty);
+            if (UIInventoryUtils.addItemToInventory(player, stack)) {
+                refunded += qty;
+            }
+        }
+        return refunded;
+    }
+
+    private static String resolveEssenceItemId(String essenceId) {
+        if (essenceId == null || essenceId.isBlank()) {
+            return null;
+        }
+        String lower = essenceId.toLowerCase(Locale.ROOT);
+        if (lower.contains("ingredient_") && lower.contains("essence")) {
+            return essenceId;
+        }
+        String cleaned = essenceId;
+        if (lower.startsWith("essence_")) {
+            cleaned = essenceId.substring("Essence_".length());
+        }
+        boolean isGreater = lower.endsWith("_concentrated");
+        if (isGreater && cleaned.length() >= "_Concentrated".length()) {
+            cleaned = cleaned.substring(0, cleaned.length() - "_Concentrated".length());
+        }
+        if (cleaned.isBlank()) {
+            return null;
+        }
+        return "Ingredient_" + cleaned + "_Essence" + (isGreater ? "_Concentrated" : "");
+    }
+
+    private static String buildRefundSuffix(int removed, int refunded) {
+        if (removed <= 0) {
+            return "";
+        }
+        if (refunded <= 0) {
+            return " Inventory full: refund failed.";
+        }
+        if (refunded < removed) {
+            return " Refunded " + refunded + " of " + removed + " (inventory full).";
+        }
+        return " Refunded " + refunded + " essence(s).";
+    }
+
     private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry) {
         if (player == null || hammerEntry == null || !isHammerItem(hammerEntry.itemId)) {
             return new HammerUseResult(false, false);
@@ -755,6 +847,23 @@ public final class EssenceBenchUI {
             sb.append("none");
         }
         return sb.toString();
+    }
+
+    private static String buildSupportDurabilityText(Entry support) {
+        if (support == null || support.item == null || support.item.isEmpty()) {
+            return "Support durability: -";
+        }
+        ItemStack item = support.item;
+        double max = item.getMaxDurability();
+        double cur = item.getDurability();
+        if (max <= 0.0d) {
+            return "Support durability: N/A";
+        }
+        int maxInt = (int) Math.round(max);
+        int curInt = (int) Math.round(cur);
+        int percent = (int) Math.round((cur / max) * 100.0);
+        percent = Math.max(0, Math.min(100, percent));
+        return "Support durability: " + percent + "% (" + curInt + "/" + maxInt + ")";
     }
 
     private static String loadTemplate() {

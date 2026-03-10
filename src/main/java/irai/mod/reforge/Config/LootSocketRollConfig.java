@@ -18,6 +18,11 @@ public class LootSocketRollConfig {
                     cfg -> new double[]{cfg.chestThreeSocketChance}
             ).add()
             .append(
+                    new KeyedCodec<>("CHEST_RESONANCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.chestResonanceChance = v[0]; },
+                    cfg -> new double[]{cfg.chestResonanceChance}
+            ).add()
+            .append(
                     new KeyedCodec<>("CHEST_FOUR_SOCKET_CHANCE", DOUBLE_ARRAY),
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.chestFourSocketChance = v[0]; },
                     cfg -> new double[]{cfg.chestFourSocketChance}
@@ -53,6 +58,11 @@ public class LootSocketRollConfig {
                     cfg -> new double[]{cfg.dropThreeToFourChance}
             ).add()
             .append(
+                    new KeyedCodec<>("DROP_RESONANCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.dropResonanceChance = v[0]; },
+                    cfg -> new double[]{cfg.dropResonanceChance}
+            ).add()
+            .append(
                     new KeyedCodec<>("MIN_BROKEN_SOCKETS", DOUBLE_ARRAY),
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.minBrokenSockets = (int) Math.round(v[0]); },
                     cfg -> new double[]{cfg.minBrokenSockets}
@@ -69,12 +79,14 @@ public class LootSocketRollConfig {
     private double chestFourSocketChance = 0.10d;
     private double chestFiveSocketChance = 0.01d;
     private double chestThreeToFourChance = 0.50d;
+    private double chestResonanceChance = 0.001d;
 
     // NPC drop rolls
     private double dropThreeSocketChance = 0.30d;
     private double dropFourSocketChance = 0.10d;
     private double dropFiveSocketChance = 0.01d;
     private double dropThreeToFourChance = 0.50d;
+    private double dropResonanceChance = 0.001d;
 
     // Clamp range used after rolling
     private int minBrokenSockets = 3;
@@ -96,6 +108,10 @@ public class LootSocketRollConfig {
         return chestThreeToFourChance;
     }
 
+    public double getChestResonanceChance() {
+        return chestResonanceChance;
+    }
+
     public double getDropThreeSocketChance() {
         return dropThreeSocketChance;
     }
@@ -112,11 +128,63 @@ public class LootSocketRollConfig {
         return dropThreeToFourChance;
     }
 
+    public double getDropResonanceChance() {
+        return dropResonanceChance;
+    }
+
     public int getMinBrokenSockets() {
         return minBrokenSockets;
     }
 
     public int getMaxBrokenSockets() {
         return maxBrokenSockets;
+    }
+
+    public void setChestThreeSocketChance(double value) {
+        this.chestThreeSocketChance = value;
+    }
+
+    public void setChestFourSocketChance(double value) {
+        this.chestFourSocketChance = value;
+    }
+
+    public void setChestFiveSocketChance(double value) {
+        this.chestFiveSocketChance = value;
+    }
+
+    public void setChestThreeToFourChance(double value) {
+        this.chestThreeToFourChance = value;
+    }
+
+    public void setChestResonanceChance(double value) {
+        this.chestResonanceChance = value;
+    }
+
+    public void setDropThreeSocketChance(double value) {
+        this.dropThreeSocketChance = value;
+    }
+
+    public void setDropFourSocketChance(double value) {
+        this.dropFourSocketChance = value;
+    }
+
+    public void setDropFiveSocketChance(double value) {
+        this.dropFiveSocketChance = value;
+    }
+
+    public void setDropThreeToFourChance(double value) {
+        this.dropThreeToFourChance = value;
+    }
+
+    public void setDropResonanceChance(double value) {
+        this.dropResonanceChance = value;
+    }
+
+    public void setMinBrokenSockets(int value) {
+        this.minBrokenSockets = value;
+    }
+
+    public void setMaxBrokenSockets(int value) {
+        this.maxBrokenSockets = value;
     }
 }

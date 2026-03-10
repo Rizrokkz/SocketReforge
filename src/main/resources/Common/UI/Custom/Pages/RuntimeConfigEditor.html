@@ -1,0 +1,15 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Runtime Config Editor" style="anchor-width: 920; anchor-height: 760;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto; layout-mode:Top; spacing:10;">
+            <h2 style="text-align:center;">Runtime Gameplay Config</h2>
+            <p style="text-align:center;">Live operator tuning for gameplay-facing settings. Changes save immediately.</p>
+            <hr/>
+            <div style="layout-mode:Top; spacing:8; background-color:#101726; padding:10; border-radius:6;">
+                <button id="reloadAllButton" style="width:220;height:36;">Reload All From Disk</button>
+                <p id="statusLabel" style="white-space:pre-line; max-height:72; overflow-y:auto; background-color:#1a1a2b; padding:8; border-radius:4;">{{statusText}}</p>
+            </div>
+            <p style="font-size:11; color:#B8B8C8;">Use the top row to switch categories, then pick a subsection to edit its values.</p>
+            <div id="categoryRoot" style="layout-mode:Top; spacing:10;">{{categoriesHtml}}</div>
+        </div>
+    </div>
+</div>

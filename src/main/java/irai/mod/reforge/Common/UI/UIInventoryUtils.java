@@ -50,6 +50,23 @@ public final class UIInventoryUtils {
         return true;
     }
 
+    public static boolean addItemToInventory(Player player, ItemStack item) {
+        if (player == null || item == null || item.isEmpty()) {
+            return false;
+        }
+        ItemContainer hotbar = getContainer(player, true);
+        if (hotbar != null && hotbar.canAddItemStack(item)) {
+            hotbar.addItemStack(item);
+            return true;
+        }
+        ItemContainer storage = getContainer(player, false);
+        if (storage != null && storage.canAddItemStack(item)) {
+            storage.addItemStack(item);
+            return true;
+        }
+        return false;
+    }
+
     public static boolean hasItemAmount(Player player,
                                         boolean hotbar,
                                         short slot,

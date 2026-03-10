@@ -1,0 +1,41 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Tool_Hammer_Thorium.name",
+    "Description": "irai.items.Tool_Hammer_Thorium.description"
+  },
+  "Parent": "Tool_Hammer_Crude",
+  "Icon": "Icons/ItemsGenerated/Tool_Hammer_Thorium.png",
+  "Quality": "Rare",
+  "ItemLevel": 20,
+  "Model": "Items/Tools/Hammer/Iron.blockymodel",
+  "Texture": "Resources/Tools/Hammer/ThoriumHammerTexture.png",
+  "MaxStack": 1,
+  "Recipe": {
+    "TimeSeconds": 3.5,
+    "Input": [
+      {
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Ingredient_Leather_Medium",
+        "Quantity": 3
+      },
+      {
+        "ItemId": "Ingredient_Bolt_Wool",
+        "Quantity": 4
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tools"
+        ],
+        "RequiredTierLevel": 2
+      }
+    ]
+  },
+  "MaxDurability": 800
+}

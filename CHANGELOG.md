@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2026-03-10
+
+### Added
+
+- **Runtime Config Editor (HyUI, OP-only)** - `/reforgeconfig` (aliases `configui`, `runtimeconfig`) for live tuning of socket, refinement, loot, and weather settings with instant save/apply and reload-from-disk support.
+- **Loot Socket Roll Config** - New `LootSocketRollConfig` for chest/NPC socket roll tuning, resonance roll chance, and broken-socket clamp ranges.
+- **Weather Event Spawns** - Spirit_Thunder rain spawns with `WeatherEventConfig` controls for timing, counts, distance, and despawn delay.
+- **Thorium Builder's Hammer** - New high-durability hammer; stronger break-chance reduction in the Reforge bench and essence refunds on successful clear in the Essence bench.
+
+### Changed
+
+- **Reforge Bench UI** - Shows support durability and base damage/defense preview; hammer support now distinguishes Iron vs Thorium durability loss and break multipliers.
+- **Essence Bench UI** - Shows support durability; Thorium hammer adds refund messaging on clear.
+- **Thorium Hammer Risk** - Essence clear has a slim chance to reduce max sockets.
+- **World Loot Resonance** - Chest/NPC loot can roll fully socketed resonance layouts based on new resonance chance settings.
+
+### Fixed
+
+- **Socket Bench Support Selection** - Selecting "None" no longer auto-selects the first stabilizer.
+
+---
+
 ## [1.3.0] - 2026-03-08
 
 ### New Feature: Socket Loot System

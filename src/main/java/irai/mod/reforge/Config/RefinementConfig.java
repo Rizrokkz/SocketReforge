@@ -95,6 +95,13 @@ public class RefinementConfig {
     public double[] getWeights0to1()        { return weights0to1; }
     public double[] getWeights1to2()        { return weights1to2; }
     public double[] getWeights2to3()        { return weights2to3; }
+    public void setDamageMultipliers(double[] values)   { this.damageMultipliers = values; }
+    public void setDefenseMultipliers(double[] values)  { this.defenseMultipliers = values; }
+    public void setBreakChances(double[] values)        { this.breakChances = values; }
+    public void setArmorBreakChances(double[] values)   { this.armorBreakChances = values; }
+    public void setWeights0to1(double[] values)         { this.weights0to1 = values; }
+    public void setWeights1to2(double[] values)         { this.weights1to2 = values; }
+    public void setWeights2to3(double[] values)         { this.weights2to3 = values; }
 
     // ── Helper Methods ────────────────────────────────────────────────────────
 

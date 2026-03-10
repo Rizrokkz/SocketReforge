@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
@@ -30,6 +31,8 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
@@ -45,11 +48,14 @@ public final class ReforgeBenchUI {
     private static final String TEMPLATE_PATH      = "Common/UI/Custom/Pages/ReforgeBench.html";
 
     private static final String MATERIAL_ID = "Refinement_Glob";
-    private static final String HAMMER_ID = "Tool_Hammer_Iron";
+    private static final String HAMMER_IRON_ID = "Tool_Hammer_Iron";
+    private static final String HAMMER_THORIUM_ID = "Tool_Hammer_Thorium";
     private static final int MATERIAL_COST = 3;
     private static final int MAX_UPGRADE_LEVEL = 3;
-    private static final double HAMMER_BREAK_MULTIPLIER = 0.50d;
-    private static final double HAMMER_DURABILITY_LOSS_FRACTION = 0.05d;
+    private static final double HAMMER_IRON_BREAK_MULTIPLIER = 0.50d;
+    private static final double HAMMER_THORIUM_BREAK_MULTIPLIER = 0.30d;
+    private static final double HAMMER_IRON_DURABILITY_LOSS_FRACTION = 0.05d;
+    private static final double HAMMER_THORIUM_DURABILITY_LOSS_FRACTION = 0.15d;
 
     private static final double[] DEFAULT_BREAK_CHANCES = {0.010, 0.050, 0.075};
     private static final double[][] DEFAULT_WEIGHTS = {
@@ -71,6 +77,20 @@ public final class ReforgeBenchUI {
 
     private enum ContainerKind { HOTBAR, STORAGE }
     private enum OutcomeType { DEGRADE, SAME, UPGRADE, JACKPOT }
+    private enum HammerSupportType {
+        IRON("Iron", HAMMER_IRON_BREAK_MULTIPLIER, HAMMER_IRON_DURABILITY_LOSS_FRACTION),
+        THORIUM("Thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION);
+
+        final String label;
+        final double breakMultiplier;
+        final double durabilityLossFraction;
+
+        HammerSupportType(String label, double breakMultiplier, double durabilityLossFraction) {
+            this.label = label;
+            this.breakMultiplier = breakMultiplier;
+            this.durabilityLossFraction = durabilityLossFraction;
+        }
+    }
 
     private static final class Entry {
         final ContainerKind container;
@@ -416,6 +436,7 @@ public final class ReforgeBenchUI {
         html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, "No reforgeable equipment found", eqKey));
         html = html.replace("{{materialOptions}}", buildOptions(snapshot.materials, "No Refinement Glob found", matKey));
         html = html.replace("{{supportOptions}}", buildSupportOptions(snapshot.supports, supKey));
+        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(selectedSupport)));
         html = html.replace("{{materialCountText}}", String.valueOf(snapshot.materialCount));
         html = html.replace("{{currentStatsText}}", escapeHtml(preview.currentStats));
         html = html.replace("{{expectedStatsText}}", escapeHtml(preview.expectedStats));
@@ -432,6 +453,7 @@ public final class ReforgeBenchUI {
         html = html.replace("{{metadataNameText}}", escapeHtml(buildMetadataName(selectedEquipment)));
         html = html.replace("{{metadataLevelText}}", escapeHtml(buildMetadataLevel(selectedEquipment)));
         html = html.replace("{{metadataCurrentStatText}}", escapeHtml(buildMetadataCurrentStat(selectedEquipment)));
+        html = html.replace("{{metadataBaseStatText}}", escapeHtml(buildMetadataBaseStat(selectedEquipment)));
         html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
@@ -499,7 +521,7 @@ public final class ReforgeBenchUI {
 
         ItemStack item = equipment.item;
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
-        boolean hammerSupport = support != null && isHammerItem(support.itemId);
+        HammerSupportType hammerSupport = getHammerSupportType(support);
         int level = Math.max(0, Math.min(MAX_UPGRADE_LEVEL, ReforgeEquip.getLevelFromItem(item)));
         String type = isArmor ? "Armor" : "Weapon";
         String refineName = isArmor ? ReforgeEquip.getArmorUpgradeName(level) : ReforgeEquip.getUpgradeName(level);
@@ -525,8 +547,9 @@ public final class ReforgeBenchUI {
                     "0%",
                     "0%",
                     "0%",
-                    hammerSupport
-                            ? "Max level reached. Hammer equipped (durability -5% per attempt)."
+                    hammerSupport != null
+                            ? "Max level reached. " + hammerSupport.label + " hammer equipped (durability -"
+                                    + durabilityPercent(hammerSupport) + "% per attempt)."
                             : "Max level reached.",
                     level);
         }
@@ -572,8 +595,9 @@ public final class ReforgeBenchUI {
                 formatPercent(pSame),
                 formatPercent(pUp),
                 formatPercent(pJack),
-                hammerSupport
-                        ? "Hammer support active: break chance reduced; durability -5% on process."
+                hammerSupport != null
+                        ? hammerSupport.label + " hammer support active: break chance reduced; durability -"
+                                + durabilityPercent(hammerSupport) + "% on process."
                         : "",
                 level);
     }
@@ -595,10 +619,10 @@ public final class ReforgeBenchUI {
             return new ProcessResult("Not enough Refinement Globs (need " + MATERIAL_COST + ").", 0);
         }
 
-        boolean hammerSupport = support != null && isHammerItem(support.itemId);
+        HammerSupportType hammerSupport = getHammerSupportType(support);
         HammerUseResult hammerUse = new HammerUseResult(true, false);
-        if (hammerSupport) {
-            hammerUse = applyHammerWear(player, support, HAMMER_DURABILITY_LOSS_FRACTION);
+        if (hammerSupport != null) {
+            hammerUse = applyHammerWear(player, support, hammerSupport.durabilityLossFraction);
             if (!hammerUse.ok) {
                 return new ProcessResult("Selected hammer stack changed; reselect and try again.", 0);
             }
@@ -610,8 +634,10 @@ public final class ReforgeBenchUI {
 
         double breakChance = effectiveBreakChance(level, isArmor, hammerSupport);
         String hammerSuffix = "";
-        if (hammerSupport) {
-            hammerSuffix = hammerUse.consumed ? " Hammer broke." : " Hammer durability -5%.";
+        if (hammerSupport != null) {
+            hammerSuffix = hammerUse.consumed
+                    ? " " + hammerSupport.label + " hammer broke."
+                    : " " + hammerSupport.label + " hammer durability -" + durabilityPercent(hammerSupport) + "%.";
         }
         if (Math.random() < breakChance) {
             removeEquipment(player, equipment);
@@ -693,10 +719,10 @@ public final class ReforgeBenchUI {
         return DEFAULT_BREAK_CHANCES[idx];
     }
 
-    private static double effectiveBreakChance(int currentLevel, boolean isArmor, boolean hammerSupport) {
+    private static double effectiveBreakChance(int currentLevel, boolean isArmor, HammerSupportType hammerSupport) {
         double base = breakChance(currentLevel, isArmor);
-        if (!hammerSupport) return base;
-        return Math.max(0.0, Math.min(1.0, base * HAMMER_BREAK_MULTIPLIER));
+        if (hammerSupport == null) return base;
+        return Math.max(0.0, Math.min(1.0, base * hammerSupport.breakMultiplier));
     }
 
     private static double statMultiplierForLevel(int level, boolean isArmor) {
@@ -753,7 +779,27 @@ public final class ReforgeBenchUI {
     }
 
     private static boolean isHammerItem(String itemId) {
-        return UIItemUtils.isIronHammerItem(itemId, HAMMER_ID);
+        return isIronHammerItem(itemId) || isThoriumHammerItem(itemId);
+    }
+
+    private static boolean isIronHammerItem(String itemId) {
+        return UIItemUtils.isIronHammerItem(itemId, HAMMER_IRON_ID);
+    }
+
+    private static boolean isThoriumHammerItem(String itemId) {
+        return itemId != null && HAMMER_THORIUM_ID.equalsIgnoreCase(itemId);
+    }
+
+    private static HammerSupportType getHammerSupportType(Entry support) {
+        if (support == null) return null;
+        if (isThoriumHammerItem(support.itemId)) return HammerSupportType.THORIUM;
+        if (isIronHammerItem(support.itemId)) return HammerSupportType.IRON;
+        return null;
+    }
+
+    private static int durabilityPercent(HammerSupportType hammerSupport) {
+        if (hammerSupport == null) return 0;
+        return (int) Math.round(hammerSupport.durabilityLossFraction * 100.0);
     }
 
     private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry, double durabilityFraction) {
@@ -818,6 +864,23 @@ public final class ReforgeBenchUI {
         return "+" + ReforgeEquip.getLevelFromItem(equipment.item);
     }
 
+    private static String buildSupportDurabilityText(Entry support) {
+        if (support == null || support.item == null || support.item.isEmpty()) {
+            return "Support durability: -";
+        }
+        ItemStack item = support.item;
+        double max = item.getMaxDurability();
+        double cur = item.getDurability();
+        if (max <= 0.0d) {
+            return "Support durability: N/A";
+        }
+        int maxInt = (int) Math.round(max);
+        int curInt = (int) Math.round(cur);
+        int percent = (int) Math.round((cur / max) * 100.0);
+        percent = Math.max(0, Math.min(100, percent));
+        return "Support durability: " + percent + "% (" + curInt + "/" + maxInt + ")";
+    }
+
     private static String buildMetadataCurrentStat(Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return "Current Stat : -";
@@ -828,6 +891,36 @@ public final class ReforgeBenchUI {
         double currentMult = statMultiplierForLevel(level, isArmor);
         String statLabel = isArmor ? "Current Defense" : "Current Damage";
         return statLabel + " : x" + format3(currentMult) + " (" + formatPercent(currentMult - 1.0) + ")";
+    }
+
+    private static String buildMetadataBaseStat(Entry equipment) {
+        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
+            return "Base Stat : -";
+        }
+        ItemStack item = equipment.item;
+        String itemId = item.getItemId();
+        if (itemId == null || itemId.isBlank()) {
+            return "Base Stat : -";
+        }
+        boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
+        int level = ReforgeEquip.getLevelFromItem(item);
+        SocketData socketData = SocketManager.getSocketData(item);
+        if (isArmor) {
+            EquipmentDamageTooltipMath.StatSummary summary =
+                    EquipmentDamageTooltipMath.computeArmorDefenseSummary(itemId, level, socketData);
+            if (summary.getBaseValue() <= 0.0) {
+                return "Base Defense : N/A";
+            }
+            return "Base Defense : " + formatDamageValue(summary.getBaseValue())
+                    + " -> " + formatDamageValue(summary.getBuffedValue());
+        }
+        EquipmentDamageTooltipMath.StatSummary summary =
+                EquipmentDamageTooltipMath.computeWeaponDamageSummary(itemId, level, socketData, 1.0);
+        if (summary.getBaseValue() <= 0.0) {
+            return "Base Damage : N/A";
+        }
+        return "Base Damage : " + formatDamageValue(summary.getBaseValue())
+                + " -> " + formatDamageValue(summary.getBuffedValue());
     }
 
     private static String loadTemplate() {
@@ -875,5 +968,14 @@ public final class ReforgeBenchUI {
 
     private static String formatPercent(double fraction) {
         return String.format(Locale.ROOT, "%.1f%%", fraction * 100.0);
+    }
+
+    private static String formatDamageValue(double value) {
+        double safe = Math.max(0.0, value);
+        long rounded = Math.round(safe);
+        if (Math.abs(safe - rounded) < 0.05) {
+            return Long.toString(rounded);
+        }
+        return String.format(Locale.ROOT, "%.1f", safe);
     }
 }

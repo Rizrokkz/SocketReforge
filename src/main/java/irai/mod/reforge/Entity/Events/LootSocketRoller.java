@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -25,6 +26,8 @@ public final class LootSocketRoller {
     private static volatile RollProfile dropProfile = RollProfile.of(0.30d, 0.10d, 0.01d, 0.50d);
     private static volatile int minBrokenSockets = 3;
     private static volatile int maxBrokenSockets = 5;
+    private static volatile double chestResonanceChance = 0.01d;
+    private static volatile double dropResonanceChance = 0.01d;
 
     private static final String META_WORLD_LOOT_ROLL_DONE = "SocketReforge.WorldLoot.RollDone";
     private static final String META_WORLD_LOOT_SOCKETED = "SocketReforge.WorldLoot.Socketed";
@@ -58,6 +61,11 @@ public final class LootSocketRoller {
             return markRollDone(stack, 0);
         }
 
+        ItemStack resonant = maybeRollResonance(stack, source);
+        if (resonant != null) {
+            return markRollDone(resonant, 1);
+        }
+
         RollProfile profile = getProfile(source);
         int socketCount = rollBrokenSocketCount(profile);
         if (socketCount <= 0) {
@@ -85,11 +93,29 @@ public final class LootSocketRoller {
                 config.getDropFiveSocketChance(),
                 config.getDropThreeToFourChance()
         );
+        chestResonanceChance = clamp01(config.getChestResonanceChance());
+        dropResonanceChance = clamp01(config.getDropResonanceChance());
 
         int min = Math.max(1, config.getMinBrokenSockets());
         int max = Math.max(min, config.getMaxBrokenSockets());
         minBrokenSockets = min;
         maxBrokenSockets = max;
+    }
+
+    private static ItemStack maybeRollResonance(ItemStack stack, LootSource source) {
+        double chance = getResonanceChance(source);
+        if (chance <= 0.0d) {
+            return null;
+        }
+        if (ThreadLocalRandom.current().nextDouble() >= chance) {
+            return null;
+        }
+
+        SocketData resonantData = ResonanceSystem.buildRandomResonanceSocketData(stack);
+        if (resonantData == null) {
+            return null;
+        }
+        return SocketManager.withSocketData(stack, resonantData);
     }
 
     private static boolean isRollDone(ItemStack stack) {
@@ -169,6 +195,13 @@ public final class LootSocketRoller {
             return dropProfile;
         }
         return chestProfile;
+    }
+
+    private static double getResonanceChance(LootSource source) {
+        if (source == LootSource.NPC_DROP) {
+            return dropResonanceChance;
+        }
+        return chestResonanceChance;
     }
 
     private static boolean hasSocketMetadata(ItemStack stack) {

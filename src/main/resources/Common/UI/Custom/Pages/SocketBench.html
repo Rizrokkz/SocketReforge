@@ -5,24 +5,24 @@
             <p style="text-align:center;">Select equipment and materials from inventory.</p>
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p><b>Equipment</b></p>
+            <p>Equipment</p>
             <select id="equipmentDropdown" data-hyui-showlabel="true">
                 {{equipmentOptions}}
             </select>
 
-            <p><b>Main Material (Socket Puncher)</b></p>
+            <p>Main Material (Socket Puncher)</p>
             <select id="puncherDropdown" data-hyui-showlabel="true">
                 {{puncherOptions}}
             </select>
 
-            <p><b>Support Material (Optional)</b></p>
+            <p>Support Material (Optional)</p>
             <select id="supportDropdown" data-hyui-showlabel="true">
                 {{supportOptions}}
             </select>
             <p></p>    
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p><b>Socket Preview</b></p>
+            <p>Socket Preview</p>
             <div id="socketIconsRow">{{socketIcons}}</div>
             <div style="layout-mode: Left; spacing: 12;">
                 <p style="flex-weight:1;">Success: <span id="successChanceLabel">{{successText}}</span></p>
@@ -31,7 +31,7 @@
             </div>
             
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p><b>Progress</b></p>
+            <p>Progress</p>
             <progress id="socketProgress"
                       max="100"
                       value="{{progressValue}}"
@@ -41,7 +41,7 @@
             <p id="statusLabel">{{statusText}}</p>
 
             <hr/>
-            <p><b>Selected Item Metadata</b></p>
+            <p>Selected Item Metadata</p>
             <p id="metadataLabel" style="white-space:pre-line;max-height:180px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">{{metadataText}}</p>
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
