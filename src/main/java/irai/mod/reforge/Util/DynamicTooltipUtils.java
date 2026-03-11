@@ -65,6 +65,8 @@ public class DynamicTooltipUtils {
     private static final String META_RESONANCE_NAME = "SocketReforge.Resonance.Name";
     private static final String META_RESONANCE_EFFECT = "SocketReforge.Resonance.Effect";
     private static final String META_RESONANCE_QUALITY = "SocketReforge.Resonance.Quality";
+    private static final String META_RECIPE_PATTERN = "SocketReforge.Recipe.Pattern";
+    private static final String META_RECIPE_TYPE = "SocketReforge.Recipe.Type";
     
     // ==================== Reforge Level ====================
     
@@ -562,12 +564,17 @@ public class DynamicTooltipUtils {
         String resonanceEffect = extractStringValue(metadata, META_RESONANCE_EFFECT);
         String resonanceQuality = extractStringValue(metadata, META_RESONANCE_QUALITY);
         boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
+        String recipePattern = extractStringValue(metadata, META_RECIPE_PATTERN);
+        boolean hasRecipePattern = recipePattern != null && !recipePattern.isBlank();
+        String recipeType = extractStringValue(metadata, META_RECIPE_TYPE);
+        boolean hasRecipeType = recipeType != null && !recipeType.isBlank();
         String baseItemId = extractBaseItemId(metadata);
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         
         // If no supported metadata is present, return null
-        if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null && !hasResonance && !isEquipmentItem) {
+        if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
+                && !hasResonance && !hasRecipePattern && !hasRecipeType && !isEquipmentItem) {
             return null;
         }
         
@@ -662,6 +669,12 @@ public class DynamicTooltipUtils {
         }
         if (resonanceQuality != null && !resonanceQuality.isBlank()) {
             tooltipLines.add(COLOR_YELLOW + "Quality: " + COLOR_WHITE + resonanceQuality);
+        }
+        if (hasRecipeType) {
+            tooltipLines.add(COLOR_ORANGE + "Type: " + COLOR_WHITE + recipeType);
+        }
+        if (hasRecipePattern) {
+            tooltipLines.add(COLOR_ORANGE + "Recipe : " + COLOR_WHITE + recipePattern);
         }
 
         // Add modular parts line if present

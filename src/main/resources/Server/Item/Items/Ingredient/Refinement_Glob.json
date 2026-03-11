@@ -6,6 +6,8 @@
   "Categories": [
     "Items.Ingredients"
   ],
+  "Model": "Items/Ingredients/Tree_Bark.blockymodel",
+  "Texture": "Items/Ingredients/Tree_Bark_Texture.png",
   "Recipe": {
     "Input": [
       {
@@ -22,9 +24,7 @@
     "OutputQuantity": 15,
     "TimeSeconds": 3
   },
-  "Model": "Blocks/Benches/Campfire_Off.blockymodel",
-  "Texture": "Blocks/Benches/Campfire_Off_Texture.png",
-  "Icon": "Icons/ItemsGenerated/Deco_Campfire_Off.png",
+  "Icon": "Icons/ItemsGenerated/Ingredient_Tree_Bark.png",
   "PlayerAnimationsId": "Item",
   "IconProperties": {
     "Scale": 1,

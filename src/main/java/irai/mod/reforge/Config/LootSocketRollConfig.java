@@ -1,7 +1,6 @@
 package irai.mod.reforge.Config;
 
 import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
-
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 
@@ -79,14 +78,14 @@ public class LootSocketRollConfig {
     private double chestFourSocketChance = 0.10d;
     private double chestFiveSocketChance = 0.01d;
     private double chestThreeToFourChance = 0.50d;
-    private double chestResonanceChance = 0.001d;
+    private double chestResonanceChance = 0.01d;
 
     // NPC drop rolls
     private double dropThreeSocketChance = 0.30d;
     private double dropFourSocketChance = 0.10d;
     private double dropFiveSocketChance = 0.01d;
     private double dropThreeToFourChance = 0.50d;
-    private double dropResonanceChance = 0.001d;
+    private double dropResonanceChance = 0.01;
 
     // Clamp range used after rolling
     private int minBrokenSockets = 3;

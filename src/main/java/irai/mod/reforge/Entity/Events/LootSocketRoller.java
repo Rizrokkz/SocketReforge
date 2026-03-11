@@ -7,10 +7,12 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Util.NameResolver;
 
 /**
  * Shared socket-roll logic for world loot (chests, NPC drops, etc.).
@@ -38,6 +40,12 @@ public final class LootSocketRoller {
 
     private static final String META_SOCKET_MAX = "SocketReforge.Socket.Max";
     private static final String META_SOCKET_VALUES = "SocketReforge.Socket.Values";
+    private static final String META_RECIPE_NAME = "SocketReforge.Recipe.ResonanceName";
+    private static final String META_RECIPE_PATTERN = "SocketReforge.Recipe.Pattern";
+    private static final String META_RECIPE_TYPE = "SocketReforge.Recipe.Type";
+    private static final String RECIPE_ITEM_ID = "Resonant_Recipe";
+    private static final int RECIPE_MIN_REVEAL = 1;
+    private static final int RECIPE_MAX_REVEAL = 3;
 
     private LootSocketRoller() {}
 
@@ -111,11 +119,79 @@ public final class LootSocketRoller {
             return null;
         }
 
-        SocketData resonantData = ResonanceSystem.buildRandomResonanceSocketData(stack);
-        if (resonantData == null) {
+        return createResonantRecipeShard(stack, 1);
+    }
+
+    public static ItemStack createResonantRecipeShard(ItemStack context, int quantity) {
+        ResonanceSystem.ResonanceRecipe recipe = context != null
+                ? ResonanceSystem.rollRandomResonanceRecipe(context)
+                : ResonanceSystem.rollRandomResonanceRecipe();
+        if (recipe == null || recipe.name() == null || recipe.name().isBlank()) {
             return null;
         }
-        return SocketManager.withSocketData(stack, resonantData);
+        int safeQty = Math.max(1, quantity);
+        String displayName = recipe.name().trim() + " Recipe";
+        String pattern = buildPartialRecipe(recipe.pattern());
+        String appliesTo = recipe.appliesTo();
+        return new ItemStack(RECIPE_ITEM_ID, safeQty)
+                .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, displayName)
+                .withMetadata(META_RECIPE_NAME, Codec.STRING, recipe.name().trim())
+                .withMetadata(META_RECIPE_PATTERN, Codec.STRING, pattern)
+                .withMetadata(META_RECIPE_TYPE, Codec.STRING, appliesTo == null ? "" : appliesTo);
+    }
+
+    public static boolean hasResonantRecipeMetadata(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        String pattern = stack.getFromMetadataOrNull(META_RECIPE_PATTERN, Codec.STRING);
+        return pattern != null && !pattern.isBlank();
+    }
+
+    private static String buildPartialRecipe(Essence.Type[] pattern) {
+        if (pattern == null || pattern.length == 0) {
+            return "";
+        }
+        int length = pattern.length;
+        int reveals = rollRevealCount(length);
+        boolean[] reveal = new boolean[length];
+        int picked = 0;
+        while (picked < reveals) {
+            int idx = ThreadLocalRandom.current().nextInt(length);
+            if (!reveal[idx]) {
+                reveal[idx] = true;
+                picked++;
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            String token = reveal[i] && pattern[i] != null ? formatEssenceToken(pattern[i]) : "x";
+            sb.append('[').append(token).append(']');
+        }
+        return sb.toString();
+    }
+
+    private static int rollRevealCount(int length) {
+        if (length <= 1) {
+            return length;
+        }
+        if (length >= 4) {
+            return 1;
+        }
+        int max = Math.min(RECIPE_MAX_REVEAL, Math.max(1, length - 1));
+        int min = Math.min(RECIPE_MIN_REVEAL, max);
+        if (max <= min) {
+            return min;
+        }
+        return ThreadLocalRandom.current().nextInt(min, max + 1);
+    }
+
+    private static String formatEssenceToken(Essence.Type type) {
+        String raw = type == null ? "" : type.name().toLowerCase(java.util.Locale.ROOT);
+        if (raw.isEmpty()) {
+            return "x";
+        }
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
 
     private static boolean isRollDone(ItemStack stack) {

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Loot Socket Roll Config** - New `LootSocketRollConfig` for chest/NPC socket roll tuning, resonance roll chance, and broken-socket clamp ranges.
 - **Weather Event Spawns** - Spirit_Thunder rain spawns with `WeatherEventConfig` controls for timing, counts, distance, and despawn delay.
 - **Thorium Builder's Hammer** - New high-durability hammer; stronger break-chance reduction in the Reforge bench and essence refunds on successful clear in the Essence bench.
+- **Resonance Recipe Drops** - Resonant loot rolls now drop a `Resonant_Recipe` shard with a partial recipe hint instead of pre-socketed equipment.
 
 ### Changed
 

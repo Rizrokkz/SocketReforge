@@ -39,7 +39,8 @@ public final class TreasureChestSocketLootListener {
             LootInjectionUtils.rule("Refinement_Glob", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Puncher", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Stabilizer", 0.15d, 1, 5),
-            LootInjectionUtils.rule("Ingredient_Voidheart", 0.05d, 1, 2)
+            LootInjectionUtils.rule("Ingredient_Voidheart", 0.05d, 1, 2),
+            LootInjectionUtils.rule("Resonant_Recipe", 0.01d, 1, 1)
     );
     private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             "furniture_temple_",
@@ -245,7 +246,39 @@ public final class TreasureChestSocketLootListener {
             }
         }
 
+        int hydrated = hydrateResonantRecipes(container);
+        if (hydrated > 0) {
+            changedCount += hydrated;
+        }
+
         return new RollResult(eligibleCount, changedCount, nonEmptyLootCount, injectedCount, String.join(", ", foundLootIds));
+    }
+
+    private static int hydrateResonantRecipes(ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+        int updated = 0;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack stack = container.getItemStack(slot);
+            if (stack == null || stack.isEmpty()) {
+                continue;
+            }
+            String itemId = stack.getItemId();
+            if (itemId == null || !"Resonant_Recipe".equalsIgnoreCase(itemId)) {
+                continue;
+            }
+            if (LootSocketRoller.hasResonantRecipeMetadata(stack)) {
+                continue;
+            }
+            ItemStack seeded = LootSocketRoller.createResonantRecipeShard(null, stack.getQuantity());
+            if (seeded == null) {
+                continue;
+            }
+            container.setItemStackForSlot(slot, seeded);
+            updated++;
+        }
+        return updated;
     }
 
     private static boolean isEquipment(ItemStack stack) {

@@ -5,6 +5,8 @@ items.Bench_Refinement_Anvil.name = Refinement Anvil
 items.Bench_Refinement_Anvil.description = A workbench for refinining equipments by using Refinement Globs
 items.Tool_Hammer_Thorium.name = Thorium Builder's Hammer
 items.Tool_Hammer_Thorium.description = Used to alter the appearance of structural building blocks.\n\nAn improved version of the crude hammer with greater durability. \n\n Further decreases the chances of breaking when refinining equipment. 
+items.Resonant_Recipe.name = Resonance Recipe
+items.Resonant_Recipe.description = A tattered page that hints at a hidden resonance.
 # Socket System Items
 items.Bench_Socket_Punch.name = Socket Punch Bench
 items.Bench_Socket_Punch.description = A workbench for punching sockets into equipment

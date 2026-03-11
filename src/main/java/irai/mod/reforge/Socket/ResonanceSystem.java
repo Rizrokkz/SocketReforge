@@ -44,6 +44,8 @@ public final class ResonanceSystem {
         AURA_BURN
     }
 
+    public record ResonanceRecipe(String name, Essence.Type[] pattern, String appliesTo) {}
+
     public record ResonanceResult(
             String name,
             String effect,
@@ -388,6 +390,68 @@ public final class ResonanceSystem {
         }
 
         return socketData;
+    }
+
+    /**
+     * Picks a random resonance recipe applicable to the given item.
+     */
+    public static ResonanceRecipe rollRandomResonanceRecipe(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return null;
+        }
+
+        boolean isWeapon = ReforgeEquip.isWeapon(item);
+        boolean isArmor = !isWeapon && ReforgeEquip.isArmor(item);
+        if (!isWeapon && !isArmor) {
+            return null;
+        }
+
+        WeaponClass weaponClass = classifyWeapon(item.getItemId());
+        List<Definition> candidates = new ArrayList<>();
+        for (Definition definition : DEFINITIONS) {
+            if (!definitionApplies(definition, isWeapon, isArmor, weaponClass)) {
+                continue;
+            }
+            candidates.add(definition);
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        Definition chosen = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
+        return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
+    }
+
+    /**
+     * Picks a random resonance recipe without item context.
+     */
+    public static ResonanceRecipe rollRandomResonanceRecipe() {
+        if (DEFINITIONS == null || DEFINITIONS.isEmpty()) {
+            return null;
+        }
+        Definition chosen = DEFINITIONS.get(ThreadLocalRandom.current().nextInt(DEFINITIONS.size()));
+        Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
+        return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
+    }
+
+    private static String resolveAppliesTo(Definition definition) {
+        if (definition == null) {
+            return "Weapon";
+        }
+        if (definition.scope == Scope.ARMOR) {
+            return "Armor";
+        }
+        WeaponClass weaponClass = definition.requiredWeaponClass;
+        if (weaponClass == null || weaponClass == WeaponClass.GENERIC) {
+            return "Weapon";
+        }
+        if (weaponClass == WeaponClass.BOW) {
+            return "Bow/Crossbow";
+        }
+        String raw = weaponClass.name().toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
 
     public static ResonanceResult evaluate(ItemStack item, SocketData socketData) {
