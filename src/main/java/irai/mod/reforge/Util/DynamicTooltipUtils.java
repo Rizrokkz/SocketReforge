@@ -67,6 +67,7 @@ public class DynamicTooltipUtils {
     private static final String META_RESONANCE_QUALITY = "SocketReforge.Resonance.Quality";
     private static final String META_RECIPE_PATTERN = "SocketReforge.Recipe.Pattern";
     private static final String META_RECIPE_TYPE = "SocketReforge.Recipe.Type";
+    private static final String META_RECIPE_USAGES = "SocketReforge.Recipe.Usages";
     
     // ==================== Reforge Level ====================
     
@@ -568,13 +569,15 @@ public class DynamicTooltipUtils {
         boolean hasRecipePattern = recipePattern != null && !recipePattern.isBlank();
         String recipeType = extractStringValue(metadata, META_RECIPE_TYPE);
         boolean hasRecipeType = recipeType != null && !recipeType.isBlank();
+        String recipeUsages = extractStringValue(metadata, META_RECIPE_USAGES);
+        boolean hasRecipeUsages = recipeUsages != null && !recipeUsages.isBlank();
         String baseItemId = extractBaseItemId(metadata);
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
-                && !hasResonance && !hasRecipePattern && !hasRecipeType && !isEquipmentItem) {
+                && !hasResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages && !isEquipmentItem) {
             return null;
         }
         
@@ -675,6 +678,9 @@ public class DynamicTooltipUtils {
         }
         if (hasRecipePattern) {
             tooltipLines.add(COLOR_ORANGE + "Recipe : " + COLOR_WHITE + recipePattern);
+        }
+        if (hasRecipeUsages) {
+            tooltipLines.add(COLOR_ORANGE + "Usages: " + COLOR_WHITE + recipeUsages);
         }
 
         // Add modular parts line if present

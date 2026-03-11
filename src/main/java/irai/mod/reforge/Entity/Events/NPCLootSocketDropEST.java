@@ -3,6 +3,7 @@ package irai.mod.reforge.Entity.Events;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import com.hypixel.hytale.component.AddReason;
 import com.hypixel.hytale.component.CommandBuffer;
@@ -23,17 +24,55 @@ import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathSystems;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
 import com.hypixel.hytale.server.core.modules.item.ItemModule;
+import com.hypixel.hytale.server.core.universe.world.WorldConfig;
+import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
 import com.hypixel.hytale.server.npc.systems.NPCDamageSystems;
 
+import irai.mod.reforge.Common.LootInjectionUtils;
+import irai.mod.reforge.Config.LootSocketRollConfig;
 /**
  * Replaces default NPC death drop generation so loot-table equipment uses
  * world-loot socket rolling before item entities are spawned.
  */
 @SuppressWarnings("removal")
 public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
+    private static volatile List<LootInjectionUtils.LootInjectionRule> npcWaterEssenceRules = List.of(
+            LootInjectionUtils.rule("Ingredient_Water_Essence", 0.05d, 1, 5)
+    );
+    private static volatile List<LootInjectionUtils.LootInjectionRule> npcLightningEssenceRules = List.of(
+            LootInjectionUtils.rule("Ingredient_Lightning_Essence", 0.05d, 1, 5)
+    );
+    private static volatile int npcWaterEssenceMinQuantity = 1;
+    private static volatile int npcWaterEssenceMaxQuantity = 5;
+    private static volatile int npcLightningEssenceMinQuantity = 1;
+    private static volatile int npcLightningEssenceMaxQuantity = 5;
+    private static final String[] FLYING_ROLE_HINTS = {
+            "bee",
+            "pter",
+            "pterodactyl",
+            "pteranodon",
+            "bat",
+            "bird",
+            "eagle",
+            "hawk",
+            "vulture",
+            "gull",
+            "raven",
+            "crow",
+            "dragon",
+            "wyvern",
+            "moth",
+            "wasp",
+            "hornet",
+            "mosquito",
+            "butterfly",
+            "scarak"
+    };
+
     @Override
     public Query<EntityStore> getQuery() {
         // Avoid static/init-time component type lookups that can be null during plugin bootstrap.
@@ -76,12 +115,15 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
             return;
         }
 
+        long worldSeed = resolveWorldSeed(npc);
+        long seedBase = mixSeed(worldSeed, seedFromUuid(npc.getUuid()));
         for (int i = 0; i < drops.size(); i++) {
             ItemStack stack = drops.get(i);
             if (stack == null || stack.isEmpty()) {
                 continue;
             }
-            drops.set(i, LootSocketRoller.maybeSocketizeLootStack(stack, LootSocketRoller.LootSource.NPC_DROP));
+            long seed = mixSeed(seedBase, i);
+            drops.set(i, LootSocketRoller.maybeSocketizeLootStack(stack, LootSocketRoller.LootSource.NPC_DROP, seed));
         }
 
         var transformType = TransformComponent.getComponentType();
@@ -130,6 +172,111 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
         if (rolledDrops != null && !rolledDrops.isEmpty()) {
             drops.addAll(rolledDrops);
         }
+
+        if (isAquaticRole(role)) {
+            LootInjectionUtils.injectByRules(drops, npcWaterEssenceRules);
+        }
+        if (isFlyingRole(role)) {
+            LootInjectionUtils.injectByRules(drops, npcLightningEssenceRules);
+        }
         return drops;
+    }
+
+    public static void setConfig(LootSocketRollConfig config) {
+        if (config == null) {
+            return;
+        }
+        double waterChance = clamp01(config.getNpcWaterEssenceChance());
+        double lightningChance = clamp01(config.getNpcLightningEssenceChance());
+        npcWaterEssenceMinQuantity = Math.max(0, config.getNpcWaterEssenceMinQuantity());
+        npcWaterEssenceMaxQuantity = Math.max(npcWaterEssenceMinQuantity, config.getNpcWaterEssenceMaxQuantity());
+        npcLightningEssenceMinQuantity = Math.max(0, config.getNpcLightningEssenceMinQuantity());
+        npcLightningEssenceMaxQuantity = Math.max(npcLightningEssenceMinQuantity, config.getNpcLightningEssenceMaxQuantity());
+        npcWaterEssenceRules = waterChance <= 0.0d
+                ? List.of()
+                : List.of(LootInjectionUtils.rule("Ingredient_Water_Essence", waterChance, npcWaterEssenceMinQuantity, npcWaterEssenceMaxQuantity));
+        npcLightningEssenceRules = lightningChance <= 0.0d
+                ? List.of()
+                : List.of(LootInjectionUtils.rule("Ingredient_Lightning_Essence", lightningChance, npcLightningEssenceMinQuantity, npcLightningEssenceMaxQuantity));
+    }
+
+    private static boolean isAquaticRole(Role role) {
+        if (role == null) {
+            return false;
+        }
+        return role.isBreathesInWater();
+    }
+
+    private static boolean isFlyingRole(Role role) {
+        if (role == null) {
+            return false;
+        }
+        return matchesFlyingHint(role.getRoleName())
+                || matchesFlyingHint(role.getAppearanceName())
+                || matchesFlyingHint(role.getNameTranslationKey())
+                || matchesFlyingHint(role.getDropListId())
+                || matchesFlyingHint(role.getLabel());
+    }
+
+    private static boolean matchesFlyingHint(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String lower = value.toLowerCase();
+        for (String hint : FLYING_ROLE_HINTS) {
+            if (lower.contains(hint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static long resolveWorldSeed(NPCEntity npc) {
+        World mainWorld = resolveMainWorld(npc);
+        if (mainWorld == null) {
+            return 0L;
+        }
+        long seed = 0L;
+        WorldConfig config = mainWorld.getWorldConfig();
+        if (config != null) {
+            seed = config.getSeed();
+        }
+        String name = mainWorld.getName();
+        if (name != null && !name.isBlank()) {
+            seed = mixSeed(seed, name.hashCode());
+        }
+        return seed;
+    }
+
+    private static World resolveMainWorld(NPCEntity npc) {
+        try {
+            Universe universe = Universe.get();
+            if (universe != null) {
+                World defaultWorld = universe.getDefaultWorld();
+                if (defaultWorld != null) {
+                    return defaultWorld;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (npc != null) {
+            return npc.getWorld();
+        }
+        return null;
+    }
+
+    private static long seedFromUuid(UUID uuid) {
+        if (uuid == null) {
+            return 0L;
+        }
+        return uuid.getMostSignificantBits() ^ uuid.getLeastSignificantBits();
+    }
+
+    private static long mixSeed(long seed, long value) {
+        return seed * 31L + value;
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0.0d, Math.min(1.0d, value));
     }
 }

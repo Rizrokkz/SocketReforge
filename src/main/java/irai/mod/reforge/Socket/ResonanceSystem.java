@@ -1,10 +1,12 @@
 package irai.mod.reforge.Socket;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -330,7 +332,174 @@ public final class ResonanceSystem {
                     Essence.Type.LIFE, Essence.Type.WATER, Essence.Type.LIFE, Essence.Type.ICE, Essence.Type.LIGHTNING)
     );
 
+    private static final Object SEED_LOCK = new Object();
+    private static volatile boolean seedConfigured = false;
+    private static volatile long configuredSeed = 0L;
+    private static volatile List<Definition> seededDefinitions = null;
+
     private ResonanceSystem() {}
+
+    /**
+     * Configures the resonance mapping seed. Use the main world seed to make
+     * resonance combinations server-unique.
+     */
+    public static void setResonanceSeed(long seed) {
+        synchronized (SEED_LOCK) {
+            configuredSeed = seed;
+            seedConfigured = true;
+            seededDefinitions = null;
+        }
+    }
+
+    public static boolean isResonanceSeedConfigured() {
+        return seedConfigured;
+    }
+
+    private static List<Definition> getDefinitions() {
+        if (!seedConfigured) {
+            return DEFINITIONS;
+        }
+        List<Definition> cached = seededDefinitions;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (SEED_LOCK) {
+            if (seededDefinitions == null) {
+                seededDefinitions = buildSeededDefinitions(configuredSeed);
+            }
+            return seededDefinitions;
+        }
+    }
+
+    private static List<Definition> buildSeededDefinitions(long seed) {
+        if (DEFINITIONS.isEmpty()) {
+            return DEFINITIONS;
+        }
+
+        Map<Integer, List<Essence.Type[]>> weaponPatternsByLen = new java.util.HashMap<>();
+        Map<Integer, List<Essence.Type[]>> armorPatternsByLen = new java.util.HashMap<>();
+        for (Definition definition : DEFINITIONS) {
+            if (definition == null || definition.pattern == null) {
+                continue;
+            }
+            Essence.Type[] clone = definition.pattern.clone();
+            if (definition.scope == Scope.ARMOR) {
+                armorPatternsByLen.computeIfAbsent(clone.length, ignored -> new ArrayList<>()).add(clone);
+            } else {
+                weaponPatternsByLen.computeIfAbsent(clone.length, ignored -> new ArrayList<>()).add(clone);
+            }
+        }
+
+        long weaponSeed = mixSeed(seed, 0xB17B0F01L);
+        for (Map.Entry<Integer, List<Essence.Type[]>> entry : weaponPatternsByLen.entrySet()) {
+            long groupSeed = mixSeed(weaponSeed, entry.getKey());
+            Collections.shuffle(entry.getValue(), new Random(groupSeed));
+        }
+        long armorSeed = mixSeed(seed, 0xC0FFEE02L);
+        for (Map.Entry<Integer, List<Essence.Type[]>> entry : armorPatternsByLen.entrySet()) {
+            long groupSeed = mixSeed(armorSeed, entry.getKey());
+            Collections.shuffle(entry.getValue(), new Random(groupSeed));
+        }
+
+        Map<Integer, Integer> weaponIndexByLen = new java.util.HashMap<>();
+        Map<Integer, Integer> armorIndexByLen = new java.util.HashMap<>();
+        List<Definition> seeded = new ArrayList<>(DEFINITIONS.size());
+        for (Definition definition : DEFINITIONS) {
+            if (definition == null) {
+                continue;
+            }
+            Essence.Type[] pattern = definition.pattern == null ? new Essence.Type[0] : definition.pattern.clone();
+            if (definition.scope == Scope.ARMOR) {
+                if (definition.pattern != null && definition.pattern.length > 0) {
+                    int len = definition.pattern.length;
+                    List<Essence.Type[]> bucket = armorPatternsByLen.get(len);
+                    int index = armorIndexByLen.getOrDefault(len, 0);
+                    if (bucket != null && index < bucket.size()) {
+                        pattern = bucket.get(index).clone();
+                        armorIndexByLen.put(len, index + 1);
+                    }
+                }
+            } else {
+                if (definition.pattern != null && definition.pattern.length > 0) {
+                    int len = definition.pattern.length;
+                    List<Essence.Type[]> bucket = weaponPatternsByLen.get(len);
+                    int index = weaponIndexByLen.getOrDefault(len, 0);
+                    if (bucket != null && index < bucket.size()) {
+                        pattern = bucket.get(index).clone();
+                        weaponIndexByLen.put(len, index + 1);
+                    }
+                }
+            }
+            seeded.add(new Definition(
+                    definition.name,
+                    definition.effect,
+                    definition.type,
+                    definition.scope,
+                    definition.requiredWeaponClass,
+                    pattern,
+                    definition.bonuses
+            ));
+        }
+
+        return List.copyOf(seeded);
+    }
+
+    private static long mixSeed(long seed, long value) {
+        return seed * 31L + value;
+    }
+
+    /**
+     * Returns the (seeded) essence pattern for a named resonance recipe.
+     */
+    public static Essence.Type[] getPatternForRecipeName(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
+        for (Definition definition : getDefinitions()) {
+            if (definition == null || definition.name == null) {
+                continue;
+            }
+            if (definition.name.trim().toLowerCase(Locale.ROOT).equals(normalized)) {
+                return definition.pattern != null ? definition.pattern.clone() : new Essence.Type[0];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the (seeded) resonance result for a named recipe, or NONE if not found.
+     */
+    public static ResonanceResult getResultForRecipeName(String name) {
+        if (name == null || name.isBlank()) {
+            return ResonanceResult.NONE;
+        }
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
+        for (Definition definition : getDefinitions()) {
+            if (definition == null || definition.name == null) {
+                continue;
+            }
+            if (definition.name.trim().toLowerCase(Locale.ROOT).equals(normalized)) {
+                return definition.toResult();
+            }
+        }
+        return ResonanceResult.NONE;
+    }
+
+    public static List<RecipeDisplay> getSeededRecipeDisplays() {
+        List<RecipeDisplay> list = new ArrayList<>();
+        for (Definition definition : getDefinitions()) {
+            if (definition == null || definition.name == null) {
+                continue;
+            }
+            String appliesTo = resolveAppliesTo(definition);
+            String pattern = formatPattern(definition.pattern);
+            list.add(new RecipeDisplay(definition.name, appliesTo, pattern));
+        }
+        return List.copyOf(list);
+    }
+
+    public record RecipeDisplay(String name, String appliesTo, String pattern) {}
 
     /**
      * Builds a fully socketed resonance layout for the given item, or null if none apply.
@@ -356,7 +525,7 @@ public final class ResonanceSystem {
 
         WeaponClass weaponClass = classifyWeapon(item.getItemId());
         List<Definition> candidates = new ArrayList<>();
-        for (Definition definition : DEFINITIONS) {
+        for (Definition definition : getDefinitions()) {
             if (definition == null || definition.pattern == null || definition.pattern.length == 0) {
                 continue;
             }
@@ -396,6 +565,10 @@ public final class ResonanceSystem {
      * Picks a random resonance recipe applicable to the given item.
      */
     public static ResonanceRecipe rollRandomResonanceRecipe(ItemStack item) {
+        return rollRandomResonanceRecipe(item, ThreadLocalRandom.current());
+    }
+
+    public static ResonanceRecipe rollRandomResonanceRecipe(ItemStack item, Random rng) {
         if (item == null || item.isEmpty()) {
             return null;
         }
@@ -408,7 +581,7 @@ public final class ResonanceSystem {
 
         WeaponClass weaponClass = classifyWeapon(item.getItemId());
         List<Definition> candidates = new ArrayList<>();
-        for (Definition definition : DEFINITIONS) {
+        for (Definition definition : getDefinitions()) {
             if (!definitionApplies(definition, isWeapon, isArmor, weaponClass)) {
                 continue;
             }
@@ -419,7 +592,8 @@ public final class ResonanceSystem {
             return null;
         }
 
-        Definition chosen = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        Random random = rng != null ? rng : ThreadLocalRandom.current();
+        Definition chosen = candidates.get(random.nextInt(candidates.size()));
         Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
         return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
     }
@@ -428,10 +602,16 @@ public final class ResonanceSystem {
      * Picks a random resonance recipe without item context.
      */
     public static ResonanceRecipe rollRandomResonanceRecipe() {
-        if (DEFINITIONS == null || DEFINITIONS.isEmpty()) {
+        return rollRandomResonanceRecipe(ThreadLocalRandom.current());
+    }
+
+    public static ResonanceRecipe rollRandomResonanceRecipe(Random rng) {
+        List<Definition> definitions = getDefinitions();
+        if (definitions == null || definitions.isEmpty()) {
             return null;
         }
-        Definition chosen = DEFINITIONS.get(ThreadLocalRandom.current().nextInt(DEFINITIONS.size()));
+        Random random = rng != null ? rng : ThreadLocalRandom.current();
+        Definition chosen = definitions.get(random.nextInt(definitions.size()));
         Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
         return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
     }
@@ -471,7 +651,7 @@ public final class ResonanceSystem {
         }
 
         WeaponClass weaponClass = classifyWeapon(item.getItemId());
-        for (Definition definition : DEFINITIONS) {
+        for (Definition definition : getDefinitions()) {
             if (definition.matches(sequence, isWeapon, isArmor, weaponClass)) {
                 ResonanceResult result = definition.toResult();
                 double multiplier = getResonanceGreaterMultiplier(socketData);
@@ -609,6 +789,25 @@ public final class ResonanceSystem {
             return String.valueOf((int) Math.rint(value));
         }
         return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static String formatPattern(Essence.Type[] pattern) {
+        if (pattern == null || pattern.length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Essence.Type type : pattern) {
+            sb.append('[').append(formatEssenceToken(type)).append(']');
+        }
+        return sb.toString();
+    }
+
+    private static String formatEssenceToken(Essence.Type type) {
+        String raw = type == null ? "" : type.name().toLowerCase(Locale.ROOT);
+        if (raw.isEmpty()) {
+            return "x";
+        }
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
 
     private static double getResonanceGreaterMultiplier(SocketData socketData) {

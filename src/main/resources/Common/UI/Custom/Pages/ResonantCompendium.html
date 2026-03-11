@@ -1,0 +1,43 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Resonant Compendium" style="anchor-width: 920; anchor-height: 700;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+            <h2 style="text-align:center;">Resonant Compendium</h2>
+            <p style="text-align:center;">Secondary click to pull a stored recipe.</p>
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Stored Recipes</p>
+            <p>{{summaryText}}</p>
+            <select id="recipeDropdown" data-hyui-showlabel="true" style="anchor-width: 500; flex-weight:1;">
+                {{recipeOptions}}
+            </select>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Recipe Info</p>
+            <div id="recipeInfoPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p>Resonance: {{recipeName}}</p>
+                <p>Type: {{recipeType}}</p>
+                <p>Progress: {{recipeProgress}}</p>
+                <p>Usages: {{recipeUsages}}</p>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Pattern Preview</p>
+            <div id="patternPreviewRow">{{patternPreview}}</div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Extraction</p>
+            <div id="extractPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p>Extracting removes the recipe from the compendium and adds a Resonant Recipe item to your inventory.</p>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p id="statusLabel">{{statusText}}</p>
+            <button id="extractButton" style="width:100%;height:40px;" {{extractDisabledAttr}}>Extract Recipe</button>
+        </div>
+    </div>
+</div>

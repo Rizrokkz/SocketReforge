@@ -5,7 +5,10 @@
             <p style="text-align:center;">Live operator tuning for gameplay-facing settings. Changes save immediately.</p>
             <hr/>
             <div style="layout-mode:Top; spacing:8; background-color:#101726; padding:10; border-radius:6;">
-                <button id="reloadAllButton" style="width:220;height:36;">Reload All From Disk</button>
+                <div style="layout-mode:Left; spacing:8;">
+                    <button id="reloadAllButton" style="width:220;height:36;">Reload All From Disk</button>
+                    <button id="resetDefaultsButton" style="width:200;height:36;">Reset Defaults</button>
+                </div>
                 <p id="statusLabel" style="white-space:pre-line; max-height:72; overflow-y:auto; background-color:#1a1a2b; padding:8; border-radius:4;">{{statusText}}</p>
             </div>
             <p style="font-size:11; color:#B8B8C8;">Use the top row to switch categories, then pick a subsection to edit its values.</p>

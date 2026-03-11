@@ -1,13 +1,19 @@
 package irai.mod.reforge.Entity.Events;
 
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
@@ -30,6 +36,13 @@ public final class LootSocketRoller {
     private static volatile int maxBrokenSockets = 5;
     private static volatile double chestResonanceChance = 0.01d;
     private static volatile double dropResonanceChance = 0.01d;
+    private static volatile double chestSocketedEssenceChance = 0.05d;
+    private static volatile double dropSocketedEssenceChance = 0.05d;
+    private static volatile double greaterEssenceChance = 0.15d;
+
+    private static final int RECIPE_PITY_THRESHOLD = 150;
+    private static final Map<UUID, Integer> RECIPE_PITY = new ConcurrentHashMap<>();
+    private static final Essence.Type[] ESSENCE_TYPES = Essence.Type.values();
 
     private static final String META_WORLD_LOOT_ROLL_DONE = "SocketReforge.WorldLoot.RollDone";
     private static final String META_WORLD_LOOT_SOCKETED = "SocketReforge.WorldLoot.Socketed";
@@ -54,6 +67,22 @@ public final class LootSocketRoller {
     }
 
     public static ItemStack maybeSocketizeLootStack(ItemStack stack, LootSource source) {
+        return maybeSocketizeLootStack(stack, source, null, null);
+    }
+
+    public static ItemStack maybeSocketizeLootStack(ItemStack stack, LootSource source, long seed) {
+        return maybeSocketizeLootStack(stack, source, Long.valueOf(seed), null);
+    }
+
+    public static ItemStack maybeSocketizeLootStack(ItemStack stack, LootSource source, Player player) {
+        return maybeSocketizeLootStack(stack, source, null, player);
+    }
+
+    public static ItemStack maybeSocketizeLootStack(ItemStack stack, LootSource source, long seed, Player player) {
+        return maybeSocketizeLootStack(stack, source, Long.valueOf(seed), player);
+    }
+
+    private static ItemStack maybeSocketizeLootStack(ItemStack stack, LootSource source, Long recipeSeed, Player player) {
         if (stack == null || stack.isEmpty()) {
             return stack;
         }
@@ -69,7 +98,9 @@ public final class LootSocketRoller {
             return markRollDone(stack, 0);
         }
 
-        ItemStack resonant = maybeRollResonance(stack, source);
+        ItemStack resonant = recipeSeed != null
+                ? maybeRollResonance(stack, source, recipeSeed.longValue(), player)
+                : maybeRollResonance(stack, source, player);
         if (resonant != null) {
             return markRollDone(resonant, 1);
         }
@@ -80,7 +111,9 @@ public final class LootSocketRoller {
             return markRollDone(stack, 0);
         }
 
-        ItemStack socketed = createBrokenSocketLoot(stack, socketCount, profile);
+        ItemStack socketed = shouldSocketEssences(stack, source)
+                ? createSocketedEssenceLoot(stack, socketCount, profile)
+                : createBrokenSocketLoot(stack, socketCount, profile);
         return markRollDone(socketed, 1);
     }
 
@@ -103,6 +136,9 @@ public final class LootSocketRoller {
         );
         chestResonanceChance = clamp01(config.getChestResonanceChance());
         dropResonanceChance = clamp01(config.getDropResonanceChance());
+        chestSocketedEssenceChance = clamp01(config.getChestSocketedEssenceChance());
+        dropSocketedEssenceChance = clamp01(config.getDropSocketedEssenceChance());
+        greaterEssenceChance = clamp01(config.getGreaterEssenceChance());
 
         int min = Math.max(1, config.getMinBrokenSockets());
         int max = Math.max(min, config.getMaxBrokenSockets());
@@ -110,16 +146,53 @@ public final class LootSocketRoller {
         maxBrokenSockets = max;
     }
 
-    private static ItemStack maybeRollResonance(ItemStack stack, LootSource source) {
+    private static ItemStack maybeRollResonance(ItemStack stack, LootSource source, Player player) {
         double chance = getResonanceChance(source);
         if (chance <= 0.0d) {
             return null;
         }
-        if (ThreadLocalRandom.current().nextDouble() >= chance) {
+        if (!rollResonantRecipeWithPity(player, chance)) {
             return null;
         }
 
         return createResonantRecipeShard(stack, 1);
+    }
+
+    private static ItemStack maybeRollResonance(ItemStack stack, LootSource source, long seed, Player player) {
+        double chance = getResonanceChance(source);
+        if (chance <= 0.0d) {
+            return null;
+        }
+        if (!rollResonantRecipeWithPity(player, chance)) {
+            return null;
+        }
+
+        return createResonantRecipeShard(stack, 1, seed);
+    }
+
+    public static boolean rollResonantRecipeWithPity(Player player, double chance) {
+        if (chance <= 0.0d) {
+            return false;
+        }
+        UUID playerId = player != null ? player.getUuid() : null;
+        if (playerId == null) {
+            return ThreadLocalRandom.current().nextDouble() < chance;
+        }
+
+        int current = RECIPE_PITY.getOrDefault(playerId, 0);
+        if (current >= RECIPE_PITY_THRESHOLD) {
+            RECIPE_PITY.remove(playerId);
+            return true;
+        }
+
+        if (ThreadLocalRandom.current().nextDouble() < chance) {
+            RECIPE_PITY.remove(playerId);
+            return true;
+        }
+
+        int next = Math.min(RECIPE_PITY_THRESHOLD, current + 1);
+        RECIPE_PITY.put(playerId, next);
+        return false;
     }
 
     public static ItemStack createResonantRecipeShard(ItemStack context, int quantity) {
@@ -131,7 +204,26 @@ public final class LootSocketRoller {
         }
         int safeQty = Math.max(1, quantity);
         String displayName = recipe.name().trim() + " Recipe";
-        String pattern = buildPartialRecipe(recipe.pattern());
+        String pattern = buildPartialRecipe(recipe.pattern(), null);
+        String appliesTo = recipe.appliesTo();
+        return new ItemStack(RECIPE_ITEM_ID, safeQty)
+                .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, displayName)
+                .withMetadata(META_RECIPE_NAME, Codec.STRING, recipe.name().trim())
+                .withMetadata(META_RECIPE_PATTERN, Codec.STRING, pattern)
+                .withMetadata(META_RECIPE_TYPE, Codec.STRING, appliesTo == null ? "" : appliesTo);
+    }
+
+    public static ItemStack createResonantRecipeShard(ItemStack context, int quantity, long seed) {
+        Random rng = new Random(seed);
+        ResonanceSystem.ResonanceRecipe recipe = context != null
+                ? ResonanceSystem.rollRandomResonanceRecipe(context, rng)
+                : ResonanceSystem.rollRandomResonanceRecipe(rng);
+        if (recipe == null || recipe.name() == null || recipe.name().isBlank()) {
+            return null;
+        }
+        int safeQty = Math.max(1, quantity);
+        String displayName = recipe.name().trim() + " Recipe";
+        String pattern = buildPartialRecipe(recipe.pattern(), rng);
         String appliesTo = recipe.appliesTo();
         return new ItemStack(RECIPE_ITEM_ID, safeQty)
                 .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, displayName)
@@ -148,16 +240,17 @@ public final class LootSocketRoller {
         return pattern != null && !pattern.isBlank();
     }
 
-    private static String buildPartialRecipe(Essence.Type[] pattern) {
+    private static String buildPartialRecipe(Essence.Type[] pattern, Random rng) {
         if (pattern == null || pattern.length == 0) {
             return "";
         }
+        Random random = rng != null ? rng : ThreadLocalRandom.current();
         int length = pattern.length;
-        int reveals = rollRevealCount(length);
+        int reveals = rollRevealCount(length, random);
         boolean[] reveal = new boolean[length];
         int picked = 0;
         while (picked < reveals) {
-            int idx = ThreadLocalRandom.current().nextInt(length);
+            int idx = random.nextInt(length);
             if (!reveal[idx]) {
                 reveal[idx] = true;
                 picked++;
@@ -171,7 +264,7 @@ public final class LootSocketRoller {
         return sb.toString();
     }
 
-    private static int rollRevealCount(int length) {
+    private static int rollRevealCount(int length, Random random) {
         if (length <= 1) {
             return length;
         }
@@ -183,7 +276,7 @@ public final class LootSocketRoller {
         if (max <= min) {
             return min;
         }
-        return ThreadLocalRandom.current().nextInt(min, max + 1);
+        return min + random.nextInt(max - min + 1);
     }
 
     private static String formatEssenceToken(Essence.Type type) {
@@ -258,6 +351,51 @@ public final class LootSocketRoller {
         return SocketManager.withSocketData(stack, socketData);
     }
 
+    private static ItemStack createSocketedEssenceLoot(ItemStack stack, int socketCount, RollProfile profile) {
+        SocketData socketData = SocketManager.getSocketData(stack);
+        if (socketData == null) {
+            return stack;
+        }
+
+        int clampedSockets = Math.max(minBrokenSockets, Math.min(maxBrokenSockets, socketCount));
+        int targetMaxSockets = resolveTargetMaxSockets(clampedSockets, profile);
+        if (socketData.getMaxSockets() != targetMaxSockets) {
+            socketData.setMaxSockets(targetMaxSockets);
+        }
+
+        while (socketData.getCurrentSocketCount() < clampedSockets) {
+            if (!socketData.addSocket()) {
+                break;
+            }
+        }
+
+        for (Socket socket : socketData.getSockets()) {
+            socket.setEssenceId(null);
+            socket.setLocked(false);
+            socket.setBroken(false);
+        }
+
+        int available = socketData.getCurrentSocketCount();
+        if (available <= 0) {
+            return SocketManager.withSocketData(stack, socketData);
+        }
+        int fillCount = ThreadLocalRandom.current().nextInt(1, available + 1);
+        int[] indices = new int[available];
+        for (int i = 0; i < available; i++) {
+            indices[i] = i;
+        }
+        shuffle(indices);
+        for (int i = 0; i < fillCount; i++) {
+            String essenceId = rollRandomEssenceId();
+            if (essenceId == null) {
+                continue;
+            }
+            socketData.setEssenceAt(indices[i], essenceId);
+        }
+
+        return SocketManager.withSocketData(stack, socketData);
+    }
+
     private static int resolveTargetMaxSockets(int rolledSockets, RollProfile profile) {
         if (rolledSockets == 3) {
             double chanceForFour = profile == null ? 0.50d : profile.threeToFourChance;
@@ -280,6 +418,13 @@ public final class LootSocketRoller {
         return chestResonanceChance;
     }
 
+    private static double getSocketedEssenceChance(LootSource source) {
+        if (source == LootSource.NPC_DROP) {
+            return dropSocketedEssenceChance;
+        }
+        return chestSocketedEssenceChance;
+    }
+
     private static boolean hasSocketMetadata(ItemStack stack) {
         Integer max = stack.getFromMetadataOrNull(META_SOCKET_MAX, Codec.INTEGER);
         String[] values = stack.getFromMetadataOrNull(META_SOCKET_VALUES, Codec.STRING_ARRAY);
@@ -300,6 +445,43 @@ public final class LootSocketRoller {
 
     private static boolean isEquipment(ItemStack stack) {
         return ReforgeEquip.isWeapon(stack) || ReforgeEquip.isArmor(stack);
+    }
+
+    private static boolean shouldSocketEssences(ItemStack stack, LootSource source) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (!isEquipment(stack)) {
+            return false;
+        }
+        double chance = getSocketedEssenceChance(source);
+        return chance > 0.0d && ThreadLocalRandom.current().nextDouble() < chance;
+    }
+
+    private static String rollRandomEssenceId() {
+        if (ESSENCE_TYPES.length == 0) {
+            return null;
+        }
+        Essence.Type type = ESSENCE_TYPES[ThreadLocalRandom.current().nextInt(ESSENCE_TYPES.length)];
+        boolean greater = ThreadLocalRandom.current().nextDouble() < greaterEssenceChance;
+        String essenceId = SocketManager.buildEssenceId(type.name(), greater);
+        if (essenceId == null) {
+            return null;
+        }
+        if (EssenceRegistry.get().exists(essenceId)) {
+            return essenceId;
+        }
+        String fallback = SocketManager.buildEssenceId(type.name(), false);
+        return fallback != null && EssenceRegistry.get().exists(fallback) ? fallback : null;
+    }
+
+    private static void shuffle(int[] values) {
+        for (int i = values.length - 1; i > 0; i--) {
+            int j = ThreadLocalRandom.current().nextInt(i + 1);
+            int tmp = values[i];
+            values[i] = values[j];
+            values[j] = tmp;
+        }
     }
 
     private static final class RollProfile {

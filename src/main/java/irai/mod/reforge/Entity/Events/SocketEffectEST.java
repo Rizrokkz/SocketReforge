@@ -256,7 +256,7 @@ public class SocketEffectEST extends DamageEventSystem {
         try {
             SocketData socketData = SocketManager.getSocketData(item);
             if (socketData != null) {
-                ResonanceSystem.ResonanceResult result = ResonanceSystem.evaluate(item, socketData);
+                ResonanceSystem.ResonanceResult result = SocketManager.evaluateAllowedResonance(item, socketData);
                 if (result != null && result.active() && result.type() != null) {
                     return result.type();
                 }

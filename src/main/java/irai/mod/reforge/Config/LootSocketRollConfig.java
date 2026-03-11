@@ -62,6 +62,81 @@ public class LootSocketRollConfig {
                     cfg -> new double[]{cfg.dropResonanceChance}
             ).add()
             .append(
+                    new KeyedCodec<>("CHEST_SOCKETED_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.chestSocketedEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.chestSocketedEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("DROP_SOCKETED_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.dropSocketedEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.dropSocketedEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("GREATER_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.greaterEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.greaterEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_WATER_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropWaterEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.cropWaterEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_LIGHTNING_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropLightningEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.cropLightningEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_WATER_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcWaterEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.npcWaterEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_LIGHTNING_ESSENCE_CHANCE", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcLightningEssenceChance = v[0]; },
+                    cfg -> new double[]{cfg.npcLightningEssenceChance}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_WATER_ESSENCE_MIN", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropWaterEssenceMinQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.cropWaterEssenceMinQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_WATER_ESSENCE_MAX", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropWaterEssenceMaxQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.cropWaterEssenceMaxQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_LIGHTNING_ESSENCE_MIN", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropLightningEssenceMinQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.cropLightningEssenceMinQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("CROP_LIGHTNING_ESSENCE_MAX", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.cropLightningEssenceMaxQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.cropLightningEssenceMaxQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_WATER_ESSENCE_MIN", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcWaterEssenceMinQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.npcWaterEssenceMinQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_WATER_ESSENCE_MAX", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcWaterEssenceMaxQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.npcWaterEssenceMaxQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_LIGHTNING_ESSENCE_MIN", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcLightningEssenceMinQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.npcLightningEssenceMinQuantity}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_LIGHTNING_ESSENCE_MAX", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.npcLightningEssenceMaxQuantity = (int) Math.round(v[0]); },
+                    cfg -> new double[]{cfg.npcLightningEssenceMaxQuantity}
+            ).add()
+            .append(
                     new KeyedCodec<>("MIN_BROKEN_SOCKETS", DOUBLE_ARRAY),
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.minBrokenSockets = (int) Math.round(v[0]); },
                     cfg -> new double[]{cfg.minBrokenSockets}
@@ -79,6 +154,7 @@ public class LootSocketRollConfig {
     private double chestFiveSocketChance = 0.01d;
     private double chestThreeToFourChance = 0.50d;
     private double chestResonanceChance = 0.01d;
+    private double chestSocketedEssenceChance = 0.05d;
 
     // NPC drop rolls
     private double dropThreeSocketChance = 0.30d;
@@ -86,6 +162,24 @@ public class LootSocketRollConfig {
     private double dropFiveSocketChance = 0.01d;
     private double dropThreeToFourChance = 0.50d;
     private double dropResonanceChance = 0.01;
+    private double dropSocketedEssenceChance = 0.05d;
+
+    // Essence fill tuning
+    private double greaterEssenceChance = 0.15d;
+
+    // Crop + NPC essence injections
+    private double cropWaterEssenceChance = 0.05d;
+    private double cropLightningEssenceChance = 0.15d;
+    private double npcWaterEssenceChance = 0.05d;
+    private double npcLightningEssenceChance = 0.15d;
+    private int cropWaterEssenceMinQuantity = 1;
+    private int cropWaterEssenceMaxQuantity = 2;
+    private int cropLightningEssenceMinQuantity = 2;
+    private int cropLightningEssenceMaxQuantity = 3;
+    private int npcWaterEssenceMinQuantity = 1;
+    private int npcWaterEssenceMaxQuantity = 2;
+    private int npcLightningEssenceMinQuantity = 2;
+    private int npcLightningEssenceMaxQuantity = 3;
 
     // Clamp range used after rolling
     private int minBrokenSockets = 3;
@@ -129,6 +223,66 @@ public class LootSocketRollConfig {
 
     public double getDropResonanceChance() {
         return dropResonanceChance;
+    }
+
+    public double getChestSocketedEssenceChance() {
+        return chestSocketedEssenceChance;
+    }
+
+    public double getDropSocketedEssenceChance() {
+        return dropSocketedEssenceChance;
+    }
+
+    public double getGreaterEssenceChance() {
+        return greaterEssenceChance;
+    }
+
+    public double getCropWaterEssenceChance() {
+        return cropWaterEssenceChance;
+    }
+
+    public double getCropLightningEssenceChance() {
+        return cropLightningEssenceChance;
+    }
+
+    public double getNpcWaterEssenceChance() {
+        return npcWaterEssenceChance;
+    }
+
+    public double getNpcLightningEssenceChance() {
+        return npcLightningEssenceChance;
+    }
+
+    public int getCropWaterEssenceMinQuantity() {
+        return cropWaterEssenceMinQuantity;
+    }
+
+    public int getCropWaterEssenceMaxQuantity() {
+        return cropWaterEssenceMaxQuantity;
+    }
+
+    public int getCropLightningEssenceMinQuantity() {
+        return cropLightningEssenceMinQuantity;
+    }
+
+    public int getCropLightningEssenceMaxQuantity() {
+        return cropLightningEssenceMaxQuantity;
+    }
+
+    public int getNpcWaterEssenceMinQuantity() {
+        return npcWaterEssenceMinQuantity;
+    }
+
+    public int getNpcWaterEssenceMaxQuantity() {
+        return npcWaterEssenceMaxQuantity;
+    }
+
+    public int getNpcLightningEssenceMinQuantity() {
+        return npcLightningEssenceMinQuantity;
+    }
+
+    public int getNpcLightningEssenceMaxQuantity() {
+        return npcLightningEssenceMaxQuantity;
     }
 
     public int getMinBrokenSockets() {
@@ -179,11 +333,102 @@ public class LootSocketRollConfig {
         this.dropResonanceChance = value;
     }
 
+    public void setChestSocketedEssenceChance(double value) {
+        this.chestSocketedEssenceChance = value;
+    }
+
+    public void setDropSocketedEssenceChance(double value) {
+        this.dropSocketedEssenceChance = value;
+    }
+
+    public void setGreaterEssenceChance(double value) {
+        this.greaterEssenceChance = value;
+    }
+
+    public void setCropWaterEssenceChance(double value) {
+        this.cropWaterEssenceChance = value;
+    }
+
+    public void setCropLightningEssenceChance(double value) {
+        this.cropLightningEssenceChance = value;
+    }
+
+    public void setNpcWaterEssenceChance(double value) {
+        this.npcWaterEssenceChance = value;
+    }
+
+    public void setNpcLightningEssenceChance(double value) {
+        this.npcLightningEssenceChance = value;
+    }
+
+    public void setCropWaterEssenceMinQuantity(int value) {
+        this.cropWaterEssenceMinQuantity = value;
+    }
+
+    public void setCropWaterEssenceMaxQuantity(int value) {
+        this.cropWaterEssenceMaxQuantity = value;
+    }
+
+    public void setCropLightningEssenceMinQuantity(int value) {
+        this.cropLightningEssenceMinQuantity = value;
+    }
+
+    public void setCropLightningEssenceMaxQuantity(int value) {
+        this.cropLightningEssenceMaxQuantity = value;
+    }
+
+    public void setNpcWaterEssenceMinQuantity(int value) {
+        this.npcWaterEssenceMinQuantity = value;
+    }
+
+    public void setNpcWaterEssenceMaxQuantity(int value) {
+        this.npcWaterEssenceMaxQuantity = value;
+    }
+
+    public void setNpcLightningEssenceMinQuantity(int value) {
+        this.npcLightningEssenceMinQuantity = value;
+    }
+
+    public void setNpcLightningEssenceMaxQuantity(int value) {
+        this.npcLightningEssenceMaxQuantity = value;
+    }
+
     public void setMinBrokenSockets(int value) {
         this.minBrokenSockets = value;
     }
 
     public void setMaxBrokenSockets(int value) {
         this.maxBrokenSockets = value;
+    }
+
+    public void resetToDefaults() {
+        LootSocketRollConfig defaults = new LootSocketRollConfig();
+        this.chestThreeSocketChance = defaults.chestThreeSocketChance;
+        this.chestFourSocketChance = defaults.chestFourSocketChance;
+        this.chestFiveSocketChance = defaults.chestFiveSocketChance;
+        this.chestThreeToFourChance = defaults.chestThreeToFourChance;
+        this.chestResonanceChance = defaults.chestResonanceChance;
+        this.chestSocketedEssenceChance = defaults.chestSocketedEssenceChance;
+        this.dropThreeSocketChance = defaults.dropThreeSocketChance;
+        this.dropFourSocketChance = defaults.dropFourSocketChance;
+        this.dropFiveSocketChance = defaults.dropFiveSocketChance;
+        this.dropThreeToFourChance = defaults.dropThreeToFourChance;
+        this.dropResonanceChance = defaults.dropResonanceChance;
+        this.dropSocketedEssenceChance = defaults.dropSocketedEssenceChance;
+        this.greaterEssenceChance = defaults.greaterEssenceChance;
+        this.cropWaterEssenceChance = defaults.cropWaterEssenceChance;
+        this.cropLightningEssenceChance = defaults.cropLightningEssenceChance;
+        this.npcWaterEssenceChance = defaults.npcWaterEssenceChance;
+        this.npcLightningEssenceChance = defaults.npcLightningEssenceChance;
+        this.cropWaterEssenceMinQuantity = defaults.cropWaterEssenceMinQuantity;
+        this.cropWaterEssenceMaxQuantity = defaults.cropWaterEssenceMaxQuantity;
+        this.cropLightningEssenceMinQuantity = defaults.cropLightningEssenceMinQuantity;
+        this.cropLightningEssenceMaxQuantity = defaults.cropLightningEssenceMaxQuantity;
+        this.npcWaterEssenceMinQuantity = defaults.npcWaterEssenceMinQuantity;
+        this.npcWaterEssenceMaxQuantity = defaults.npcWaterEssenceMaxQuantity;
+        this.npcLightningEssenceMinQuantity = defaults.npcLightningEssenceMinQuantity;
+        this.npcLightningEssenceMaxQuantity = defaults.npcLightningEssenceMaxQuantity;
+        this.minBrokenSockets = defaults.minBrokenSockets;
+        this.maxBrokenSockets = defaults.maxBrokenSockets;
     }
 }

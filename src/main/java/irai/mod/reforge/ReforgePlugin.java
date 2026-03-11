@@ -29,23 +29,27 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Int
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.WorldConfig;
 import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
+import irai.mod.reforge.Commands.ResonanceListCommand;
+import irai.mod.reforge.Commands.ResonanceWorldScanCommand;
 import irai.mod.reforge.Commands.RuntimeConfigCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
+import irai.mod.reforge.Common.CropEssenceDropUtils;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
-import irai.mod.reforge.Config.WeatherEventConfig;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
@@ -56,18 +60,22 @@ import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
-import irai.mod.reforge.Entity.Events.SpiritThunderRainSystem;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.HatchetThrowUse;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Interactions.ResonantCompendiumUse;
+import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Socket.EssenceRegistry;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.EssenceBenchUI;
+import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
+import irai.mod.reforge.UI.ResonantCompendiumUI;
 import irai.mod.reforge.UI.RuntimeConfigUI;
 import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.UI.ToolPartsUI;
@@ -84,7 +92,6 @@ public class ReforgePlugin extends JavaPlugin {
     private final SalvageMetadataCompatEST salvageMetadataCompatEST;
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
-    private final SpiritThunderRainSystem spiritThunderRainSystem;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -98,7 +105,6 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<RefinementConfig> refinementConfig;
     private final Config<SocketConfig> socketConfig;
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
-    private final Config<WeatherEventConfig> weatherEventConfig;
     private final ConfigService configService;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
@@ -113,13 +119,11 @@ public class ReforgePlugin extends JavaPlugin {
         salvageMetadataCompatEST = new SalvageMetadataCompatEST();
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
-        spiritThunderRainSystem = new SpiritThunderRainSystem();
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
-        this.weatherEventConfig = this.withConfig("WeatherEventConfig", WeatherEventConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -142,8 +146,11 @@ public class ReforgePlugin extends JavaPlugin {
             EssenceRegistry.initialize();
         });
 
-        this.configService.register("LootSocketRollConfig", this.lootSocketRollConfig, LootSocketRoller::setConfig);
-        this.configService.register("WeatherEventConfig", this.weatherEventConfig, SpiritThunderRainSystem::setConfig);
+        this.configService.register("LootSocketRollConfig", this.lootSocketRollConfig, cfg -> {
+            LootSocketRoller.setConfig(cfg);
+            CropEssenceDropUtils.setConfig(cfg);
+            NPCLootSocketDropEST.setConfig(cfg);
+        });
     }
 
     @Override
@@ -157,11 +164,12 @@ public class ReforgePlugin extends JavaPlugin {
         EssenceBenchUI.initialize();
         ReforgeBenchUI.initialize();
         ToolPartsUI.initialize();
+        RecipeCombineUI.initialize();
+        ResonantCompendiumUI.initialize();
         RuntimeConfigUI.initialize(this);
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
-        
         // Register interaction
         reforgeEquip = new ReforgeEquip();
 
@@ -174,9 +182,13 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
+        this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, CropEssenceDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
@@ -191,6 +203,8 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
         this.getCommandRegistry().registerCommand(new ItemMetaCommand("itemmeta", "View or modify item metadata", false));
+        this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
+        this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
@@ -201,7 +215,6 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
-        this.getEntityStoreRegistry().registerSystem(spiritThunderRainSystem);
 
 
     }
@@ -209,6 +222,10 @@ public class ReforgePlugin extends JavaPlugin {
     @Override
     protected void start() {
         injectHatchetUseInteractions();
+        injectResonantRecipeUseInteraction();
+        injectResonantCompendiumUseInteraction();
+        configureResonanceSeedFromMainWorld();
+        CropEssenceDropUtils.onServerStart();
     }
 
     protected void stop() {
@@ -245,9 +262,6 @@ public class ReforgePlugin extends JavaPlugin {
         return refinementConfig.get();
     }
 
-    public WeatherEventConfig getWeatherEventRuntimeConfig() {
-        return weatherEventConfig.get();
-    }
 
     public LootSocketRollConfig getLootSocketRollRuntimeConfig() {
         return lootSocketRollConfig.get();
@@ -340,6 +354,79 @@ public class ReforgePlugin extends JavaPlugin {
         } catch (Exception e) {
             System.err.println("[SocketReforge] Failed to inject hatchet interactions: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private void injectResonantRecipeUseInteraction() {
+        try {
+            DefaultAssetMap<String, Item> assetMap = Item.getAssetMap();
+            if (assetMap == null || assetMap.getAssetMap() == null) {
+                System.out.println("[SocketReforge] Resonant recipe interaction injection skipped: item asset map unavailable");
+                return;
+            }
+
+            Item recipeItem = assetMap.getAssetMap().get("Resonant_Recipe");
+            if (recipeItem == null || recipeItem == Item.UNKNOWN) {
+                System.out.println("[SocketReforge] Resonant recipe interaction injection skipped: item not found");
+                return;
+            }
+
+            boolean changed = ensureItemInteraction(recipeItem, InteractionType.Use, "ResonantRecipeCombineUse");
+            if (changed) {
+                System.out.println("[SocketReforge] Resonant recipe combine interaction enabled");
+            }
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Failed to inject resonant recipe interaction: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void injectResonantCompendiumUseInteraction() {
+        try {
+            DefaultAssetMap<String, Item> assetMap = Item.getAssetMap();
+            if (assetMap == null || assetMap.getAssetMap() == null) {
+                System.out.println("[SocketReforge] Resonant compendium interaction injection skipped: item asset map unavailable");
+                return;
+            }
+
+            Item compendiumItem = assetMap.getAssetMap().get("Resonant_Compendium");
+            if (compendiumItem == null || compendiumItem == Item.UNKNOWN) {
+                System.out.println("[SocketReforge] Resonant compendium interaction injection skipped: item not found");
+                return;
+            }
+
+            boolean changed = ensureItemInteraction(compendiumItem, InteractionType.Use, "ResonantCompendiumUse");
+            changed |= ensureItemInteraction(compendiumItem, InteractionType.Secondary, "ResonantCompendiumUse");
+            if (changed) {
+                System.out.println("[SocketReforge] Resonant compendium interaction enabled");
+            }
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Failed to inject resonant compendium interaction: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void configureResonanceSeedFromMainWorld() {
+        try {
+            Universe universe = Universe.get();
+            if (universe == null) {
+                System.out.println("[SocketReforge] Resonance seed not set (Universe unavailable).");
+                return;
+            }
+            World world = universe.getDefaultWorld();
+            if (world == null) {
+                System.out.println("[SocketReforge] Resonance seed not set (default world unavailable).");
+                return;
+            }
+            WorldConfig config = world.getWorldConfig();
+            if (config == null) {
+                System.out.println("[SocketReforge] Resonance seed not set (world config unavailable).");
+                return;
+            }
+            ResonanceSystem.setResonanceSeed(config.getSeed());
+            System.out.println("[SocketReforge] Resonance combinations seeded from main world.");
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Failed to set resonance seed: " + e.getMessage());
         }
     }
 

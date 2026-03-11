@@ -1,0 +1,63 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Resonant Recipe Combine" style="anchor-width: 920; anchor-height: 700;">
+        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+            <h2 style="text-align:center;">Resonant Recipe Combine</h2>
+            <p style="text-align:center;">Combine recipe shards to reveal the full resonance pattern.</p>
+            <hr/>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <div style="layout-mode:center; spacing:16;">
+                <div style="anchor-width:400; layout-mode:Top;">
+                    <p style="font-weight:bold;">Held Recipe</p>
+                    <select id="heldRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 400; flex-weight:1;">
+                        {{heldRecipeOptions}}
+                    </select>
+                </div>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Recipe Info</p>
+            <div id="recipeInfoPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p>Resonance: {{recipeName}}</p>
+                <p>Type: {{recipeType}}</p>
+                <p>Progress: {{recipeProgress}}</p>
+                <p>Usages: {{recipeUsages}}</p>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Pattern Preview</p>
+            <div id="patternPreviewRow">{{patternPreview}}</div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Available Shards to Merge</p>
+            <div id="shardListPanel" style="layout-mode:Top;max-height:140px;overflow-y:auto;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p style="white-space:pre-line;">{{shardListText}}</p>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p style="font-weight:bold;">Merge Preview</p>
+            <div id="mergePreviewPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p style="white-space:pre-line;">{{mergePreviewText}}</p>
+            </div>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-weight:bold;">Progress</p>
+            <progress id="combineProgress"
+                      max="100"
+                      value="{{progressValue}}"
+                      data-hyui-bar-texture-path="boost_fill.png"
+                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+            </progress>
+            <p id="statusLabel">{{statusText}}</p>
+
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-size:11;">Combining merges all compatible shards into the held recipe.</p>
+            <p style="font-size:11;">Consumed shards are removed from inventory.</p>
+            <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>Combine Shards</button>
+        </div>
+    </div>
+</div>

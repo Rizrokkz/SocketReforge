@@ -17,7 +17,6 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SocketConfig;
-import irai.mod.reforge.Config.WeatherEventConfig;
 import irai.mod.reforge.ReforgePlugin;
 
 /**
@@ -30,16 +29,15 @@ public final class RuntimeConfigUI {
     private static final String HYUI_PLUGIN = "au.ellie.hyui.HyUIPlugin";
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/RuntimeConfigEditor.html";
+    private static final String RESET_DEFAULTS_BUTTON = "resetDefaultsButton";
 
     private static final String SOCKET_CONFIG_NAME = "SocketConfig";
     private static final String REFINEMENT_CONFIG_NAME = "RefinementConfig";
     private static final String LOOT_CONFIG_NAME = "LootSocketRollConfig";
-    private static final String WEATHER_CONFIG_NAME = "WeatherEventConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
     private static final String CATEGORY_LOOT = "loot";
-    private static final String CATEGORY_WEATHER = "weather";
 
     private static final String DEFAULT_STATUS =
             "Changes apply live and save immediately.\nUse Reload All From Disk to discard in-memory edits.";
@@ -74,7 +72,8 @@ public final class RuntimeConfigUI {
     private enum DisplayKind {
         INTEGER,
         PERCENT,
-        MULTIPLIER
+        MULTIPLIER,
+        TOGGLE
     }
 
     @FunctionalInterface
@@ -294,6 +293,8 @@ public final class RuntimeConfigUI {
 
             addListener.invoke(pageBuilder, "reloadAllButton", activating,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReload(finalPlayer, finalState));
+            addListener.invoke(pageBuilder, RESET_DEFAULTS_BUTTON, activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleResetDefaults(finalPlayer, finalState));
 
             for (CategorySection category : categories) {
                 addListener.invoke(pageBuilder, category.toggleButtonId, activating,
@@ -314,10 +315,15 @@ public final class RuntimeConfigUI {
             }
 
             for (NumericControl control : visibleControls(activeCategory, activeGroup)) {
-                registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.largeStep, finalPlayer, finalState);
-                registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
-                registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
-                registerAdjustmentListener(pageBuilder, addListener, activating, control, control.largeStep, finalPlayer, finalState);
+                if (control.displayKind == DisplayKind.TOGGLE) {
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
+                } else {
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.largeStep, finalPlayer, finalState);
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
+                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.largeStep, finalPlayer, finalState);
+                }
             }
 
             pageBuilder = onDismiss.invoke(pageBuilder,
@@ -341,7 +347,7 @@ public final class RuntimeConfigUI {
             Player player,
             ViewState state) throws Exception {
         String buttonId = buttonIdForDelta(control, delta);
-                addListener.invoke(pageBuilder, buttonId, activating,
+        addListener.invoke(pageBuilder, buttonId, activating,
                 (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAdjustment(player, state, control, delta));
     }
 
@@ -353,6 +359,40 @@ public final class RuntimeConfigUI {
             state.statusText = "Reload failed: " + sanitizeError(e);
         }
         requestReopen(player, state);
+    }
+
+    private static void handleResetDefaults(Player player, ViewState state) {
+        CategorySection activeCategory = resolveActiveCategory(state);
+        if (activeCategory == null) {
+            state.statusText = "No active category to reset.";
+            requestReopen(player, state);
+            return;
+        }
+        try {
+            resetCategoryToDefaults(activeCategory.id);
+            state.statusText = activeCategory.title + " reset to defaults.";
+        } catch (Exception e) {
+            state.statusText = "Reset failed: " + sanitizeError(e);
+        }
+        requestReopen(player, state);
+    }
+
+    private static void resetCategoryToDefaults(String categoryId) {
+        if (CATEGORY_SOCKET.equals(categoryId)) {
+            socketConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+            return;
+        }
+        if (CATEGORY_REFINEMENT.equals(categoryId)) {
+            refinementConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
+            return;
+        }
+        if (CATEGORY_LOOT.equals(categoryId)) {
+            lootConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(LOOT_CONFIG_NAME);
+            return;
+        }
     }
 
     private static void handleAdjustment(Player player, ViewState state, NumericControl control, double delta) {
@@ -501,10 +541,15 @@ public final class RuntimeConfigUI {
         }
         sb.append("</div>");
         sb.append("<div style=\"layout-mode:Left; spacing:8;\">");
-        sb.append(buildButton(control.minusLargeButtonId(), control.formatLargeStepLabel(false)));
-        sb.append(buildButton(control.minusButtonId(), control.formatSmallStepLabel(false)));
-        sb.append(buildButton(control.plusButtonId(), control.formatSmallStepLabel(true)));
-        sb.append(buildButton(control.plusLargeButtonId(), control.formatLargeStepLabel(true)));
+        if (control.displayKind == DisplayKind.TOGGLE) {
+            sb.append(buildButton(control.minusButtonId(), control.formatSmallStepLabel(false)));
+            sb.append(buildButton(control.plusButtonId(), control.formatSmallStepLabel(true)));
+        } else {
+            sb.append(buildButton(control.minusLargeButtonId(), control.formatLargeStepLabel(false)));
+            sb.append(buildButton(control.minusButtonId(), control.formatSmallStepLabel(false)));
+            sb.append(buildButton(control.plusButtonId(), control.formatSmallStepLabel(true)));
+            sb.append(buildButton(control.plusLargeButtonId(), control.formatLargeStepLabel(true)));
+        }
         sb.append("<p id=\"")
                 .append(control.valueElementId())
                 .append("\" style=\"width:")
@@ -592,7 +637,6 @@ public final class RuntimeConfigUI {
         addCategory(buildSocketCategory());
         addCategory(buildRefinementCategory());
         addCategory(buildLootCategory());
-        addCategory(buildWeatherCategory());
     }
 
     private static void addCategory(CategorySection category) {
@@ -725,6 +769,7 @@ public final class RuntimeConfigUI {
         chestRolls.add(chanceControl("loot_chest_five", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest 5-socket chance", "Chance for rolled chest loot to land at 5 sockets.", () -> lootConfig().getChestFiveSocketChance(), delta -> lootConfig().setChestFiveSocketChance(clampChance(lootConfig().getChestFiveSocketChance() + delta))));
         chestRolls.add(chanceControl("loot_chest_three_to_four", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest 3->4 conversion", "Upgrade chance when chest loot first rolls 3 sockets.", () -> lootConfig().getChestThreeToFourChance(), delta -> lootConfig().setChestThreeToFourChance(clampChance(lootConfig().getChestThreeToFourChance() + delta))));
         chestRolls.add(chanceControl("loot_chest_resonance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest resonance chance", "Chance for chest loot to roll a fully resonant item.", () -> lootConfig().getChestResonanceChance(), delta -> lootConfig().setChestResonanceChance(clampChance(lootConfig().getChestResonanceChance() + delta))));
+        chestRolls.add(chanceControl("loot_chest_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest socketed essence chance", "Chance for chest equipment to spawn with filled essences.", () -> lootConfig().getChestSocketedEssenceChance(), delta -> lootConfig().setChestSocketedEssenceChance(clampChance(lootConfig().getChestSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("chest_loot", "Chest Loot", "Socket roll tuning for treasure chests.", chestRolls));
 
         List<NumericControl> dropRolls = new ArrayList<>();
@@ -733,7 +778,30 @@ public final class RuntimeConfigUI {
         dropRolls.add(chanceControl("loot_drop_five", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 5-socket chance", "Chance for NPC drops to land at 5 sockets.", () -> lootConfig().getDropFiveSocketChance(), delta -> lootConfig().setDropFiveSocketChance(clampChance(lootConfig().getDropFiveSocketChance() + delta))));
         dropRolls.add(chanceControl("loot_drop_three_to_four", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 3->4 conversion", "Upgrade chance when drop loot first rolls 3 sockets.", () -> lootConfig().getDropThreeToFourChance(), delta -> lootConfig().setDropThreeToFourChance(clampChance(lootConfig().getDropThreeToFourChance() + delta))));
         dropRolls.add(chanceControl("loot_drop_resonance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop resonance chance", "Chance for NPC drops to roll a fully resonant item.", () -> lootConfig().getDropResonanceChance(), delta -> lootConfig().setDropResonanceChance(clampChance(lootConfig().getDropResonanceChance() + delta))));
+        dropRolls.add(chanceControl("loot_drop_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop socketed essence chance", "Chance for NPC equipment to spawn with filled essences.", () -> lootConfig().getDropSocketedEssenceChance(), delta -> lootConfig().setDropSocketedEssenceChance(clampChance(lootConfig().getDropSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("npc_drops", "NPC Drops", "Socket roll tuning for NPC and world drops.", dropRolls));
+
+        List<NumericControl> essenceFill = new ArrayList<>();
+        essenceFill.add(chanceControl("loot_greater_essence_chance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Greater essence chance", "Chance each filled socket uses a concentrated essence.", () -> lootConfig().getGreaterEssenceChance(), delta -> lootConfig().setGreaterEssenceChance(clampChance(lootConfig().getGreaterEssenceChance() + delta))));
+        groups.add(new ControlGroup("essence_fill", "Essence Fill", "Controls for pre-filled socketed essences.", essenceFill));
+
+        List<NumericControl> essenceDrops = new ArrayList<>();
+        essenceDrops.add(chanceControl("loot_crop_water_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence chance", "Chance for farm crops to drop water essence.", () -> lootConfig().getCropWaterEssenceChance(), delta -> lootConfig().setCropWaterEssenceChance(clampChance(lootConfig().getCropWaterEssenceChance() + delta))));
+        essenceDrops.add(chanceControl("loot_crop_lightning_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop lightning essence chance", "Chance for stamina crops to drop lightning essence.", () -> lootConfig().getCropLightningEssenceChance(), delta -> lootConfig().setCropLightningEssenceChance(clampChance(lootConfig().getCropLightningEssenceChance() + delta))));
+        essenceDrops.add(chanceControl("loot_npc_water_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC water essence chance", "Chance for aquatic NPC drops to include water essence.", () -> lootConfig().getNpcWaterEssenceChance(), delta -> lootConfig().setNpcWaterEssenceChance(clampChance(lootConfig().getNpcWaterEssenceChance() + delta))));
+        essenceDrops.add(chanceControl("loot_npc_lightning_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC lightning essence chance", "Chance for flying NPC drops to include lightning essence.", () -> lootConfig().getNpcLightningEssenceChance(), delta -> lootConfig().setNpcLightningEssenceChance(clampChance(lootConfig().getNpcLightningEssenceChance() + delta))));
+        groups.add(new ControlGroup("essence_drops", "Essence Drops", "Extra essence injection for crops and NPCs.", essenceDrops));
+
+        List<NumericControl> essenceQuantities = new ArrayList<>();
+        essenceQuantities.add(intControlStep("loot_crop_water_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence min", "Minimum water essence quantity from crops.", 1, 5, () -> lootConfig().getCropWaterEssenceMinQuantity(), delta -> lootConfig().setCropWaterEssenceMinQuantity(Math.min(clampInt(lootConfig().getCropWaterEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropWaterEssenceMaxQuantity()))));
+        essenceQuantities.add(intControlStep("loot_crop_water_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence max", "Maximum water essence quantity from crops.", 1, 5, () -> lootConfig().getCropWaterEssenceMaxQuantity(), delta -> lootConfig().setCropWaterEssenceMaxQuantity(Math.max(clampInt(lootConfig().getCropWaterEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropWaterEssenceMinQuantity()))));
+        essenceQuantities.add(intControlStep("loot_crop_lightning_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop lightning essence min", "Minimum lightning essence quantity from stamina crops.", 1, 5, () -> lootConfig().getCropLightningEssenceMinQuantity(), delta -> lootConfig().setCropLightningEssenceMinQuantity(Math.min(clampInt(lootConfig().getCropLightningEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropLightningEssenceMaxQuantity()))));
+        essenceQuantities.add(intControlStep("loot_crop_lightning_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop lightning essence max", "Maximum lightning essence quantity from stamina crops.", 1, 5, () -> lootConfig().getCropLightningEssenceMaxQuantity(), delta -> lootConfig().setCropLightningEssenceMaxQuantity(Math.max(clampInt(lootConfig().getCropLightningEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropLightningEssenceMinQuantity()))));
+        essenceQuantities.add(intControlStep("loot_npc_water_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC water essence min", "Minimum water essence quantity from aquatic NPCs.", 1, 5, () -> lootConfig().getNpcWaterEssenceMinQuantity(), delta -> lootConfig().setNpcWaterEssenceMinQuantity(Math.min(clampInt(lootConfig().getNpcWaterEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getNpcWaterEssenceMaxQuantity()))));
+        essenceQuantities.add(intControlStep("loot_npc_water_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC water essence max", "Maximum water essence quantity from aquatic NPCs.", 1, 5, () -> lootConfig().getNpcWaterEssenceMaxQuantity(), delta -> lootConfig().setNpcWaterEssenceMaxQuantity(Math.max(clampInt(lootConfig().getNpcWaterEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getNpcWaterEssenceMinQuantity()))));
+        essenceQuantities.add(intControlStep("loot_npc_lightning_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC lightning essence min", "Minimum lightning essence quantity from flying NPCs.", 1, 5, () -> lootConfig().getNpcLightningEssenceMinQuantity(), delta -> lootConfig().setNpcLightningEssenceMinQuantity(Math.min(clampInt(lootConfig().getNpcLightningEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getNpcLightningEssenceMaxQuantity()))));
+        essenceQuantities.add(intControlStep("loot_npc_lightning_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC lightning essence max", "Maximum lightning essence quantity from flying NPCs.", 1, 5, () -> lootConfig().getNpcLightningEssenceMaxQuantity(), delta -> lootConfig().setNpcLightningEssenceMaxQuantity(Math.max(clampInt(lootConfig().getNpcLightningEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getNpcLightningEssenceMinQuantity()))));
+        groups.add(new ControlGroup("essence_quantities", "Essence Quantities", "Min/max quantities for injected essences.", essenceQuantities));
 
         List<NumericControl> brokenRange = new ArrayList<>();
         brokenRange.add(intControl("loot_min_broken", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Min broken sockets", "Lower clamp after a loot roll resolves.", () -> lootConfig().getMinBrokenSockets(), delta -> lootConfig().setMinBrokenSockets(Math.min(clampInt(lootConfig().getMinBrokenSockets() + (int) Math.round(delta), 1, 8), lootConfig().getMaxBrokenSockets()))));
@@ -747,139 +815,6 @@ public final class RuntimeConfigUI {
                 "Treasure chest and NPC socket roll tuning with min/max clamps.",
                 groups,
                 null);
-    }
-
-    private static CategorySection buildWeatherCategory() {
-        List<ControlGroup> groups = new ArrayList<>();
-
-        List<NumericControl> timing = new ArrayList<>();
-        timing.add(intControlStep(
-                "weather_min_interval",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Min spawn interval (s)",
-                "Minimum seconds between weather spawns per player.",
-                1,
-                5,
-                () -> weatherConfig().getMinSpawnIntervalSeconds(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    double value = clamp(cfg.getMinSpawnIntervalSeconds() + delta, 0.1, cfg.getMaxSpawnIntervalSeconds());
-                    cfg.setMinSpawnIntervalSeconds(value);
-                }));
-        timing.add(intControlStep(
-                "weather_max_interval",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Max spawn interval (s)",
-                "Maximum seconds between weather spawns per player.",
-                1,
-                5,
-                () -> weatherConfig().getMaxSpawnIntervalSeconds(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    double value = Math.max(cfg.getMinSpawnIntervalSeconds(), cfg.getMaxSpawnIntervalSeconds() + delta);
-                    cfg.setMaxSpawnIntervalSeconds(value);
-                }));
-        timing.add(intControlStep(
-                "weather_despawn_delay",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Despawn delay (s)",
-                "Seconds after rain ends before spirits are removed.",
-                1,
-                5,
-                () -> weatherConfig().getDespawnAfterRainEndSeconds(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    double value = clamp(cfg.getDespawnAfterRainEndSeconds() + delta, 0.0, 3600.0);
-                    cfg.setDespawnAfterRainEndSeconds(value);
-                }));
-        groups.add(new ControlGroup("weather_timing", "Timing", "Interval and cleanup timing for weather spawns.", timing));
-
-        List<NumericControl> counts = new ArrayList<>();
-        counts.add(intControlStep(
-                "weather_max_spirits",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Max spirits per player",
-                "Hard cap for spirits spawned per player.",
-                1,
-                5,
-                () -> weatherConfig().getMaxSpiritsPerPlayer(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    int value = clampInt(cfg.getMaxSpiritsPerPlayer() + (int) Math.round(delta), 1, 100);
-                    cfg.setMaxSpiritsPerPlayer(value);
-                }));
-        counts.add(intControlStep(
-                "weather_min_spawns",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Min spawns per interval",
-                "Minimum number of spirits per spawn interval.",
-                1,
-                2,
-                () -> weatherConfig().getMinSpawnsPerInterval(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    int value = clampInt(cfg.getMinSpawnsPerInterval() + (int) Math.round(delta), 1, cfg.getMaxSpawnsPerInterval());
-                    cfg.setMinSpawnsPerInterval(value);
-                }));
-        counts.add(intControlStep(
-                "weather_max_spawns",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Max spawns per interval",
-                "Maximum number of spirits per spawn interval.",
-                1,
-                2,
-                () -> weatherConfig().getMaxSpawnsPerInterval(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    int value = Math.max(cfg.getMinSpawnsPerInterval(), cfg.getMaxSpawnsPerInterval() + (int) Math.round(delta));
-                    cfg.setMaxSpawnsPerInterval(value);
-                }));
-        groups.add(new ControlGroup("weather_counts", "Spawn Counts", "Per-player caps and interval spawn counts.", counts));
-
-        List<NumericControl> distance = new ArrayList<>();
-        distance.add(intControlStep(
-                "weather_min_distance",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Min spawn distance",
-                "Closest distance from the player.",
-                1,
-                5,
-                () -> weatherConfig().getMinSpawnDistance(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    double value = clamp(cfg.getMinSpawnDistance() + delta, 0.0, cfg.getMaxSpawnDistance());
-                    cfg.setMinSpawnDistance(value);
-                }));
-        distance.add(intControlStep(
-                "weather_max_distance",
-                CATEGORY_WEATHER,
-                WEATHER_CONFIG_NAME,
-                "Max spawn distance",
-                "Farthest distance from the player.",
-                1,
-                5,
-                () -> weatherConfig().getMaxSpawnDistance(),
-                delta -> {
-                    WeatherEventConfig cfg = weatherConfig();
-                    double value = Math.max(cfg.getMinSpawnDistance(), cfg.getMaxSpawnDistance() + delta);
-                    cfg.setMaxSpawnDistance(value);
-                }));
-        groups.add(new ControlGroup("weather_distance", "Spawn Distance", "Spawn radius around the player.", distance));
-
-        return new CategorySection(
-                CATEGORY_WEATHER,
-                "toggleWeatherCategory",
-                "Weather Spawns",
-                "Configure Spirit_Thunder weather event spawns.",
-                groups,
-                "Note: SPIRIT_ROLE and RAIN_KEYWORDS must be edited in WeatherEventConfig.json.");
     }
 
     private static List<NumericControl> buildWeightControls(String idPrefix, int transition, String labelPrefix) {
@@ -939,6 +874,26 @@ public final class RuntimeConfigUI {
                 delta -> arraySupplier.get()[index] = clamp(arraySupplier.get()[index] + delta, 0.10, 5.0));
     }
 
+    private static NumericControl toggleControl(String id,
+                                                String categoryId,
+                                                String configName,
+                                                String label,
+                                                String description,
+                                                java.util.function.BooleanSupplier supplier,
+                                                java.util.function.Consumer<Boolean> setter) {
+        return new NumericControl(
+                id,
+                categoryId,
+                configName,
+                label,
+                description,
+                DisplayKind.TOGGLE,
+                1,
+                1,
+                () -> supplier.getAsBoolean() ? 1.0 : 0.0,
+                delta -> setter.accept(delta >= 0));
+    }
+
     private static NumericControl weightControl(String id, int transition, int index, String label, String description) {
         return new NumericControl(
                 id,
@@ -963,10 +918,6 @@ public final class RuntimeConfigUI {
 
     private static LootSocketRollConfig lootConfig() {
         return plugin.getLootSocketRollRuntimeConfig();
-    }
-
-    private static WeatherEventConfig weatherConfig() {
-        return plugin.getWeatherEventRuntimeConfig();
     }
 
     private static double[] ensureSocketSuccessArray() {
@@ -1109,6 +1060,12 @@ public final class RuntimeConfigUI {
     }
 
     private static String buttonIdForDelta(NumericControl control, double delta) {
+        if (control.displayKind == DisplayKind.TOGGLE) {
+            if (roughlyEqual(delta, -control.smallStep)) {
+                return control.minusButtonId();
+            }
+            return control.plusButtonId();
+        }
         if (roughlyEqual(delta, -control.largeStep)) {
             return control.minusLargeButtonId();
         }
@@ -1128,6 +1085,9 @@ public final class RuntimeConfigUI {
         if (kind == DisplayKind.PERCENT) {
             return String.format(Locale.ROOT, "%.1f%%", rawValue * 100.0);
         }
+        if (kind == DisplayKind.TOGGLE) {
+            return rawValue >= 0.5 ? "Enabled" : "Disabled";
+        }
         double bonusPercent = (rawValue - 1.0) * 100.0;
         return "x" + String.format(Locale.ROOT, "%.3f", rawValue)
                 + " (" + String.format(Locale.ROOT, "%+.1f%%", bonusPercent) + ")";
@@ -1137,6 +1097,9 @@ public final class RuntimeConfigUI {
         String prefix = positive ? "+" : "-";
         if (kind == DisplayKind.INTEGER) {
             return prefix + (int) Math.round(rawStep);
+        }
+        if (kind == DisplayKind.TOGGLE) {
+            return positive ? "Enable" : "Disable";
         }
         double percentStep = rawStep * 100.0;
         if (roughlyEqual(percentStep, Math.rint(percentStep))) {

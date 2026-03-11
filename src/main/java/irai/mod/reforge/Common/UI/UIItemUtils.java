@@ -41,13 +41,87 @@ public final class UIItemUtils {
         }
         String itemId = itemStack.getItemId();
         String displayName = NameResolver.getDisplayName(itemStack);
+        String essenceFallback = resolveEssenceDisplayName(itemId);
         if (displayName == null || displayName.isBlank() || UNKNOWN_ITEM.equals(displayName)) {
             if (itemId == null || itemId.isBlank()) {
                 return UNKNOWN_ITEM;
             }
-            return itemId;
+            return essenceFallback != null ? essenceFallback : itemId;
+        }
+        if (itemId != null && !itemId.isBlank()) {
+            if (displayName.equalsIgnoreCase(itemId) || looksLikeTranslationKey(displayName)) {
+                if (essenceFallback != null) {
+                    return essenceFallback;
+                }
+            }
         }
         return displayName;
+    }
+
+    private static boolean looksLikeTranslationKey(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String lower = value.toLowerCase(Locale.ROOT);
+        if (!lower.contains(".")) {
+            return false;
+        }
+        if (lower.endsWith(".name")) {
+            return true;
+        }
+        return lower.contains(".items.") || lower.contains(".item.") || lower.contains(".entity.");
+    }
+
+    private static String resolveEssenceDisplayName(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        String id = itemId.trim();
+        String lower = id.toLowerCase(Locale.ROOT);
+        if (!lower.contains("essence")) {
+            return null;
+        }
+
+        boolean concentrated = lower.contains("concentrated");
+        String base = id;
+        if (base.startsWith("Ingredient_")) {
+            base = base.substring("Ingredient_".length());
+        }
+        if (base.endsWith("_Essence")) {
+            base = base.substring(0, base.length() - "_Essence".length());
+        } else if (base.endsWith("_Essence_Concentrated")) {
+            base = base.substring(0, base.length() - "_Essence_Concentrated".length());
+        }
+        if (base.endsWith("_Concentrated")) {
+            base = base.substring(0, base.length() - "_Concentrated".length());
+        }
+
+        base = base.replace('_', ' ').trim();
+        if (base.isBlank()) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        String[] parts = base.split("\\s+");
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.isEmpty()) {
+                continue;
+            }
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                sb.append(part.substring(1).toLowerCase(Locale.ROOT));
+            }
+            if (i < parts.length - 1) {
+                sb.append(' ');
+            }
+        }
+
+        String name = sb.toString();
+        if (name.isBlank()) {
+            return null;
+        }
+        return concentrated ? name + " Essence (Concentrated)" : name + " Essence";
     }
 
     public static String normalizeItemId(String itemId) {

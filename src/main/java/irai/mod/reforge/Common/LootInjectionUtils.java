@@ -49,6 +49,35 @@ public final class LootInjectionUtils {
         return injected.isEmpty() ? Map.of() : injected;
     }
 
+    /**
+     * Applies each rule once to a drop list. If a rule procs, the rolled quantity
+     * is appended as a new stack.
+     *
+     * @return map of itemId to injected quantity (only for successful injections)
+     */
+    public static Map<String, Integer> injectByRules(List<ItemStack> drops, List<LootInjectionRule> rules) {
+        if (drops == null || rules == null || rules.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<String, Integer> injected = new LinkedHashMap<>();
+        for (LootInjectionRule rule : rules) {
+            if (rule == null || !rule.shouldInject()) {
+                continue;
+            }
+
+            int quantity = rule.rollQuantity();
+            if (quantity <= 0) {
+                continue;
+            }
+
+            drops.add(new ItemStack(rule.itemId(), quantity));
+            injected.merge(rule.itemId(), quantity, Integer::sum);
+        }
+
+        return injected.isEmpty() ? Map.of() : injected;
+    }
+
     public static LootInjectionRule rule(String itemId, double chance, int minQuantity, int maxQuantity) {
         return new LootInjectionRule(itemId, chance, minQuantity, maxQuantity);
     }
@@ -62,7 +91,7 @@ public final class LootInjectionUtils {
         private LootInjectionRule(String itemId, double chance, int minQuantity, int maxQuantity) {
             this.itemId = itemId == null ? "" : itemId;
             this.chance = clamp01(chance);
-            int safeMin = Math.max(1, minQuantity);
+            int safeMin = Math.max(0, minQuantity);
             int safeMax = Math.max(safeMin, maxQuantity);
             this.minQuantity = safeMin;
             this.maxQuantity = safeMax;

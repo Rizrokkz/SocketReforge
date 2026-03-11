@@ -21,10 +21,12 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHa
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.Essence.Type;
 import irai.mod.reforge.Socket.EssenceRegistry;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.UI.EssenceBenchUI;
@@ -210,7 +212,30 @@ public class EssenceSocketBench extends SimpleInteraction {
 
         // Update the equipment with socketed data
         short heldSlot = context.getHeldItemSlot();
-        ItemStack updatedItem = SocketManager.withSocketData(equipment, socketData);
+        ResonanceSystem.ResonanceResult rawResonance = ResonanceSystem.evaluate(equipment, socketData);
+        boolean rawActive = rawResonance != null && rawResonance.active();
+        ItemStack baseItem = equipment;
+        if (rawActive) {
+            String resonanceName = rawResonance.name();
+            boolean alreadyUnlocked = SocketManager.isResonanceUnlocked(equipment, resonanceName);
+            if (!alreadyUnlocked) {
+                RecipeSlot recipeSlot = findMatchingRecipe(player, resonanceName);
+                if (recipeSlot != null) {
+                    ItemStack updatedRecipe = ResonantRecipeUtils.decrementUsage(recipeSlot.stack);
+                    if (updatedRecipe != recipeSlot.stack) {
+                        recipeSlot.container.setItemStackForSlot(recipeSlot.slot, updatedRecipe);
+                    }
+                    baseItem = SocketManager.withResonanceUnlock(equipment, resonanceName);
+                    player.sendMessage(Message.raw("Resonance unlocked. 1 recipe usage consumed."));
+                } else {
+                    player.sendMessage(Message.raw("Resonance locked: completed recipe required."));
+                }
+            } else {
+                baseItem = SocketManager.withResonanceUnlock(equipment, resonanceName);
+            }
+        }
+
+        ItemStack updatedItem = SocketManager.withSocketData(baseItem, socketData);
         player.getInventory().getHotbar().setItemStackForSlot(heldSlot, updatedItem);
         
         // Register tooltips for the socketed item using the updated item (has metadata)
@@ -257,6 +282,58 @@ public class EssenceSocketBench extends SimpleInteraction {
         }
         
         return false;
+    }
+
+    private RecipeSlot findMatchingRecipe(Player player, String resonanceName) {
+        if (player == null || resonanceName == null || resonanceName.isBlank()) {
+            return null;
+        }
+        String normalized = ResonantRecipeUtils.normalizeRecipeName(resonanceName);
+        RecipeSlot fromHotbar = findMatchingRecipeInContainer(player.getInventory().getHotbar(), normalized);
+        if (fromHotbar != null) {
+            return fromHotbar;
+        }
+        return findMatchingRecipeInContainer(player.getInventory().getStorage(), normalized);
+    }
+
+    private RecipeSlot findMatchingRecipeInContainer(ItemContainer container, String normalizedName) {
+        if (container == null || normalizedName == null || normalizedName.isBlank()) {
+            return null;
+        }
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack stack = container.getItemStack(slot);
+            if (!ResonantRecipeUtils.isResonantRecipeItem(stack)) {
+                continue;
+            }
+            if (!ResonantRecipeUtils.isRecipeComplete(stack)) {
+                continue;
+            }
+            ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(stack);
+            if (!usage.hasRemaining()) {
+                continue;
+            }
+            String recipeName = ResonantRecipeUtils.getRecipeName(stack);
+            if (recipeName == null || recipeName.isBlank()) {
+                continue;
+            }
+            if (!ResonantRecipeUtils.normalizeRecipeName(recipeName).equals(normalizedName)) {
+                continue;
+            }
+            return new RecipeSlot(container, slot, stack);
+        }
+        return null;
+    }
+
+    private static final class RecipeSlot {
+        final ItemContainer container;
+        final short slot;
+        final ItemStack stack;
+
+        private RecipeSlot(ItemContainer container, short slot, ItemStack stack) {
+            this.container = container;
+            this.slot = slot;
+            this.stack = stack;
+        }
     }
     
     /**

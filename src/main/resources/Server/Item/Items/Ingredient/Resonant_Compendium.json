@@ -1,0 +1,32 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Resonant_Compendium.name",
+    "Description": "Stores and merges Recipe shards."
+  },
+  "Icon": "Icons/ItemsGenerated/Weapon_Spellbook_Grimoire_Brown.png",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Weapons/Spellbook/Book.blockymodel",
+  "Texture": "Items/Weapons/Spellbook/Grimoire_Brown_Texture.png",
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.76,
+    "Rotation": [
+      135,
+      135,
+      0
+    ],
+    "Translation": [
+      -1,
+      5
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  },
+  "DropOnDeath": true,
+  "MaxStack": 1
+}

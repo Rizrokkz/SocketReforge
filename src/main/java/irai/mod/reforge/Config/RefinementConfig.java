@@ -103,6 +103,17 @@ public class RefinementConfig {
     public void setWeights1to2(double[] values)         { this.weights1to2 = values; }
     public void setWeights2to3(double[] values)         { this.weights2to3 = values; }
 
+    public void resetToDefaults() {
+        RefinementConfig defaults = new RefinementConfig();
+        this.damageMultipliers = defaults.damageMultipliers == null ? null : defaults.damageMultipliers.clone();
+        this.defenseMultipliers = defaults.defenseMultipliers == null ? null : defaults.defenseMultipliers.clone();
+        this.breakChances = defaults.breakChances == null ? null : defaults.breakChances.clone();
+        this.armorBreakChances = defaults.armorBreakChances == null ? null : defaults.armorBreakChances.clone();
+        this.weights0to1 = defaults.weights0to1 == null ? null : defaults.weights0to1.clone();
+        this.weights1to2 = defaults.weights1to2 == null ? null : defaults.weights1to2.clone();
+        this.weights2to3 = defaults.weights2to3 == null ? null : defaults.weights2to3.clone();
+    }
+
     // ── Helper Methods ────────────────────────────────────────────────────────
 
     /**

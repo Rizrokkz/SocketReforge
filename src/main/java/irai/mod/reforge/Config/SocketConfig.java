@@ -72,7 +72,7 @@ public class SocketConfig {
 
     // Max sockets by item type
     private int maxSocketsWeapon = 4;
-    private int maxSocketsArmor  = 2;
+    private int maxSocketsArmor  = 4;
 
     /**
      * Success chances per current socket count [0-indexed].
@@ -134,4 +134,16 @@ public class SocketConfig {
     public void setEssenceRemovalDestroyChance(double v)  { essenceRemovalDestroyChance  = v; }
     public void setBonusSocketChance(double v)            { bonusSocketChance = v; }
     public void setMaxReduceChance(double v)              { maxReduceChance = v; }
+
+    public void resetToDefaults() {
+        SocketConfig defaults = new SocketConfig();
+        this.maxSocketsWeapon = defaults.maxSocketsWeapon;
+        this.maxSocketsArmor = defaults.maxSocketsArmor;
+        this.punchSuccessChances = defaults.punchSuccessChances == null ? null : defaults.punchSuccessChances.clone();
+        this.punchBreakChances = defaults.punchBreakChances == null ? null : defaults.punchBreakChances.clone();
+        this.essenceRemovalSuccessChance = defaults.essenceRemovalSuccessChance;
+        this.essenceRemovalDestroyChance = defaults.essenceRemovalDestroyChance;
+        this.bonusSocketChance = defaults.bonusSocketChance;
+        this.maxReduceChance = defaults.maxReduceChance;
+    }
 }

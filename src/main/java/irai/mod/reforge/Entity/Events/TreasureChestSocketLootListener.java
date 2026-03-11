@@ -20,11 +20,15 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
+import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.WorldConfig;
 import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
 import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
 import irai.mod.reforge.Common.LootInjectionUtils;
+import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
 /**
@@ -40,8 +44,12 @@ public final class TreasureChestSocketLootListener {
             LootInjectionUtils.rule("Socket_Puncher", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Stabilizer", 0.15d, 1, 5),
             LootInjectionUtils.rule("Ingredient_Voidheart", 0.05d, 1, 2),
-            LootInjectionUtils.rule("Resonant_Recipe", 0.01d, 1, 1)
+            LootInjectionUtils.rule("Ingredient_Lightning_Essence", 0.015d, 1, 5),
+            LootInjectionUtils.rule("Ingredient_Water_Essence", 0.025d, 1, 5)
     );
+    private static final double RECIPE_INJECTION_CHANCE = 0.01d;
+    private static final int RECIPE_INJECTION_MIN = 1;
+    private static final int RECIPE_INJECTION_MAX = 1;
     private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             "furniture_temple_",
             "treasure_chest",
@@ -105,9 +113,12 @@ public final class TreasureChestSocketLootListener {
         if (player == null || player.getWorld() == null) {
             return;
         }
-        String chestKey = player.getWorld().getName() + "|" + x + "|" + y + "|" + z;
+        String chestKey = chestKey(player, x, y, z);
         ROLLED_CHESTS.remove(chestKey);
         LOGGED_SKIPPED_CHESTS.remove(chestKey);
+        if (isMainWorld(player)) {
+            clearChestCustomFlag(player, x, y, z);
+        }
     }
 
     private static int applyLootSocketsToOpenTreasureChest(Player player, String source) {
@@ -143,7 +154,7 @@ public final class TreasureChestSocketLootListener {
                 continue;
             }
 
-            RollResult result = applyLootSocketsToContainer(containerBlockWindow.getItemContainer());
+            RollResult result = applyLootSocketsToContainer(player, containerBlockWindow);
             if (result.changedCount > 0 || result.injectedCount > 0) {
                 // Force this window to rebuild so tooltip packet adapters see updated chest items.
                 refreshChestWindow(player, containerBlockWindow);
@@ -154,6 +165,7 @@ public final class TreasureChestSocketLootListener {
             // preventing later player-deposited equipment from being treated as world loot.
             if (result.nonEmptyLootCount > 0) {
                 if (ROLLED_CHESTS.add(chestKey)) {
+                    markChestRolled(player, containerBlockWindow);
                     log("Chest rolled: chest=" + chestKey
                             + ", blockId=" + blockId
                             + ", source=" + source
@@ -200,11 +212,13 @@ public final class TreasureChestSocketLootListener {
         }
     }
 
-    private static RollResult applyLootSocketsToContainer(ItemContainer container) {
+    private static RollResult applyLootSocketsToContainer(Player player, ContainerBlockWindow window) {
+        ItemContainer container = window != null ? window.getItemContainer() : null;
         if (container == null) {
             return RollResult.EMPTY;
         }
 
+        long worldSeed = resolveWorldSeed(player);
         int changedCount = 0;
         int eligibleCount = 0;
         int nonEmptyLootCount = 0;
@@ -224,7 +238,8 @@ public final class TreasureChestSocketLootListener {
             if (itemId != null && !itemId.isBlank()) {
                 foundLootIds.add(itemId);
             }
-            ItemStack updated = LootSocketRoller.maybeSocketizeLootStack(stack, LootSocketRoller.LootSource.CHEST);
+            long seed = recipeSeedForSlot(worldSeed, window, slot);
+            ItemStack updated = LootSocketRoller.maybeSocketizeLootStack(stack, LootSocketRoller.LootSource.CHEST, seed, player);
             if (updated == null || updated == stack) {
                 continue;
             }
@@ -244,9 +259,14 @@ public final class TreasureChestSocketLootListener {
                 injectedCount += qty;
                 foundLootIds.add(itemId + " x" + qty);
             }
+            int recipeQty = maybeInjectResonantRecipe(player, container);
+            if (recipeQty > 0) {
+                injectedCount += recipeQty;
+                foundLootIds.add("Resonant_Recipe x" + recipeQty);
+            }
         }
 
-        int hydrated = hydrateResonantRecipes(container);
+        int hydrated = hydrateResonantRecipes(container, worldSeed, window);
         if (hydrated > 0) {
             changedCount += hydrated;
         }
@@ -254,7 +274,7 @@ public final class TreasureChestSocketLootListener {
         return new RollResult(eligibleCount, changedCount, nonEmptyLootCount, injectedCount, String.join(", ", foundLootIds));
     }
 
-    private static int hydrateResonantRecipes(ItemContainer container) {
+    private static int hydrateResonantRecipes(ItemContainer container, long worldSeed, ContainerBlockWindow window) {
         if (container == null) {
             return 0;
         }
@@ -269,9 +289,15 @@ public final class TreasureChestSocketLootListener {
                 continue;
             }
             if (LootSocketRoller.hasResonantRecipeMetadata(stack)) {
+                ItemStack migrated = ResonantRecipeUtils.remapResonantRecipePattern(stack);
+                if (migrated != stack) {
+                    container.setItemStackForSlot(slot, migrated);
+                    updated++;
+                }
                 continue;
             }
-            ItemStack seeded = LootSocketRoller.createResonantRecipeShard(null, stack.getQuantity());
+            long seed = recipeSeedForSlot(worldSeed, window, slot);
+            ItemStack seeded = LootSocketRoller.createResonantRecipeShard(null, stack.getQuantity(), seed);
             if (seeded == null) {
                 continue;
             }
@@ -279,6 +305,27 @@ public final class TreasureChestSocketLootListener {
             updated++;
         }
         return updated;
+    }
+
+    private static int maybeInjectResonantRecipe(Player player, ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+        int quantity = RECIPE_INJECTION_MIN >= RECIPE_INJECTION_MAX
+                ? RECIPE_INJECTION_MIN
+                : java.util.concurrent.ThreadLocalRandom.current().nextInt(RECIPE_INJECTION_MIN, RECIPE_INJECTION_MAX + 1);
+        if (quantity <= 0) {
+            return 0;
+        }
+        ItemStack stack = new ItemStack("Resonant_Recipe", quantity);
+        if (!container.canAddItemStack(stack)) {
+            return 0;
+        }
+        if (!LootSocketRoller.rollResonantRecipeWithPity(player, RECIPE_INJECTION_CHANCE)) {
+            return 0;
+        }
+        container.addItemStack(stack);
+        return quantity;
     }
 
     private static boolean isEquipment(ItemStack stack) {
@@ -305,17 +352,27 @@ public final class TreasureChestSocketLootListener {
         try {
             String blockId = window.getBlockType() != null ? window.getBlockType().getId() : null;
             String normalizedBlockId = normalizeBlockId(blockId);
-            if (matchesGeneratedStructureChestId(blockId, normalizedBlockId)) {
-                return true;
-            }
 
             Ref<ChunkStore> ref = BlockModule.getBlockEntity(player.getWorld(), window.getX(), window.getY(), window.getZ());
             if (ref == null || ref.getStore() == null) {
-                return false;
+                return matchesGeneratedStructureChestId(blockId, normalizedBlockId);
             }
             BlockState state = BlockState.getBlockState(ref, ref.getStore());
             if (state == null) {
-                return false;
+                return matchesGeneratedStructureChestId(blockId, normalizedBlockId);
+            }
+
+            if (state instanceof ItemContainerState itemContainerState) {
+                if (isCustomContainer(itemContainerState)) {
+                    return false;
+                }
+
+                String droplist = itemContainerState.getDroplist();
+                boolean hasDroplist = droplist != null && !droplist.isBlank();
+                if (hasDroplist) {
+                    // world-generated loot containers normally have a droplist and are not custom.
+                    return true;
+                }
             }
 
             String stateClassName = state.getClass().getName();
@@ -323,18 +380,7 @@ public final class TreasureChestSocketLootListener {
                 return true;
             }
 
-            if (!(state instanceof ItemContainerState itemContainerState)) {
-                return false;
-            }
-
-            String droplist = itemContainerState.getDroplist();
-            boolean hasDroplist = droplist != null && !droplist.isBlank();
-            boolean isCustom = isCustomContainer(itemContainerState);
-
-            // Heuristic:
-            // world-generated loot containers normally have a droplist and are not custom.
-            // player-placed containers are usually custom and/or have no droplist.
-            return hasDroplist && !isCustom;
+            return matchesGeneratedStructureChestId(blockId, normalizedBlockId);
         } catch (Throwable t) {
             return false;
         }
@@ -400,8 +446,59 @@ public final class TreasureChestSocketLootListener {
     }
 
     private static String chestKey(Player player, ContainerBlockWindow window) {
-        String worldName = player != null && player.getWorld() != null ? player.getWorld().getName() : "unknown";
-        return worldName + "|" + window.getX() + "|" + window.getY() + "|" + window.getZ();
+        if (window == null) {
+            return "unknown|0|0|0";
+        }
+        return chestKey(player, window.getX(), window.getY(), window.getZ());
+    }
+
+    private static long resolveWorldSeed(Player player) {
+        World mainWorld = resolveMainWorld(player);
+        if (mainWorld == null) {
+            return 0L;
+        }
+        long seed = 0L;
+        WorldConfig config = mainWorld.getWorldConfig();
+        if (config != null) {
+            seed = config.getSeed();
+        }
+        String name = mainWorld.getName();
+        if (name != null && !name.isBlank()) {
+            seed = mixSeed(seed, name.hashCode());
+        }
+        return seed;
+    }
+
+    private static World resolveMainWorld(Player player) {
+        try {
+            Universe universe = Universe.get();
+            if (universe != null) {
+                World defaultWorld = universe.getDefaultWorld();
+                if (defaultWorld != null) {
+                    return defaultWorld;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (player != null) {
+            return player.getWorld();
+        }
+        return null;
+    }
+
+    private static long recipeSeedForSlot(long worldSeed, ContainerBlockWindow window, int slot) {
+        long seed = worldSeed;
+        if (window != null) {
+            seed = mixSeed(seed, window.getX());
+            seed = mixSeed(seed, window.getY());
+            seed = mixSeed(seed, window.getZ());
+        }
+        seed = mixSeed(seed, slot);
+        return seed;
+    }
+
+    private static long mixSeed(long seed, long value) {
+        return seed * 31L + value;
     }
 
     private static void log(String message) {
@@ -409,6 +506,91 @@ public final class TreasureChestSocketLootListener {
             return;
         }
         LOGGER.info("[WORLD_CHEST_SOCKET] " + message);
+    }
+    
+    private static void markChestRolled(Player player, ContainerBlockWindow window) {
+        if (!isMainWorld(player)) {
+            return;
+        }
+        ItemContainerState state = resolveContainerState(player, window);
+        if (state == null) {
+            return;
+        }
+        boolean changed = false;
+        if (!isCustomContainer(state)) {
+            state.setCustom(true);
+            changed = true;
+        }
+        String droplist = state.getDroplist();
+        if (droplist != null && !droplist.isBlank()) {
+            state.setDroplist("");
+            changed = true;
+        }
+        if (changed) {
+            state.markNeedsSave();
+        }
+    }
+
+    private static boolean isMainWorld(Player player) {
+        if (player == null || player.getWorld() == null) {
+            return false;
+        }
+        String name = player.getWorld().getName();
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        if (World.DEFAULT != null && World.DEFAULT.equalsIgnoreCase(name)) {
+            return true;
+        }
+        return "world".equalsIgnoreCase(name) || "default".equalsIgnoreCase(name);
+    }
+
+    private static String chestKey(Player player, int x, int y, int z) {
+        if (player == null || player.getWorld() == null) {
+            return "unknown|" + x + "|" + y + "|" + z;
+        }
+        String worldId = player.getWorld().getName();
+        WorldConfig config = player.getWorld().getWorldConfig();
+        if (config != null && config.getUuid() != null) {
+            worldId = config.getUuid().toString();
+        }
+        if (worldId == null || worldId.isBlank()) {
+            worldId = "unknown";
+        }
+        return worldId + "|" + x + "|" + y + "|" + z;
+    }
+
+    private static void clearChestCustomFlag(Player player, int x, int y, int z) {
+        ItemContainerState state = resolveContainerState(player, x, y, z);
+        if (state == null) {
+            return;
+        }
+        if (isCustomContainer(state)) {
+            state.setCustom(false);
+            state.markNeedsSave();
+        }
+    }
+
+    private static ItemContainerState resolveContainerState(Player player, ContainerBlockWindow window) {
+        if (player == null || window == null) {
+            return null;
+        }
+        return resolveContainerState(player, window.getX(), window.getY(), window.getZ());
+    }
+
+    private static ItemContainerState resolveContainerState(Player player, int x, int y, int z) {
+        if (player == null || player.getWorld() == null) {
+            return null;
+        }
+        Ref<ChunkStore> ref = BlockModule.getBlockEntity(player.getWorld(), x, y, z);
+        if (ref == null || ref.getStore() == null) {
+            return null;
+        }
+        BlockState state = BlockState.getBlockState(ref, ref.getStore());
+        if (state instanceof ItemContainerState containerState) {
+            return containerState;
+        }
+        return null;
     }
 
     private static final class RollResult {

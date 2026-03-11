@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.Map;
 
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
@@ -23,10 +24,12 @@ import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -113,14 +116,17 @@ public final class EssenceBenchUI {
         final String equipmentKey;
         final String essenceKey;
         final String supportKey;
+        final String slotKey;
         final String statusText;
         final int progressValue;
         final boolean processing;
 
-        SelectionState(String equipmentKey, String essenceKey, String supportKey, String statusText, int progressValue, boolean processing) {
+        SelectionState(String equipmentKey, String essenceKey, String supportKey, String slotKey,
+                       String statusText, int progressValue, boolean processing) {
             this.equipmentKey = equipmentKey;
             this.essenceKey = essenceKey;
             this.supportKey = supportKey;
+            this.slotKey = slotKey;
             this.statusText = statusText;
             this.progressValue = progressValue;
             this.processing = processing;
@@ -144,6 +150,18 @@ public final class EssenceBenchUI {
         HammerUseResult(boolean ok, boolean consumed) {
             this.ok = ok;
             this.consumed = consumed;
+        }
+    }
+
+    private static final class AutoEssenceSelection {
+        final Entry entry;
+        final String notice;
+        final String error;
+
+        AutoEssenceSelection(Entry entry, String notice, String error) {
+            this.entry = entry;
+            this.notice = notice;
+            this.error = error;
         }
     }
 
@@ -208,7 +226,7 @@ public final class EssenceBenchUI {
             if (isEssenceItem(itemId)) {
                 essences.add(entry);
             }
-            if (isVoidheartItem(itemId) || isHammerItem(itemId)) {
+            if (isVoidheartItem(itemId) || isHammerItem(itemId) || isCompletedRecipeSupport(stack)) {
                 voidhearts.add(entry);
             }
         }
@@ -237,6 +255,21 @@ public final class EssenceBenchUI {
 
     private static boolean isHammerItem(String itemId) {
         return isIronHammerItem(itemId) || isThoriumHammerItem(itemId);
+    }
+
+    private static boolean isCompletedRecipeSupport(ItemStack stack) {
+        if (!ResonantRecipeUtils.isResonantRecipeItem(stack)) {
+            return false;
+        }
+        if (!ResonantRecipeUtils.isRecipeComplete(stack)) {
+            return false;
+        }
+        ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(stack);
+        return usage.hasRemaining();
+    }
+
+    private static boolean isRecipeSupport(Entry entry) {
+        return entry != null && entry.item != null && ResonantRecipeUtils.isResonantRecipeItem(entry.item);
     }
 
     private static boolean isIronHammerItem(String itemId) {
@@ -274,8 +307,9 @@ public final class EssenceBenchUI {
                         String equipmentVal = extractEventValue(eventObj);
                         String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
                         String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, null, 0, false));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, null, 0, false));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                     });
 
@@ -284,8 +318,9 @@ public final class EssenceBenchUI {
                         String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
                         String essenceVal = extractEventValue(eventObj);
                         String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, null, 0, false));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, null, 0, false));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                     });
 
@@ -294,8 +329,20 @@ public final class EssenceBenchUI {
                         String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
                         String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
                         String supportVal = extractEventValue(eventObj);
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, null, 0, false));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, null, 0, false));
+                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            addListener.invoke(pageBuilder, "slotDropdown", valueChanged,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
+                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
+                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
+                        String slotVal = extractEventValue(eventObj);
+                        pendingSelections.put(finalPlayer.getPlayerRef(),
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, null, 0, false));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                     });
 
@@ -307,13 +354,14 @@ public final class EssenceBenchUI {
                         String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
                         String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
                         String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
                         Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
                         Entry essence = resolveSelection(finalSnapshot.essences, essenceVal);
                         Entry support = resolveSelection(finalSnapshot.voidhearts, supportVal);
 
                         processingPlayers.put(finalPlayer.getPlayerRef(), true);
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, "Processing...", 0, true));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, "Processing...", 0, true));
                         sfxConfig.playReforgeStart(finalPlayer);
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
 
@@ -323,16 +371,16 @@ public final class EssenceBenchUI {
                             scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                                 if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
                                 pendingSelections.put(finalPlayer.getPlayerRef(),
-                                        new SelectionState(equipmentVal, essenceVal, supportVal, "Processing...", timedProgress, true));
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, "Processing...", timedProgress, true));
                                 openWithSync(finalPlayer);
                             }), delay, TimeUnit.MILLISECONDS);
                         }
 
                         scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                             try {
-                                ProcessResult result = processSelection(finalPlayer, equipment, essence, support);
+                                ProcessResult result = processSelection(finalPlayer, equipment, essence, support, slotVal);
                                 pendingSelections.put(finalPlayer.getPlayerRef(),
-                                        new SelectionState(equipmentVal, essenceVal, supportVal, result.status, result.progress, false));
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, result.status, result.progress, false));
                             } finally {
                                 processingPlayers.remove(finalPlayer.getPlayerRef());
                                 openWithSync(finalPlayer);
@@ -354,6 +402,7 @@ public final class EssenceBenchUI {
         String equipmentKey = state != null ? state.equipmentKey : null;
         String essenceKey = state != null ? state.essenceKey : null;
         String supportKey = state != null ? state.supportKey : null;
+        String slotKey = state != null ? state.slotKey : null;
         boolean processing = state != null && state.processing;
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
         String status = state != null && state.statusText != null ? state.statusText : "Idle";
@@ -369,15 +418,18 @@ public final class EssenceBenchUI {
 
         String html = loadTemplate();
         html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, "No socketed equipment found", equipmentKey));
-        html = html.replace("{{essenceOptions}}", buildOptions(snapshot.essences, "No essence found", essenceKey));
+        html = html.replace("{{essenceOptions}}", buildEssenceOptions(snapshot.essences, essenceKey));
         html = html.replace("{{supportOptions}}", buildSupportOptions(snapshot.voidhearts, supportKey));
         html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(selectedSupport)));
+        html = html.replace("{{supportRecipeText}}", escapeHtml(buildSupportRecipeText(selectedSupport)));
+        html = html.replace("{{effectPreviewText}}", escapeHtml(buildEffectPreviewText(selectedEquipment, selectedSupport)));
+        html = html.replace("{{slotOptions}}", buildSlotOptions(selectedEquipment, slotKey));
         html = html.replace("{{socketIcons}}", buildSocketIconsHtml(selectedEquipment));
         html = html.replace("{{socketSummary}}", escapeHtml(buildSocketSummary(selectedEquipment)));
         html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
-        html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, essenceKey, selectedSupport) ? "disabled=\"true\"" : "");
+        html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, essenceKey, selectedSupport, slotKey) ? "disabled=\"true\"" : "");
         return html;
     }
 
@@ -386,6 +438,26 @@ public final class EssenceBenchUI {
             return "<option value=\"\" selected=\"true\">" + escapeHtml(emptyLabel) + "</option>";
         }
         StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < entries.size(); i++) {
+            Entry entry = entries.get(i);
+            String key = String.valueOf(i);
+            sb.append("<option value=\"").append(key).append("\"");
+            if (key.equals(selectedKey)) {
+                sb.append(" selected=\"true\"");
+            }
+            sb.append(">").append(escapeHtml(entry.displayName)).append(" x").append(entry.quantity).append("</option>");
+        }
+        return sb.toString();
+    }
+
+    private static String buildEssenceOptions(List<Entry> entries, String selectedKey) {
+        StringBuilder sb = new StringBuilder();
+        boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
+        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "").append(">None</option>");
+        if (entries.isEmpty()) {
+            sb.append("<option value=\"\" disabled=\"true\">No essence found</option>");
+            return sb.toString();
+        }
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
             String key = String.valueOf(i);
@@ -412,19 +484,133 @@ public final class EssenceBenchUI {
             String suffix = isHammerItem(entry.itemId)
                     ? " [Clear Essences]"
                     : (isVoidheartItem(entry.itemId) ? " [Repair Broken]" : "");
+            if (suffix.isEmpty() && ResonantRecipeUtils.isResonantRecipeItem(entry.item)) {
+                ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(entry.item);
+                String usageLabel = ResonantRecipeUtils.formatUsages(usage);
+                suffix = usageLabel.isEmpty() ? " [Recipe]" : " [Recipe " + usageLabel + "]";
+            }
             sb.append(">").append(escapeHtml(entry.displayName)).append(suffix).append(" x").append(entry.quantity).append("</option>");
         }
         return sb.toString();
     }
 
-    private static boolean shouldDisable(boolean processing, Entry equipment, String essenceKey, Entry selectedSupport) {
+    private static String buildSlotOptions(Entry equipment, String selectedKey) {
+        StringBuilder sb = new StringBuilder();
+        boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
+        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
+                .append(">Auto (First Available)</option>");
+
+        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
+            sb.append("<option value=\"\" disabled=\"true\">No equipment selected</option>");
+            return sb.toString();
+        }
+        SocketData sd = SocketManager.getSocketData(equipment.item);
+        if (sd == null || sd.getSockets().isEmpty()) {
+            sb.append("<option value=\"\" disabled=\"true\">No sockets</option>");
+            return sb.toString();
+        }
+
+        for (Socket socket : sd.getSockets()) {
+            if (socket == null) {
+                continue;
+            }
+            String key = String.valueOf(socket.getSlotIndex());
+            sb.append("<option value=\"").append(key).append("\"");
+            if (key.equals(selectedKey)) {
+                sb.append(" selected=\"true\"");
+            }
+            sb.append(">").append(escapeHtml(buildSlotLabel(socket))).append("</option>");
+        }
+
+        return sb.toString();
+    }
+
+    private static String buildSlotLabel(Socket socket) {
+        if (socket == null) {
+            return "Slot ?";
+        }
+        int slotNumber = socket.getSlotIndex() + 1;
+        if (socket.isBroken()) {
+            return "Slot " + slotNumber + ": Broken";
+        }
+        if (socket.isLocked()) {
+            return "Slot " + slotNumber + ": Locked";
+        }
+        if (socket.isEmpty()) {
+            return "Slot " + slotNumber + ": Empty";
+        }
+        String essenceLabel = resolveEssenceLabel(socket);
+        return "Slot " + slotNumber + ": " + essenceLabel;
+    }
+
+    private static String resolveEssenceLabel(Socket socket) {
+        if (socket == null || socket.isEmpty()) {
+            return "Empty";
+        }
+        String essenceId = socket.getEssenceId();
+        Essence essence = essenceId == null ? null : EssenceRegistry.get().getById(essenceId);
+        Essence.Type type = essence != null ? essence.getType() : null;
+        String name = type != null ? formatEssenceToken(type) : "Essence";
+        if (essenceId != null && SocketManager.isGreaterEssenceId(essenceId)) {
+            return name + " (Concentrated)";
+        }
+        return name;
+    }
+
+    private static boolean shouldDisable(boolean processing, Entry equipment, String essenceKey, Entry selectedSupport, String slotKey) {
         if (processing) return true;
         if (equipment == null) return true;
         if (selectedSupport != null && isHammerItem(selectedSupport.itemId)) {
             return false;
         }
-        if (essenceKey == null || essenceKey.isEmpty()) return true;
+        if (essenceKey == null || essenceKey.isEmpty()) {
+            return !canRepairWithoutEssence(equipment, selectedSupport)
+                    && !canAutoSocketWithRecipe(equipment, selectedSupport)
+                    && !canRepairSelectedSlot(equipment, selectedSupport, slotKey);
+        }
         return isFilled(equipment);
+    }
+
+    private static boolean canRepairSelectedSlot(Entry equipment, Entry support, String slotKey) {
+        if (equipment == null || support == null) return false;
+        if (!isVoidheartItem(support.itemId)) return false;
+        SocketData sd = SocketManager.getSocketData(equipment.item);
+        if (sd == null || sd.getSockets().isEmpty()) return false;
+        int slotIndex = resolveSlotIndex(slotKey, sd);
+        if (slotIndex < 0) return false;
+        Socket target = findSocketByIndex(sd, slotIndex);
+        return target != null && target.isBroken();
+    }
+
+    private static boolean canAutoSocketWithRecipe(Entry equipment, Entry support) {
+        if (equipment == null || support == null) return false;
+        if (!isRecipeSupport(support)) return false;
+        String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
+        if (recipeName == null || recipeName.isBlank()) return false;
+        Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(recipeName);
+        if (pattern == null || pattern.length == 0) return false;
+        SocketData sd = SocketManager.getSocketData(equipment.item);
+        if (sd == null) return false;
+        for (int i = 0; i < Math.min(pattern.length, sd.getSockets().size()); i++) {
+            Socket socket = sd.getSockets().get(i);
+            if (socket == null) continue;
+            if (socket.isBroken() || socket.isLocked() || !socket.isEmpty()) continue;
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean canRepairWithoutEssence(Entry equipment, Entry support) {
+        if (equipment == null || support == null) return false;
+        if (!isVoidheartItem(support.itemId)) return false;
+        SocketData sd = SocketManager.getSocketData(equipment.item);
+        if (sd == null || !sd.hasBrokenSocket()) return false;
+        for (Socket socket : sd.getSockets()) {
+            if (!socket.isBroken() && socket.isEmpty() && !socket.isLocked()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String buildSocketIconsHtml(Entry equipment) {
@@ -452,7 +638,6 @@ public final class EssenceBenchUI {
         int maxSockets = Math.max(0, socketData.getMaxSockets());
         int punchedSockets = socketData.getCurrentSocketCount();
         List<Socket> sockets = socketData.getSockets();
-        String filledIconName = resolveFilledSocketIconName();
         String brokenIconName = resolveBrokenSocketIconName();
 
         StringBuilder sb = new StringBuilder();
@@ -462,18 +647,20 @@ public final class EssenceBenchUI {
             Socket socket = i < sockets.size() ? sockets.get(i) : null;
             boolean isBroken = socket != null && socket.isBroken();
             boolean isFilled = socket != null && !socket.isBroken() && !socket.isEmpty();
-            String essenceColor = getSocketColorHex(socket);
 
-            String tileStyle = isBroken
-                    ? "anchor-width:95; anchor-height:95; background-color:#b22222; layout-mode:Top;"
-                    : "anchor-width:95; anchor-height:95; background-color:#00000000; layout-mode:Top;";
-            // Use anchor sizing (HyUI-friendly) to keep wrapper visible.
-            String wrapStyle = "anchor-width:95; anchor-height:95; background-color:" + essenceColor
-                    + "; layout-mode:Top;";
-            String icon = isBroken
+            String backgroundIcon = isBroken
                     ? brokenIconName
-                    : (!isPunched ? "slot_bg.png" : (isFilled ? filledIconName : "socket_empty.png"));
+                    : (!isPunched ? "slot_bg.png" : "socket_empty.png");
+            String overlayIcon = (isPunched && isFilled && !isBroken) ? resolveEssenceIconName(socket) : null;
 
+            String tileStyle = "anchor-width:91; anchor-height:91;"
+                    + " background-image:url('" + backgroundIcon + "'); background-size:100% 100%;"
+                    + " background-repeat:no-repeat; layout-mode:Top;";
+            // Use anchor sizing (HyUI-friendly) to keep wrapper visible.
+            String wrapStyle = "anchor-width:95; anchor-height:95; background-color:" + getSocketColorHex(socket)
+                    + "; layout-mode:Top; padding:2;";
+
+            int overlaySize = 85;
             sb.append("<div style=\"").append(wrapStyle).append("\">")
                     .append("<div style=\"flex-weight:1;\"></div>")
                     .append("<div style=\"layout-mode:Left;\"><div style=\"flex-weight:1;\"></div>")
@@ -481,7 +668,9 @@ public final class EssenceBenchUI {
                     .append("<div style=\"flex-weight:1;\"></div>")
                     .append("<div style=\"layout-mode:Left;\">")
                     .append("<div style=\"flex-weight:1;\"></div>")
-                    .append("<img src=\"").append(icon).append("\" width=\"90\" height=\"90\"/>")
+                    .append(overlayIcon != null
+                            ? "<img src=\"" + overlayIcon + "\" width=\"" + overlaySize + "\" height=\"" + overlaySize + "\"/>"
+                            : "")
                     .append("<div style=\"flex-weight:1;\"></div>")
                     .append("</div>")
                     .append("<div style=\"flex-weight:1;\"></div>")
@@ -492,6 +681,14 @@ public final class EssenceBenchUI {
         }
         sb.append("<div style=\"flex-weight:1;\"></div></div>");
         return sb.toString();
+    }
+
+    private static String resolveFilledSocketIconName() {
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
+    }
+
+    private static String resolveBrokenSocketIconName() {
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
     }
 
     private static String getSocketColorHex(Socket socket) {
@@ -529,12 +726,102 @@ public final class EssenceBenchUI {
         return "#FFFFFF";
     }
 
-    private static String resolveFilledSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
+    private static String resolveEssenceIconName(Socket socket) {
+        if (socket == null || socket.isEmpty()) {
+            return resolveFilledSocketIconName();
+        }
+        String essenceId = socket.getEssenceId();
+        String itemIcon = resolveIconFromEssenceId(essenceId);
+        if (itemIcon != null && !itemIcon.isBlank()) {
+            return itemIcon;
+        }
+        Essence.Type type = null;
+        try {
+            Essence essence = essenceId == null ? null : EssenceRegistry.get().getById(essenceId);
+            if (essence != null) {
+                type = essence.getType();
+            }
+        } catch (Exception ignored) {
+        }
+        if (type == null && essenceId != null) {
+            String lower = essenceId.toLowerCase(Locale.ROOT);
+            if (lower.contains("fire")) type = Essence.Type.FIRE;
+            else if (lower.contains("ice")) type = Essence.Type.ICE;
+            else if (lower.contains("life")) type = Essence.Type.LIFE;
+            else if (lower.contains("lightning")) type = Essence.Type.LIGHTNING;
+            else if (lower.contains("void")) type = Essence.Type.VOID;
+            else if (lower.contains("water")) type = Essence.Type.WATER;
+        }
+        if (type == null) {
+            return resolveFilledSocketIconName();
+        }
+        String base = "essence_" + type.name().toLowerCase(Locale.ROOT);
+        boolean greater = essenceId != null && SocketManager.isGreaterEssenceId(essenceId);
+        if (greater) {
+            return UITemplateUtils.resolveCustomUiAsset(
+                    resolveFilledSocketIconName(),
+                    base + "_concentrated.png",
+                    base + "_greater.png",
+                    base + "_concentrated_icon.png",
+                    base + "_greater_icon.png",
+                    base + ".png");
+        }
+        return UITemplateUtils.resolveCustomUiAsset(
+                resolveFilledSocketIconName(),
+                base + ".png",
+                base + "_icon.png");
     }
 
-    private static String resolveBrokenSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
+    private static String resolveIconFromEssenceId(String essenceId) {
+        if (essenceId == null || essenceId.isBlank()) {
+            return null;
+        }
+        String itemId = resolveEssenceItemId(essenceId);
+        if (itemId == null || itemId.isBlank()) {
+            System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId not resolved");
+            return null;
+        }
+        System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId=" + itemId);
+        try {
+            Item item = Item.getAssetMap().getAssetMap().get(itemId);
+            if (item == null || item == Item.UNKNOWN) {
+                System.out.println("[SocketReforge] Essence icon lookup: item not found for " + itemId);
+                return null;
+            }
+            String icon = item.getIcon();
+            if (icon == null || icon.isBlank()) {
+                System.out.println("[SocketReforge] Essence icon lookup: no icon for " + itemId);
+                return null;
+            }
+            if (Item.UNKNOWN_TEXTURE.equals(icon)) {
+                System.out.println("[SocketReforge] Essence icon lookup: unknown texture for " + itemId);
+                return null;
+            }
+            String uiIcon = resolveUiIconPath(icon);
+            if (uiIcon != null) {
+                System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " -> ui=" + uiIcon);
+                return uiIcon;
+            }
+            System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " for " + itemId);
+            return icon;
+        } catch (Exception ignored) {
+            System.out.println("[SocketReforge] Essence icon lookup: failed for " + itemId);
+            return null;
+        }
+    }
+
+    private static String resolveUiIconPath(String iconPath) {
+        if (iconPath == null || iconPath.isBlank()) {
+            return null;
+        }
+        String normalized = iconPath.replace('\\', '/');
+        if (normalized.startsWith("Common/Icons/")) {
+            return normalized.substring("Common/".length());
+        }
+        if (normalized.startsWith("Icons/")) {
+            return normalized;
+        }
+        return "Icons/" + normalized;
     }
 
     private static boolean isFilled(Entry equipment) {
@@ -543,7 +830,34 @@ public final class EssenceBenchUI {
         return sd != null && !sd.hasEmptySocket();
     }
 
-    private static ProcessResult processSelection(Player player, Entry equipment, Entry essence, Entry support) {
+    private static int resolveSlotIndex(String slotKey, SocketData socketData) {
+        if (slotKey == null || slotKey.isBlank() || socketData == null) {
+            return -1;
+        }
+        try {
+            int idx = Integer.parseInt(slotKey.trim());
+            if (idx < 0 || idx >= socketData.getSockets().size()) {
+                return -1;
+            }
+            return idx;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    private static Socket findSocketByIndex(SocketData socketData, int slotIndex) {
+        if (socketData == null || slotIndex < 0) {
+            return null;
+        }
+        for (Socket socket : socketData.getSockets()) {
+            if (socket != null && socket.getSlotIndex() == slotIndex) {
+                return socket;
+            }
+        }
+        return null;
+    }
+
+    private static ProcessResult processSelection(Player player, Entry equipment, Entry essence, Entry support, String slotKey) {
         if (equipment == null) return new ProcessResult("Pick a valid equipment first.", 0);
 
         ItemStack item = equipmentItem(equipment, player);
@@ -556,36 +870,62 @@ public final class EssenceBenchUI {
         if (socketData == null || socketData.getMaxSockets() == 0 || socketData.getSockets().isEmpty()) {
             return new ProcessResult("No sockets found. Punch sockets first.", 0);
         }
+        int selectedSlot = resolveSlotIndex(slotKey, socketData);
 
         // Hammer support action: clear all socketed essences (broken sockets remain broken).
         if (support != null && isHammerItem(support.itemId)) {
+            Socket target = selectedSlot >= 0 ? findSocketByIndex(socketData, selectedSlot) : null;
+            if (selectedSlot >= 0 && target == null) {
+                return new ProcessResult("Selected slot is invalid.", 0);
+            }
             int clearable = 0;
-            for (Socket socket : socketData.getSockets()) {
-                if (!socket.isBroken() && !socket.isEmpty()) {
-                    clearable++;
+            if (target != null) {
+                if (!target.isBroken() && !target.isEmpty()) {
+                    clearable = 1;
+                }
+            } else {
+                for (Socket socket : socketData.getSockets()) {
+                    if (!socket.isBroken() && !socket.isEmpty()) {
+                        clearable++;
+                    }
                 }
             }
             if (clearable <= 0) {
                 sfxConfig.playNoChange(player);
-                return new ProcessResult("No socketed essences to clear.", 100);
+                return new ProcessResult("No socketed essences to clear in the selected slot.", 100);
             }
 
             boolean isThoriumHammer = isThoriumHammerItem(support.itemId);
             Map<String, Integer> refundCounts = new LinkedHashMap<>();
             if (isThoriumHammer) {
-                for (Socket socket : socketData.getSockets()) {
-                    if (socket.isBroken() || socket.isEmpty()) {
-                        continue;
+                if (target != null) {
+                    if (!target.isBroken() && !target.isEmpty()) {
+                        String essenceId = target.getEssenceId();
+                        if (essenceId != null && !essenceId.isBlank()) {
+                            refundCounts.merge(essenceId, 1, Integer::sum);
+                        }
                     }
-                    String essenceId = socket.getEssenceId();
-                    if (essenceId == null || essenceId.isBlank()) {
-                        continue;
+                } else {
+                    for (Socket socket : socketData.getSockets()) {
+                        if (socket.isBroken() || socket.isEmpty()) {
+                            continue;
+                        }
+                        String essenceId = socket.getEssenceId();
+                        if (essenceId == null || essenceId.isBlank()) {
+                            continue;
+                        }
+                        refundCounts.merge(essenceId, 1, Integer::sum);
                     }
-                    refundCounts.merge(essenceId, 1, Integer::sum);
                 }
             }
 
-            HammerUseResult hammerUse = applyHammerWear(player, support);
+            double hammerWear;
+            if (selectedSlot >= 0) {
+                hammerWear = isThoriumHammer ? 0.02d : 0.03d;
+            } else {
+                hammerWear = isThoriumHammer ? 0.08d : 0.10d;
+            }
+            HammerUseResult hammerUse = applyHammerWear(player, support, hammerWear);
             if (!hammerUse.ok) {
                 return new ProcessResult("Selected hammer stack changed; reselect and try again.", 0);
             }
@@ -598,24 +938,38 @@ public final class EssenceBenchUI {
             boolean reducedMaxSockets = false;
             int removed = 0;
             if (success) {
-                for (Socket socket : socketData.getSockets()) {
-                    if (!socket.isBroken() && !socket.isEmpty()) {
-                        socket.setEssenceId(null);
-                        removed++;
+                if (target != null) {
+                    if (!target.isBroken() && !target.isEmpty()) {
+                        target.setEssenceId(null);
+                        removed = 1;
+                    }
+                } else {
+                    for (Socket socket : socketData.getSockets()) {
+                        if (!socket.isBroken() && !socket.isEmpty()) {
+                            socket.setEssenceId(null);
+                            removed++;
+                        }
                     }
                 }
             } else {
-                List<Socket> breakable = new ArrayList<>();
-                for (Socket socket : socketData.getSockets()) {
-                    if (!socket.isBroken()) {
-                        breakable.add(socket);
+                if (target != null) {
+                    if (!target.isBroken()) {
+                        target.setBroken(true);
+                        target.setEssenceId(null);
                     }
-                }
-                if (!breakable.isEmpty()) {
-                    int idx = (int) (Math.random() * breakable.size());
-                    Socket broken = breakable.get(idx);
-                    broken.setBroken(true);
-                    broken.setEssenceId(null);
+                } else {
+                    List<Socket> breakable = new ArrayList<>();
+                    for (Socket socket : socketData.getSockets()) {
+                        if (!socket.isBroken()) {
+                            breakable.add(socket);
+                        }
+                    }
+                    if (!breakable.isEmpty()) {
+                        int idx = (int) (Math.random() * breakable.size());
+                        Socket broken = breakable.get(idx);
+                        broken.setBroken(true);
+                        broken.setEssenceId(null);
+                    }
                 }
             }
             if (isThoriumHammer && socketData.getMaxSockets() > 1
@@ -630,9 +984,10 @@ public final class EssenceBenchUI {
             if (success) {
                 int refunded = isThoriumHammer ? refundEssences(player, refundCounts) : 0;
                 sfxConfig.playSuccess(player);
+                String slotSuffix = target != null ? " from slot " + (selectedSlot + 1) : "";
                 String successStatus = hammerUse.consumed
-                        ? "Clear succeeded: removed " + removed + ". Hammer broke."
-                        : "Clear succeeded: removed " + removed + " socketed essence(s).";
+                        ? "Clear succeeded: removed " + removed + slotSuffix + ". Hammer broke."
+                        : "Clear succeeded: removed " + removed + " socketed essence(s)" + slotSuffix + ".";
                 successStatus += (isThoriumHammer ? buildRefundSuffix(removed, refunded) : "");
                 if (reducedMaxSockets) {
                     successStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
@@ -642,15 +997,34 @@ public final class EssenceBenchUI {
 
             sfxConfig.playShatter(player);
             String failureStatus = hammerUse.consumed
-                    ? "Clear failed: a random socket broke. Hammer broke."
-                    : "Clear failed: a random socket broke.";
+                    ? (target != null ? "Clear failed: selected slot broke. Hammer broke." : "Clear failed: a random socket broke. Hammer broke.")
+                    : (target != null ? "Clear failed: selected slot broke." : "Clear failed: a random socket broke.");
             if (reducedMaxSockets) {
                 failureStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
             }
             return new ProcessResult(failureStatus, 100);
         }
 
-        if (essence == null) return new ProcessResult("Pick an essence first.", 0);
+        if (support != null && isVoidheartItem(support.itemId) && selectedSlot >= 0) {
+            Socket target = findSocketByIndex(socketData, selectedSlot);
+            if (target == null) {
+                return new ProcessResult("Selected slot is invalid.", 0);
+            }
+            if (!target.isBroken()) {
+                return new ProcessResult("Selected slot is not broken.", 100);
+            }
+            if (!consumeMaterial(player, support, 1)) {
+                return new ProcessResult("Voidheart stack changed; reselect and try again.", 0);
+            }
+            target.setBroken(false);
+            target.setEssenceId(null);
+            ItemStack repaired = SocketManager.withSocketData(item, socketData);
+            writeStack(player, equipment, repaired);
+            socketData.registerTooltips(repaired, repaired.getItemId(), isWeapon);
+            DynamicTooltipUtils.refreshAllPlayers();
+            sfxConfig.playSuccess(player);
+            return new ProcessResult("Socket repaired in slot " + (selectedSlot + 1) + ". Process again to socket essence.", 100);
+        }
 
         boolean hasFillableSocket = false;
         for (Socket socket : socketData.getSockets()) {
@@ -662,13 +1036,23 @@ public final class EssenceBenchUI {
 
         // Only force repair-first when no non-broken empty sockets are available.
         if (!hasFillableSocket && socketData.hasBrokenSocket()) {
-            if (support == null) {
+            if (support == null || !isVoidheartItem(support.itemId)) {
                 return new ProcessResult("Broken socket detected. Select Voidheart to repair first.", 100);
             }
             if (!consumeMaterial(player, support, 1)) {
                 return new ProcessResult("Voidheart stack changed; reselect and try again.", 0);
             }
-            if (!socketData.repairBrokenSocket()) {
+            if (selectedSlot >= 0) {
+                Socket target = findSocketByIndex(socketData, selectedSlot);
+                if (target == null) {
+                    return new ProcessResult("Selected slot is invalid.", 0);
+                }
+                if (!target.isBroken()) {
+                    return new ProcessResult("Selected slot is not broken.", 100);
+                }
+                target.setBroken(false);
+                target.setEssenceId(null);
+            } else if (!socketData.repairBrokenSocket()) {
                 return new ProcessResult("Repair failed. Try again.", 0);
             }
 
@@ -677,35 +1061,233 @@ public final class EssenceBenchUI {
             socketData.registerTooltips(repaired, repaired.getItemId(), isWeapon);
             DynamicTooltipUtils.refreshAllPlayers();
             sfxConfig.playSuccess(player);
+            if (selectedSlot >= 0) {
+                return new ProcessResult("Socket repaired in slot " + (selectedSlot + 1) + ". Process again to socket essence.", 100);
+            }
             return new ProcessResult("Socket repaired. Process again to socket essence.", 100);
         }
+
+        Entry resolvedEssence = essence;
+        String autoNotice = null;
+        if (resolvedEssence == null && support != null && isRecipeSupport(support)) {
+            AutoEssenceSelection auto = autoSelectEssenceForRecipe(player, equipment, support, socketData, selectedSlot);
+            if (auto != null && auto.error != null) {
+                return new ProcessResult(auto.error, 0);
+            }
+            if (auto != null && auto.entry != null) {
+                resolvedEssence = auto.entry;
+                autoNotice = auto.notice;
+            }
+        }
+        if (resolvedEssence == null) return new ProcessResult("Pick an essence first.", 0);
 
         if (!hasFillableSocket) {
             return new ProcessResult("All sockets are filled.", 100);
         }
 
-        if (!consumeMaterial(player, essence, 1)) {
+        if (!consumeMaterial(player, resolvedEssence, 1)) {
             return new ProcessResult("Selected essence stack changed; reselect and try again.", 0);
         }
 
-        String essenceType = SocketManager.resolveEssenceTypeFromItemId(essence.itemId);
-        String essenceId = SocketManager.resolveEssenceIdFromItemId(essence.itemId);
+        String essenceType = SocketManager.resolveEssenceTypeFromItemId(resolvedEssence.itemId);
+        String essenceId = SocketManager.resolveEssenceIdFromItemId(resolvedEssence.itemId);
         if (essenceType == null || essenceId == null) {
             return new ProcessResult("Invalid essence selected.", 0);
         }
         if (!EssenceRegistry.get().exists(essenceId)) {
             return new ProcessResult("Essence not found: " + essenceId, 0);
         }
-        if (!SocketManager.socketEssence(socketData, essenceId)) {
+        if (selectedSlot >= 0) {
+            Socket target = findSocketByIndex(socketData, selectedSlot);
+            if (target == null) {
+                return new ProcessResult("Selected slot is invalid.", 0);
+            }
+            if (target.isBroken()) {
+                return new ProcessResult("Selected slot is broken. Repair it first.", 100);
+            }
+            if (target.isLocked()) {
+                return new ProcessResult("Selected slot is locked.", 100);
+            }
+            if (!target.isEmpty()) {
+                return new ProcessResult("Selected slot is already filled.", 100);
+            }
+            target.setEssenceId(essenceId);
+        } else if (!SocketManager.socketEssence(socketData, essenceId)) {
             return new ProcessResult("Could not socket essence. Try again.", 0);
         }
 
-        ItemStack updated = SocketManager.withSocketData(item, socketData);
+        ResonanceSystem.ResonanceResult rawResonance = ResonanceSystem.evaluate(item, socketData);
+        boolean rawActive = rawResonance != null && rawResonance.active();
+        boolean consumedRecipe = false;
+        String resonanceNotice = null;
+        ItemStack baseItem = item;
+
+        if (rawActive) {
+            String resonanceName = rawResonance.name();
+            boolean alreadyUnlocked = SocketManager.isResonanceUnlocked(item, resonanceName);
+            if (alreadyUnlocked) {
+                baseItem = SocketManager.withResonanceUnlock(item, resonanceName);
+            } else if (support != null && isRecipeSupport(support)) {
+                String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
+                boolean nameMatches = recipeName != null
+                        && ResonantRecipeUtils.normalizeRecipeName(recipeName)
+                        .equals(ResonantRecipeUtils.normalizeRecipeName(resonanceName));
+                if (!nameMatches) {
+                    resonanceNotice = "Recipe does not match resonance. Resonance locked.";
+                } else {
+                    ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(support.item);
+                    if (!usage.hasRemaining()) {
+                        resonanceNotice = "Recipe has no usages left. Resonance locked.";
+                    } else {
+                        ItemStack updatedSupport = ResonantRecipeUtils.decrementUsage(support.item);
+                        if (updatedSupport != support.item) {
+                            writeStack(player, support, updatedSupport);
+                            consumedRecipe = true;
+                        }
+                        baseItem = SocketManager.withResonanceUnlock(item, resonanceName);
+                    }
+                }
+            } else {
+                resonanceNotice = "Resonance locked: select completed recipe support.";
+            }
+        }
+
+        ItemStack updated = SocketManager.withSocketData(baseItem, socketData);
         writeStack(player, equipment, updated);
         socketData.registerTooltips(updated, updated.getItemId(), isWeapon);
         DynamicTooltipUtils.refreshAllPlayers();
         sfxConfig.playSuccess(player);
-        return new ProcessResult("Essence socketed successfully.", 100);
+        String status = autoNotice != null
+                ? autoNotice
+                : (selectedSlot >= 0 ? "Essence socketed into slot " + (selectedSlot + 1) + "." : "Essence socketed successfully.");
+        if (rawActive) {
+            if (SocketManager.hasResonance(updated)) {
+                status = consumedRecipe ? "Resonance unlocked. 1 recipe usage consumed." : "Resonance active.";
+            } else if (resonanceNotice != null) {
+                status = "Essence socketed. " + resonanceNotice;
+            }
+        }
+        if (autoNotice != null && !status.startsWith("Auto-") && !status.startsWith("Auto ")) {
+            status = autoNotice + " " + status;
+        }
+        return new ProcessResult(status, 100);
+    }
+
+    private static AutoEssenceSelection autoSelectEssenceForRecipe(Player player, Entry equipment, Entry support,
+                                                                   SocketData socketData, int selectedSlot) {
+        if (player == null || equipment == null || support == null || socketData == null) {
+            return null;
+        }
+        if (!isRecipeSupport(support)) {
+            return null;
+        }
+        String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
+        if (recipeName == null || recipeName.isBlank()) {
+            return new AutoEssenceSelection(null, null, "Recipe name missing on support item.");
+        }
+        Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(recipeName);
+        if (pattern == null || pattern.length == 0) {
+            return new AutoEssenceSelection(null, null, "Recipe pattern not found for support item.");
+        }
+
+        int limit = Math.min(pattern.length, socketData.getSockets().size());
+        int targetIndex = -1;
+        Essence.Type targetType = null;
+        if (selectedSlot >= 0) {
+            if (selectedSlot >= limit) {
+                return new AutoEssenceSelection(null, null, "Selected slot is outside the recipe pattern.");
+            }
+            Socket socket = findSocketByIndex(socketData, selectedSlot);
+            if (socket == null) {
+                return new AutoEssenceSelection(null, null, "Selected slot is invalid.");
+            }
+            if (socket.isBroken()) {
+                return new AutoEssenceSelection(null, null, "Selected slot is broken. Repair it first.");
+            }
+            if (socket.isLocked()) {
+                return new AutoEssenceSelection(null, null, "Selected slot is locked.");
+            }
+            if (!socket.isEmpty()) {
+                return new AutoEssenceSelection(null, null, "Selected slot is already filled.");
+            }
+            targetIndex = selectedSlot;
+            targetType = pattern[selectedSlot];
+        } else {
+            for (int i = 0; i < limit; i++) {
+                Socket socket = socketData.getSockets().get(i);
+                if (socket == null) continue;
+                if (socket.isBroken() || socket.isLocked() || !socket.isEmpty()) {
+                    continue;
+                }
+                targetIndex = i;
+                targetType = pattern[i];
+                break;
+            }
+        }
+
+        if (targetIndex < 0 || targetType == null) {
+            return new AutoEssenceSelection(null, null, "No fillable socket matches the recipe.");
+        }
+
+        Entry best = findBestEssenceEntry(player, targetType);
+        if (best == null) {
+            return new AutoEssenceSelection(null, null, "No matching essence found for recipe slot " + (targetIndex + 1) + ".");
+        }
+
+        String notice = "Auto-socketed " + best.displayName + " into slot " + (targetIndex + 1) + ".";
+        return new AutoEssenceSelection(best, notice, null);
+    }
+
+    private static Entry findBestEssenceEntry(Player player, Essence.Type desiredType) {
+        if (player == null || desiredType == null) {
+            return null;
+        }
+        Entry best = null;
+        best = pickBetterEssence(best, findBestEssenceInContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, desiredType));
+        best = pickBetterEssence(best, findBestEssenceInContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, desiredType));
+        return best;
+    }
+
+    private static Entry pickBetterEssence(Entry current, Entry candidate) {
+        if (candidate == null) return current;
+        if (current == null) return candidate;
+        boolean currentGreater = SocketManager.isGreaterEssenceItemId(current.itemId);
+        boolean candidateGreater = SocketManager.isGreaterEssenceItemId(candidate.itemId);
+        if (candidateGreater && !currentGreater) {
+            return candidate;
+        }
+        return current;
+    }
+
+    private static Entry findBestEssenceInContainer(ItemContainer container, ContainerKind kind, Essence.Type desiredType) {
+        if (container == null || desiredType == null) {
+            return null;
+        }
+        Entry best = null;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack stack = container.getItemStack(slot);
+            if (stack == null || stack.isEmpty()) continue;
+            String itemId = stack.getItemId();
+            if (itemId == null || itemId.isBlank()) continue;
+            String typeName = SocketManager.resolveEssenceTypeFromItemId(itemId);
+            if (typeName == null) continue;
+            Essence.Type type = toEssenceType(typeName);
+            if (type != desiredType) continue;
+            Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), UIItemUtils.displayNameOrItemId(stack));
+            best = pickBetterEssence(best, entry);
+        }
+        return best;
+    }
+
+    private static Essence.Type toEssenceType(String typeName) {
+        if (typeName == null || typeName.isBlank()) {
+            return null;
+        }
+        try {
+            return Essence.Type.valueOf(typeName.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static ItemStack equipmentItem(Entry equipment, Player player) {
@@ -776,7 +1358,7 @@ public final class EssenceBenchUI {
         return " Refunded " + refunded + " essence(s).";
     }
 
-    private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry) {
+    private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry, double durabilityFraction) {
         if (player == null || hammerEntry == null || !isHammerItem(hammerEntry.itemId)) {
             return new HammerUseResult(false, false);
         }
@@ -787,7 +1369,7 @@ public final class EssenceBenchUI {
         UIItemUtils.HammerWearResult wear = UIItemUtils.applyHammerWear(
                 container,
                 hammerEntry.slot,
-                0.10d,
+                durabilityFraction,
                 itemId -> isHammerItem(itemId));
         if (!wear.ok()) {
             return new HammerUseResult(false, false);
@@ -854,6 +1436,11 @@ public final class EssenceBenchUI {
             return "Support durability: -";
         }
         ItemStack item = support.item;
+        if (ResonantRecipeUtils.isResonantRecipeItem(item)) {
+            ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(item);
+            String usageLabel = ResonantRecipeUtils.formatUsages(usage);
+            return usageLabel.isEmpty() ? "Recipe usages: -" : "Recipe usages: " + usageLabel;
+        }
         double max = item.getMaxDurability();
         double cur = item.getDurability();
         if (max <= 0.0d) {
@@ -864,6 +1451,75 @@ public final class EssenceBenchUI {
         int percent = (int) Math.round((cur / max) * 100.0);
         percent = Math.max(0, Math.min(100, percent));
         return "Support durability: " + percent + "% (" + curInt + "/" + maxInt + ")";
+    }
+
+    private static String buildSupportRecipeText(Entry support) {
+        if (support == null || support.item == null || support.item.isEmpty()) {
+            return "Recipe: -";
+        }
+        if (!ResonantRecipeUtils.isResonantRecipeItem(support.item)) {
+            return "Recipe: -";
+        }
+        String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
+        if (recipeName == null || recipeName.isBlank()) {
+            return "Recipe: (unknown)";
+        }
+        Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(recipeName);
+        String patternText = formatPattern(pattern);
+        if (patternText.isBlank()) {
+            return "Recipe: " + recipeName;
+        }
+        return "Recipe: " + recipeName + "\nPattern: " + patternText;
+    }
+
+    private static String buildEffectPreviewText(Entry equipment, Entry support) {
+        if (support == null || support.item == null || support.item.isEmpty()) {
+            return "Effect preview: -";
+        }
+        if (!ResonantRecipeUtils.isResonantRecipeItem(support.item)) {
+            return "Effect preview: -";
+        }
+        String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
+        if (recipeName == null || recipeName.isBlank()) {
+            return "Effect preview: -";
+        }
+        ResonanceSystem.ResonanceResult result = ResonanceSystem.getResultForRecipeName(recipeName);
+        if (result == null || !result.active()) {
+            return "Effect preview: -";
+        }
+        boolean isWeapon = equipment != null && ReforgeEquip.isWeapon(equipment.item);
+        boolean isArmor = equipment != null && ReforgeEquip.isArmor(equipment.item) && !isWeapon;
+        boolean useWeaponContext = equipment == null || isWeapon || !isArmor;
+        StringBuilder sb = new StringBuilder();
+        sb.append("Resonance: ").append(result.name());
+        String flavor = result.effect() == null ? "" : result.effect().trim();
+        if (!flavor.isBlank()) {
+            sb.append("\n").append(flavor);
+        }
+        String details = ResonanceSystem.buildDetailedEffect(result, useWeaponContext);
+        if (!details.isBlank()) {
+            sb.append("\n").append(details);
+        }
+        return sb.toString();
+    }
+
+    private static String formatPattern(Essence.Type[] pattern) {
+        if (pattern == null || pattern.length == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Essence.Type type : pattern) {
+            sb.append('[').append(formatEssenceToken(type)).append(']');
+        }
+        return sb.toString();
+    }
+
+    private static String formatEssenceToken(Essence.Type type) {
+        if (type == null) {
+            return "x";
+        }
+        String raw = type.name().toLowerCase(Locale.ROOT);
+        return raw.isEmpty() ? "x" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
 
     private static String loadTemplate() {

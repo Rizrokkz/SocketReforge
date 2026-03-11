@@ -1,5 +1,6 @@
 package irai.mod.reforge.Entity.Events;
 
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -16,7 +17,12 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.Socket;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.EssenceRegistry;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
@@ -44,51 +50,77 @@ public class OpenGuiListener {
      * Scans player's inventory and registers tooltips for items with reforge/socket metadata
      */
     private static void scanAndRegisterTooltips(Player player) {
-        if (!DynamicTooltipUtils.isAvailable()) {
-            return;
-        }
+        boolean tooltipsAvailable = DynamicTooltipUtils.isAvailable();
 
-        // Ensure the dynamic metadata provider is registered.
-        DynamicTooltipUtils.ensureProviderRegistered();
+        // Ensure the dynamic metadata provider is registered when tooltips are available.
+        if (tooltipsAvailable) {
+            DynamicTooltipUtils.ensureProviderRegistered();
+        }
         
         int registeredCount = 0;
+        int migratedCount = 0;
         
         // Scan hotbar
         ItemContainer hotbar = player.getInventory().getHotbar();
-        registeredCount += scanContainer(hotbar);
+        migratedCount += migrateResonantRecipes(hotbar);
+        migratedCount += migrateResonantEquipment(hotbar);
+        if (tooltipsAvailable) {
+            registeredCount += scanContainer(hotbar);
+        }
         
         // Scan storage inventory
         ItemContainer storage = player.getInventory().getStorage();
-        registeredCount += scanContainer(storage);
+        migratedCount += migrateResonantRecipes(storage);
+        migratedCount += migrateResonantEquipment(storage);
+        if (tooltipsAvailable) {
+            registeredCount += scanContainer(storage);
+        }
 
         // Scan equipped armor so join-time tooltip cache is rebuilt even when
         // the player has no reforge/socket items in hotbar/storage.
         ItemContainer armor = player.getInventory().getArmor();
-        registeredCount += scanContainer(armor);
+        migratedCount += migrateResonantEquipment(armor);
+        if (tooltipsAvailable) {
+            registeredCount += scanContainer(armor);
+        }
         
         // Always refresh after player join so dynamic metadata tooltips are rebuilt,
         // even if there were no pre-cached tooltip lines this session.
-        if (registeredCount > 0) {
+        if (tooltipsAvailable && (registeredCount > 0 || migratedCount > 0)) {
             System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join; refreshing shortly...");
-        } else {
+        } else if (tooltipsAvailable) {
             System.out.println("[SocketReforge] Player join tooltip refresh queued (provider-only path).");
         }
-        scheduleRefresh(1200, TimeUnit.MILLISECONDS);
+        if (tooltipsAvailable) {
+            scheduleRefresh(1200, TimeUnit.MILLISECONDS);
+        }
     }
 
     /**
      * Scans a non-inventory container (e.g. open chest window) and triggers a debounced tooltip refresh.
      */
     public static void scanAndRegisterTooltipsForContainer(ItemContainer container) {
-        if (!DynamicTooltipUtils.isAvailable() || container == null) {
+        if (container == null) {
             return;
         }
 
-        int registeredCount = scanContainer(container);
-        if (registeredCount > 0) {
-            // Short delay helps ensure update-window packets are already in flight.
-            scheduleRefresh(300, TimeUnit.MILLISECONDS);
+        int migrated = migrateResonantItemsInContainer(container);
+        if (DynamicTooltipUtils.isAvailable()) {
+            int registeredCount = scanContainer(container);
+            if (registeredCount > 0 || migrated > 0) {
+                // Short delay helps ensure update-window packets are already in flight.
+                scheduleRefresh(300, TimeUnit.MILLISECONDS);
+            }
         }
+    }
+
+    public static int migrateResonantItemsInContainer(ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+        int migrated = migrateResonantRecipes(container);
+        migrated += migrateResonantEquipment(container);
+        return migrated;
     }
 
     private static void scheduleRefresh(long delay, TimeUnit unit) {
@@ -143,5 +175,106 @@ public class OpenGuiListener {
         }
         
         return count;
+    }
+
+    private static int migrateResonantRecipes(ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+        int updated = 0;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack item = container.getItemStack(slot);
+            if (item == null || item.isEmpty()) {
+                continue;
+            }
+            if (!ResonantRecipeUtils.isResonantRecipeItem(item)) {
+                continue;
+            }
+            if (!LootSocketRoller.hasResonantRecipeMetadata(item)) {
+                continue;
+            }
+            ItemStack migrated = ResonantRecipeUtils.remapResonantRecipePattern(item);
+            ItemStack updatedItem = ResonantRecipeUtils.ensureRecipeUsages(migrated);
+            if (updatedItem != item) {
+                container.setItemStackForSlot(slot, updatedItem);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private static int migrateResonantEquipment(ItemContainer container) {
+        if (container == null) {
+            return 0;
+        }
+        int updated = 0;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack item = container.getItemStack(slot);
+            if (item == null || item.isEmpty()) {
+                continue;
+            }
+            if (!ReforgeEquip.isWeapon(item) && !ReforgeEquip.isArmor(item)) {
+                continue;
+            }
+            String resonanceName = SocketManager.getResonanceName(item);
+            SocketData existing = SocketManager.getSocketData(item);
+            if (resonanceName == null || resonanceName.isBlank()) {
+                if (existing != null) {
+                    ResonanceSystem.ResonanceResult raw = ResonanceSystem.evaluate(item, existing);
+                    if (raw != null && raw.active()) {
+                        resonanceName = raw.name();
+                    }
+                }
+            }
+            if (resonanceName == null || resonanceName.isBlank()) {
+                continue;
+            }
+            Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(resonanceName);
+            if (pattern == null || pattern.length == 0) {
+                continue;
+            }
+            SocketData remapped = buildSocketDataForPattern(pattern, existing);
+            if (remapped == null) {
+                continue;
+            }
+            ItemStack unlocked = SocketManager.withResonanceUnlock(item, resonanceName);
+            ItemStack migrated = SocketManager.withSocketData(unlocked, remapped);
+            if (migrated != item) {
+                container.setItemStackForSlot(slot, migrated);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private static SocketData buildSocketDataForPattern(Essence.Type[] pattern, SocketData existing) {
+        if (pattern == null || pattern.length == 0) {
+            return null;
+        }
+        SocketData data = new SocketData(pattern.length);
+        List<Socket> existingSockets = existing != null ? existing.getSockets() : List.of();
+        for (int i = 0; i < pattern.length; i++) {
+            data.addSocket();
+            Essence.Type type = pattern[i];
+            if (type == null) {
+                continue;
+            }
+            boolean useGreater = false;
+            if (i < existingSockets.size()) {
+                Socket existingSocket = existingSockets.get(i);
+                if (existingSocket != null && !existingSocket.isEmpty() && !existingSocket.isBroken()) {
+                    useGreater = SocketManager.isGreaterEssenceId(existingSocket.getEssenceId());
+                }
+            }
+            String essenceId = SocketManager.buildEssenceId(type.name(), useGreater);
+            if (essenceId == null || !EssenceRegistry.get().exists(essenceId)) {
+                essenceId = SocketManager.buildEssenceId(type.name(), false);
+            }
+            if (essenceId == null || !EssenceRegistry.get().exists(essenceId)) {
+                continue;
+            }
+            data.setEssenceAt(i, essenceId);
+        }
+        return data;
     }
 }

@@ -33,6 +33,7 @@ public class SocketManager {
     private static final String META_ESSENCE_BONUS_STATS = "SocketReforge.Essence.Bonus.Stats";
     private static final String META_ESSENCE_BONUS_FLAT = "SocketReforge.Essence.Bonus.Flat";
     private static final String META_ESSENCE_BONUS_PERCENT = "SocketReforge.Essence.Bonus.Percent";
+    private static final String META_RESONANCE_RECIPE_NAME = "SocketReforge.Resonance.RecipeName";
     private static final String GREATER_ESSENCE_SUFFIX = "_Concentrated";
 
     // ── Config ────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ public class SocketManager {
 
         String[] encoded = encodeSockets(socketData);
         boolean isWeapon = ReforgeEquip.isWeapon(item);
-        ResonanceSystem.ResonanceResult resonance = ResonanceSystem.evaluate(item, socketData);
+        ResonanceSystem.ResonanceResult resonance = evaluateAllowedResonance(item, socketData);
         String resonanceTooltipEffect = resonance.active()
                 ? ResonanceSystem.buildDetailedEffect(resonance, isWeapon)
                 : "";
@@ -161,6 +162,17 @@ public class SocketManager {
                 // Best effort: there is no runtime ItemStack quality setter, so we persist a metadata flag.
                 .withMetadata(ResonanceSystem.META_RESONANCE_QUALITY_INDEX, Codec.INTEGER,
                         resonance.active() ? ResonanceSystem.LEGENDARY_QUALITY_INDEX : 0);
+    }
+
+    public static ResonanceSystem.ResonanceResult evaluateAllowedResonance(ItemStack item, SocketData socketData) {
+        ResonanceSystem.ResonanceResult raw = ResonanceSystem.evaluate(item, socketData);
+        if (raw == null || !raw.active()) {
+            return raw;
+        }
+        if (isResonanceUnlocked(item, raw.name())) {
+            return raw;
+        }
+        return ResonanceSystem.ResonanceResult.NONE;
     }
     
     /**
@@ -254,6 +266,33 @@ public class SocketManager {
         return value == null || value.isBlank() ? null : value;
     }
 
+    public static String getResonanceRecipeName(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return null;
+        }
+        String value = item.getFromMetadataOrNull(META_RESONANCE_RECIPE_NAME, Codec.STRING);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    public static boolean isResonanceUnlocked(ItemStack item, String resonanceName) {
+        if (item == null || item.isEmpty() || resonanceName == null || resonanceName.isBlank()) {
+            return false;
+        }
+        String allowed = getResonanceRecipeName(item);
+        if (allowed == null || allowed.isBlank()) {
+            String legacy = getResonanceName(item);
+            return legacy != null && legacy.equalsIgnoreCase(resonanceName.trim());
+        }
+        return allowed.equalsIgnoreCase(resonanceName.trim());
+    }
+
+    public static ItemStack withResonanceUnlock(ItemStack item, String resonanceName) {
+        if (item == null || item.isEmpty() || resonanceName == null || resonanceName.isBlank()) {
+            return item;
+        }
+        return item.withMetadata(META_RESONANCE_RECIPE_NAME, Codec.STRING, resonanceName.trim());
+    }
+
     public static String getResonanceEffect(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
         String value = item.getFromMetadataOrNull(ResonanceSystem.META_RESONANCE_EFFECT, Codec.STRING);
@@ -339,7 +378,7 @@ public class SocketManager {
             return totals;
         }
 
-        ResonanceSystem.ResonanceResult resonance = ResonanceSystem.evaluate(item, socketData);
+        ResonanceSystem.ResonanceResult resonance = evaluateAllowedResonance(item, socketData);
         if (resonance.active()) {
             for (Map.Entry<EssenceEffect.StatType, double[]> entry : resonance.bonuses().entrySet()) {
                 double[] values = entry.getValue();
