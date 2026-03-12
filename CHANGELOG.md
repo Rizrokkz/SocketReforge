@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Chest loot bug** - Fixed player-placed chests occasionally receiving socketed loot and item replacement issues.
+- **Config UI overflow** - Fixed RuntimeConfigEditor UI overflow/scroll issues.
 - **Greater Fire Essence Recipe** - Fixed the greater fire essence recipe.
 - **Noisy Logs** - Reduced overly noisy log output.
 

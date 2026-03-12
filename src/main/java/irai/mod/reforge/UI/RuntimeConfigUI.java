@@ -45,9 +45,12 @@ public final class RuntimeConfigUI {
     private static final int GROUP_WIDTH = 828;
     private static final int GROUP_LIST_COLUMN_WIDTH = 270;
     private static final int CONTROL_PANEL_WIDTH = 550;
+    private static final int GROUP_PANEL_HEIGHT = 420;
     private static final int CONTROL_COLUMN_WIDTH = 270;
     private static final int VALUE_WIDTH = 150;
     private static final int DIVIDER_WIDTH = 792;
+    private static final int PICKER_PAGE_SIZE = 7;
+    private static final int CONTROL_PAGE_SIZE = 5;
 
     private static final double[] DEFAULT_SOCKET_SUCCESS = {0.90, 0.75, 0.55, 0.35};
     private static final double[] DEFAULT_SOCKET_BREAK = {0.05, 0.10, 0.20, 0.35};
@@ -76,6 +79,12 @@ public final class RuntimeConfigUI {
         TOGGLE
     }
 
+    private enum PickerMode {
+        NONE,
+        CATEGORY,
+        GROUP
+    }
+
     @FunctionalInterface
     private interface ValueSupplier {
         double get();
@@ -95,11 +104,29 @@ public final class RuntimeConfigUI {
         String activeCategoryId;
         String activeGroupId;
         String statusText;
+        PickerMode picker;
+        int pickerPage;
+        int controlsPage;
 
-        ViewState(String activeCategoryId, String activeGroupId, String statusText) {
+        ViewState(String activeCategoryId, String activeGroupId, String statusText, PickerMode picker, int pickerPage, int controlsPage) {
             this.activeCategoryId = activeCategoryId;
             this.activeGroupId = activeGroupId;
             this.statusText = statusText;
+            this.picker = picker == null ? PickerMode.NONE : picker;
+            this.pickerPage = Math.max(0, pickerPage);
+            this.controlsPage = Math.max(0, controlsPage);
+        }
+    }
+
+    private static final class PickerEntry {
+        final String id;
+        final String title;
+        final String summary;
+
+        private PickerEntry(String id, String title, String summary) {
+            this.id = id == null ? "" : id;
+            this.title = title == null ? "" : title;
+            this.summary = summary == null ? "" : summary;
         }
     }
 
@@ -280,41 +307,99 @@ public final class RuntimeConfigUI {
             Object activating = eventBindingClass.getField("Activating").get(null);
 
             String html = loadTemplate();
+            CategorySection activeCategory = resolveActiveCategory(state);
+            ControlGroup activeGroup = resolveActiveGroup(activeCategory, state);
+
             html = html.replace("{{statusText}}", escapeHtml(state.statusText));
-            html = html.replace("{{categoriesHtml}}", buildCategoriesHtml(state));
+            html = html.replace("{{categorySummary}}", buildCategorySummaryHtml(activeCategory));
+            html = html.replace("{{groupSummary}}", buildGroupSummaryHtml(activeCategory, activeGroup));
+            html = html.replace("{{controlsHtml}}", buildControlsHtml(activeCategory, activeGroup, state));
+            html = html.replace("{{pickerModal}}", buildPickerModalHtml(state, activeCategory, activeGroup));
 
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
 
             final Player finalPlayer = player;
             final ViewState finalState = state;
-            final CategorySection activeCategory = resolveActiveCategory(finalState);
-            final ControlGroup activeGroup = resolveActiveGroup(activeCategory, finalState);
 
             addListener.invoke(pageBuilder, "reloadAllButton", activating,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReload(finalPlayer, finalState));
             addListener.invoke(pageBuilder, RESET_DEFAULTS_BUTTON, activating,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleResetDefaults(finalPlayer, finalState));
 
-            for (CategorySection category : categories) {
-                addListener.invoke(pageBuilder, category.toggleButtonId, activating,
+            addListener.invoke(pageBuilder, "openCategoryPicker", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        finalState.picker = PickerMode.CATEGORY;
+                        finalState.pickerPage = 0;
+                        finalState.controlsPage = 0;
+                        requestReopen(finalPlayer, finalState);
+                    });
+
+            addListener.invoke(pageBuilder, "openGroupPicker", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        finalState.picker = PickerMode.GROUP;
+                        finalState.pickerPage = 0;
+                        finalState.controlsPage = 0;
+                        requestReopen(finalPlayer, finalState);
+                    });
+
+            if (finalState.picker != null && finalState.picker != PickerMode.NONE) {
+                List<PickerEntry> pickerEntries = buildPickerEntries(finalState.picker, activeCategory);
+                int maxPage = computePickerMaxPage(pickerEntries);
+                int page = Math.min(finalState.pickerPage, maxPage);
+                List<Integer> indices = computePickerIndices(pickerEntries, page);
+
+                addListener.invoke(pageBuilder, "pickerCloseButton", activating,
                         (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            selectCategory(finalState, category.id);
+                            finalState.picker = PickerMode.NONE;
+                            finalState.pickerPage = 0;
                             requestReopen(finalPlayer, finalState);
                         });
-            }
 
-            if (activeCategory != null) {
-                for (ControlGroup group : activeCategory.groups) {
-                    addListener.invoke(pageBuilder, group.buttonId(activeCategory.id), activating,
+                addListener.invoke(pageBuilder, "pickerPrevButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            finalState.pickerPage = Math.max(0, finalState.pickerPage - 1);
+                            requestReopen(finalPlayer, finalState);
+                        });
+
+                addListener.invoke(pageBuilder, "pickerNextButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            finalState.pickerPage = Math.min(maxPage, finalState.pickerPage + 1);
+                            requestReopen(finalPlayer, finalState);
+                        });
+
+                for (int index : indices) {
+                    PickerEntry entry = pickerEntries.get(index);
+                    addListener.invoke(pageBuilder, "pickerEntry_" + index, activating,
                             (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                                finalState.activeGroupId = group.id;
+                                if (finalState.picker == PickerMode.CATEGORY) {
+                                    selectCategory(finalState, entry.id);
+                                } else if (finalState.picker == PickerMode.GROUP) {
+                                    finalState.activeGroupId = entry.id;
+                                }
+                                finalState.picker = PickerMode.NONE;
+                                finalState.pickerPage = 0;
+                                finalState.controlsPage = 0;
                                 requestReopen(finalPlayer, finalState);
                             });
                 }
             }
 
-            for (NumericControl control : visibleControls(activeCategory, activeGroup)) {
+            if (activeGroup != null) {
+                int maxControlsPage = computeControlMaxPage(activeGroup.controls);
+                addListener.invoke(pageBuilder, "controlsPrevButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            finalState.controlsPage = Math.max(0, finalState.controlsPage - 1);
+                            requestReopen(finalPlayer, finalState);
+                        });
+                addListener.invoke(pageBuilder, "controlsNextButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            finalState.controlsPage = Math.min(maxControlsPage, finalState.controlsPage + 1);
+                            requestReopen(finalPlayer, finalState);
+                        });
+            }
+
+            for (NumericControl control : visibleControls(activeCategory, activeGroup, finalState)) {
                 if (control.displayKind == DisplayKind.TOGGLE) {
                     registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
                     registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
@@ -427,7 +512,7 @@ public final class RuntimeConfigUI {
         sb.append("<div style=\"layout-mode:Top; spacing:10;\">");
         sb.append("<div style=\"anchor-width:")
                 .append(CATEGORY_WIDTH)
-                .append("; layout-mode:Left; spacing:8; background-color:#0f1520; padding:10; border-radius:6;\">");
+                .append("; anchor-height:52; layout-mode:Left; spacing:8; background-color:#0f1520; padding:10; border-radius:6; overflow-x:auto; overflow-y:hidden;\">");
         for (CategorySection category : categories) {
             sb.append(buildNavigationButton(
                     category.toggleButtonId,
@@ -441,6 +526,205 @@ public final class RuntimeConfigUI {
         }
         sb.append("</div>");
         return sb.toString();
+    }
+
+    private static String buildCategorySummaryHtml(CategorySection category) {
+        if (category == null) {
+            return buildPickerSummaryCard("No categories available.", "");
+        }
+        return buildPickerSummaryCard(category.title, category.summary);
+    }
+
+    private static String buildGroupSummaryHtml(CategorySection category, ControlGroup group) {
+        if (category == null) {
+            return buildPickerSummaryCard("Select a category first.", "");
+        }
+        if (group == null) {
+            return buildPickerSummaryCard("No sections available.", "");
+        }
+        return buildPickerSummaryCard(group.title, group.description);
+    }
+
+    private static String buildPickerSummaryCard(String title, String summary) {
+        String safeTitle = title == null ? "" : title;
+        String safeSummary = summary == null ? "" : summary;
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"anchor-height:72; anchor-width:440; layout-mode:Top; padding:6; background-image:url(output_bg.png); background-size:100% 100%; background-repeat:no-repeat; background-position:center;\">");
+        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(safeTitle)).append("</p>");
+        if (!safeSummary.isBlank()) {
+            sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(safeSummary)).append("</p>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildControlsHtml(CategorySection category, ControlGroup group, ViewState state) {
+        if (category == null) {
+            return "<p>No categories available.</p>";
+        }
+        if (group == null) {
+            return "<p>No sections available.</p>";
+        }
+        int maxPage = computeControlMaxPage(group.controls);
+        int page = state != null ? Math.min(Math.max(0, state.controlsPage), maxPage) : 0;
+        String pageLabel = (maxPage <= 0)
+                ? "Page 1/1"
+                : "Page " + (page + 1) + "/" + (maxPage + 1);
+        String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
+        String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(buildControlsListHtml(group, page));
+        sb.append("<div style=\"layout-mode:Center; spacing:8;\">");
+        sb.append("<button id=\"controlsPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
+                .append(prevDisabled).append(">Prev</button>");
+        sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
+        sb.append("<button id=\"controlsNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
+                .append(nextDisabled).append(">Next</button>");
+        sb.append("</div>");
+        if (category.noteText != null && !category.noteText.isBlank()) {
+            sb.append("<div style=\"layout-mode:Top; padding:8; background-color:#191919; border-radius:4;\">")
+                    .append("<p style=\"color:#C9B26D;\">")
+                    .append(escapeHtml(category.noteText))
+                    .append("</p></div>");
+        }
+        return sb.toString();
+    }
+
+    private static String buildControlsListHtml(ControlGroup group, int page) {
+        if (group == null) {
+            return "<p>No controls.</p>";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("<reorderable-list id=\"controlsList\" style=\"layout-mode:Top; spacing:6; anchor-width:840; anchor-height:420; background-color:#121b29; padding:8; border-radius:4;\">");
+        int start = page * CONTROL_PAGE_SIZE;
+        int end = Math.min(group.controls.size(), start + CONTROL_PAGE_SIZE);
+        if (start >= end) {
+            sb.append("<p style=\"font-size:11; color:#b0b0c2;\">No controls on this page.</p>");
+        } else {
+            int singleColumnWidth = CONTROL_PANEL_WIDTH - 32;
+            for (int i = start; i < end; i++) {
+                NumericControl control = group.controls.get(i);
+                sb.append(buildControlCell(control, singleColumnWidth));
+            }
+        }
+        sb.append("</reorderable-list>");
+        return sb.toString();
+    }
+
+    private static int computeControlMaxPage(List<NumericControl> controls) {
+        if (controls == null || controls.isEmpty()) {
+            return 0;
+        }
+        return Math.max(0, (controls.size() - 1) / CONTROL_PAGE_SIZE);
+    }
+
+    private static List<PickerEntry> buildPickerEntries(PickerMode mode, CategorySection activeCategory) {
+        List<PickerEntry> entries = new ArrayList<>();
+        if (mode == PickerMode.CATEGORY) {
+            for (CategorySection category : categories) {
+                entries.add(new PickerEntry(category.id, category.title, category.summary));
+            }
+        } else if (mode == PickerMode.GROUP && activeCategory != null) {
+            for (ControlGroup group : activeCategory.groups) {
+                entries.add(new PickerEntry(group.id, group.title, group.description));
+            }
+        }
+        return entries;
+    }
+
+    private static String buildPickerModalHtml(ViewState state, CategorySection activeCategory, ControlGroup activeGroup) {
+        PickerMode picker = state != null ? state.picker : PickerMode.NONE;
+        if (picker == null || picker == PickerMode.NONE) {
+            return "";
+        }
+        List<PickerEntry> entries = buildPickerEntries(picker, activeCategory);
+        String selectedId = picker == PickerMode.CATEGORY
+                ? (activeCategory != null ? activeCategory.id : null)
+                : (activeGroup != null ? activeGroup.id : null);
+        String title = picker == PickerMode.CATEGORY ? "Select Category" : "Select Section";
+        String emptyLabel = picker == PickerMode.CATEGORY ? "No categories found." : "No sections found.";
+
+        int maxPage = computePickerMaxPage(entries);
+        int page = Math.max(0, Math.min(maxPage, state.pickerPage));
+        String pageLabel = (maxPage <= 0)
+                ? "Page 1/1"
+                : "Page " + (page + 1) + "/" + (maxPage + 1);
+
+        String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
+        String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
+        String cards = buildPickerCardList(entries, selectedId, emptyLabel, page);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div id=\"pickerOverlay\" style=\"anchor-full:200; layout-mode:Left; background-color:#0b0b1200;\">");
+        sb.append("<div style=\"layout-mode:Left;\">");
+        sb.append("<div style=\"anchor-width:350; anchor-height:700; layout-mode:Top; background-color:#1a1a2b; padding:10; border-radius:6;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:10;\">");
+        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(title)).append("</p>");
+        sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<button id=\"pickerCloseButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\">Close</button>");
+        sb.append("</div>");
+        sb.append("<img src=\"divider.png\" style=\"anchor-width: 350; anchor-height: 3;\">");
+        sb.append("<reorderable-list id=\"pickerList\" style=\"layout-mode:Top; spacing:6; anchor-width:350; anchor-height:600; background-color:#141426; padding:6; border-radius:4;\">");
+        sb.append(cards);
+        sb.append("</reorderable-list>");
+        sb.append("<div style=\"layout-mode:Center; spacing:8; anchor-width:700;\">");
+        sb.append("<button id=\"pickerPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(prevDisabled).append(">Prev</button>");
+        sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
+        sb.append("<button id=\"pickerNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(nextDisabled).append(">Next</button>");
+        sb.append("</div>");
+        sb.append("</div>");
+        sb.append("</div>");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildPickerCardList(List<PickerEntry> entries, String selectedId, String emptyLabel, int page) {
+        if (entries == null || entries.isEmpty()) {
+            String label = emptyLabel == null ? "No entries" : emptyLabel;
+            return "<p style=\"font-size:11; color:#b0b0c2;\">" + escapeHtml(label) + "</p>";
+        }
+        int start = page * PICKER_PAGE_SIZE;
+        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < end; i++) {
+            PickerEntry entry = entries.get(i);
+            boolean selected = entry.id.equals(selectedId) || (selectedId == null && i == 0);
+            String bg = selected ? "#343a5a" : "#202036";
+            String border = selected ? "#7fa5ff" : "#2c2c4b";
+            sb.append("<button id=\"pickerEntry_").append(i)
+                    .append("\" class=\"custom-button\" style=\"anchor-width:330; anchor-height:64; text-align:left; padding:6; background-color:")
+                    .append(bg).append("; border:1px solid ").append(border)
+                    .append("; border-radius:2; layout-mode:Top;\">");
+            sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(entry.title)).append("</p>");
+            if (entry.summary != null && !entry.summary.isBlank()) {
+                sb.append("<p style=\"font-size:11; color:#b0b0c2;\">")
+                        .append(escapeHtml(entry.summary))
+                        .append("</p>");
+            }
+            sb.append("</button>");
+        }
+        return sb.toString();
+    }
+
+    private static int computePickerMaxPage(List<PickerEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return 0;
+        }
+        return Math.max(0, (entries.size() - 1) / PICKER_PAGE_SIZE);
+    }
+
+    private static List<Integer> computePickerIndices(List<PickerEntry> entries, int page) {
+        List<Integer> indices = new ArrayList<>();
+        if (entries == null || entries.isEmpty()) {
+            return indices;
+        }
+        int start = page * PICKER_PAGE_SIZE;
+        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
+        for (int i = start; i < end; i++) {
+            indices.add(i);
+        }
+        return indices;
     }
 
     private static String buildCategoryHtml(CategorySection category, ViewState state) {
@@ -461,10 +745,14 @@ public final class RuntimeConfigUI {
         sb.append("<div style=\"anchor-width:")
                 .append(GROUP_WIDTH)
                 .append("; layout-mode:Top; spacing:6; background-color:#121b29; padding:8; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-height:")
+                .append(GROUP_PANEL_HEIGHT)
+                .append(";\">");
         sb.append("<div style=\"anchor-width:")
                 .append(GROUP_LIST_COLUMN_WIDTH)
-                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4;\">");
+                .append("; anchor-height:")
+                .append(GROUP_PANEL_HEIGHT)
+                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4; overflow-y:auto;\">");
         for (ControlGroup group : category.groups) {
             sb.append(buildNavigationButton(
                     group.buttonId(category.id),
@@ -476,7 +764,9 @@ public final class RuntimeConfigUI {
 
         sb.append("<div style=\"anchor-width:")
                 .append(CONTROL_PANEL_WIDTH)
-                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4;\">");
+                .append("; anchor-height:")
+                .append(GROUP_PANEL_HEIGHT)
+                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4; overflow-y:auto;\">");
         if (activeGroup != null) {
             sb.append(buildGroupHtml(activeGroup));
         }
@@ -574,7 +864,10 @@ public final class RuntimeConfigUI {
         return new ViewState(
                 defaultCategory == null ? CATEGORY_SOCKET : defaultCategory.id,
                 firstGroupId(defaultCategory),
-                DEFAULT_STATUS);
+                DEFAULT_STATUS,
+                PickerMode.NONE,
+                0,
+                0);
     }
 
     private static CategorySection resolveActiveCategory(ViewState state) {
@@ -626,11 +919,17 @@ public final class RuntimeConfigUI {
         return category.groups.get(0).id;
     }
 
-    private static List<NumericControl> visibleControls(CategorySection category, ControlGroup group) {
+    private static List<NumericControl> visibleControls(CategorySection category, ControlGroup group, ViewState state) {
         if (category == null || group == null) {
             return List.of();
         }
-        return group.controls;
+        int page = state != null ? Math.max(0, state.controlsPage) : 0;
+        int start = page * CONTROL_PAGE_SIZE;
+        int end = Math.min(group.controls.size(), start + CONTROL_PAGE_SIZE);
+        if (start >= end) {
+            return List.of();
+        }
+        return group.controls.subList(start, end);
     }
 
     private static void registerControls() {

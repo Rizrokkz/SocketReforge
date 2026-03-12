@@ -1,18 +1,50 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Runtime Config Editor" style="anchor-width: 920; anchor-height: 760;">
+    <div class="decorated-container" data-hyui-title="Runtime Config Editor" style="anchor-width: 920; anchor-height: 900;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto; layout-mode:Top; spacing:10;">
             <h2 style="text-align:center;">Runtime Gameplay Config</h2>
             <p style="text-align:center;">Live operator tuning for gameplay-facing settings. Changes save immediately.</p>
             <hr/>
-            <div style="layout-mode:Top; spacing:8; background-color:#101726; padding:10; border-radius:6;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Controls</p>
+            <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
                 <div style="layout-mode:Left; spacing:8;">
                     <button id="reloadAllButton" style="width:220;height:36;">Reload All From Disk</button>
                     <button id="resetDefaultsButton" style="width:200;height:36;">Reset Defaults</button>
                 </div>
-                <p id="statusLabel" style="white-space:pre-line; max-height:72; overflow-y:auto; background-color:#1a1a2b; padding:8; border-radius:4;">{{statusText}}</p>
+                <p id="statusLabel" style="white-space:pre-line; max-height:72; overflow-y:auto; background-color:#101726; padding:8; border-radius:4;">{{statusText}}</p>
             </div>
-            <p style="font-size:11; color:#B8B8C8;">Use the top row to switch categories, then pick a subsection to edit its values.</p>
-            <div id="categoryRoot" style="layout-mode:Top; spacing:10;">{{categoriesHtml}}</div>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Selection</p>
+            <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <div style="layout-mode:Left; spacing:16;">
+                    <div style="anchor-width:440; layout-mode:Top;">
+                        <p style="font-weight:bold;">Category</p>
+                        <button id="openCategoryPicker" class="custom-button"
+                                style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                            {{categorySummary}}
+                        </button>
+                    </div>
+                    <div style="anchor-width:440; layout-mode:Top;">
+                        <p style="font-weight:bold;">Section</p>
+                        <button id="openGroupPicker" class="custom-button"
+                                style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                            {{groupSummary}}
+                        </button>
+                    </div>
+                </div>
+                <p style="font-size:11; text-align:center; color:#B8B8C8;">Pick a category and section to edit the values below.</p>
+            </div>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Config Values</p>
+            <div id="controlsPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                {{controlsHtml}}
+            </div>
         </div>
     </div>
+    {{pickerModal}}
 </div>

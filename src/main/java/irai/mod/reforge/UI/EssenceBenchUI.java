@@ -47,6 +47,8 @@ public final class EssenceBenchUI {
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String UI_COMMAND_BUILDER = "com.hypixel.hytale.server.core.ui.builder.UICommandBuilder";
     private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/EssenceBench.html";
+    private static final boolean DEBUG_ESSENCE_ICON = Boolean.parseBoolean(
+            System.getProperty("socketreforge.debug.essenceicon", "false"));
 
     private static final String[] ESSENCE_ITEM_IDS = {
             "Ingredient_Fire_Essence",
@@ -778,34 +780,50 @@ public final class EssenceBenchUI {
         }
         String itemId = resolveEssenceItemId(essenceId);
         if (itemId == null || itemId.isBlank()) {
-            System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId not resolved");
+            if (DEBUG_ESSENCE_ICON) {
+                System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId not resolved");
+            }
             return null;
         }
-        System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId=" + itemId);
+        if (DEBUG_ESSENCE_ICON) {
+            System.out.println("[SocketReforge] Essence icon lookup: essenceId=" + essenceId + " -> itemId=" + itemId);
+        }
         try {
             Item item = Item.getAssetMap().getAssetMap().get(itemId);
             if (item == null || item == Item.UNKNOWN) {
-                System.out.println("[SocketReforge] Essence icon lookup: item not found for " + itemId);
+                if (DEBUG_ESSENCE_ICON) {
+                    System.out.println("[SocketReforge] Essence icon lookup: item not found for " + itemId);
+                }
                 return null;
             }
             String icon = item.getIcon();
             if (icon == null || icon.isBlank()) {
-                System.out.println("[SocketReforge] Essence icon lookup: no icon for " + itemId);
+                if (DEBUG_ESSENCE_ICON) {
+                    System.out.println("[SocketReforge] Essence icon lookup: no icon for " + itemId);
+                }
                 return null;
             }
             if (Item.UNKNOWN_TEXTURE.equals(icon)) {
-                System.out.println("[SocketReforge] Essence icon lookup: unknown texture for " + itemId);
+                if (DEBUG_ESSENCE_ICON) {
+                    System.out.println("[SocketReforge] Essence icon lookup: unknown texture for " + itemId);
+                }
                 return null;
             }
             String uiIcon = resolveUiIconPath(icon);
             if (uiIcon != null) {
-                System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " -> ui=" + uiIcon);
+                if (DEBUG_ESSENCE_ICON) {
+                    System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " -> ui=" + uiIcon);
+                }
                 return uiIcon;
             }
-            System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " for " + itemId);
+            if (DEBUG_ESSENCE_ICON) {
+                System.out.println("[SocketReforge] Essence icon lookup: icon=" + icon + " for " + itemId);
+            }
             return icon;
         } catch (Exception ignored) {
-            System.out.println("[SocketReforge] Essence icon lookup: failed for " + itemId);
+            if (DEBUG_ESSENCE_ICON) {
+                System.out.println("[SocketReforge] Essence icon lookup: failed for " + itemId);
+            }
             return null;
         }
     }

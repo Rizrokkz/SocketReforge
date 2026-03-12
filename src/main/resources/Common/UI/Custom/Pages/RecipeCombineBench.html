@@ -4,36 +4,39 @@
             <h2 style="text-align:center;">Resonant Recipe Combine</h2>
             <p style="text-align:center;">Combine recipe shards to reveal the full resonance pattern.</p>
             <hr/>
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <div style="layout-mode:Left; spacing:16;">
-                <div style="anchor-width:440; layout-mode:Top;">
-                    <p style="font-weight:bold;">Base Recipe</p>
-                    <select id="baseRecipeDropdown" data-hyui-showlabel="false"
-                            style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
-                        {{baseRecipeOptions}}
-                    </select>
-                    <button id="openBasePicker" class="custom-button"
-                            style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
-                        {{basePickerSummary}}
-                    </button>
-                </div>
-                <div style="anchor-width:440; layout-mode:Top;">
-                    <p style="font-weight:bold;">Merge Shard</p>
-                    <select id="mergeRecipeDropdown" data-hyui-showlabel="false"
-                            style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
-                        {{mergeRecipeOptions}}
-                    </select>
-                    <button id="openMergePicker" class="custom-button"
-                            style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
-                        {{mergePickerSummary}}
-                    </button>
+            <p>Recipes</p>
+            <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <div style="layout-mode:Left; spacing:16;">
+                    <div style="anchor-width:440; layout-mode:Top;">
+                        <p style="font-weight:bold;">Base Recipe</p>
+                        <select id="baseRecipeDropdown" data-hyui-showlabel="false"
+                                style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
+                            {{baseRecipeOptions}}
+                        </select>
+                        <button id="openBasePicker" class="custom-button"
+                                style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                            {{basePickerSummary}}
+                        </button>
+                    </div>
+                    <div style="anchor-width:440; layout-mode:Top;">
+                        <p style="font-weight:bold;">Merge Shard</p>
+                        <select id="mergeRecipeDropdown" data-hyui-showlabel="false"
+                                style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
+                            {{mergeRecipeOptions}}
+                        </select>
+                        <button id="openMergePicker" class="custom-button"
+                                style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                            {{mergePickerSummary}}
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Recipe Info</p>
+            <p>Recipe Info</p>
             <div id="recipeInfoPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
                 <p>Resonance: {{recipeName}}</p>
                 <p>Type: {{recipeType}}</p>
@@ -41,27 +44,34 @@
                 <p>Usages: {{recipeUsages}}</p>
             </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Merge Preview</p>
+            <p>Merge Preview</p>
             <div id="mergePreviewPanel" style="layout-mode:Top;spacing:8;background-color:#1a1a2b;padding:8;border-radius:4;min-height:160;">
                 <p style="white-space:pre-line;">{{mergePreviewText}}</p>
                 {{mergePreviewVisual}}
             </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-weight:bold;">Progress</p>
-            <progress id="combineProgress"
-                      max="100"
-                      value="{{progressValue}}"
-                      data-hyui-bar-texture-path="boost_fill.png"
-                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
-            </progress>
-            <p id="statusLabel">{{statusText}}</p>
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11;">Combining merges the selected shard into the base recipe.</p>
-            <p style="font-size:11;">Consumed shards are removed from inventory or compendium.</p>
+            <p>Progress</p>
+            <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <progress id="combineProgress"
+                          max="100"
+                          value="{{progressValue}}"
+                          data-hyui-bar-texture-path="boost_fill.png"
+                          style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+                </progress>
+                <p id="statusLabel">{{statusText}}</p>
+            </div>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Combine</p>
+            <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p style="font-size:11;">Combining merges the selected shard into the base recipe.</p>
+                <p style="font-size:11;">Consumed shards are removed from inventory or compendium.</p>
+            </div>
             <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>Combine Shards</button>
         </div>
     </div>
