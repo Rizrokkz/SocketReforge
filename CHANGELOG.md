@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.3] - 2026-03-13
+
+### Added
+
+- **Resonance Compendium** - Added a compendium that compiles all recipes and lets players combine recipes there. Craft at Workbench (Tier 3) with 3 Resonant Recipe shards plus 10 each Fire, Ice, Life, Lightning, Void, and Water essences.
+- **Blank Resonant Recipe Shards** - Craftable at the Arcane Bench (Amalgamy tab) using 8 Linen Fabric Scraps, 6 Void Essence, 6 Life Essence, and 1 Thorium Bar.
+- **Recipe Drop Rarity Weights** - Added rarity weighting controls for recipe drops.
+
+### Fixed
+
+- **Greater Fire Essence Recipe** - Fixed the greater fire essence recipe.
+- **Noisy Logs** - Reduced overly noisy log output.
+
+---
+
+## [1.3.2] - 2026-03-11
+
+### Added
+
+#### Loot & Drops
+
+- **Crop Essence Drops** - Farmable crop droplists now inject Water essence (default 5%) and Stamina crops inject Lightning essence (default 15%).
+- **Aquatic/Flying Essence Drops** - Aquatic NPCs can drop Water essence and flying NPCs can drop Lightning essence (both configurable).
+- **Essence Drop Controls** - LootSocketRollConfig now includes chance + min/max quantity settings for crop/NPC Water and Lightning essence drops, with runtime config UI controls.
+- **Socketed Essence Rolls** - World loot can roll with filled essences (greater essence chance supported).
+
+#### Resonance
+
+- **Seeded Resonance Combinations** - Resonance essence order is now generated per main world seed so each server has unique combinations.
+- **Resonance Recipe Support** - Completed recipe shards can now be used as support in the Essence bench to trigger resonance.
+- **Resonance Migration** - Legacy resonant items and recipe shards are migrated to seeded patterns while preserving revealed slots.
+
+#### Admin & Tools
+
+- **Resonance Admin Tools** - Added `/resonancecombos` to list seeded combos and `/resonanceworldscan` to migrate stored items.
+
+### Changed
+
+#### Socket Defaults
+
+- **Socket Caps Defaults** - Weapon and armor max sockets now default to 4.
+
+#### Loot Defaults
+
+- **Essence Drop Defaults** - Water essence quantities default to 1–2; Lightning essence quantities default to 2–3; NPC Lightning default chance is now 15%.
+- **NPC Water Essences** - Water essence drops are now restricted to aquatic roles only.
+
+#### Resonance Rules
+
+- **Resonance Requirements** - Direct resonance without a completed recipe is blocked; recipe usage is only consumed on successful resonance.
+- **Recipe Roll Pity** - After 150 failed rolls, the next resonant recipe roll is guaranteed per player.
+- **Recipe Combine Logic** - Combine use prioritizes shards that reveal missing slots first.
+
+### Fixed
+
+#### Loot
+
+- **Loot Injection Minimums** - Min quantity can now be 0 for injection rules.
+- **Live Essence Drop Tuning** - Existing crop droplists update their essence weights/quantities when config changes are applied.
+
+#### Resonance
+
+- **Recipe Combine Consume** - Combine now avoids consuming shards when no new slots would be revealed.
+
+### Removed
+
+- **Weather Event System** - Removed Spirit_Thunder weather spawns, WeatherEventConfig, and all related runtime config UI controls.
+
+### Planned Features
+
+- Additional weapon types support
+- Enhanced gem socketing mechanics
+- Server-wide leaderboards for reforging achievements
+- Custom reforge animations
+- Multi-language support
+
+---
+
 ## [1.3.1] - 2026-03-10
 
 ### Added
@@ -506,69 +584,6 @@ This update completely overhauls how refinement data is stored, moving from item
 - Built on Hytale's JavaPlugin framework
 - Event-driven architecture with global event listeners
 - Timer-based scheduled tasks for auto-save and sync
-
----
-
-## [1.3.2] - 2026-03-11
-
-### Added
-
-#### Loot & Drops
-
-- **Crop Essence Drops** - Farmable crop droplists now inject Water essence (default 5%) and Stamina crops inject Lightning essence (default 15%).
-- **Aquatic/Flying Essence Drops** - Aquatic NPCs can drop Water essence and flying NPCs can drop Lightning essence (both configurable).
-- **Essence Drop Controls** - LootSocketRollConfig now includes chance + min/max quantity settings for crop/NPC Water and Lightning essence drops, with runtime config UI controls.
-- **Socketed Essence Rolls** - World loot can roll with filled essences (greater essence chance supported).
-
-#### Resonance
-
-- **Seeded Resonance Combinations** - Resonance essence order is now generated per main world seed so each server has unique combinations.
-- **Resonance Recipe Support** - Completed recipe shards can now be used as support in the Essence bench to trigger resonance.
-- **Resonance Migration** - Legacy resonant items and recipe shards are migrated to seeded patterns while preserving revealed slots.
-
-#### Admin & Tools
-
-- **Resonance Admin Tools** - Added `/resonancecombos` to list seeded combos and `/resonanceworldscan` to migrate stored items.
-
-### Changed
-
-#### Socket Defaults
-
-- **Socket Caps Defaults** - Weapon and armor max sockets now default to 4.
-
-#### Loot Defaults
-
-- **Essence Drop Defaults** - Water essence quantities default to 1–2; Lightning essence quantities default to 2–3; NPC Lightning default chance is now 15%.
-- **NPC Water Essences** - Water essence drops are now restricted to aquatic roles only.
-
-#### Resonance Rules
-
-- **Resonance Requirements** - Direct resonance without a completed recipe is blocked; recipe usage is only consumed on successful resonance.
-- **Recipe Roll Pity** - After 150 failed rolls, the next resonant recipe roll is guaranteed per player.
-- **Recipe Combine Logic** - Combine use prioritizes shards that reveal missing slots first.
-
-### Fixed
-
-#### Loot
-
-- **Loot Injection Minimums** - Min quantity can now be 0 for injection rules.
-- **Live Essence Drop Tuning** - Existing crop droplists update their essence weights/quantities when config changes are applied.
-
-#### Resonance
-
-- **Recipe Combine Consume** - Combine now avoids consuming shards when no new slots would be revealed.
-
-### Removed
-
-- **Weather Event System** - Removed Spirit_Thunder weather spawns, WeatherEventConfig, and all related runtime config UI controls.
-
-### Planned Features
-
-- Additional weapon types support
-- Enhanced gem socketing mechanics
-- Server-wide leaderboards for reforging achievements
-- Custom reforge animations
-- Multi-language support
 
 ---
 
