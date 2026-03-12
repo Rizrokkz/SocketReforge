@@ -52,8 +52,10 @@ public final class RecipeCombineUI {
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private static final int PROCESS_DURATION_MS = 800;
     private static final int PROGRESS_TICK_MS = 50;
+    private static final int PICKER_PAGE_SIZE = 8;
 
     private enum Source { HOTBAR, STORAGE, COMPENDIUM }
+    private enum PickerMode { NONE, BASE, MERGE }
 
     private static final class CompendiumHandle {
         final short slot;
@@ -111,19 +113,41 @@ public final class RecipeCombineUI {
         }
     }
 
+    private static final class ResolvedSelections {
+        final Entry baseEntry;
+        final String baseKey;
+        final List<Entry> mergeCandidates;
+        final Entry mergeEntry;
+        final String mergeKey;
+
+        ResolvedSelections(Entry baseEntry, String baseKey, List<Entry> mergeCandidates,
+                           Entry mergeEntry, String mergeKey) {
+            this.baseEntry = baseEntry;
+            this.baseKey = baseKey;
+            this.mergeCandidates = mergeCandidates;
+            this.mergeEntry = mergeEntry;
+            this.mergeKey = mergeKey;
+        }
+    }
+
     private static final class SelectionState {
         final String baseKey;
         final String mergeKey;
         final String statusText;
         final int progressValue;
         final boolean processing;
+        final PickerMode picker;
+        final int pickerPage;
 
-        SelectionState(String baseKey, String mergeKey, String statusText, int progressValue, boolean processing) {
+        SelectionState(String baseKey, String mergeKey, String statusText, int progressValue, boolean processing,
+                       PickerMode picker, int pickerPage) {
             this.baseKey = baseKey;
             this.mergeKey = mergeKey;
             this.statusText = statusText;
             this.progressValue = progressValue;
             this.processing = processing;
+            this.picker = picker == null ? PickerMode.NONE : picker;
+            this.pickerPage = Math.max(0, pickerPage);
         }
     }
 
@@ -303,6 +327,13 @@ public final class RecipeCombineUI {
             final Player finalPlayer = player;
             final Snapshot finalSnapshot = snapshot;
 
+            ResolvedSelections resolved = resolveSelections(snapshot, state);
+            PickerMode picker = state != null ? state.picker : PickerMode.NONE;
+            int pickerPage = state != null ? state.pickerPage : 0;
+            int maxPickerPage = computePickerMaxPage(
+                    picker == PickerMode.BASE ? snapshot.entries : resolved.mergeCandidates);
+            int effectivePickerPage = Math.min(pickerPage, maxPickerPage);
+
             // Base recipe dropdown change
             addListener.invoke(pageBuilder, "baseRecipeDropdown", valueChanged,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
@@ -315,7 +346,7 @@ public final class RecipeCombineUI {
                                 debug("base change value=" + baseVal);
                             }
                             pendingSelections.put(finalPlayer.getPlayerRef(),
-                                    new SelectionState(baseVal, null, null, 0, false));
+                                    new SelectionState(baseVal, null, null, 0, false, PickerMode.NONE, 0));
                             finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                         } catch (Exception e) {
                             System.err.println("[SocketReforge] RecipeCombineUI base change failed: " + e.getMessage());
@@ -336,13 +367,77 @@ public final class RecipeCombineUI {
                                 debug("merge change value=" + mergeVal + " base=" + baseVal);
                             }
                             pendingSelections.put(finalPlayer.getPlayerRef(),
-                                    new SelectionState(baseVal, mergeVal, null, 0, false));
+                                    new SelectionState(baseVal, mergeVal, null, 0, false, PickerMode.NONE, 0));
                             finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                         } catch (Exception e) {
                             System.err.println("[SocketReforge] RecipeCombineUI merge change failed: " + e.getMessage());
                             e.printStackTrace();
                         }
                     });
+
+            addListener.invoke(pageBuilder, "openBasePicker", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        pendingSelections.put(finalPlayer.getPlayerRef(),
+                                new SelectionState(resolved.baseKey, resolved.mergeKey, null, 0, false,
+                                        PickerMode.BASE, 0));
+                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            addListener.invoke(pageBuilder, "openMergePicker", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        pendingSelections.put(finalPlayer.getPlayerRef(),
+                                new SelectionState(resolved.baseKey, resolved.mergeKey, null, 0, false,
+                                        PickerMode.MERGE, 0));
+                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            if (picker != PickerMode.NONE) {
+                addListener.invoke(pageBuilder, "pickerCloseButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            pendingSelections.put(finalPlayer.getPlayerRef(),
+                                    new SelectionState(resolved.baseKey, resolved.mergeKey, null, 0, false,
+                                            PickerMode.NONE, 0));
+                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                        });
+
+                int maxPage = maxPickerPage;
+                if (effectivePickerPage > 0) {
+                    addListener.invoke(pageBuilder, "pickerPrevButton", activating,
+                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                                pendingSelections.put(finalPlayer.getPlayerRef(),
+                                        new SelectionState(resolved.baseKey, resolved.mergeKey, null, 0, false,
+                                                picker, Math.max(0, effectivePickerPage - 1)));
+                                finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                            });
+                }
+                if (effectivePickerPage < maxPage) {
+                    addListener.invoke(pageBuilder, "pickerNextButton", activating,
+                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                                pendingSelections.put(finalPlayer.getPlayerRef(),
+                                        new SelectionState(resolved.baseKey, resolved.mergeKey, null, 0, false,
+                                                picker, Math.min(maxPage, effectivePickerPage + 1)));
+                                finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                            });
+                }
+
+                List<Integer> pickerIndices = computePickerIndices(
+                        picker == PickerMode.BASE ? snapshot.entries : resolved.mergeCandidates,
+                        effectivePickerPage);
+                for (Integer index : pickerIndices) {
+                    final String selectKey = String.valueOf(index);
+                    addListener.invoke(pageBuilder, "pickerEntry_" + index, activating,
+                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                                SelectionState next;
+                                if (picker == PickerMode.BASE) {
+                                    next = new SelectionState(selectKey, null, null, 0, false, PickerMode.NONE, 0);
+                                } else {
+                                    next = new SelectionState(resolved.baseKey, selectKey, null, 0, false, PickerMode.NONE, 0);
+                                }
+                                pendingSelections.put(finalPlayer.getPlayerRef(), next);
+                                finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                            });
+                }
+            }
 
             // Combine button
             addListener.invoke(pageBuilder, "combineButton", activating,
@@ -351,17 +446,16 @@ public final class RecipeCombineUI {
                         if (Boolean.TRUE.equals(processingPlayers.get(ref))) return;
                         int sessionToken = currentSession(ref);
 
-                        String baseVal = getContextValue(ctxObj, "baseRecipeDropdown",
-                                "#baseRecipeDropdown.value");
-                        String mergeVal = getContextValue(ctxObj, "mergeRecipeDropdown",
-                                "#mergeRecipeDropdown.value");
-                        Entry baseEntry = resolveSelection(finalSnapshot.entries, baseVal);
-                        List<Entry> mergeCandidates = buildMergeCandidates(finalSnapshot.entries, baseEntry);
-                        Entry mergeEntry = resolveSelection(mergeCandidates, mergeVal);
+                        String baseVal = resolved.baseKey;
+                        String mergeVal = resolved.mergeKey;
+                        Entry baseEntry = resolved.baseEntry;
+                        List<Entry> mergeCandidates = resolved.mergeCandidates;
+                        Entry mergeEntry = resolved.mergeEntry;
 
                         processingPlayers.put(ref, true);
                         pendingSelections.put(ref,
-                                new SelectionState(baseVal, mergeVal, "Combining shards...", 0, true));
+                                new SelectionState(baseVal, mergeVal, "Combining shards...", 0, true,
+                                        PickerMode.NONE, 0));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
 
                         for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
@@ -372,7 +466,8 @@ public final class RecipeCombineUI {
                                 if (!isSessionActive(ref, sessionToken)) return;
                                 if (!Boolean.TRUE.equals(processingPlayers.get(ref))) return;
                                 pendingSelections.put(ref,
-                                        new SelectionState(baseVal, mergeVal, "Combining shards...", timedProgress, true));
+                                        new SelectionState(baseVal, mergeVal, "Combining shards...", timedProgress, true,
+                                                PickerMode.NONE, 0));
                                 openWithSync(finalPlayer);
                             }), delay, TimeUnit.MILLISECONDS);
                         }
@@ -382,7 +477,8 @@ public final class RecipeCombineUI {
                             try {
                                 ProcessResult result = processCombine(finalPlayer, baseEntry, mergeEntry);
                                 pendingSelections.put(ref,
-                                        new SelectionState(baseVal, mergeVal, result.status, result.progress, false));
+                                        new SelectionState(baseVal, mergeVal, result.status, result.progress, false,
+                                                PickerMode.NONE, 0));
                             } finally {
                                 processingPlayers.remove(ref);
                                 openWithSync(finalPlayer);
@@ -414,9 +510,96 @@ public final class RecipeCombineUI {
         boolean processing = state != null && state.processing;
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
         String status = state != null && state.statusText != null ? state.statusText : "Idle";
+        PickerMode picker = state != null ? state.picker : PickerMode.NONE;
+        int pickerPage = state != null ? state.pickerPage : 0;
         if (!processing) {
             progress = 0;
         }
+
+        ResolvedSelections resolved = resolveSelections(snapshot, state);
+        Entry selectedBase = resolved.baseEntry;
+        Entry selectedMerge = resolved.mergeEntry;
+        baseKey = resolved.baseKey;
+        mergeKey = resolved.mergeKey;
+
+        String mergePreviewText;
+        String mergePreviewVisual = "";
+        boolean canCombine = false;
+        if (selectedBase == null) {
+            mergePreviewText = "No recipe selected.";
+            if (!processing) status = "No recipe shards found.";
+        } else if (selectedBase.stats.isComplete()) {
+            mergePreviewText = "Recipe is already complete.";
+            if (!processing) status = "Recipe already complete. Usages: " + formatUsages(selectedBase);
+        } else if (selectedMerge == null) {
+            mergePreviewText = "Select a matching shard to merge.";
+            if (!processing) status = resolved.mergeCandidates.isEmpty()
+                    ? "No compatible shards to combine."
+                    : "Select a shard to combine.";
+            mergePreviewVisual = buildPatternPreviewStrip(selectedBase.pattern, 90, 68);
+        } else {
+            String mergedPattern = ResonantRecipeUtils.mergePatterns(selectedBase.pattern, selectedMerge.pattern);
+            ResonantRecipeUtils.PatternStats beforeStats = selectedBase.stats;
+            ResonantRecipeUtils.PatternStats afterStats = ResonantRecipeUtils.getPatternStats(mergedPattern);
+            int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
+            mergePreviewVisual = buildPatternPreviewStrip(mergedPattern, 90, 68);
+
+            if (gained <= 0) {
+                mergePreviewText = "Selected shard adds no new slot data.";
+                if (!processing) status = "Shard has no new data to contribute.";
+            } else {
+                canCombine = true;
+                mergePreviewText = "Merging will reveal " + gained + " new slot(s).\n"
+                        + "Result: " + afterStats.revealedSlots() + "/" + afterStats.totalSlots()
+                        + " slots revealed"
+                        + (afterStats.isComplete() ? " (complete!)" : "");
+                if (!processing) status = "Ready to combine.";
+            }
+        }
+
+        String basePickerSummary = buildPickerSummaryHtml(selectedBase, "No recipe shards found.");
+        String mergePickerSummary;
+        if (selectedBase == null) {
+            mergePickerSummary = buildPickerSummaryHtml(null, "Select a base recipe first.");
+        } else if (selectedMerge == null) {
+            mergePickerSummary = buildPickerSummaryHtml(null,
+                    resolved.mergeCandidates.isEmpty() ? "No matching shards." : "Select a shard to merge.");
+        } else {
+            mergePickerSummary = buildPickerSummaryHtml(selectedMerge, "Select a shard to merge.");
+        }
+
+        String pickerModal = buildPickerModalHtml(resolved, picker, pickerPage, snapshot.entries);
+
+        String html = loadTemplate();
+        html = html.replace("<p style=\"font-weight:bold;\">Matching Shards</p>", "");
+        html = html.replace("id=\"shardListPanel\" style=\"", "id=\"shardListPanel\" style=\"display:none;");
+        html = html.replace("{{shardListHtml}}", "");
+        html = html.replace("{{baseRecipeOptions}}",
+                buildRecipeOptions(snapshot.entries, baseKey, "No recipe shards found"));
+        html = html.replace("{{mergeRecipeOptions}}",
+                buildRecipeOptions(resolved.mergeCandidates, mergeKey, "No matching shards"));
+        html = html.replace("{{basePickerSummary}}", basePickerSummary);
+        html = html.replace("{{mergePickerSummary}}", mergePickerSummary);
+        html = html.replace("{{recipeName}}", escapeHtml(selectedBase != null ? selectedBase.recipeName : "-"));
+        html = html.replace("{{recipeType}}", escapeHtml(selectedBase != null ? resolveRecipeType(selectedBase) : "-"));
+        html = html.replace("{{recipeProgress}}", escapeHtml(selectedBase != null
+                ? selectedBase.stats.revealedSlots() + "/" + selectedBase.stats.totalSlots() + " slots revealed"
+                        + (selectedBase.stats.isComplete() ? " (complete)" : "")
+                : "-"));
+        html = html.replace("{{recipeUsages}}", escapeHtml(selectedBase != null ? formatUsages(selectedBase) : "-"));
+        html = html.replace("{{mergePreviewText}}", escapeHtml(mergePreviewText));
+        html = html.replace("{{mergePreviewVisual}}", mergePreviewVisual);
+        html = html.replace("{{progressValue}}", String.valueOf(progress));
+        html = html.replace("{{statusText}}", escapeHtml(status));
+        html = html.replace("{{combineDisabledAttr}}",
+                shouldDisable(processing, canCombine) ? "disabled=\"true\"" : "");
+        html = html.replace("{{pickerModal}}", pickerModal);
+        return html;
+    }
+
+    private static ResolvedSelections resolveSelections(Snapshot snapshot, SelectionState state) {
+        String baseKey = state != null ? state.baseKey : null;
+        String mergeKey = state != null ? state.mergeKey : null;
 
         Entry selectedBase = resolveSelection(snapshot.entries, baseKey);
         if (selectedBase == null && !snapshot.entries.isEmpty()) {
@@ -436,59 +619,146 @@ public final class RecipeCombineUI {
             mergeKey = indexOfEntry(mergeCandidates, selectedMerge);
         }
 
-        String mergePreviewText;
-        boolean canCombine = false;
-        if (selectedBase == null) {
-            mergePreviewText = "No recipe selected.";
-            if (!processing) status = "No recipe shards found.";
-        } else if (selectedBase.stats.isComplete()) {
-            mergePreviewText = "Recipe is already complete.";
-            if (!processing) status = "Recipe already complete. Usages: " + formatUsages(selectedBase);
-        } else if (selectedMerge == null) {
-            mergePreviewText = "Select a matching shard to merge.";
-            if (!processing) status = mergeCandidates.isEmpty()
-                    ? "No compatible shards to combine."
-                    : "Select a shard to combine.";
-        } else {
-            String mergedPattern = ResonantRecipeUtils.mergePatterns(selectedBase.pattern, selectedMerge.pattern);
-            ResonantRecipeUtils.PatternStats beforeStats = selectedBase.stats;
-            ResonantRecipeUtils.PatternStats afterStats = ResonantRecipeUtils.getPatternStats(mergedPattern);
-            int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
+        return new ResolvedSelections(selectedBase, baseKey, mergeCandidates, selectedMerge, mergeKey);
+    }
 
-            if (gained <= 0) {
-                mergePreviewText = "Selected shard adds no new slot data.";
-                if (!processing) status = "Shard has no new data to contribute.";
-            } else {
-                canCombine = true;
-                mergePreviewText = "Merging will reveal " + gained + " new slot(s).\n"
-                        + "Result: " + afterStats.revealedSlots() + "/" + afterStats.totalSlots()
-                        + " slots revealed"
-                        + (afterStats.isComplete() ? " (complete!)" : "") + "\n"
-                        + "Merged pattern: " + formatPatternText(mergedPattern);
-                if (!processing) status = "Ready to combine.";
-            }
+    private static String buildPickerSummaryHtml(Entry entry, String emptyLabel) {
+        if (entry == null) {
+            String label = emptyLabel == null ? "Select a recipe" : emptyLabel;
+            StringBuilder empty = new StringBuilder();
+            empty.append("<div style=\"anchor-height:72; anchor-width:440; layout-mode:Top; padding:6; background-image:url(output_bg.png); background-size:100% 100%; background-repeat:no-repeat; background-position:center;\">");
+            empty.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(label)).append("</p>");
+            empty.append("</div>");
+            return empty.toString();
         }
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"anchor-height:72; anchor-width:440; layout-mode:Top; padding:6; background-image:url(output_bg.png); background-size:100% 100%; background-repeat:no-repeat; background-position:center;\">");
+        sb.append("<div style=\"layout-mode:Top; anchor-width:100%;\">");
+        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(entry.recipeName)).append("</p>");
+        sb.append(buildPatternPreviewStrip(entry.pattern, 40, 40));
+        sb.append("<p style=\"font-size:11; color:#b0b0c2;\">");
+        sb.append(entry.stats.revealedSlots()).append("/").append(entry.stats.totalSlots())
+                .append(" revealed");
+        if (entry.quantity > 1) {
+            sb.append(" | x").append(entry.quantity);
+        }
+        if (entry.source == Source.COMPENDIUM) {
+            sb.append(" | Compendium");
+        }
+        sb.append("</p>");
+        sb.append("</div>");
+        
+        sb.append("</div>");
+        return sb.toString();
+    }
 
-        String html = loadTemplate();
-        html = html.replace("{{baseRecipeOptions}}",
-                buildRecipeOptions(snapshot.entries, baseKey, "No recipe shards found"));
-        html = html.replace("{{mergeRecipeOptions}}",
-                buildRecipeOptions(mergeCandidates, mergeKey, "No matching shards"));
-        html = html.replace("{{recipeName}}", escapeHtml(selectedBase != null ? selectedBase.recipeName : "-"));
-        html = html.replace("{{recipeType}}", escapeHtml(selectedBase != null ? resolveRecipeType(selectedBase) : "-"));
-        html = html.replace("{{recipeProgress}}", escapeHtml(selectedBase != null
-                ? selectedBase.stats.revealedSlots() + "/" + selectedBase.stats.totalSlots() + " slots revealed"
-                        + (selectedBase.stats.isComplete() ? " (complete)" : "")
-                : "-"));
-        html = html.replace("{{recipeUsages}}", escapeHtml(selectedBase != null ? formatUsages(selectedBase) : "-"));
-        html = html.replace("{{patternPreview}}", buildPatternPreviewHtml(selectedBase));
-        html = html.replace("{{shardListHtml}}", buildShardListHtml(mergeCandidates));
-        html = html.replace("{{mergePreviewText}}", escapeHtml(mergePreviewText));
-        html = html.replace("{{progressValue}}", String.valueOf(progress));
-        html = html.replace("{{statusText}}", escapeHtml(status));
-        html = html.replace("{{combineDisabledAttr}}",
-                shouldDisable(processing, canCombine) ? "disabled=\"true\"" : "");
-        return html;
+    private static String buildPickerModalHtml(ResolvedSelections resolved, PickerMode picker,
+                                               int pickerPage, List<Entry> baseEntries) {
+        if (picker == null || picker == PickerMode.NONE) {
+            return "";
+        }
+        List<Entry> entries = picker == PickerMode.BASE ? baseEntries : resolved.mergeCandidates;
+        String selectedKey = picker == PickerMode.BASE ? resolved.baseKey : resolved.mergeKey;
+        String title = picker == PickerMode.BASE ? "Select Base Recipe" : "Select Merge Shard";
+        String emptyLabel = picker == PickerMode.BASE ? "No recipe shards found."
+                : "No matching shards.";
+
+        int maxPage = computePickerMaxPage(entries);
+        int page = Math.max(0, Math.min(maxPage, pickerPage));
+        String pageLabel = (maxPage <= 0)
+                ? "Page 1/1"
+                : "Page " + (page + 1) + "/" + (maxPage + 1);
+
+        String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
+        String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
+
+        String cards = buildPickerCardList(entries, selectedKey, emptyLabel, page);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div id=\"pickerOverlay\" style=\"anchor-full:200; layout-mode:Left; background-color:#0b0b1200;\">");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<div style=\"layout-mode:Left;\">");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<div style=\"anchor-width:350; anchor-height:700; layout-mode:Top; background-color:#1a1a2b; padding:10; border-radius:6;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:10;\">");
+        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(title)).append("</p>");
+        sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<button id=\"pickerCloseButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\">Close</button>");
+        sb.append("</div>");
+        sb.append("<img src=\"divider.png\" style=\"anchor-width: 350; anchor-height: 3;\">");
+        sb.append("<reorderable-list id=\"pickerList\" style=\"layout-mode:Top; spacing:6; anchor-width:350; anchor-height:600; background-color:#141426; padding:6; border-radius:4;\">");
+        sb.append(cards);
+        sb.append("</reorderable-list>");
+        sb.append("<div style=\"layout-mode:Center; spacing:8; anchor-width:700;\">");
+        sb.append("<button id=\"pickerPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(prevDisabled).append(">Prev</button>");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("<button id=\"pickerNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(nextDisabled).append(">Next</button>");
+        sb.append("</div>");
+        sb.append("</div>");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("</div>");
+        //sb.append("<div style=\"flex-weight:1;\"></div>");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildPickerCardList(List<Entry> entries, String selectedKey, String emptyLabel, int page) {
+        if (entries == null || entries.isEmpty()) {
+            String label = emptyLabel == null ? "No entries" : emptyLabel;
+            return "<p style=\"font-size:11; color:#b0b0c2;\">" + escapeHtml(label) + "</p>";
+        }
+        int start = page * PICKER_PAGE_SIZE;
+        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < end; i++) {
+            Entry entry = entries.get(i);
+            String key = String.valueOf(i);
+            boolean selected = key.equals(selectedKey) || (selectedKey == null && i == 0);
+            String bg = selected ? "#343a5a00" : "#20203600";
+            String border = selected ? "#7fa5ff" : "#2c2c4b";
+            sb.append("<img src=\"divider.png\" style=\"anchor-width: 350; anchor-height: 3;\">");
+            sb.append("<button id=\"pickerEntry_").append(i)
+                    .append("\" class=\"custom-button\" style=\"anchor-width:350; anchor-height:70; text-align:left; padding:0; background-color:")
+                    .append(bg).append("; border:1px solid ").append(border)
+                    .append("; border-radius:1; layout-mode:Top;\">");
+            sb.append("<div style=\"anchor-width:350; anchor-height:70; layout-mode:Top; padding:20; background-image:url(output_bg.png); background-size:100% 100%; background-repeat:no-repeat; background-position:center;\">");
+            sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(entry.recipeName)).append("</p>");
+            sb.append(buildPatternPreviewStrip(entry.pattern, 32, 32));
+            sb.append("<p style=\"font-size:11; color:#b0b0c2;\">");
+            sb.append(entry.stats.revealedSlots()).append("/").append(entry.stats.totalSlots())
+                    .append(" revealed");
+            if (entry.quantity > 1) {
+                sb.append(" | x").append(entry.quantity);
+            }
+            if (entry.source == Source.COMPENDIUM) {
+                sb.append(" | Compendium");
+            }
+            sb.append("</div>");
+            sb.append("</button>");
+        }
+        return sb.toString();
+    }
+
+    private static int computePickerMaxPage(List<Entry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return 0;
+        }
+        return Math.max(0, (entries.size() - 1) / PICKER_PAGE_SIZE);
+    }
+
+    private static List<Integer> computePickerIndices(List<Entry> entries, int page) {
+        List<Integer> indices = new ArrayList<>();
+        if (entries == null || entries.isEmpty()) {
+            return indices;
+        }
+        int start = page * PICKER_PAGE_SIZE;
+        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
+        for (int i = start; i < end; i++) {
+            indices.add(i);
+        }
+        return indices;
     }
 
     private static List<Entry> buildMergeCandidates(List<Entry> entries, Entry baseEntry) {
@@ -746,7 +1016,7 @@ public final class RecipeCombineUI {
             return "<p style=\"font-size:11;\">No pattern data.</p>";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode: Left; spacing: 6;\">");
+        sb.append("<div style=\"layout-mode: Center; spacing: 6;\">");
         for (String token : tokens) {
             String icon = resolveEssenceIcon(token);
             sb.append("<div style=\"anchor-width:").append(cellSize)

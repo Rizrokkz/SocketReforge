@@ -9,15 +9,25 @@
             <div style="layout-mode:Left; spacing:16;">
                 <div style="anchor-width:440; layout-mode:Top;">
                     <p style="font-weight:bold;">Base Recipe</p>
-                    <select id="baseRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 440; flex-weight:1;">
+                    <select id="baseRecipeDropdown" data-hyui-showlabel="false"
+                            style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
                         {{baseRecipeOptions}}
                     </select>
+                    <button id="openBasePicker" class="custom-button"
+                            style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                        {{basePickerSummary}}
+                    </button>
                 </div>
                 <div style="anchor-width:440; layout-mode:Top;">
                     <p style="font-weight:bold;">Merge Shard</p>
-                    <select id="mergeRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 440; flex-weight:1;">
+                    <select id="mergeRecipeDropdown" data-hyui-showlabel="false"
+                            style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
                         {{mergeRecipeOptions}}
                     </select>
+                    <button id="openMergePicker" class="custom-button"
+                            style="anchor-width:440; anchor-height:72; text-align:left; padding:0; background-color:#00000000; border:1px solid #2c2c4b; border-radius:4; layout-mode:Top; overflow:hidden;">
+                        {{mergePickerSummary}}
+                    </button>
                 </div>
             </div>
 
@@ -33,21 +43,10 @@
 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Pattern Preview</p>
-            <div id="patternPreviewRow">{{patternPreview}}</div>
-
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-
-            <p style="font-weight:bold;">Matching Shards</p>
-            <div id="shardListPanel" style="layout-mode:Top;max-height:200px;overflow-y:auto;background-color:#1a1a2b;padding:8;border-radius:4;">
-                {{shardListHtml}}
-            </div>
-
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-
             <p style="font-weight:bold;">Merge Preview</p>
-            <div id="mergePreviewPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+            <div id="mergePreviewPanel" style="layout-mode:Top;spacing:8;background-color:#1a1a2b;padding:8;border-radius:4;min-height:160;">
                 <p style="white-space:pre-line;">{{mergePreviewText}}</p>
+                {{mergePreviewVisual}}
             </div>
 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
@@ -66,4 +65,5 @@
             <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>Combine Shards</button>
         </div>
     </div>
+    {{pickerModal}}
 </div>
