@@ -1,3 +1,17 @@
 {
-  "Type": "ResonantCompendiumUse"
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "Simple",
+      "RunTime": 0.35,
+      "Effects": {
+        "ItemPlayerAnimationsId": "Spellbook",
+        "ItemAnimationId": "CastHurlCharging",
+        "ClearAnimationOnFinish": false
+      }
+    },
+    {
+      "Type": "ResonantCompendiumUse"
+    }
+  ]
 }

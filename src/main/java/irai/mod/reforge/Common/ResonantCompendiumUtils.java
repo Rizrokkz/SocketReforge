@@ -13,12 +13,16 @@ public final class ResonantCompendiumUtils {
     private ResonantCompendiumUtils() {}
 
     public static class CompendiumEntry {
+        public String name;
         public String pattern;
         public String usages;
+        public int quantity;
 
-        public CompendiumEntry(String pattern, String usages) {
-            this.pattern = pattern;
-            this.usages = usages;
+        public CompendiumEntry(String name, String pattern, String usages, int quantity) {
+            this.name = name == null ? "" : name;
+            this.pattern = pattern == null ? "" : pattern;
+            this.usages = usages == null ? "" : usages;
+            this.quantity = Math.max(1, quantity);
         }
     }
 
@@ -39,9 +43,24 @@ public final class ResonantCompendiumUtils {
             String[] parts = line.split("\t");
             if (parts.length >= 2) {
                 String name = parts[0];
-                String pattern = parts[1];
-                String usages = parts.length > 2 ? parts[2] : "";
-                data.put(name, new CompendiumEntry(pattern, usages));
+                String pattern = ResonantRecipeUtils.normalizePattern(parts[1]);
+                String usages = parts.length > 2 ? ResonantRecipeUtils.normalizeUsages(parts[2]) : "";
+                int quantity = 1;
+                if (parts.length > 3) {
+                    try {
+                        quantity = Integer.parseInt(parts[3].trim());
+                    } catch (NumberFormatException ignored) {
+                        quantity = 1;
+                    }
+                }
+                CompendiumEntry entry = new CompendiumEntry(name, pattern, usages, quantity);
+                String key = buildEntryKey(entry.name, entry.pattern, entry.usages);
+                CompendiumEntry existing = data.get(key);
+                if (existing == null) {
+                    data.put(key, entry);
+                } else {
+                    existing.quantity = Math.max(1, existing.quantity) + entry.quantity;
+                }
             }
         }
         return data;
@@ -52,9 +71,14 @@ public final class ResonantCompendiumUtils {
 
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, CompendiumEntry> entry : data.entrySet()) {
-            sb.append(entry.getKey()).append("\t")
-              .append(entry.getValue().pattern).append("\t")
-              .append(entry.getValue().usages != null ? entry.getValue().usages : "").append("\n");
+            CompendiumEntry value = entry.getValue();
+            if (value == null || value.quantity <= 0) {
+                continue;
+            }
+            sb.append(value.name).append("\t")
+              .append(value.pattern).append("\t")
+              .append(value.usages != null ? value.usages : "").append("\t")
+              .append(value.quantity).append("\n");
         }
 
         return stack.withMetadata(META_COMPENDIUM_DATA, Codec.STRING, sb.toString());
@@ -64,51 +88,28 @@ public final class ResonantCompendiumUtils {
      * Merges a recipe shard into the compendium.
      * Returns true if it contributed new slots or combined effectively.
      */
-    public static boolean addShardToCompendium(Map<String, CompendiumEntry> data, String recipeName, String pattern, String usages) {
+    public static boolean addShardToCompendium(Map<String, CompendiumEntry> data, String recipeName, String pattern, String usages, int quantity) {
         String normalizedName = ResonantRecipeUtils.normalizeRecipeName(recipeName);
         if (normalizedName.isEmpty()) return false;
+        int safeQty = Math.max(1, quantity);
+        String incomingPattern = ResonantRecipeUtils.normalizePattern(pattern);
+        String incomingUsages = ResonantRecipeUtils.normalizeUsages(usages);
 
-        // We use normalizedName as the key, but we need to store the display name somewhere, 
-        // let's use the actual recipeName for display mapping by storing it as key if it's new, 
-        // to simplify, we search for existing case-insensitive match.
-        String existingKey = null;
-        for (String key : data.keySet()) {
-            if (ResonantRecipeUtils.normalizeRecipeName(key).equals(normalizedName)) {
-                existingKey = key;
-                break;
-            }
+        String key = buildEntryKey(recipeName, incomingPattern, incomingUsages);
+        CompendiumEntry existing = data.get(key);
+        if (existing == null) {
+            data.put(key, new CompendiumEntry(recipeName, incomingPattern, incomingUsages, safeQty));
+        } else {
+            existing.quantity = Math.max(1, existing.quantity) + safeQty;
         }
 
-        if (existingKey == null) {
-            // New entry
-            data.put(recipeName, new CompendiumEntry(pattern, usages));
-            return true;
-        }
+        return true;
+    }
 
-        // Merge existing
-        CompendiumEntry existing = data.get(existingKey);
-        boolean[] beforeMask = ResonantRecipeUtils.revealMaskFromPattern(existing.pattern);
-        boolean[] shardMask = ResonantRecipeUtils.revealMaskFromPattern(pattern);
-        
-        int added = ResonantRecipeUtils.countNewReveals(beforeMask, shardMask);
-        if (added > 0) {
-            existing.pattern = ResonantRecipeUtils.mergePatterns(existing.pattern, pattern);
-        }
-
-        // If existing isn't complete but the shard is complete, or shard has better usages?
-        // Let's just let it merge patterns. Usages track complete recipe uses.
-        ResonantRecipeUtils.PatternStats stats = ResonantRecipeUtils.getPatternStats(existing.pattern);
-        if (stats.isComplete() && (existing.usages == null || existing.usages.isBlank() || existing.usages.equals(ResonantRecipeUtils.DEFAULT_RECIPE_USAGES))) {
-            // If newly completed or we had incomplete usages, take from the shard if it's complete
-            if (usages != null && !usages.isBlank()) {
-                existing.usages = usages;
-            }
-        }
-
-        // Returning true if we added slots. (Actually if it's complete, adding shards does nothing).
-        // Let's always return true if we consumed it, maybe to say we processed it. But if it adds NO data, return false to not consume?
-        // Wait, the user wants to "resolve the cluttering", so maybe we always consume and say true if we absorbed it? 
-        // Let's just store it and consume it. Returning true to indicate successful absorption.
-        return true; 
+    private static String buildEntryKey(String name, String pattern, String usages) {
+        String safeName = name == null ? "" : ResonantRecipeUtils.normalizeRecipeName(name);
+        String safePattern = ResonantRecipeUtils.normalizePattern(pattern);
+        String safeUsages = ResonantRecipeUtils.normalizeUsages(usages);
+        return safeName + "\u001F" + safePattern + "\u001F" + safeUsages;
     }
 }

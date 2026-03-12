@@ -27,6 +27,37 @@
       "Ingredient"
     ]
   },
+  "Recipe": {
+    "TimeSeconds": 4,
+    "Input": [
+      {
+        "ItemId": "Ingredient_Fabric_Scrap_Linen",
+        "Quantity": 8
+      },
+      {
+        "ItemId": "Ingredient_Void_Essence",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Ingredient_Life_Essence",
+        "Quantity": 6
+      },
+      {
+        "ItemId": "Ingredient_Bar_Thorium",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Id": "Arcanebench",
+        "Categories": [
+          "Arcane_Essence"
+        ]
+      }
+    ],
+    "OutputQuantity": 1
+  },
   "DropOnDeath": true,
   "MaxStack": 1
 }

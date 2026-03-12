@@ -1,12 +1,17 @@
 package irai.mod.reforge.UI;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
@@ -23,6 +28,7 @@ import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Socket.ResonanceSystem;
+import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 
@@ -43,6 +49,8 @@ public final class ResonantCompendiumUI {
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, CompendiumHandle> activeCompendiums = new ConcurrentHashMap<>();
+    private static final Map<PlayerRef, Short> pendingCombineSlots = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     private static final class CompendiumHandle {
         final short slot;
@@ -68,23 +76,27 @@ public final class ResonantCompendiumUI {
         final String pattern;
         final String usages;
         final ResonantRecipeUtils.PatternStats stats;
+        final int quantity;
 
-        Entry(String key, String name, String pattern, String usages, ResonantRecipeUtils.PatternStats stats) {
+        Entry(String key, String name, String pattern, String usages, ResonantRecipeUtils.PatternStats stats, int quantity) {
             this.key = key;
             this.name = name;
             this.pattern = pattern;
             this.usages = usages;
             this.stats = stats;
+            this.quantity = Math.max(1, quantity);
         }
     }
 
     private static final class Snapshot {
         final List<Entry> entries;
         final int completeCount;
+        final int totalQuantity;
 
-        Snapshot(List<Entry> entries, int completeCount) {
+        Snapshot(List<Entry> entries, int completeCount, int totalQuantity) {
             this.entries = entries;
             this.completeCount = completeCount;
+            this.totalQuantity = totalQuantity;
         }
     }
 
@@ -124,6 +136,7 @@ public final class ResonantCompendiumUI {
         }
         PlayerRef ref = player.getPlayerRef();
         activeCompendiums.put(ref, new CompendiumHandle(heldSlot));
+        pendingCombineSlots.remove(ref);
         closePageIfOpen(ref);
         pendingSelections.remove(ref);
         player.getWorld().execute(() -> openWithSync(player));
@@ -166,20 +179,25 @@ public final class ResonantCompendiumUI {
         Map<String, CompendiumEntry> data = ResonantCompendiumUtils.getCompendiumData(compendium);
         List<Entry> entries = new ArrayList<>();
         int complete = 0;
+        int totalQuantity = 0;
         for (Map.Entry<String, CompendiumEntry> entry : data.entrySet()) {
-            String name = entry.getKey();
+            String dataKey = entry.getKey();
             CompendiumEntry value = entry.getValue();
+            String name = value != null && value.name != null ? value.name : "";
             String pattern = value != null && value.pattern != null ? value.pattern : "";
             String usages = value != null && value.usages != null ? value.usages : "";
+            int quantity = value != null ? value.quantity : 1;
+            quantity = Math.max(1, quantity);
             ResonantRecipeUtils.PatternStats stats = ResonantRecipeUtils.getPatternStats(pattern);
             if (stats.isComplete()) {
                 complete++;
             }
-            String key = ResonantRecipeUtils.normalizeRecipeName(name);
-            entries.add(new Entry(key, name, pattern, usages, stats));
+            String key = encodeKey(dataKey);
+            entries.add(new Entry(key, name, pattern, usages, stats, quantity));
+            totalQuantity += quantity;
         }
         entries.sort(Comparator.comparing(e -> e.name.toLowerCase(Locale.ROOT)));
-        return new Snapshot(entries, complete);
+        return new Snapshot(entries, complete, totalQuantity);
     }
 
     private static void openPage(Player player, Snapshot snapshot, SelectionState state) {
@@ -198,7 +216,6 @@ public final class ResonantCompendiumUI {
 
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
-
             String html = buildHtml(snapshot, state);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
@@ -220,6 +237,54 @@ public final class ResonantCompendiumUI {
                         pendingSelections.put(finalPlayer.getPlayerRef(),
                                 new SelectionState(selection, result.status));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            addListener.invoke(pageBuilder, "openCombineButton", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        CompendiumContext context = resolveCompendium(finalPlayer);
+                        if (context == null) {
+                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>Hold the Resonant Compendium and reopen the UI."));
+                            return;
+                        }
+                        if (RecipeCombineUI.isAvailable()) {
+                            // Close compendium UI before opening combine UI to avoid HyUI focus conflicts.
+                            PlayerRef ref = finalPlayer.getPlayerRef();
+                            pendingCombineSlots.put(ref, context.slot);
+                            closePageIfOpen(ref);
+                            // Fallback: if onDismiss isn't triggered, open after a short delay.
+                            scheduler.schedule(() -> {
+                                Short slot = pendingCombineSlots.remove(ref);
+                                if (slot == null || finalPlayer.getWorld() == null || !RecipeCombineUI.isAvailable()) {
+                                    return;
+                                }
+                                finalPlayer.getWorld().execute(() -> {
+                                    stopCompendiumAnimation(finalPlayer);
+                                    RecipeCombineUI.openFromCompendium(finalPlayer, slot);
+                                });
+                            }, 100, TimeUnit.MILLISECONDS);
+                        } else {
+                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - recipe combine UI disabled."));
+                        }
+                    });
+
+            Method onDismiss = pageBuilderClass.getMethod("onDismiss", java.util.function.BiConsumer.class);
+            pageBuilder = onDismiss.invoke(pageBuilder,
+                    (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByPlayer) -> {
+                        PlayerRef ref = finalPlayer.getPlayerRef();
+                        Object current = openPages.get(ref);
+                        if (current != pageObj) {
+                            return;
+                        }
+                        openPages.remove(ref);
+                        Short slot = pendingCombineSlots.remove(ref);
+                        if (slot != null && RecipeCombineUI.isAvailable()) {
+                            stopCompendiumAnimation(finalPlayer);
+                            RecipeCombineUI.openFromCompendium(finalPlayer, slot);
+                            return;
+                        }
+                        if (dismissedByPlayer instanceof Boolean dismissed && dismissed) {
+                            stopCompendiumAnimation(finalPlayer);
+                        }
                     });
 
             pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
@@ -255,10 +320,11 @@ public final class ResonantCompendiumUI {
                 ? selected.stats.revealedSlots() + "/" + selected.stats.totalSlots() + " slots revealed"
                 + (selected.stats.isComplete() ? " (complete)" : "")
                 : "-";
+        String recipeQuantity = selected != null ? String.valueOf(selected.quantity) : "-";
         String recipeUsages = selected != null ? formatUsages(selected) : "-";
         String patternPreview = buildPatternPreviewHtml(selected);
 
-        boolean canExtract = selected != null && selected.stats.isComplete();
+        boolean canExtract = selected != null;
         String extractDisabledAttr = canExtract ? "" : "disabled=\"true\"";
 
         String html = loadTemplate();
@@ -267,6 +333,7 @@ public final class ResonantCompendiumUI {
         html = html.replace("{{recipeName}}", escapeHtml(recipeName));
         html = html.replace("{{recipeType}}", escapeHtml(recipeType));
         html = html.replace("{{recipeProgress}}", escapeHtml(recipeProgress));
+        html = html.replace("{{recipeQuantity}}", escapeHtml(recipeQuantity));
         html = html.replace("{{recipeUsages}}", escapeHtml(recipeUsages));
         html = html.replace("{{patternPreview}}", patternPreview);
         html = html.replace("{{statusText}}", escapeHtml(status));
@@ -283,24 +350,32 @@ public final class ResonantCompendiumUI {
             return new ProcessResult("Compendium moved. Reopen the UI.");
         }
         Map<String, CompendiumEntry> data = ResonantCompendiumUtils.getCompendiumData(context.compendium);
-        Map.Entry<String, CompendiumEntry> target = findEntry(data, selectionKey);
-        if (target == null) {
+        String dataKey = decodeKey(selectionKey);
+        if (dataKey == null || dataKey.isBlank()) {
+            return new ProcessResult("Recipe not found. Reopen the UI.");
+        }
+        CompendiumEntry entry = data.get(dataKey);
+        if (entry == null) {
             return new ProcessResult("Recipe not found. Reopen the UI.");
         }
 
-        CompendiumEntry entry = target.getValue();
         String pattern = entry != null && entry.pattern != null ? entry.pattern : "";
         ResonantRecipeUtils.PatternStats stats = ResonantRecipeUtils.getPatternStats(pattern);
-        if (!stats.isComplete()) {
-            return new ProcessResult("Recipe incomplete. Absorb more shards.");
-        }
+        boolean complete = stats.isComplete();
 
-        ItemStack recipe = buildRecipeItem(target.getKey(), entry);
+        int quantity = Math.max(1, entry.quantity);
+        ItemStack recipe = buildRecipeItem(entry.name, entry, complete);
         if (!UIInventoryUtils.addItemToInventory(player, recipe)) {
             return new ProcessResult("Inventory full. Make space first.");
         }
 
-        data.remove(target.getKey());
+        int remaining = Math.max(0, quantity - 1);
+        if (remaining <= 0) {
+            data.remove(dataKey);
+        } else {
+            entry.quantity = remaining;
+        }
+
         ItemStack updated = ResonantCompendiumUtils.saveCompendiumData(context.compendium, data);
         ItemContainer hotbar = player.getInventory().getHotbar();
         if (hotbar != null) {
@@ -309,10 +384,13 @@ public final class ResonantCompendiumUI {
         if (DynamicTooltipUtils.isAvailable()) {
             DynamicTooltipUtils.refreshAllPlayers();
         }
-        return new ProcessResult("Extracted \"" + target.getKey() + "\" recipe.");
+        if (remaining > 0) {
+            return new ProcessResult("Extracted 1 recipe. " + remaining + " remain in the compendium.");
+        }
+        return new ProcessResult("Extracted 1 recipe.");
     }
 
-    private static ItemStack buildRecipeItem(String recipeName, CompendiumEntry entry) {
+    private static ItemStack buildRecipeItem(String recipeName, CompendiumEntry entry, boolean complete) {
         String safeName = recipeName == null ? "" : recipeName.trim();
         String pattern = entry != null && entry.pattern != null ? entry.pattern : "";
         String usages = entry != null && entry.usages != null ? entry.usages : "";
@@ -327,24 +405,7 @@ public final class ResonantCompendiumUI {
         if (usages != null && !usages.isBlank()) {
             recipe = recipe.withMetadata(ResonantRecipeUtils.META_RECIPE_USAGES, Codec.STRING, usages);
         }
-        return ResonantRecipeUtils.ensureRecipeUsages(recipe);
-    }
-
-    private static Map.Entry<String, CompendiumEntry> findEntry(Map<String, CompendiumEntry> data, String key) {
-        if (data == null || key == null) {
-            return null;
-        }
-        String normalized = key.trim().toLowerCase(Locale.ROOT);
-        for (Map.Entry<String, CompendiumEntry> entry : data.entrySet()) {
-            String name = entry.getKey();
-            if (name == null) {
-                continue;
-            }
-            if (ResonantRecipeUtils.normalizeRecipeName(name).equals(normalized)) {
-                return entry;
-            }
-        }
-        return null;
+        return complete ? ResonantRecipeUtils.ensureRecipeUsages(recipe) : recipe;
     }
 
     private static String resolveRecipeType(Entry entry) {
@@ -376,7 +437,7 @@ public final class ResonantCompendiumUI {
             return "-";
         }
         if (!entry.stats.isComplete()) {
-            return "Complete recipe to unlock";
+            return "Incomplete";
         }
         String usages = entry.usages;
         if (usages == null || usages.isBlank()) {
@@ -389,7 +450,9 @@ public final class ResonantCompendiumUI {
         int total = snapshot.entries.size();
         int complete = snapshot.completeCount;
         int incomplete = Math.max(0, total - complete);
-        return "Stored: " + total + " total, " + complete + " complete, " + incomplete + " incomplete.";
+        int totalQuantity = snapshot.totalQuantity;
+        return "Stored: " + total + " recipes (" + complete + " complete, " + incomplete + " incomplete), "
+                + totalQuantity + " shards total.";
     }
 
     private static String buildRecipeOptions(List<Entry> entries, String selectedKey) {
@@ -408,6 +471,9 @@ public final class ResonantCompendiumUI {
             if (selected) sb.append(" selected=\"true\"");
             sb.append(">");
             sb.append(escapeHtml(entry.name));
+            if (entry.quantity > 1) {
+                sb.append(" x").append(entry.quantity);
+            }
             sb.append(" [").append(entry.stats.revealedSlots()).append("/")
                     .append(entry.stats.totalSlots()).append("]");
             if (entry.stats.isComplete()) sb.append(" (complete)");
@@ -420,7 +486,7 @@ public final class ResonantCompendiumUI {
         if (entries == null || entries.isEmpty() || key == null || key.isBlank()) {
             return null;
         }
-        String normalized = key.trim().toLowerCase(Locale.ROOT);
+        String normalized = key.trim();
         for (Entry entry : entries) {
             if (entry == null || entry.key == null) {
                 continue;
@@ -451,16 +517,10 @@ public final class ResonantCompendiumUI {
         StringBuilder sb = new StringBuilder();
         sb.append("<div style=\"layout-mode: Left; spacing: 8;\"><div style=\"flex-weight:1;\"></div>");
         for (String token : tokens) {
-            boolean unknown = isUnknownToken(token);
-            String color = unknown ? "#555555" : getEssenceColorHex(token);
-            String label = unknown ? "?" : capitalize(token);
-            sb.append("<div style=\"anchor-width:80; anchor-height:80; background-color:")
-                    .append(color)
-                    .append("; layout-mode:Top; padding:4; border-radius:6;\">")
+            String icon = resolveEssenceIcon(token);
+            sb.append("<div style=\"anchor-width:80; anchor-height:80; background-color:#1a1a2b; layout-mode:Top; padding:6; border-radius:6;\">")
                     .append("<div style=\"flex-weight:1;\"></div>")
-                    .append("<p style=\"text-align:center; font-size:12;\">")
-                    .append(escapeHtml(label))
-                    .append("</p>")
+                    .append("<img src=\"").append(icon).append("\" width=\"64\" height=\"64\"/>")
                     .append("<div style=\"flex-weight:1;\"></div>")
                     .append("</div>");
         }
@@ -499,28 +559,18 @@ public final class ResonantCompendiumUI {
         return tokens;
     }
 
-    private static boolean isUnknownToken(String token) {
-        if (token == null) return true;
-        String trimmed = token.trim();
-        return trimmed.isEmpty() || "x".equalsIgnoreCase(trimmed);
-    }
-
-    private static String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        String lower = s.toLowerCase(Locale.ROOT);
-        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
-    }
-
-    private static String getEssenceColorHex(String token) {
-        if (token == null) return "#555555";
+    private static String resolveEssenceIcon(String token) {
+        if (token == null || token.isBlank()) {
+            return "slot_bg.png";
+        }
         String lower = token.trim().toLowerCase(Locale.ROOT);
-        if (lower.contains("fire")) return "#FFAA00";
-        if (lower.contains("ice")) return "#55FFFF";
-        if (lower.contains("life")) return "#55FF55";
-        if (lower.contains("lightning")) return "#FFFF55";
-        if (lower.contains("void")) return "#AA55FF";
-        if (lower.contains("water")) return "#5555FF";
-        return "#888888";
+        if (lower.contains("fire")) return "Icons/ItemsGenerated/Ingredient_Fire_Essence.png";
+        if (lower.contains("ice")) return "Icons/ItemsGenerated/Ingredient_Ice_Essence.png";
+        if (lower.contains("life")) return "Icons/ItemsGenerated/Ingredient_Life_Essence.png";
+        if (lower.contains("lightning")) return "Icons/ItemsGenerated/Ingredient_Lightning_Essence.png";
+        if (lower.contains("void")) return "Icons/ItemsGenerated/Ingredient_Void_Essence.png";
+        if (lower.contains("water")) return "Icons/ItemsGenerated/Ingredient_Water_Essence.png";
+        return "slot_bg.png";
     }
 
     private static String loadTemplate() {
@@ -547,7 +597,48 @@ public final class ResonantCompendiumUI {
         HyUIReflectionUtils.closePageIfOpen(openPages, ref);
     }
 
+    private static void stopCompendiumAnimation(Player player) {
+        if (player == null || player.getInventory() == null) {
+            return;
+        }
+        PlayerRef ref = player.getPlayerRef();
+        CompendiumHandle handle = activeCompendiums.remove(ref);
+        if (handle == null) {
+            return;
+        }
+        ItemContainer hotbar = player.getInventory().getHotbar();
+        if (hotbar == null) {
+            return;
+        }
+        ItemStack stack = hotbar.getItemStack(handle.slot);
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        // Re-set the stack to nudge the client to refresh the held-item animation state.
+        hotbar.setItemStackForSlot(handle.slot, stack);
+    }
+
     private static String escapeHtml(String text) {
         return UITemplateUtils.escapeHtml(text);
+    }
+
+    private static String encodeKey(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String decodeKey(String encoded) {
+        if (encoded == null || encoded.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] decoded = Base64.getUrlDecoder().decode(encoded);
+            return new String(decoded, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

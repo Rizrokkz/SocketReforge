@@ -337,6 +337,10 @@ public final class ResonanceSystem {
     private static volatile long configuredSeed = 0L;
     private static volatile List<Definition> seededDefinitions = null;
 
+    private static final double RECIPE_WEIGHT_3_SOCKET = 25.0d;
+    private static final double RECIPE_WEIGHT_4_SOCKET = 10.0d;
+    private static final double RECIPE_WEIGHT_5_SOCKET = 1.0d;
+
     private ResonanceSystem() {}
 
     /**
@@ -593,7 +597,7 @@ public final class ResonanceSystem {
         }
 
         Random random = rng != null ? rng : ThreadLocalRandom.current();
-        Definition chosen = candidates.get(random.nextInt(candidates.size()));
+        Definition chosen = chooseWeightedDefinition(candidates, random);
         Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
         return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
     }
@@ -611,7 +615,44 @@ public final class ResonanceSystem {
             return null;
         }
         Random random = rng != null ? rng : ThreadLocalRandom.current();
-        Definition chosen = definitions.get(random.nextInt(definitions.size()));
+        Definition chosen = chooseWeightedDefinition(definitions, random);
+        Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
+        return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
+    }
+
+    /**
+     * Picks a random resonance recipe with an exact socket count.
+     */
+    public static ResonanceRecipe rollRandomResonanceRecipeBySockets(int socketCount) {
+        return rollRandomResonanceRecipeBySockets(socketCount, ThreadLocalRandom.current());
+    }
+
+    public static ResonanceRecipe rollRandomResonanceRecipeBySockets(int socketCount, Random rng) {
+        if (socketCount <= 0) {
+            return rollRandomResonanceRecipe(rng);
+        }
+        List<Definition> definitions = getDefinitions();
+        if (definitions == null || definitions.isEmpty()) {
+            return null;
+        }
+
+        List<Definition> candidates = new ArrayList<>();
+        for (Definition definition : definitions) {
+            if (definition == null || definition.pattern == null) {
+                continue;
+            }
+            if (definition.pattern.length != socketCount) {
+                continue;
+            }
+            candidates.add(definition);
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        Random random = rng != null ? rng : ThreadLocalRandom.current();
+        Definition chosen = candidates.get(random.nextInt(candidates.size()));
         Essence.Type[] pattern = chosen.pattern != null ? chosen.pattern.clone() : new Essence.Type[0];
         return new ResonanceRecipe(chosen.name, pattern, resolveAppliesTo(chosen));
     }
@@ -632,6 +673,90 @@ public final class ResonanceSystem {
         }
         String raw = weaponClass.name().toLowerCase(Locale.ROOT);
         return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+    }
+
+    private static Definition chooseWeightedDefinition(List<Definition> candidates, Random random) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+
+        Map<Integer, List<Definition>> bySockets = new java.util.HashMap<>();
+        for (Definition definition : candidates) {
+            if (definition == null || definition.pattern == null) {
+                continue;
+            }
+            int sockets = definition.pattern.length;
+            if (sockets <= 0) {
+                continue;
+            }
+            bySockets.computeIfAbsent(sockets, ignored -> new ArrayList<>()).add(definition);
+        }
+
+        if (bySockets.isEmpty()) {
+            return candidates.get(random.nextInt(candidates.size()));
+        }
+
+        List<Integer> socketCounts = new ArrayList<>(bySockets.keySet());
+        Collections.sort(socketCounts);
+
+        double totalWeight = 0.0d;
+        List<SocketBucket> buckets = new ArrayList<>();
+        for (Integer socketCount : socketCounts) {
+            if (socketCount == null) {
+                continue;
+            }
+            double weight = getRecipeWeight(socketCount);
+            if (weight <= 0.0d) {
+                continue;
+            }
+            List<Definition> defs = bySockets.get(socketCount);
+            if (defs == null || defs.isEmpty()) {
+                continue;
+            }
+            totalWeight += weight;
+            buckets.add(new SocketBucket(weight, defs));
+        }
+
+        if (buckets.isEmpty() || totalWeight <= 0.0d) {
+            return candidates.get(random.nextInt(candidates.size()));
+        }
+
+        double roll = random.nextDouble() * totalWeight;
+        double acc = 0.0d;
+        for (SocketBucket bucket : buckets) {
+            acc += bucket.weight;
+            if (roll <= acc) {
+                return bucket.pick(random);
+            }
+        }
+
+        return buckets.get(buckets.size() - 1).pick(random);
+    }
+
+    private static double getRecipeWeight(int socketCount) {
+        return switch (socketCount) {
+            case 3 -> RECIPE_WEIGHT_3_SOCKET;
+            case 4 -> RECIPE_WEIGHT_4_SOCKET;
+            case 5 -> RECIPE_WEIGHT_5_SOCKET;
+            default -> 1.0d;
+        };
+    }
+
+    private static final class SocketBucket {
+        private final double weight;
+        private final List<Definition> definitions;
+
+        private SocketBucket(double weight, List<Definition> definitions) {
+            this.weight = weight;
+            this.definitions = definitions;
+        }
+
+        private Definition pick(Random random) {
+            if (definitions == null || definitions.isEmpty()) {
+                return null;
+            }
+            return definitions.get(random.nextInt(definitions.size()));
+        }
     }
 
     public static ResonanceResult evaluate(ItemStack item, SocketData socketData) {

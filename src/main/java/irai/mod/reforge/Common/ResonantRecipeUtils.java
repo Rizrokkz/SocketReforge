@@ -1,8 +1,10 @@
 package irai.mod.reforge.Common;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -147,6 +149,37 @@ public final class ResonantRecipeUtils {
         return recipeName.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Normalize a pattern into a stable bracketed token format.
+     * Unknown tokens collapse to "x".
+     */
+    public static String normalizePattern(String pattern) {
+        List<String> tokens = parsePatternTokens(pattern);
+        if (tokens.isEmpty()) {
+            return "";
+        }
+        List<String> normalized = new ArrayList<>(tokens.size());
+        for (String token : tokens) {
+            normalized.add(normalizeToken(token));
+        }
+        return formatPatternTokens(normalized);
+    }
+
+    /**
+     * Normalize usages into a stable "remaining/max" format.
+     * Returns blank when usages are missing or invalid.
+     */
+    public static String normalizeUsages(String usages) {
+        if (usages == null || usages.isBlank()) {
+            return "";
+        }
+        UsageState state = parseUsages(usages);
+        if (state.max() <= 0) {
+            return "";
+        }
+        return formatUsages(state);
+    }
+
     public static PatternStats getPatternStats(String pattern) {
         List<String> tokens = parsePatternTokens(pattern);
         int total = tokens.size();
@@ -239,6 +272,91 @@ public final class ResonantRecipeUtils {
     }
 
     public static <T extends MergeCandidate> List<T> selectBestMergeCandidates(String basePattern, List<T> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
+
+        boolean[] baseMaskArr = revealMaskFromPattern(basePattern);
+        int maxLen = baseMaskArr.length;
+        for (T candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            boolean[] mask = candidate.getRevealMask();
+            if (mask != null) {
+                maxLen = Math.max(maxLen, mask.length);
+            }
+        }
+
+        if (maxLen <= 0) {
+            return List.of();
+        }
+
+        // Safety fallback: bitmask uses int.
+        if (maxLen >= 31) {
+            return selectBestMergeCandidatesGreedy(basePattern, candidates);
+        }
+
+        int baseMask = maskFromReveal(baseMaskArr, maxLen);
+        int targetMask = (1 << maxLen) - 1;
+        if (baseMask == targetMask) {
+            return List.of();
+        }
+
+        Map<Integer, List<T>> best = new HashMap<>();
+        best.put(baseMask, new ArrayList<>());
+
+        for (T candidate : candidates) {
+            if (candidate == null) {
+                continue;
+            }
+            int candMask = maskFromReveal(candidate.getRevealMask(), maxLen);
+            if (candMask == 0) {
+                continue;
+            }
+            List<Map.Entry<Integer, List<T>>> snapshot = new ArrayList<>(best.entrySet());
+            for (Map.Entry<Integer, List<T>> entry : snapshot) {
+                int mask = entry.getKey();
+                int newMask = mask | candMask;
+                if (newMask == mask) {
+                    continue;
+                }
+                List<T> current = entry.getValue();
+                List<T> next = new ArrayList<>(current.size() + 1);
+                next.addAll(current);
+                next.add(candidate);
+                List<T> existing = best.get(newMask);
+                if (existing == null || next.size() < existing.size()) {
+                    best.put(newMask, next);
+                }
+            }
+        }
+
+        List<T> exact = best.get(targetMask);
+        if (exact != null) {
+            return exact;
+        }
+
+        List<T> bestList = best.get(baseMask);
+        int bestCount = Integer.bitCount(baseMask);
+        for (Map.Entry<Integer, List<T>> entry : best.entrySet()) {
+            int mask = entry.getKey();
+            List<T> list = entry.getValue();
+            int count = Integer.bitCount(mask);
+            if (count > bestCount) {
+                bestCount = count;
+                bestList = list;
+                continue;
+            }
+            if (count == bestCount && list != null && bestList != null && list.size() < bestList.size()) {
+                bestList = list;
+            }
+        }
+
+        return bestList != null ? bestList : List.of();
+    }
+
+    private static <T extends MergeCandidate> List<T> selectBestMergeCandidatesGreedy(String basePattern, List<T> candidates) {
         List<T> remaining = new ArrayList<>(candidates);
         List<T> selected = new ArrayList<>();
         boolean[] currentMask = revealMaskFromPattern(basePattern);
@@ -249,6 +367,9 @@ public final class ResonantRecipeUtils {
             int bestGain = 0;
             for (int i = 0; i < remaining.size(); i++) {
                 T candidate = remaining.get(i);
+                if (candidate == null) {
+                    continue;
+                }
                 int gain = countNewReveals(currentMask, candidate.getRevealMask());
                 if (gain > bestGain) {
                     bestGain = gain;
@@ -264,6 +385,23 @@ public final class ResonantRecipeUtils {
             if (getPatternStats(mergedPattern).isComplete()) break;
         }
         return selected;
+    }
+
+    private static int maskFromReveal(boolean[] revealMask, int length) {
+        if (length <= 0) {
+            return 0;
+        }
+        int mask = 0;
+        if (revealMask == null) {
+            return mask;
+        }
+        int safeLen = Math.min(length, revealMask.length);
+        for (int i = 0; i < safeLen; i++) {
+            if (revealMask[i]) {
+                mask |= (1 << i);
+            }
+        }
+        return mask;
     }
 
     public static int countNewReveals(boolean[] currentMask, boolean[] candidateMask) {

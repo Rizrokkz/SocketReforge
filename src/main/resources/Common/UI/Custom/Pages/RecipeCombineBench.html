@@ -1,4 +1,4 @@
-<div class="page-overlay">
+<div id="recipeCombinePage" class="page-overlay">
     <div class="decorated-container" data-hyui-title="Resonant Recipe Combine" style="anchor-width: 920; anchor-height: 700;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
             <h2 style="text-align:center;">Resonant Recipe Combine</h2>
@@ -6,11 +6,17 @@
             <hr/>
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <div style="layout-mode:center; spacing:16;">
-                <div style="anchor-width:400; layout-mode:Top;">
-                    <p style="font-weight:bold;">Held Recipe</p>
-                    <select id="heldRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 400; flex-weight:1;">
-                        {{heldRecipeOptions}}
+            <div style="layout-mode:Left; spacing:16;">
+                <div style="anchor-width:440; layout-mode:Top;">
+                    <p style="font-weight:bold;">Base Recipe</p>
+                    <select id="baseRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 440; flex-weight:1;">
+                        {{baseRecipeOptions}}
+                    </select>
+                </div>
+                <div style="anchor-width:440; layout-mode:Top;">
+                    <p style="font-weight:bold;">Merge Shard</p>
+                    <select id="mergeRecipeDropdown" data-hyui-showlabel="true" style="anchor-width: 440; flex-weight:1;">
+                        {{mergeRecipeOptions}}
                     </select>
                 </div>
             </div>
@@ -32,9 +38,9 @@
 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Available Shards to Merge</p>
-            <div id="shardListPanel" style="layout-mode:Top;max-height:140px;overflow-y:auto;background-color:#1a1a2b;padding:8;border-radius:4;">
-                <p style="white-space:pre-line;">{{shardListText}}</p>
+            <p style="font-weight:bold;">Matching Shards</p>
+            <div id="shardListPanel" style="layout-mode:Top;max-height:200px;overflow-y:auto;background-color:#1a1a2b;padding:8;border-radius:4;">
+                {{shardListHtml}}
             </div>
 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
@@ -55,8 +61,8 @@
             <p id="statusLabel">{{statusText}}</p>
 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11;">Combining merges all compatible shards into the held recipe.</p>
-            <p style="font-size:11;">Consumed shards are removed from inventory.</p>
+            <p style="font-size:11;">Combining merges the selected shard into the base recipe.</p>
+            <p style="font-size:11;">Consumed shards are removed from inventory or compendium.</p>
             <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>Combine Shards</button>
         </div>
     </div>

@@ -2,6 +2,7 @@ package irai.mod.reforge.UI;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +19,8 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.ResonantRecipeUtils;
+import irai.mod.reforge.Common.ResonantCompendiumUtils;
+import irai.mod.reforge.Common.ResonantCompendiumUtils.CompendiumEntry;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
@@ -36,23 +39,46 @@ public final class RecipeCombineUI {
     private static final String HYUI_PLUGIN        = "au.ellie.hyui.HyUIPlugin";
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String TEMPLATE_PATH      = "Common/UI/Custom/Pages/RecipeCombineBench.html";
+    private static final boolean DEBUG = Boolean.parseBoolean(
+            System.getProperty("socketreforge.debug.combine", "false"));
 
     private static boolean hyuiAvailable = false;
 
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> processingPlayers = new ConcurrentHashMap<>();
+    private static final Map<PlayerRef, CompendiumHandle> activeCompendiums = new ConcurrentHashMap<>();
+    private static final Map<PlayerRef, Integer> sessionTokens = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private static final int PROCESS_DURATION_MS = 800;
     private static final int PROGRESS_TICK_MS = 50;
 
-    private enum ContainerKind { HOTBAR, STORAGE }
+    private enum Source { HOTBAR, STORAGE, COMPENDIUM }
+
+    private static final class CompendiumHandle {
+        final short slot;
+
+        CompendiumHandle(short slot) {
+            this.slot = slot;
+        }
+    }
+
+    private static final class CompendiumContext {
+        final short slot;
+        final ItemStack compendium;
+
+        CompendiumContext(short slot, ItemStack compendium) {
+            this.slot = slot;
+            this.compendium = compendium;
+        }
+    }
 
     private static final class Entry {
-        final ContainerKind container;
+        final Source source;
         final short slot;
         final ItemStack item;
         final String itemId;
+        final String compendiumKey;
         final int quantity;
         final String displayName;
         final String recipeName;
@@ -60,13 +86,14 @@ public final class RecipeCombineUI {
         final ResonantRecipeUtils.PatternStats stats;
         final String usages;
 
-        Entry(ContainerKind container, short slot, ItemStack item, String itemId, int quantity,
+        Entry(Source source, short slot, ItemStack item, String itemId, String compendiumKey, int quantity,
               String displayName, String recipeName, String pattern,
               ResonantRecipeUtils.PatternStats stats, String usages) {
-            this.container = container;
+            this.source = source;
             this.slot = slot;
             this.item = item;
             this.itemId = itemId;
+            this.compendiumKey = compendiumKey;
             this.quantity = quantity;
             this.displayName = displayName;
             this.recipeName = recipeName;
@@ -77,23 +104,23 @@ public final class RecipeCombineUI {
     }
 
     private static final class Snapshot {
-        final List<Entry> heldRecipes;
-        final List<Entry> allShards;
+        final List<Entry> entries;
 
-        Snapshot(List<Entry> heldRecipes, List<Entry> allShards) {
-            this.heldRecipes = heldRecipes;
-            this.allShards = allShards;
+        Snapshot(List<Entry> entries) {
+            this.entries = entries;
         }
     }
 
     private static final class SelectionState {
-        final String heldRecipeKey;
+        final String baseKey;
+        final String mergeKey;
         final String statusText;
         final int progressValue;
         final boolean processing;
 
-        SelectionState(String heldRecipeKey, String statusText, int progressValue, boolean processing) {
-            this.heldRecipeKey = heldRecipeKey;
+        SelectionState(String baseKey, String mergeKey, String statusText, int progressValue, boolean processing) {
+            this.baseKey = baseKey;
+            this.mergeKey = mergeKey;
             this.statusText = statusText;
             this.progressValue = progressValue;
             this.processing = processing;
@@ -129,10 +156,32 @@ public final class RecipeCombineUI {
             return;
         }
         PlayerRef ref = player.getPlayerRef();
+        bumpSession(ref);
         closePageIfOpen(ref);
         pendingSelections.remove(ref);
         processingPlayers.remove(ref);
+        activeCompendiums.remove(ref);
         player.getWorld().execute(() -> openWithSync(player));
+    }
+
+    public static void openFromCompendium(Player player, short compendiumSlot) {
+        if (player == null) return;
+        if (!hyuiAvailable) {
+            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - recipe combine UI disabled."));
+            return;
+        }
+        PlayerRef ref = player.getPlayerRef();
+        bumpSession(ref);
+        closePageIfOpen(ref);
+        pendingSelections.remove(ref);
+        processingPlayers.remove(ref);
+        activeCompendiums.put(ref, new CompendiumHandle(compendiumSlot));
+        scheduler.schedule(() -> {
+            if (player.getWorld() == null) {
+                return;
+            }
+            player.getWorld().execute(() -> openWithSync(player));
+        }, 50, TimeUnit.MILLISECONDS);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -142,18 +191,29 @@ public final class RecipeCombineUI {
     private static void openWithSync(Player player) {
         Snapshot snapshot = collectSnapshot(player);
         SelectionState state = pendingSelections.remove(player.getPlayerRef());
+        if (DEBUG) {
+            String baseKey = state != null ? state.baseKey : "";
+            String mergeKey = state != null ? state.mergeKey : "";
+            debug("openWithSync entries=" + snapshot.entries.size() + " baseKey=" + baseKey + " mergeKey=" + mergeKey);
+        }
         openPage(player, snapshot, state);
     }
 
     private static Snapshot collectSnapshot(Player player) {
-        List<Entry> allShards = new ArrayList<>();
-        collectRecipeShards(player.getInventory().getHotbar(), ContainerKind.HOTBAR, allShards);
-        collectRecipeShards(player.getInventory().getStorage(), ContainerKind.STORAGE, allShards);
-        // All recipe shards can be selected as the "held" recipe
-        return new Snapshot(allShards, allShards);
+        List<Entry> entries = new ArrayList<>();
+        collectInventoryShards(player.getInventory().getHotbar(), Source.HOTBAR, entries);
+        collectInventoryShards(player.getInventory().getStorage(), Source.STORAGE, entries);
+
+        CompendiumContext compendiumContext = resolveCompendium(player);
+        if (compendiumContext != null) {
+            collectCompendiumEntries(compendiumContext, entries);
+        }
+
+        sortEntries(entries);
+        return new Snapshot(entries);
     }
 
-    private static void collectRecipeShards(ItemContainer container, ContainerKind kind, List<Entry> shards) {
+    private static void collectInventoryShards(ItemContainer container, Source kind, List<Entry> shards) {
         if (container == null) return;
         for (short slot = 0; slot < container.getCapacity(); slot++) {
             ItemStack stack = container.getItemStack(slot);
@@ -167,11 +227,53 @@ public final class RecipeCombineUI {
             String usages = ResonantRecipeUtils.getRecipeUsages(stack);
             String name = UIItemUtils.displayNameOrItemId(stack);
 
-            shards.add(new Entry(kind, slot, stack, stack.getItemId(),
+            shards.add(new Entry(kind, slot, stack, stack.getItemId(), null,
                     stack.getQuantity(), name, recipeName,
                     pattern == null ? "" : pattern, stats,
                     usages == null ? "" : usages));
         }
+    }
+
+    private static void collectCompendiumEntries(CompendiumContext context, List<Entry> entries) {
+        if (context == null || context.compendium == null) {
+            return;
+        }
+        Map<String, CompendiumEntry> data = ResonantCompendiumUtils.getCompendiumData(context.compendium);
+        if (data.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, CompendiumEntry> entry : data.entrySet()) {
+            String key = entry.getKey();
+            CompendiumEntry value = entry.getValue();
+            if (value == null) {
+                continue;
+            }
+            String recipeName = value.name == null ? "" : value.name;
+            String pattern = value.pattern == null ? "" : value.pattern;
+            ResonantRecipeUtils.PatternStats stats = ResonantRecipeUtils.getPatternStats(pattern);
+            String usages = value.usages == null ? "" : value.usages;
+            int quantity = Math.max(1, value.quantity);
+            entries.add(new Entry(Source.COMPENDIUM, (short) -1, null, null, key, quantity,
+                    recipeName, recipeName, pattern, stats, usages));
+        }
+    }
+
+    private static void sortEntries(List<Entry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        Comparator<Entry> comparator = Comparator
+                .comparing((Entry e) -> ResonantRecipeUtils.normalizeRecipeName(e.recipeName))
+                .thenComparingInt(e -> sourceOrder(e.source))
+                .thenComparingInt(e -> e.source == Source.COMPENDIUM ? 0 : e.slot)
+                .thenComparing(e -> e.compendiumKey == null ? "" : e.compendiumKey);
+        entries.sort(comparator);
+    }
+
+    private static int sourceOrder(Source source) {
+        if (source == Source.HOTBAR) return 0;
+        if (source == Source.STORAGE) return 1;
+        return 2;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -194,7 +296,6 @@ public final class RecipeCombineUI {
 
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
-
             String html = buildHtml(snapshot, state);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
@@ -202,13 +303,45 @@ public final class RecipeCombineUI {
             final Player finalPlayer = player;
             final Snapshot finalSnapshot = snapshot;
 
-            // Held recipe dropdown change
-            addListener.invoke(pageBuilder, "heldRecipeDropdown", valueChanged,
+            // Base recipe dropdown change
+            addListener.invoke(pageBuilder, "baseRecipeDropdown", valueChanged,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        String recipeVal = extractEventValue(eventObj);
-                        pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(recipeVal, null, 0, false));
-                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                        try {
+                            String baseVal = extractEventValue(eventObj);
+                            if (baseVal == null || baseVal.isBlank()) {
+                                baseVal = getContextValue(ctxObj, "baseRecipeDropdown", "#baseRecipeDropdown.value");
+                            }
+                            if (DEBUG) {
+                                debug("base change value=" + baseVal);
+                            }
+                            pendingSelections.put(finalPlayer.getPlayerRef(),
+                                    new SelectionState(baseVal, null, null, 0, false));
+                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                        } catch (Exception e) {
+                            System.err.println("[SocketReforge] RecipeCombineUI base change failed: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    });
+
+            // Merge recipe dropdown change
+            addListener.invoke(pageBuilder, "mergeRecipeDropdown", valueChanged,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        try {
+                            String mergeVal = extractEventValue(eventObj);
+                            if (mergeVal == null || mergeVal.isBlank()) {
+                                mergeVal = getContextValue(ctxObj, "mergeRecipeDropdown", "#mergeRecipeDropdown.value");
+                            }
+                            String baseVal = getContextValue(ctxObj, "baseRecipeDropdown", "#baseRecipeDropdown.value");
+                            if (DEBUG) {
+                                debug("merge change value=" + mergeVal + " base=" + baseVal);
+                            }
+                            pendingSelections.put(finalPlayer.getPlayerRef(),
+                                    new SelectionState(baseVal, mergeVal, null, 0, false));
+                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                        } catch (Exception e) {
+                            System.err.println("[SocketReforge] RecipeCombineUI merge change failed: " + e.getMessage());
+                            e.printStackTrace();
+                        }
                     });
 
             // Combine button
@@ -216,14 +349,19 @@ public final class RecipeCombineUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         PlayerRef ref = finalPlayer.getPlayerRef();
                         if (Boolean.TRUE.equals(processingPlayers.get(ref))) return;
+                        int sessionToken = currentSession(ref);
 
-                        String recipeVal = getContextValue(ctxObj, "heldRecipeDropdown",
-                                "#heldRecipeDropdown.value");
-                        Entry heldEntry = resolveSelection(finalSnapshot.heldRecipes, recipeVal);
+                        String baseVal = getContextValue(ctxObj, "baseRecipeDropdown",
+                                "#baseRecipeDropdown.value");
+                        String mergeVal = getContextValue(ctxObj, "mergeRecipeDropdown",
+                                "#mergeRecipeDropdown.value");
+                        Entry baseEntry = resolveSelection(finalSnapshot.entries, baseVal);
+                        List<Entry> mergeCandidates = buildMergeCandidates(finalSnapshot.entries, baseEntry);
+                        Entry mergeEntry = resolveSelection(mergeCandidates, mergeVal);
 
                         processingPlayers.put(ref, true);
                         pendingSelections.put(ref,
-                                new SelectionState(recipeVal, "Combining shards...", 0, true));
+                                new SelectionState(baseVal, mergeVal, "Combining shards...", 0, true));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
 
                         for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
@@ -231,23 +369,33 @@ public final class RecipeCombineUI {
                             final int timedProgress = Math.min(99,
                                     (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
                             scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                                if (!isSessionActive(ref, sessionToken)) return;
                                 if (!Boolean.TRUE.equals(processingPlayers.get(ref))) return;
                                 pendingSelections.put(ref,
-                                        new SelectionState(recipeVal, "Combining shards...", timedProgress, true));
+                                        new SelectionState(baseVal, mergeVal, "Combining shards...", timedProgress, true));
                                 openWithSync(finalPlayer);
                             }), delay, TimeUnit.MILLISECONDS);
                         }
 
                         scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                            if (!isSessionActive(ref, sessionToken)) return;
                             try {
-                                ProcessResult result = processCombine(finalPlayer, heldEntry);
+                                ProcessResult result = processCombine(finalPlayer, baseEntry, mergeEntry);
                                 pendingSelections.put(ref,
-                                        new SelectionState(recipeVal, result.status, result.progress, false));
+                                        new SelectionState(baseVal, mergeVal, result.status, result.progress, false));
                             } finally {
                                 processingPlayers.remove(ref);
                                 openWithSync(finalPlayer);
                             }
                         }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
+                    });
+
+            Method onDismiss = pageBuilderClass.getMethod("onDismiss", java.util.function.BiConsumer.class);
+            pageBuilder = onDismiss.invoke(pageBuilder,
+                    (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByPlayer) -> {
+                        if (Boolean.TRUE.equals(dismissedByPlayer)) {
+                            cleanupPlayerState(finalPlayer);
+                        }
                     });
 
             pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
@@ -261,7 +409,8 @@ public final class RecipeCombineUI {
     }
 
     private static String buildHtml(Snapshot snapshot, SelectionState state) {
-        String heldKey = state != null ? state.heldRecipeKey : null;
+        String baseKey = state != null ? state.baseKey : null;
+        String mergeKey = state != null ? state.mergeKey : null;
         boolean processing = state != null && state.processing;
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
         String status = state != null && state.statusText != null ? state.statusText : "Idle";
@@ -269,68 +418,49 @@ public final class RecipeCombineUI {
             progress = 0;
         }
 
-        Entry selectedHeld = resolveSelection(snapshot.heldRecipes, heldKey);
-        if (selectedHeld == null && !snapshot.heldRecipes.isEmpty()) {
-            selectedHeld = snapshot.heldRecipes.get(0);
-            heldKey = "0";
+        Entry selectedBase = resolveSelection(snapshot.entries, baseKey);
+        if (selectedBase == null && !snapshot.entries.isEmpty()) {
+            selectedBase = snapshot.entries.get(0);
+            baseKey = "0";
+            mergeKey = null;
+        } else if (selectedBase != null) {
+            baseKey = indexOfEntry(snapshot.entries, selectedBase);
         }
 
-        // Build matching shards list (same normalized name, excluding the held entry,
-        // and only shards that can reveal at least one new slot)
-        String normalizedName = selectedHeld != null
-                ? ResonantRecipeUtils.normalizeRecipeName(selectedHeld.recipeName)
-                : "";
-        boolean[] heldMask = selectedHeld != null
-                ? ResonantRecipeUtils.revealMaskFromPattern(selectedHeld.pattern)
-                : new boolean[0];
-        List<Entry> matchingShards = new ArrayList<>();
-        if (selectedHeld != null) {
-            for (Entry e : snapshot.allShards) {
-                if (e == selectedHeld) continue;
-                if (e.stats.isComplete()) continue;
-                if (!ResonantRecipeUtils.normalizeRecipeName(e.recipeName).equals(normalizedName)) continue;
-                boolean[] shardMask = ResonantRecipeUtils.revealMaskFromPattern(e.pattern);
-                if (ResonantRecipeUtils.countNewReveals(heldMask, shardMask) <= 0) continue;
-                matchingShards.add(e);
-            }
+        List<Entry> mergeCandidates = buildMergeCandidates(snapshot.entries, selectedBase);
+        Entry selectedMerge = resolveSelection(mergeCandidates, mergeKey);
+        if (selectedMerge == null && !mergeCandidates.isEmpty()) {
+            selectedMerge = mergeCandidates.get(0);
+            mergeKey = "0";
+        } else if (selectedMerge != null) {
+            mergeKey = indexOfEntry(mergeCandidates, selectedMerge);
         }
 
-        // Build merge preview
         String mergePreviewText;
         boolean canCombine = false;
-        if (selectedHeld == null) {
+        if (selectedBase == null) {
             mergePreviewText = "No recipe selected.";
             if (!processing) status = "No recipe shards found.";
-        } else if (selectedHeld.stats.isComplete()) {
+        } else if (selectedBase.stats.isComplete()) {
             mergePreviewText = "Recipe is already complete.";
-            if (!processing) status = "Recipe already complete. Usages: " + formatUsages(selectedHeld);
-        } else if (matchingShards.isEmpty()) {
-            mergePreviewText = "No compatible shards with new slot data found.";
-            if (!processing) status = "No compatible shards to combine.";
+            if (!processing) status = "Recipe already complete. Usages: " + formatUsages(selectedBase);
+        } else if (selectedMerge == null) {
+            mergePreviewText = "Select a matching shard to merge.";
+            if (!processing) status = mergeCandidates.isEmpty()
+                    ? "No compatible shards to combine."
+                    : "Select a shard to combine.";
         } else {
-            // Simulate merge
-            String mergedPattern = selectedHeld.pattern;
-            int consumeCount = 0;
-            for (Entry shard : matchingShards) {
-                String trial = ResonantRecipeUtils.mergePatterns(mergedPattern, shard.pattern);
-                ResonantRecipeUtils.PatternStats trialStats = ResonantRecipeUtils.getPatternStats(trial);
-                if (trialStats.revealedSlots() > ResonantRecipeUtils.getPatternStats(mergedPattern).revealedSlots()) {
-                    mergedPattern = trial;
-                    consumeCount++;
-                }
-                if (trialStats.isComplete()) break;
-            }
-            ResonantRecipeUtils.PatternStats beforeStats = selectedHeld.stats;
+            String mergedPattern = ResonantRecipeUtils.mergePatterns(selectedBase.pattern, selectedMerge.pattern);
+            ResonantRecipeUtils.PatternStats beforeStats = selectedBase.stats;
             ResonantRecipeUtils.PatternStats afterStats = ResonantRecipeUtils.getPatternStats(mergedPattern);
             int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
 
             if (gained <= 0) {
-                mergePreviewText = "No new slots can be revealed from available shards.";
-                if (!processing) status = "Shards have no new data to contribute.";
+                mergePreviewText = "Selected shard adds no new slot data.";
+                if (!processing) status = "Shard has no new data to contribute.";
             } else {
                 canCombine = true;
-                mergePreviewText = "Combining " + consumeCount + " shard(s) will reveal "
-                        + gained + " new slot(s).\n"
+                mergePreviewText = "Merging will reveal " + gained + " new slot(s).\n"
                         + "Result: " + afterStats.revealedSlots() + "/" + afterStats.totalSlots()
                         + " slots revealed"
                         + (afterStats.isComplete() ? " (complete!)" : "") + "\n"
@@ -340,16 +470,19 @@ public final class RecipeCombineUI {
         }
 
         String html = loadTemplate();
-        html = html.replace("{{heldRecipeOptions}}", buildRecipeOptions(snapshot.heldRecipes, heldKey));
-        html = html.replace("{{recipeName}}", escapeHtml(selectedHeld != null ? selectedHeld.recipeName : "-"));
-        html = html.replace("{{recipeType}}", escapeHtml(selectedHeld != null ? resolveRecipeType(selectedHeld) : "-"));
-        html = html.replace("{{recipeProgress}}", escapeHtml(selectedHeld != null
-                ? selectedHeld.stats.revealedSlots() + "/" + selectedHeld.stats.totalSlots() + " slots revealed"
-                        + (selectedHeld.stats.isComplete() ? " (complete)" : "")
+        html = html.replace("{{baseRecipeOptions}}",
+                buildRecipeOptions(snapshot.entries, baseKey, "No recipe shards found"));
+        html = html.replace("{{mergeRecipeOptions}}",
+                buildRecipeOptions(mergeCandidates, mergeKey, "No matching shards"));
+        html = html.replace("{{recipeName}}", escapeHtml(selectedBase != null ? selectedBase.recipeName : "-"));
+        html = html.replace("{{recipeType}}", escapeHtml(selectedBase != null ? resolveRecipeType(selectedBase) : "-"));
+        html = html.replace("{{recipeProgress}}", escapeHtml(selectedBase != null
+                ? selectedBase.stats.revealedSlots() + "/" + selectedBase.stats.totalSlots() + " slots revealed"
+                        + (selectedBase.stats.isComplete() ? " (complete)" : "")
                 : "-"));
-        html = html.replace("{{recipeUsages}}", escapeHtml(selectedHeld != null ? formatUsages(selectedHeld) : "-"));
-        html = html.replace("{{patternPreview}}", buildPatternPreviewHtml(selectedHeld));
-        html = html.replace("{{shardListText}}", escapeHtml(buildShardListText(matchingShards)));
+        html = html.replace("{{recipeUsages}}", escapeHtml(selectedBase != null ? formatUsages(selectedBase) : "-"));
+        html = html.replace("{{patternPreview}}", buildPatternPreviewHtml(selectedBase));
+        html = html.replace("{{shardListHtml}}", buildShardListHtml(mergeCandidates));
         html = html.replace("{{mergePreviewText}}", escapeHtml(mergePreviewText));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
@@ -358,169 +491,216 @@ public final class RecipeCombineUI {
         return html;
     }
 
+    private static List<Entry> buildMergeCandidates(List<Entry> entries, Entry baseEntry) {
+        if (entries == null || entries.isEmpty() || baseEntry == null) {
+            return List.of();
+        }
+        if (baseEntry.stats.isComplete()) {
+            return List.of();
+        }
+        String normalizedName = ResonantRecipeUtils.normalizeRecipeName(baseEntry.recipeName);
+        boolean[] baseMask = ResonantRecipeUtils.revealMaskFromPattern(baseEntry.pattern);
+
+        List<Entry> matches = new ArrayList<>();
+        for (Entry entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+            if (isSameEntry(baseEntry, entry)) {
+                continue;
+            }
+            if (entry.stats.isComplete()) {
+                continue;
+            }
+            if (!ResonantRecipeUtils.normalizeRecipeName(entry.recipeName).equals(normalizedName)) {
+                continue;
+            }
+            boolean[] shardMask = ResonantRecipeUtils.revealMaskFromPattern(entry.pattern);
+            if (ResonantRecipeUtils.countNewReveals(baseMask, shardMask) <= 0) {
+                continue;
+            }
+            matches.add(entry);
+        }
+        return matches;
+    }
+
+    private static boolean isSameEntry(Entry a, Entry b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.source != b.source) {
+            return false;
+        }
+        if (a.source == Source.COMPENDIUM) {
+            if (a.compendiumKey == null || b.compendiumKey == null) {
+                return false;
+            }
+            return a.compendiumKey.equals(b.compendiumKey);
+        }
+        return a.slot == b.slot;
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Processing
     // ═══════════════════════════════════════════════════════════════
 
-    private static ProcessResult processCombine(Player player, Entry heldEntry) {
-        if (heldEntry == null) {
+    private static ProcessResult processCombine(Player player, Entry baseEntry, Entry mergeEntry) {
+        if (baseEntry == null) {
             return new ProcessResult("No recipe selected.", 0);
         }
-
-        // Re-read current state of the held item
-        ItemContainer container = heldEntry.container == ContainerKind.HOTBAR
-                ? player.getInventory().getHotbar()
-                : player.getInventory().getStorage();
-        if (container == null) {
-            return new ProcessResult("Inventory changed. Retry.", 0);
+        if (mergeEntry == null) {
+            return new ProcessResult("Select a shard to merge.", 0);
         }
-        ItemStack current = container.getItemStack(heldEntry.slot);
-        if (!ResonantRecipeUtils.isResonantRecipeItem(current)) {
-            return new ProcessResult("Selected recipe changed. Retry.", 0);
+        if (isSameEntry(baseEntry, mergeEntry)) {
+            return new ProcessResult("Select two different shards.", 0);
         }
 
-        String recipeName = ResonantRecipeUtils.getRecipeName(current);
-        if (recipeName == null || recipeName.isBlank()) {
-            return new ProcessResult("Recipe is missing resonance data.", 0);
+        String baseName = baseEntry.recipeName;
+        String mergeName = mergeEntry.recipeName;
+        if (!ResonantRecipeUtils.normalizeRecipeName(baseName)
+                .equals(ResonantRecipeUtils.normalizeRecipeName(mergeName))) {
+            return new ProcessResult("Selected shards do not match.", 0);
         }
 
-        ResonantRecipeUtils.PatternStats currentStats = ResonantRecipeUtils.getPatternStats(
-                ResonantRecipeUtils.getRecipePattern(current));
-        if (currentStats.isComplete()) {
-            ItemStack ensured = ResonantRecipeUtils.ensureRecipeUsages(current);
-            if (ensured != current) {
-                container.setItemStackForSlot(heldEntry.slot, ensured);
-            }
-            String usages = ResonantRecipeUtils.getRecipeUsages(ensured);
-            String usageText = usages != null && !usages.isBlank() ? " Usages: " + usages + "." : "";
-            return new ProcessResult("Recipe is already complete." + usageText, 100);
+        if (baseEntry.stats.isComplete()) {
+            return new ProcessResult("Recipe is already complete. Usages: " + formatUsages(baseEntry), 100);
         }
 
-        String normalized = ResonantRecipeUtils.normalizeRecipeName(recipeName);
-
-        // Collect matching shards from both containers
-        List<ShardSlot> matches = new ArrayList<>();
-        collectShardSlots(matches, player.getInventory().getHotbar(), ContainerKind.HOTBAR, normalized);
-        collectShardSlots(matches, player.getInventory().getStorage(), ContainerKind.STORAGE, normalized);
-
-        // Remove the held entry from candidates
-        List<ShardSlot> candidates = new ArrayList<>();
-        for (ShardSlot s : matches) {
-            if (s.kind == heldEntry.container && s.slot == heldEntry.slot) continue;
-            candidates.add(s);
-        }
-
-        if (candidates.isEmpty()) {
-            return new ProcessResult("No other \"" + recipeName + "\" shards to combine.", 0);
-        }
-
-        // Select best merge candidates (greedy, same algorithm as ResonantRecipeCombineUse)
-        String basePattern = ResonantRecipeUtils.getRecipePattern(current);
-        if (basePattern == null) basePattern = "";
-        List<ShardSlot> selected = ResonantRecipeUtils.selectBestMergeCandidates(basePattern, candidates);
-        if (selected.isEmpty()) {
-            return new ProcessResult("No shards reveal new slots to combine.", 0);
-        }
-
-        // Merge
-        String mergedPattern = basePattern;
-        for (ShardSlot s : selected) {
-            mergedPattern = ResonantRecipeUtils.mergePatterns(mergedPattern, s.pattern);
-        }
-
-        ResonantRecipeUtils.PatternStats beforeStats = ResonantRecipeUtils.getPatternStats(basePattern);
+        String mergedPattern = ResonantRecipeUtils.mergePatterns(baseEntry.pattern, mergeEntry.pattern);
+        ResonantRecipeUtils.PatternStats beforeStats = baseEntry.stats;
         ResonantRecipeUtils.PatternStats afterStats = ResonantRecipeUtils.getPatternStats(mergedPattern);
+        int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
+        if (gained <= 0) {
+            return new ProcessResult("Selected shard adds no new slot data.", 0);
+        }
 
-        // Update the held item
-        ItemStack updated = ResonantRecipeUtils.withRecipePattern(current, mergedPattern);
-        updated = ResonantRecipeUtils.ensureRecipeUsages(updated);
-        container.setItemStackForSlot(heldEntry.slot, updated);
+        CompendiumContext compendiumContext = null;
+        Map<String, CompendiumEntry> compendiumData = null;
+        boolean needsCompendium = baseEntry.source == Source.COMPENDIUM || mergeEntry.source == Source.COMPENDIUM;
+        if (needsCompendium) {
+            compendiumContext = resolveCompendium(player);
+            if (compendiumContext == null) {
+                return new ProcessResult("Compendium moved. Reopen the UI.", 0);
+            }
+            compendiumData = ResonantCompendiumUtils.getCompendiumData(compendiumContext.compendium);
+        }
 
-        // Remove consumed shards
-        int removed = 0;
-        for (ShardSlot s : selected) {
-            ItemContainer shardContainer = s.kind == ContainerKind.HOTBAR
-                    ? player.getInventory().getHotbar()
-                    : player.getInventory().getStorage();
-            if (shardContainer != null) {
-                shardContainer.removeItemStackFromSlot(s.slot, 1, false, false);
-                removed++;
+        // Update base entry
+        if (baseEntry.source == Source.COMPENDIUM) {
+            CompendiumEntry baseComp = compendiumData.get(baseEntry.compendiumKey);
+            if (baseComp == null) {
+                return new ProcessResult("Base compendium entry missing. Reopen the UI.", 0);
+            }
+            String usages = baseComp.usages == null ? "" : baseComp.usages;
+            String name = baseComp.name == null ? "" : baseComp.name;
+            if (baseComp.quantity > 1) {
+                baseComp.quantity -= 1;
+                ResonantCompendiumUtils.addShardToCompendium(compendiumData, name, mergedPattern, usages, 1);
+            } else {
+                baseComp.pattern = mergedPattern;
+            }
+        } else {
+            ItemContainer baseContainer = getContainerForSource(player, baseEntry.source);
+            if (baseContainer == null) {
+                return new ProcessResult("Inventory changed. Retry.", 0);
+            }
+            ItemStack baseStack = baseContainer.getItemStack(baseEntry.slot);
+            if (!ResonantRecipeUtils.isResonantRecipeItem(baseStack)) {
+                return new ProcessResult("Selected recipe changed. Retry.", 0);
+            }
+            String currentName = ResonantRecipeUtils.getRecipeName(baseStack);
+            if (currentName == null || currentName.isBlank()
+                    || !ResonantRecipeUtils.normalizeRecipeName(currentName)
+                    .equals(ResonantRecipeUtils.normalizeRecipeName(baseName))) {
+                return new ProcessResult("Selected recipe changed. Retry.", 0);
+            }
+            ItemStack updated = ResonantRecipeUtils.withRecipePattern(baseStack, mergedPattern);
+            updated = ResonantRecipeUtils.ensureRecipeUsages(updated);
+            baseContainer.setItemStackForSlot(baseEntry.slot, updated);
+        }
+
+        // Consume merge entry
+        if (mergeEntry.source == Source.COMPENDIUM) {
+            CompendiumEntry mergeComp = compendiumData.get(mergeEntry.compendiumKey);
+            if (mergeComp == null) {
+                return new ProcessResult("Merge shard missing. Reopen the UI.", 0);
+            }
+            if (mergeComp.quantity > 1) {
+                mergeComp.quantity -= 1;
+            } else {
+                compendiumData.remove(mergeEntry.compendiumKey);
+            }
+        } else {
+            ItemContainer mergeContainer = getContainerForSource(player, mergeEntry.source);
+            if (mergeContainer == null) {
+                return new ProcessResult("Inventory changed. Retry.", 0);
+            }
+            ItemStack mergeStack = mergeContainer.getItemStack(mergeEntry.slot);
+            if (!ResonantRecipeUtils.isResonantRecipeItem(mergeStack)) {
+                return new ProcessResult("Selected shard changed. Retry.", 0);
+            }
+            String currentName = ResonantRecipeUtils.getRecipeName(mergeStack);
+            if (currentName == null || currentName.isBlank()
+                    || !ResonantRecipeUtils.normalizeRecipeName(currentName)
+                    .equals(ResonantRecipeUtils.normalizeRecipeName(mergeName))) {
+                return new ProcessResult("Selected shard changed. Retry.", 0);
+            }
+            mergeContainer.removeItemStackFromSlot(mergeEntry.slot, 1, false, false);
+        }
+
+        if (compendiumData != null && compendiumContext != null) {
+            ItemStack updatedCompendium = ResonantCompendiumUtils.saveCompendiumData(
+                    compendiumContext.compendium, compendiumData);
+            ItemContainer hotbar = player.getInventory().getHotbar();
+            if (hotbar != null) {
+                hotbar.setItemStackForSlot(compendiumContext.slot, updatedCompendium);
             }
         }
 
-        DynamicTooltipUtils.refreshAllPlayers();
+        if (DynamicTooltipUtils.isAvailable()) {
+            DynamicTooltipUtils.refreshAllPlayers();
+        }
 
-        int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
-        String gainLabel = gained > 0 ? " (+" + gained + " new)" : "";
         String progress = afterStats.totalSlots() > 0
                 ? afterStats.revealedSlots() + "/" + afterStats.totalSlots() + " slots revealed"
                 : "no pattern data";
         if (afterStats.isComplete()) {
             progress = progress + " (complete)";
         }
-        return new ProcessResult("Combined " + removed + " shard(s). " + progress + gainLabel + ".", 100);
+        return new ProcessResult("Combined 1 shard. " + progress + " (+" + gained + " new).", 100);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Shard merge selection (mirrors ResonantRecipeCombineUse logic)
+    // Selection helpers
     // ═══════════════════════════════════════════════════════════════
-
-    private static final class ShardSlot implements ResonantRecipeUtils.MergeCandidate {
-        final ContainerKind kind;
-        final short slot;
-        final String pattern;
-        final boolean[] revealMask;
-
-        ShardSlot(ContainerKind kind, short slot, String pattern) {
-            this.kind = kind;
-            this.slot = slot;
-            this.pattern = pattern == null ? "" : pattern;
-            this.revealMask = ResonantRecipeUtils.revealMaskFromPattern(this.pattern);
-        }
-
-        @Override
-        public String getPattern() {
-            return pattern;
-        }
-
-        @Override
-        public boolean[] getRevealMask() {
-            return revealMask;
-        }
-    }
-
-    private static void collectShardSlots(List<ShardSlot> matches, ItemContainer container,
-                                           ContainerKind kind, String normalizedRecipeName) {
-        if (container == null) return;
-        for (short slot = 0; slot < container.getCapacity(); slot++) {
-            ItemStack stack = container.getItemStack(slot);
-            if (!ResonantRecipeUtils.isResonantRecipeItem(stack)) continue;
-            String name = ResonantRecipeUtils.getRecipeName(stack);
-            if (name == null || name.isBlank()) continue;
-            if (!ResonantRecipeUtils.normalizeRecipeName(name).equals(normalizedRecipeName)) continue;
-            String pattern = ResonantRecipeUtils.getRecipePattern(stack);
-            ResonantRecipeUtils.PatternStats stats = ResonantRecipeUtils.getPatternStats(pattern);
-            if (stats.isComplete()) continue;
-            matches.add(new ShardSlot(kind, slot, pattern == null ? "" : pattern));
-        }
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // HTML builders
     // ═══════════════════════════════════════════════════════════════
 
-    private static String buildRecipeOptions(List<Entry> entries, String selectedKey) {
+    private static String buildRecipeOptions(List<Entry> entries, String selectedKey, String emptyLabel) {
         if (entries.isEmpty()) {
-            return "<option value=\"\" selected=\"true\">No recipe shards found</option>";
+            String label = emptyLabel == null ? "No recipe shards found" : emptyLabel;
+            return "<option value=\"\" selected=\"true\">" + escapeHtml(label) + "</option>";
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
             String key = String.valueOf(i);
             sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) sb.append(" selected=\"true\"");
+            boolean selected = key.equals(selectedKey);
+            if (!selected && selectedKey == null && i == 0) {
+                selected = true;
+            }
+            if (selected) sb.append(" selected=\"true\"");
             sb.append(">");
             sb.append(escapeHtml(entry.recipeName));
+            if (entry.quantity > 1) {
+                sb.append(" x").append(entry.quantity);
+            }
+            if (entry.source == Source.COMPENDIUM) {
+                sb.append(" (Compendium)");
+            }
             sb.append(" [").append(entry.stats.revealedSlots()).append("/")
                     .append(entry.stats.totalSlots()).append("]");
             if (entry.stats.isComplete()) sb.append(" ✓");
@@ -541,7 +721,6 @@ public final class RecipeCombineUI {
         }
 
         String pattern = held.pattern;
-        // Parse pattern tokens like [Fire][x][Ice]
         List<String> tokens = parsePatternTokens(pattern);
         if (tokens.isEmpty()) {
             return "<div style=\"layout-mode: Left; spacing: 10;\"><p>No pattern data.</p></div>";
@@ -550,16 +729,10 @@ public final class RecipeCombineUI {
         StringBuilder sb = new StringBuilder();
         sb.append("<div style=\"layout-mode: Left; spacing: 8;\"><div style=\"flex-weight:1;\"></div>");
         for (String token : tokens) {
-            boolean unknown = isUnknownToken(token);
-            String color = unknown ? "#555555" : getEssenceColorHex(token);
-            String label = unknown ? "?" : capitalize(token);
-            sb.append("<div style=\"anchor-width:80; anchor-height:80; background-color:")
-                    .append(color)
-                    .append("; layout-mode:Top; padding:4; border-radius:6;\">")
+            String icon = resolveEssenceIcon(token);
+            sb.append("<div style=\"anchor-width:80; anchor-height:80; background-color:#1a1a2b; layout-mode:Top; padding:6; border-radius:6;\">")
                     .append("<div style=\"flex-weight:1;\"></div>")
-                    .append("<p style=\"text-align:center; font-size:12;\">")
-                    .append(escapeHtml(label))
-                    .append("</p>")
+                    .append("<img src=\"").append(icon).append("\" width=\"64\" height=\"64\"/>")
                     .append("<div style=\"flex-weight:1;\"></div>")
                     .append("</div>");
         }
@@ -567,19 +740,53 @@ public final class RecipeCombineUI {
         return sb.toString();
     }
 
-    private static String buildShardListText(List<Entry> shards) {
-        if (shards.isEmpty()) {
-            return "No matching shards in inventory.";
+    private static String buildPatternPreviewStrip(String pattern, int cellSize, int iconSize) {
+        List<String> tokens = parsePatternTokens(pattern);
+        if (tokens.isEmpty()) {
+            return "<p style=\"font-size:11;\">No pattern data.</p>";
         }
         StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"layout-mode: Left; spacing: 6;\">");
+        for (String token : tokens) {
+            String icon = resolveEssenceIcon(token);
+            sb.append("<div style=\"anchor-width:").append(cellSize)
+                    .append("; anchor-height:").append(cellSize)
+                    .append("; background-color:#1a1a2b; layout-mode:Top; padding:4; border-radius:4;\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("<img src=\"").append(icon)
+                    .append("\" width=\"").append(iconSize)
+                    .append("\" height=\"").append(iconSize).append("\"/>")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildShardListHtml(List<Entry> shards) {
+        if (shards.isEmpty()) {
+            return "<p>No matching shards available.</p>";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"layout-mode:Top; spacing:8;\">");
         for (int i = 0; i < shards.size(); i++) {
             Entry shard = shards.get(i);
-            sb.append("Shard ").append(i + 1).append(": ");
-            sb.append(formatPatternText(shard.pattern));
-            sb.append(" (").append(shard.stats.revealedSlots()).append("/")
-                    .append(shard.stats.totalSlots()).append(" revealed)");
-            if (i < shards.size() - 1) sb.append("\n");
+            sb.append("<div style=\"layout-mode:Top; background-color:#202036; padding:6; border-radius:4;\">");
+            sb.append(buildPatternPreviewStrip(shard.pattern, 52, 36));
+            sb.append("<p style=\"font-size:11;\">");
+            sb.append("Shard ").append(i + 1);
+            if (shard.quantity > 1) {
+                sb.append(" x").append(shard.quantity);
+            }
+            sb.append(" | ").append(shard.stats.revealedSlots()).append("/")
+                    .append(shard.stats.totalSlots()).append(" revealed");
+            if (shard.source == Source.COMPENDIUM) {
+                sb.append(" | Compendium");
+            }
+            sb.append("</p>");
+            sb.append("</div>");
         }
+        sb.append("</div>");
         return sb.toString();
     }
 
@@ -607,10 +814,13 @@ public final class RecipeCombineUI {
     }
 
     private static String resolveRecipeType(Entry entry) {
-        if (entry == null || entry.item == null) return "-";
-        String type = ResonantRecipeUtils.getRecipeType(entry.item);
-        if (type != null && !type.isBlank()) return type;
-        // Try to infer from resonance system
+        if (entry == null) return "-";
+        if (entry.item != null) {
+            String type = ResonantRecipeUtils.getRecipeType(entry.item);
+            if (type != null && !type.isBlank()) {
+                return type;
+            }
+        }
         Essence.Type[] essencePattern = ResonanceSystem.getPatternForRecipeName(entry.recipeName);
         if (essencePattern != null && essencePattern.length > 0) {
             return "Resonance (" + essencePattern.length + " sockets)";
@@ -665,24 +875,79 @@ public final class RecipeCombineUI {
         return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 
-    private static String getEssenceColorHex(String token) {
-        if (token == null) return "#555555";
+    private static String resolveEssenceIcon(String token) {
+        if (token == null || token.isBlank()) {
+            return "slot_bg.png";
+        }
         String lower = token.trim().toLowerCase(Locale.ROOT);
-        if (lower.contains("fire")) return "#FFAA00";
-        if (lower.contains("ice")) return "#55FFFF";
-        if (lower.contains("life")) return "#55FF55";
-        if (lower.contains("lightning")) return "#FFFF55";
-        if (lower.contains("void")) return "#AA55FF";
-        if (lower.contains("water")) return "#5555FF";
-        return "#888888";
+        if (lower.contains("fire")) return "Icons/ItemsGenerated/Ingredient_Fire_Essence.png";
+        if (lower.contains("ice")) return "Icons/ItemsGenerated/Ingredient_Ice_Essence.png";
+        if (lower.contains("life")) return "Icons/ItemsGenerated/Ingredient_Life_Essence.png";
+        if (lower.contains("lightning")) return "Icons/ItemsGenerated/Ingredient_Lightning_Essence.png";
+        if (lower.contains("void")) return "Icons/ItemsGenerated/Ingredient_Void_Essence.png";
+        if (lower.contains("water")) return "Icons/ItemsGenerated/Ingredient_Water_Essence.png";
+        return "slot_bg.png";
     }
 
     // ═══════════════════════════════════════════════════════════════
     // Shared helpers
     // ═══════════════════════════════════════════════════════════════
 
+    private static CompendiumContext resolveCompendium(Player player) {
+        if (player == null || player.getInventory() == null) {
+            return null;
+        }
+        PlayerRef ref = player.getPlayerRef();
+        CompendiumHandle handle = activeCompendiums.get(ref);
+        if (handle == null) {
+            return null;
+        }
+        ItemContainer hotbar = player.getInventory().getHotbar();
+        if (hotbar == null) {
+            return null;
+        }
+        ItemStack compendium = hotbar.getItemStack(handle.slot);
+        if (!ResonantCompendiumUtils.isCompendiumItem(compendium)) {
+            return null;
+        }
+        return new CompendiumContext(handle.slot, compendium);
+    }
+
+    private static ItemContainer getContainerForSource(Player player, Source source) {
+        if (player == null || player.getInventory() == null || source == null) {
+            return null;
+        }
+        if (source == Source.HOTBAR) {
+            return player.getInventory().getHotbar();
+        }
+        if (source == Source.STORAGE) {
+            return player.getInventory().getStorage();
+        }
+        return null;
+    }
+
     private static Entry resolveSelection(List<Entry> entries, String value) {
-        return HyUIReflectionUtils.resolveIndexSelection(entries, value);
+        if (entries == null || entries.isEmpty() || value == null || value.isBlank()) {
+            return null;
+        }
+        Entry byIndex = HyUIReflectionUtils.resolveIndexSelection(entries, value);
+        if (byIndex != null) {
+            return byIndex;
+        }
+        String base = trimOptionLabel(value);
+        if (base.isBlank()) {
+            return null;
+        }
+        String normalized = ResonantRecipeUtils.normalizeRecipeName(base);
+        for (Entry entry : entries) {
+            if (entry == null || entry.recipeName == null) {
+                continue;
+            }
+            if (ResonantRecipeUtils.normalizeRecipeName(entry.recipeName).equals(normalized)) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     private static String loadTemplate() {
@@ -711,5 +976,75 @@ public final class RecipeCombineUI {
 
     private static String escapeHtml(String text) {
         return UITemplateUtils.escapeHtml(text);
+    }
+
+    private static void debug(String message) {
+        System.out.println("[SocketReforge] RecipeCombineUI: " + message);
+    }
+
+    private static String indexOfEntry(List<Entry> entries, Entry entry) {
+        if (entries == null || entry == null) {
+            return "";
+        }
+        for (int i = 0; i < entries.size(); i++) {
+            if (entries.get(i) == entry) {
+                return String.valueOf(i);
+            }
+        }
+        return "";
+    }
+
+    private static String trimOptionLabel(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        int cut = trimmed.length();
+        int idx = trimmed.indexOf(" x");
+        if (idx > 0) {
+            cut = Math.min(cut, idx);
+        }
+        idx = trimmed.indexOf(" (");
+        if (idx > 0) {
+            cut = Math.min(cut, idx);
+        }
+        idx = trimmed.indexOf(" [");
+        if (idx > 0) {
+            cut = Math.min(cut, idx);
+        }
+        return trimmed.substring(0, cut).trim();
+    }
+
+    private static void cleanupPlayerState(Player player) {
+        if (player == null) {
+            return;
+        }
+        PlayerRef ref = player.getPlayerRef();
+        bumpSession(ref);
+        openPages.remove(ref);
+        pendingSelections.remove(ref);
+        processingPlayers.remove(ref);
+        activeCompendiums.remove(ref);
+    }
+
+    private static int bumpSession(PlayerRef ref) {
+        if (ref == null) {
+            return 0;
+        }
+        return sessionTokens.merge(ref, 1, Integer::sum);
+    }
+
+    private static int currentSession(PlayerRef ref) {
+        if (ref == null) {
+            return 0;
+        }
+        return sessionTokens.getOrDefault(ref, 0);
+    }
+
+    private static boolean isSessionActive(PlayerRef ref, int token) {
+        if (ref == null) {
+            return false;
+        }
+        return sessionTokens.getOrDefault(ref, 0) == token;
     }
 }

@@ -37,6 +37,7 @@ import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
 import irai.mod.reforge.Commands.ResonanceListCommand;
+import irai.mod.reforge.Commands.ResonanceRecipeGiveCommand;
 import irai.mod.reforge.Commands.ResonanceWorldScanCommand;
 import irai.mod.reforge.Commands.RuntimeConfigCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
@@ -204,6 +205,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
         this.getCommandRegistry().registerCommand(new ItemMetaCommand("itemmeta", "View or modify item metadata", false));
         this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
+        this.getCommandRegistry().registerCommand(new ResonanceRecipeGiveCommand("resonancerecipe", "OP: give resonant recipe shards", false));
         this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);

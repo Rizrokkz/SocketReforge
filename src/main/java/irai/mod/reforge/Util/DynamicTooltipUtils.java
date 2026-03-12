@@ -513,17 +513,26 @@ public class DynamicTooltipUtils {
             
             switch (methodName) {
                 case "getProviderId":
-                    logger.info("[PROVIDER] getProviderId called");
+                    if (debugMode) {
+                        logger.info("[PROVIDER] getProviderId called");
+                    }
                     return PROVIDER_ID;
                     
                 case "getPriority":
-                    logger.info("[PROVIDER] getPriority called");
+                    if (debugMode) {
+                        logger.info("[PROVIDER] getPriority called");
+                    }
                     return 100; // Default priority
                     
                 case "getTooltipData":
                     // getTooltipData(String itemId, String metadata)
                     // or getTooltipData(String itemId, String metadata, String locale)
-                    logger.info("[PROVIDER] getTooltipData called with itemId=" + (args != null && args.length > 0 ? args[0] : "null") + ", metadata=" + (args != null && args.length > 1 ? args[1] : "null"));
+                    if (debugMode) {
+                        logger.info("[PROVIDER] getTooltipData called with itemId="
+                                + (args != null && args.length > 0 ? args[0] : "null")
+                                + ", metadata="
+                                + (args != null && args.length > 1 ? args[1] : "null"));
+                    }
                     
                     if (args == null || args.length < 2) {
                         return null;
@@ -761,7 +770,9 @@ public class DynamicTooltipUtils {
             Method buildMethod = builder.getClass().getMethod("build");
             Object result = buildMethod.invoke(builder);
             
-            logger.info("[TOOLTIP] Created tooltip for " + itemId + " with " + tooltipLines.size() + " lines");
+            if (debugMode) {
+                logger.info("[TOOLTIP] Created tooltip for " + itemId + " with " + tooltipLines.size() + " lines");
+            }
             
             return result;
             

@@ -1,40 +1,56 @@
-<div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Resonant Compendium" style="anchor-width: 920; anchor-height: 700;">
+<div id="compendiumPage" class="page-overlay">
+    <div class="decorated-container" data-hyui-title="Resonant Compendium" style="anchor-width: 920; anchor-height: 740;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
             <h2 style="text-align:center;">Resonant Compendium</h2>
-            <p style="text-align:center;">Secondary click to pull a stored recipe.</p>
+            <p style="text-align:center;">Absorb shards with use. Secondary click to open this menu.</p>
             <hr/>
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Stored Recipes</p>
-            <p>{{summaryText}}</p>
-            <select id="recipeDropdown" data-hyui-showlabel="true" style="anchor-width: 500; flex-weight:1;">
-                {{recipeOptions}}
-            </select>
+            <div style="layout-mode:center; spacing:16;">
+                <div style="anchor-width:280; layout-mode:Top;">
+                    <p style="text-align:center;">Stored Recipes</p>
+                    <select id="recipeDropdown" data-hyui-showlabel="true" style="anchor-width: 280; flex-weight:1;">
+                        {{recipeOptions}}
+                    </select>
+                </div>
+            </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p style="font-size:11; text-align:center;">{{summaryText}}</p>
 
-            <p style="font-weight:bold;">Recipe Info</p>
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Recipe Info</p>
             <div id="recipeInfoPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
                 <p>Resonance: {{recipeName}}</p>
                 <p>Type: {{recipeType}}</p>
                 <p>Progress: {{recipeProgress}}</p>
+                <p>Quantity: {{recipeQuantity}}</p>
                 <p>Usages: {{recipeUsages}}</p>
             </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Pattern Preview</p>
+            <p>Pattern Preview</p>
             <div id="patternPreviewRow">{{patternPreview}}</div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p style="font-weight:bold;">Extraction</p>
+            <p>Extraction</p>
             <div id="extractPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                <p>Extracting removes the recipe from the compendium and adds a Resonant Recipe item to your inventory.</p>
+                <p>Extracting removes one recipe from the compendium and adds a Resonant Recipe item to your inventory.</p>
+                <p>Incomplete recipes extract with their current pattern and no usages.</p>
             </div>
 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+
+            <p>Combine</p>
+            <div id="combinePanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
+                <p>Open the combine UI to merge recipe shards from your inventory and compendium.</p>
+            </div>
+
+            <button id="openCombineButton" style="width:100%;height:40px;">Open Combine UI</button>
+
+            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
             <p id="statusLabel">{{statusText}}</p>
             <button id="extractButton" style="width:100%;height:40px;" {{extractDisabledAttr}}>Extract Recipe</button>

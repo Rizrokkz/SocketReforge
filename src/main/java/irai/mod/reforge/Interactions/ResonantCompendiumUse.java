@@ -51,7 +51,7 @@ public class ResonantCompendiumUse extends SimpleInteraction {
             if (ResonantCompendiumUI.isAvailable()) {
                 ResonantCompendiumUI.open(player, context.getHeldItemSlot());
             } else {
-                player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - compendium UI disabled."));
+                player.sendMessage(Message.raw("HyUI not installed - compendium UI disabled."));
             }
             return;
         }
@@ -71,14 +71,14 @@ public class ResonantCompendiumUse extends SimpleInteraction {
             ItemStack updated = ResonantCompendiumUtils.saveCompendiumData(compendium, data);
 
             String countSummary = getSummary(data);
-            player.sendMessage(Message.raw("<color=#55FFFF>" + countSummary.replace("\n", " ")));
+            player.sendMessage(Message.raw(countSummary.replace("\n", " ")));
 
             ItemContainer hotbar = player.getInventory().getHotbar();
             if (hotbar != null) {
                 hotbar.setItemStackForSlot(context.getHeldItemSlot(), updated);
             }
             
-            player.sendMessage(Message.raw("<color=#55FF55>Compendium absorbed " + absorbed + " shard" + (absorbed == 1 ? "" : "s") + "!"));
+            player.sendMessage(Message.raw("Compendium absorbed " + absorbed + " shard" + (absorbed == 1 ? "" : "s") + "!"));
             if (DynamicTooltipUtils.isAvailable()) {
                 DynamicTooltipUtils.refreshAllPlayers();
             }
@@ -92,9 +92,9 @@ public class ResonantCompendiumUse extends SimpleInteraction {
                     incomplete++;
                 }
             }
-            player.sendMessage(Message.raw("<color=#55FFFF>Compendium contents: " + complete + " complete, " + incomplete + " incomplete recipes."));
+            player.sendMessage(Message.raw("Compendium contents: " + complete + " complete, " + incomplete + " incomplete recipes."));
             if (data.isEmpty()) {
-                player.sendMessage(Message.raw("<color=#AAAAAA>The compendium is currently empty. Right-click to absorb recipe shards in your inventory."));
+                player.sendMessage(Message.raw("The compendium is currently empty. Right-click to absorb recipe shards in your inventory."));
             }
         }
     }
@@ -112,10 +112,11 @@ public class ResonantCompendiumUse extends SimpleInteraction {
             String pattern = ResonantRecipeUtils.getRecipePattern(stack);
             String usages = ResonantRecipeUtils.getRecipeUsages(stack);
 
-            ResonantCompendiumUtils.addShardToCompendium(data, recipeName, pattern, usages);
+            int qty = Math.max(1, stack.getQuantity());
+            ResonantCompendiumUtils.addShardToCompendium(data, recipeName, pattern, usages, qty);
 
-            container.removeItemStackFromSlot(slot, stack.getQuantity(), false, false);
-            absorbedCount += stack.getQuantity();
+            container.removeItemStackFromSlot(slot, qty, false, false);
+            absorbedCount += qty;
         }
         return absorbedCount;
     }

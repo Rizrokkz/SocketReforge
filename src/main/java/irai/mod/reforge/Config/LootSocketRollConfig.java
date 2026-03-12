@@ -153,7 +153,7 @@ public class LootSocketRollConfig {
     private double chestFourSocketChance = 0.10d;
     private double chestFiveSocketChance = 0.01d;
     private double chestThreeToFourChance = 0.50d;
-    private double chestResonanceChance = 0.01d;
+    private double chestResonanceChance = 0.25d;
     private double chestSocketedEssenceChance = 0.05d;
 
     // NPC drop rolls
@@ -161,7 +161,7 @@ public class LootSocketRollConfig {
     private double dropFourSocketChance = 0.10d;
     private double dropFiveSocketChance = 0.01d;
     private double dropThreeToFourChance = 0.50d;
-    private double dropResonanceChance = 0.01;
+    private double dropResonanceChance = 0.25d;
     private double dropSocketedEssenceChance = 0.05d;
 
     // Essence fill tuning

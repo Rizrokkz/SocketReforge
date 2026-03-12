@@ -34,8 +34,8 @@ public final class LootSocketRoller {
     private static volatile RollProfile dropProfile = RollProfile.of(0.30d, 0.10d, 0.01d, 0.50d);
     private static volatile int minBrokenSockets = 3;
     private static volatile int maxBrokenSockets = 5;
-    private static volatile double chestResonanceChance = 0.01d;
-    private static volatile double dropResonanceChance = 0.01d;
+    private static volatile double chestResonanceChance = 0.25d;
+    private static volatile double dropResonanceChance = 0.25d;
     private static volatile double chestSocketedEssenceChance = 0.05d;
     private static volatile double dropSocketedEssenceChance = 0.05d;
     private static volatile double greaterEssenceChance = 0.15d;
