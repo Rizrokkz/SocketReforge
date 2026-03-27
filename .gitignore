@@ -43,7 +43,10 @@ bin/
 .DS_Store
 .fake
 
+gradle/wrapper/gradle-wrapper.jar
+lib/lombok-1.18.42.jar
 libs/HytaleServer.jar
+tools/assetkeyvalidator-override/AssetKeyValidatorOverride.jar
 /lib/
 /build/
 /server/
