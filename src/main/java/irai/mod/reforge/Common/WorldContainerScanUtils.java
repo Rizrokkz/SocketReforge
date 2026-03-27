@@ -5,10 +5,11 @@ import com.hypixel.hytale.component.ResourceType;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.spatial.SpatialData;
 import com.hypixel.hytale.component.spatial.SpatialResource;
+import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.modules.block.BlockModule;
+import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
-import com.hypixel.hytale.server.core.universe.world.meta.BlockStateModule;
-import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
@@ -34,13 +35,13 @@ public final class WorldContainerScanUtils {
             return WorldContainerScanResult.error("Chunk store registry unavailable.");
         }
 
-        BlockStateModule blockStateModule = BlockStateModule.get();
-        if (blockStateModule == null) {
-            return WorldContainerScanResult.error("BlockState module unavailable.");
+        BlockModule blockModule = BlockModule.get();
+        if (blockModule == null) {
+            return WorldContainerScanResult.error("Block module unavailable.");
         }
 
         ResourceType<ChunkStore, SpatialResource<Ref<ChunkStore>, ChunkStore>> resourceType =
-                blockStateModule.getItemContainerSpatialResourceType();
+                blockModule.getItemContainerSpatialResourceType();
         if (resourceType == null) {
             return WorldContainerScanResult.error("Item container spatial resource unavailable.");
         }
@@ -60,27 +61,34 @@ public final class WorldContainerScanUtils {
         int itemsMigrated = 0;
 
         for (int i = 0; i < spatialData.size(); i++) {
-            Ref<ChunkStore> ref = spatialData.getData(i);
-            if (ref == null) {
+            Vector3d position = spatialData.getVector(i);
+            if (position == null) {
+                continue;
+            }
+            int x = (int) Math.floor(position.getX());
+            int y = (int) Math.floor(position.getY());
+            int z = (int) Math.floor(position.getZ());
+
+            ItemContainerBlock containerBlock = BlockModule.getComponent(
+                    blockModule.getItemContainerBlockComponentType(),
+                    world,
+                    x,
+                    y,
+                    z);
+            if (containerBlock == null) {
                 continue;
             }
 
-            Store<ChunkStore> refStore = ref.getStore();
-            if (refStore == null) {
-                continue;
-            }
-
-            BlockState blockState = BlockState.getBlockState(ref, refStore);
-            if (!(blockState instanceof ItemContainerState containerState)) {
+            ItemContainer container = containerBlock.getItemContainer();
+            if (container == null) {
                 continue;
             }
 
             containersScanned++;
-            int migrated = OpenGuiListener.migrateResonantItemsInContainer(containerState.getItemContainer());
+            int migrated = OpenGuiListener.migrateResonantItemsInContainer(container);
             if (migrated > 0) {
                 itemsMigrated += migrated;
                 containersUpdated++;
-                containerState.markNeedsSave();
             }
         }
 

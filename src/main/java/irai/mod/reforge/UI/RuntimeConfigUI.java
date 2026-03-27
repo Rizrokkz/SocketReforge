@@ -14,10 +14,12 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.ReforgePlugin;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * OP-only live gameplay config editor backed by HyUI.
@@ -34,12 +36,14 @@ public final class RuntimeConfigUI {
     private static final String SOCKET_CONFIG_NAME = "SocketConfig";
     private static final String REFINEMENT_CONFIG_NAME = "RefinementConfig";
     private static final String LOOT_CONFIG_NAME = "LootSocketRollConfig";
+    private static final String LORE_CONFIG_NAME = "LoreConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
     private static final String CATEGORY_LOOT = "loot";
 
-    private static final String DEFAULT_STATUS =
+    private static final String DEFAULT_STATUS_KEY = "ui.runtime_config.status_default";
+    private static final String DEFAULT_STATUS_FALLBACK =
             "Changes apply live and save immediately.\nUse Reload All From Disk to discard in-memory edits.";
     private static final int CATEGORY_WIDTH = 848;
     private static final int GROUP_WIDTH = 828;
@@ -269,7 +273,7 @@ public final class RuntimeConfigUI {
             return;
         }
         if (!isAvailable()) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - runtime config UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + t(player, "ui.runtime_config.hyui_missing")));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();
@@ -313,8 +317,9 @@ public final class RuntimeConfigUI {
             html = html.replace("{{statusText}}", escapeHtml(state.statusText));
             html = html.replace("{{categorySummary}}", buildCategorySummaryHtml(activeCategory));
             html = html.replace("{{groupSummary}}", buildGroupSummaryHtml(activeCategory, activeGroup));
-            html = html.replace("{{controlsHtml}}", buildControlsHtml(activeCategory, activeGroup, state));
-            html = html.replace("{{pickerModal}}", buildPickerModalHtml(state, activeCategory, activeGroup));
+            html = html.replace("{{controlsHtml}}", buildControlsHtml(player, activeCategory, activeGroup, state));
+            html = html.replace("{{pickerModal}}", buildPickerModalHtml(player, state, activeCategory, activeGroup));
+            html = LangLoader.replaceUiTokens(player, html);
 
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
@@ -439,9 +444,9 @@ public final class RuntimeConfigUI {
     private static void handleReload(Player player, ViewState state) {
         try {
             plugin.getConfigService().reloadAll();
-            state.statusText = "Reloaded all live gameplay configs from disk.";
+            state.statusText = t(player, "ui.runtime_config.status_reload_success");
         } catch (Exception e) {
-            state.statusText = "Reload failed: " + sanitizeError(e);
+            state.statusText = t(player, "ui.runtime_config.status_reload_failed", sanitizeError(e));
         }
         requestReopen(player, state);
     }
@@ -449,15 +454,15 @@ public final class RuntimeConfigUI {
     private static void handleResetDefaults(Player player, ViewState state) {
         CategorySection activeCategory = resolveActiveCategory(state);
         if (activeCategory == null) {
-            state.statusText = "No active category to reset.";
+            state.statusText = t(player, "ui.runtime_config.status_reset_no_category");
             requestReopen(player, state);
             return;
         }
         try {
             resetCategoryToDefaults(activeCategory.id);
-            state.statusText = activeCategory.title + " reset to defaults.";
+            state.statusText = t(player, "ui.runtime_config.status_reset_success", activeCategory.title);
         } catch (Exception e) {
-            state.statusText = "Reset failed: " + sanitizeError(e);
+            state.statusText = t(player, "ui.runtime_config.status_reset_failed", sanitizeError(e));
         }
         requestReopen(player, state);
     }
@@ -487,12 +492,12 @@ public final class RuntimeConfigUI {
             plugin.getConfigService().saveAndApply(control.configName);
             double after = control.currentValue();
             if (roughlyEqual(before, after)) {
-                state.statusText = control.label + " unchanged (" + control.formatValue(after) + ").";
+                state.statusText = t(player, "ui.runtime_config.status_control_unchanged", control.label, control.formatValue(after));
             } else {
-                state.statusText = control.label + ": " + control.formatValue(before) + " -> " + control.formatValue(after) + ".";
+                state.statusText = t(player, "ui.runtime_config.status_control_changed", control.label, control.formatValue(before), control.formatValue(after));
             }
         } catch (Exception e) {
-            state.statusText = "Update failed for " + control.label + ": " + sanitizeError(e);
+            state.statusText = t(player, "ui.runtime_config.status_control_failed", control.label, sanitizeError(e));
         }
         requestReopen(player, state);
     }
@@ -558,7 +563,7 @@ public final class RuntimeConfigUI {
         return sb.toString();
     }
 
-    private static String buildControlsHtml(CategorySection category, ControlGroup group, ViewState state) {
+    private static String buildControlsHtml(Player player, CategorySection category, ControlGroup group, ViewState state) {
         if (category == null) {
             return "<p>No categories available.</p>";
         }
@@ -567,9 +572,7 @@ public final class RuntimeConfigUI {
         }
         int maxPage = computeControlMaxPage(group.controls);
         int page = state != null ? Math.min(Math.max(0, state.controlsPage), maxPage) : 0;
-        String pageLabel = (maxPage <= 0)
-                ? "Page 1/1"
-                : "Page " + (page + 1) + "/" + (maxPage + 1);
+        String pageLabel = t(player, "ui.runtime_config.page_label", page + 1, Math.max(1, maxPage + 1));
         String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
         String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
 
@@ -577,10 +580,14 @@ public final class RuntimeConfigUI {
         sb.append(buildControlsListHtml(group, page));
         sb.append("<div style=\"layout-mode:Center; spacing:8;\">");
         sb.append("<button id=\"controlsPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
-                .append(prevDisabled).append(">Prev</button>");
+                .append(prevDisabled).append(">")
+                .append(escapeHtml(t(player, "ui.runtime_config.button_prev")))
+                .append("</button>");
         sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
         sb.append("<button id=\"controlsNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
-                .append(nextDisabled).append(">Next</button>");
+                .append(nextDisabled).append(">")
+                .append(escapeHtml(t(player, "ui.runtime_config.button_next")))
+                .append("</button>");
         sb.append("</div>");
         if (category.noteText != null && !category.noteText.isBlank()) {
             sb.append("<div style=\"layout-mode:Top; padding:8; background-color:#191919; border-radius:4;\">")
@@ -633,7 +640,7 @@ public final class RuntimeConfigUI {
         return entries;
     }
 
-    private static String buildPickerModalHtml(ViewState state, CategorySection activeCategory, ControlGroup activeGroup) {
+    private static String buildPickerModalHtml(Player player, ViewState state, CategorySection activeCategory, ControlGroup activeGroup) {
         PickerMode picker = state != null ? state.picker : PickerMode.NONE;
         if (picker == null || picker == PickerMode.NONE) {
             return "";
@@ -642,14 +649,16 @@ public final class RuntimeConfigUI {
         String selectedId = picker == PickerMode.CATEGORY
                 ? (activeCategory != null ? activeCategory.id : null)
                 : (activeGroup != null ? activeGroup.id : null);
-        String title = picker == PickerMode.CATEGORY ? "Select Category" : "Select Section";
-        String emptyLabel = picker == PickerMode.CATEGORY ? "No categories found." : "No sections found.";
+        String title = picker == PickerMode.CATEGORY
+                ? t(player, "ui.runtime_config.picker_title_category")
+                : t(player, "ui.runtime_config.picker_title_section");
+        String emptyLabel = picker == PickerMode.CATEGORY
+                ? t(player, "ui.runtime_config.picker_empty_categories")
+                : t(player, "ui.runtime_config.picker_empty_sections");
 
         int maxPage = computePickerMaxPage(entries);
         int page = Math.max(0, Math.min(maxPage, state.pickerPage));
-        String pageLabel = (maxPage <= 0)
-                ? "Page 1/1"
-                : "Page " + (page + 1) + "/" + (maxPage + 1);
+        String pageLabel = t(player, "ui.runtime_config.page_label", page + 1, Math.max(1, maxPage + 1));
 
         String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
         String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
@@ -662,16 +671,24 @@ public final class RuntimeConfigUI {
         sb.append("<div style=\"layout-mode:Left; spacing:10;\">");
         sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(title)).append("</p>");
         sb.append("<div style=\"flex-weight:1;\"></div>");
-        sb.append("<button id=\"pickerCloseButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\">Close</button>");
+        sb.append("<button id=\"pickerCloseButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\">")
+                .append(escapeHtml(t(player, "ui.runtime_config.button_close")))
+                .append("</button>");
         sb.append("</div>");
         sb.append("<img src=\"divider.png\" style=\"anchor-width: 350; anchor-height: 3;\">");
         sb.append("<reorderable-list id=\"pickerList\" style=\"layout-mode:Top; spacing:6; anchor-width:350; anchor-height:600; background-color:#141426; padding:6; border-radius:4;\">");
         sb.append(cards);
         sb.append("</reorderable-list>");
         sb.append("<div style=\"layout-mode:Center; spacing:8; anchor-width:700;\">");
-        sb.append("<button id=\"pickerPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(prevDisabled).append(">Prev</button>");
+        sb.append("<button id=\"pickerPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
+                .append(prevDisabled).append(">")
+                .append(escapeHtml(t(player, "ui.runtime_config.button_prev")))
+                .append("</button>");
         sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
-        sb.append("<button id=\"pickerNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ").append(nextDisabled).append(">Next</button>");
+        sb.append("<button id=\"pickerNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
+                .append(nextDisabled).append(">")
+                .append(escapeHtml(t(player, "ui.runtime_config.button_next")))
+                .append("</button>");
         sb.append("</div>");
         sb.append("</div>");
         sb.append("</div>");
@@ -861,10 +878,11 @@ public final class RuntimeConfigUI {
 
     private static ViewState createDefaultViewState(PlayerRef playerRef) {
         CategorySection defaultCategory = categories.isEmpty() ? null : categories.get(0);
+        String statusText = tOrFallback(playerRef, DEFAULT_STATUS_KEY, DEFAULT_STATUS_FALLBACK);
         return new ViewState(
                 defaultCategory == null ? CATEGORY_SOCKET : defaultCategory.id,
                 firstGroupId(defaultCategory),
-                DEFAULT_STATUS,
+                statusText,
                 PickerMode.NONE,
                 0,
                 0);
@@ -1107,6 +1125,29 @@ public final class RuntimeConfigUI {
         brokenRange.add(intControl("loot_max_broken", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Max broken sockets", "Upper clamp after a loot roll resolves.", () -> lootConfig().getMaxBrokenSockets(), delta -> lootConfig().setMaxBrokenSockets(Math.max(clampInt(lootConfig().getMaxBrokenSockets() + (int) Math.round(delta), 1, 8), lootConfig().getMinBrokenSockets()))));
         groups.add(new ControlGroup("broken_socket_range", "Broken Socket Range", "Final min/max clamp used after chest and drop rolls.", brokenRange));
 
+        List<NumericControl> loreControls = new ArrayList<>();
+        loreControls.add(chanceControl("lore_chest_socket_chance", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket chest chance", "Chance for chest loot to roll lore sockets.", () -> loreConfig().getChestLoreSocketChance(), delta -> loreConfig().setChestLoreSocketChance(clampChance(loreConfig().getChestLoreSocketChance() + delta))));
+        loreControls.add(chanceControl("lore_drop_socket_chance", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket drop chance", "Chance for NPC drops to roll lore sockets.", () -> loreConfig().getDropLoreSocketChance(), delta -> loreConfig().setDropLoreSocketChance(clampChance(loreConfig().getDropLoreSocketChance() + delta))));
+        loreControls.add(intControl("lore_socket_min", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket min", "Minimum lore sockets on a roll.", () -> loreConfig().getMinLoreSockets(), delta -> {
+            int next = clampInt(loreConfig().getMinLoreSockets() + (int) Math.round(delta), 0, 3);
+            loreConfig().setMinLoreSockets(next);
+            if (loreConfig().getMaxLoreSockets() < next) {
+                loreConfig().setMaxLoreSockets(next);
+            }
+        }));
+        loreControls.add(intControl("lore_socket_max", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket max", "Maximum lore sockets on a roll.", () -> loreConfig().getMaxLoreSockets(), delta -> {
+            int next = clampInt(loreConfig().getMaxLoreSockets() + (int) Math.round(delta), 0, 3);
+            loreConfig().setMaxLoreSockets(Math.max(next, loreConfig().getMinLoreSockets()));
+        }));
+        loreControls.add(intControl("lore_max_level", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore max level", "Maximum lore level before absorption.", () -> loreConfig().getMaxLevel(), delta -> loreConfig().setMaxLevel(clampInt(loreConfig().getMaxLevel() + (int) Math.round(delta), 1, 200))));
+        loreControls.add(intControl("lore_xp_per_proc", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore XP per proc", "XP gained per lore proc trigger.", () -> loreConfig().getXpPerProc(), delta -> loreConfig().setXpPerProc(clampInt(loreConfig().getXpPerProc() + (int) Math.round(delta), 1, 50))));
+        loreControls.add(intControl("lore_base_xp_per_level", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore base XP per level", "Base XP required per level.", () -> loreConfig().getBaseXpPerLevel(), delta -> loreConfig().setBaseXpPerLevel(clampInt(loreConfig().getBaseXpPerLevel() + (int) Math.round(delta), 1, 500))));
+        loreControls.add(multiplierControl("lore_xp_growth", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore XP growth", "Additional XP growth per level.", () -> loreConfig().getXpGrowthPerLevel(), delta -> loreConfig().setXpGrowthPerLevel(clamp(loreConfig().getXpGrowthPerLevel() + delta, 0.0, 10.0))));
+        loreControls.add(intControl("lore_feed_interval", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore feed interval", "Levels per feed gate.", () -> loreConfig().getFeedInterval(), delta -> loreConfig().setFeedInterval(clampInt(loreConfig().getFeedInterval() + (int) Math.round(delta), 1, 50))));
+        loreControls.add(intControl("lore_feed_base", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore feed base cost", "Base Resonant Essence cost per feed.", () -> loreConfig().getFeedBase(), delta -> loreConfig().setFeedBase(clampInt(loreConfig().getFeedBase() + (int) Math.round(delta), 0, 100))));
+        loreControls.add(intControl("lore_feed_multiplier", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore feed multiplier", "Cost multiplier each feed tier.", () -> loreConfig().getFeedMultiplier(), delta -> loreConfig().setFeedMultiplier(clampInt(loreConfig().getFeedMultiplier() + (int) Math.round(delta), 1, 10))));
+        groups.add(new ControlGroup("lore_rolls", "Lore Socket System", "Controls for lore socket progression.", loreControls));
+
         return new CategorySection(
                 CATEGORY_LOOT,
                 "toggleLootCategory",
@@ -1217,6 +1258,30 @@ public final class RuntimeConfigUI {
 
     private static LootSocketRollConfig lootConfig() {
         return plugin.getLootSocketRollRuntimeConfig();
+    }
+
+    private static LoreConfig loreConfig() {
+        return plugin.getLoreRuntimeConfig();
+    }
+
+    private static NumericControl multiplierControl(String id,
+                                                    String categoryId,
+                                                    String configName,
+                                                    String label,
+                                                    String description,
+                                                    ValueSupplier supplier,
+                                                    AdjustHandler adjuster) {
+        return new NumericControl(
+                id,
+                categoryId,
+                configName,
+                label,
+                description,
+                DisplayKind.MULTIPLIER,
+                0.05,
+                0.25,
+                supplier,
+                adjuster);
     }
 
     private static double[] ensureSocketSuccessArray() {
@@ -1442,5 +1507,17 @@ public final class RuntimeConfigUI {
 
     private static String escapeHtml(String text) {
         return UITemplateUtils.escapeHtml(text);
+    }
+
+    private static String t(Object player, String key, Object... params) {
+        return LangLoader.getUITranslation(player, key, params);
+    }
+
+    private static String tOrFallback(Object player, String key, String fallback, Object... params) {
+        String value = LangLoader.getUITranslation(player, key, params);
+        if (value == null || value.equals(key)) {
+            return fallback;
+        }
+        return value;
     }
 }

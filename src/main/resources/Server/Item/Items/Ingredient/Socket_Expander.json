@@ -1,0 +1,49 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Socket_Expander.name",
+    "Description": "irai.items.Socket_Expander.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Ingredient_Strap_Leather.png",
+  "Model": "Resources/Materials/Strap_Leather.blockymodel",
+  "Texture": "Resources/Materials/Strap_Leather_Texture.png",
+  "IconProperties": {
+    "Scale": 0.67,
+    "Translation": [1.3, -7.1],
+    "Rotation": [17.06, 74.435, 73.31]
+  },
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Socket_Puncher",
+        "Quantity": 15
+      },
+      {
+        "ItemId": "Ingredient_Strap_Leather",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Alchemy_Potions_Misc"
+        ],
+        "Id": "Alchemybench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "MaxStack": 100,
+  "ItemLevel": 1,
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "Tags": {
+    "Type": [
+      "SocketMaterial",
+      "SupportingMaterial"
+    ]
+  }
+}

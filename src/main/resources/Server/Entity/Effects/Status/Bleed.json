@@ -1,0 +1,18 @@
+{
+  "ApplicationEffects": {
+    "EntityBottomTint": "#220000",
+    "EntityTopTint": "#b00000",
+    "ScreenEffect": "ScreenEffects/Fire.png",
+    "Particles": [
+      {
+        "SystemId": "Effect_Poison"
+      }
+    ]
+  },
+  "OverlapBehavior": "Overwrite",
+  "RemovalBehavior": "Duration",
+  "Infinite": false,
+  "Debuff": true,
+  "StatusEffectIcon": "UI/StatusEffects/Burn.png",
+  "Duration": 3
+}

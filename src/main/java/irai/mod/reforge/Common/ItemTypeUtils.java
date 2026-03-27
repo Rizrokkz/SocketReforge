@@ -34,6 +34,73 @@ public final class ItemTypeUtils {
             "tool_watering_can",
             "tool_watering_can_full"
     );
+    private static final String[] WEAPON_FALLBACK_TOKENS = {
+            "sword",
+            "greatsword",
+            "claymore",
+            "axe",
+            "battleaxe",
+            "dagger",
+            "knife",
+            "mace",
+            "club",
+            "hammer",
+            "bow",
+            "crossbow",
+            "staff",
+            "spellbook",
+            "spell_book",
+            "spell-book",
+            "tome",
+            "grimoire",
+            "spear",
+            "lance",
+            "halberd",
+            "scythe",
+            "rapier",
+            "katana",
+            "trident",
+            "pike",
+            "flail",
+            "whip"
+    };
+    private static final String[] ARMOR_FALLBACK_TOKENS = {
+            "helmet",
+            "helm",
+            "hood",
+            "cap",
+            "mask",
+            "visor",
+            "chestplate",
+            "breastplate",
+            "cuirass",
+            "tunic",
+            "robe",
+            "vest",
+            "greaves",
+            "leggings",
+            "pants",
+            "boots",
+            "gauntlet",
+            "gauntlets",
+            "glove",
+            "gloves",
+            "bracer",
+            "bracers",
+            "pauldron",
+            "pauldrons",
+            "shoulder",
+            "shoulders",
+            "sabatons"
+    };
+    private static final String[] TOOL_FALLBACK_TOKENS = {
+            "pickaxe",
+            "pick_axe",
+            "shovel",
+            "hoe",
+            "spade",
+            "rake"
+    };
 
     private ItemTypeUtils() {}
 
@@ -209,7 +276,13 @@ public final class ItemTypeUtils {
         if (isNonEquipmentWeaponIdLower(lower)) {
             return false;
         }
-        return lower.startsWith("weapon_") || lower.contains("weapon");
+        if (lower.startsWith("weapon_") || lower.contains("weapon")) {
+            return true;
+        }
+        if (isToolFallbackId(itemId) || containsAny(lower, TOOL_FALLBACK_TOKENS)) {
+            return false;
+        }
+        return containsAny(lower, WEAPON_FALLBACK_TOKENS);
     }
 
     private static boolean isArmorFallbackId(String itemId) {
@@ -217,10 +290,13 @@ public final class ItemTypeUtils {
             return false;
         }
         String lower = itemId.toLowerCase(Locale.ROOT);
-        return lower.startsWith("armor_")
+        if (lower.startsWith("armor_")
                 || lower.startsWith("armour_")
                 || lower.contains("armor")
-                || lower.contains("armour");
+                || lower.contains("armour")) {
+            return true;
+        }
+        return containsAny(lower, ARMOR_FALLBACK_TOKENS);
     }
 
     private static boolean isToolFallbackId(String itemId) {

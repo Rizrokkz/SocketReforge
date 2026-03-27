@@ -28,6 +28,7 @@ import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.LangLoader;
 
 public final class ToolPartsUI {
     private ToolPartsUI() {}
@@ -57,8 +58,8 @@ public final class ToolPartsUI {
     private enum ToolKind { PICKAXE, HATCHET, SHOVEL, HOE, SICKLE, SHEARS, MULTITOOL, GENERIC }
 
     private static final class PartSlot {
-        final String name; final MaterialKind kind;
-        PartSlot(String name, MaterialKind kind) { this.name = name; this.kind = kind; }
+        final String labelKey; final MaterialKind kind;
+        PartSlot(String labelKey, MaterialKind kind) { this.labelKey = labelKey; this.kind = kind; }
     }
 
     private static final class ToolProfile {
@@ -111,7 +112,7 @@ public final class ToolPartsUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - parts UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -122,33 +123,35 @@ public final class ToolPartsUI {
     private static void openWithSync(Player player) {
         Snapshot snap = snapshot(player);
         if (snap.equipments.isEmpty()) {
-            player.sendMessage(Message.raw("<color=#FF5555>No valid tools found."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.error_no_tools")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
         SelectionState st = pendingSelections.remove(ref);
         if (st == null) st = new SelectionState(equipmentKeyOf(snap.equipments.get(0)), null, null, null);
         String status = pendingStatus.remove(ref);
-        if (status == null || status.isBlank()) status = "Select a tool, choose 3 materials, then apply.";
+        if (status == null || status.isBlank()) {
+            status = LangLoader.getUITranslation(player, "ui.tool_parts.status_select");
+        }
         openPage(player, snap, st, status);
     }
 
     private static Snapshot snapshot(Player player) {
         List<EquipmentEntry> eq = new ArrayList<>();
         List<MaterialEntry> mats = new ArrayList<>();
-        collect(player.getInventory().getHotbar(), ContainerKind.HOTBAR, eq, mats);
-        collect(player.getInventory().getStorage(), ContainerKind.STORAGE, eq, mats);
+        collect(player, player.getInventory().getHotbar(), ContainerKind.HOTBAR, eq, mats);
+        collect(player, player.getInventory().getStorage(), ContainerKind.STORAGE, eq, mats);
         return new Snapshot(eq, mats);
     }
 
-    private static void collect(ItemContainer container, ContainerKind kind, List<EquipmentEntry> eq, List<MaterialEntry> mats) {
+    private static void collect(Player player, ItemContainer container, ContainerKind kind, List<EquipmentEntry> eq, List<MaterialEntry> mats) {
         if (container == null) return;
         for (short i = 0; i < container.getCapacity(); i++) {
             ItemStack s = container.getItemStack(i);
             if (s == null || s.isEmpty()) continue;
             String id = s.getItemId();
             if (id == null || id.isBlank()) continue;
-            String name = UIItemUtils.displayNameOrItemId(s);
+            String name = UIItemUtils.displayNameOrItemId(s, player);
             if (ItemTypeUtils.isTool(s)) {
                 String p1 = s.getFromMetadataOrNull(META_PART1_ID, Codec.STRING);
                 String p2 = s.getFromMetadataOrNull(META_PART2_ID, Codec.STRING);
@@ -166,14 +169,14 @@ public final class ToolPartsUI {
 
     private static ToolProfile profileOf(String itemId) {
         String v = itemId == null ? "" : itemId.toLowerCase(Locale.ROOT);
-        if (v.contains("multitool")) return new ToolProfile(ToolKind.MULTITOOL, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Core", MaterialKind.STONE), new PartSlot("Tool Head", MaterialKind.METAL));
-        if (v.contains("pickaxe")) return new ToolProfile(ToolKind.PICKAXE, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Binding", MaterialKind.STONE), new PartSlot("Pick Head", MaterialKind.METAL));
-        if (v.contains("hatchet")) return new ToolProfile(ToolKind.HATCHET, new PartSlot("Haft", MaterialKind.WOOD), new PartSlot("Wedge", MaterialKind.STONE), new PartSlot("Hatchet Head", MaterialKind.METAL));
-        if (v.contains("shovel")) return new ToolProfile(ToolKind.SHOVEL, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Collar", MaterialKind.STONE), new PartSlot("Spade Head", MaterialKind.METAL));
-        if (v.contains("hoe")) return new ToolProfile(ToolKind.HOE, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Brace", MaterialKind.STONE), new PartSlot("Hoe Head", MaterialKind.METAL));
-        if (v.contains("sickle")) return new ToolProfile(ToolKind.SICKLE, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Rivet", MaterialKind.STONE), new PartSlot("Blade", MaterialKind.METAL));
-        if (v.contains("shears")) return new ToolProfile(ToolKind.SHEARS, new PartSlot("Grip", MaterialKind.WOOD), new PartSlot("Pivot", MaterialKind.STONE), new PartSlot("Blades", MaterialKind.METAL));
-        return new ToolProfile(ToolKind.GENERIC, new PartSlot("Handle", MaterialKind.WOOD), new PartSlot("Core", MaterialKind.STONE), new PartSlot("Head", MaterialKind.METAL));
+        if (v.contains("multitool")) return new ToolProfile(ToolKind.MULTITOOL, new PartSlot("ui.tool_parts.slot_handle", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_core", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_tool_head", MaterialKind.METAL));
+        if (v.contains("pickaxe")) return new ToolProfile(ToolKind.PICKAXE, new PartSlot("ui.tool_parts.slot_handle", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_binding", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_pick_head", MaterialKind.METAL));
+        if (v.contains("hatchet")) return new ToolProfile(ToolKind.HATCHET, new PartSlot("ui.tool_parts.slot_haft", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_wedge", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_hatchet_head", MaterialKind.METAL));
+        if (v.contains("shovel")) return new ToolProfile(ToolKind.SHOVEL, new PartSlot("ui.tool_parts.slot_handle", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_collar", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_spade_head", MaterialKind.METAL));
+        if (v.contains("hoe")) return new ToolProfile(ToolKind.HOE, new PartSlot("ui.tool_parts.slot_handle", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_brace", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_hoe_head", MaterialKind.METAL));
+        if (v.contains("sickle")) return new ToolProfile(ToolKind.SICKLE, new PartSlot("ui.tool_parts.slot_grip", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_rivet", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_blade", MaterialKind.METAL));
+        if (v.contains("shears")) return new ToolProfile(ToolKind.SHEARS, new PartSlot("ui.tool_parts.slot_grip", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_pivot", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_blades", MaterialKind.METAL));
+        return new ToolProfile(ToolKind.GENERIC, new PartSlot("ui.tool_parts.slot_handle", MaterialKind.WOOD), new PartSlot("ui.tool_parts.slot_core", MaterialKind.STONE), new PartSlot("ui.tool_parts.slot_head", MaterialKind.METAL));
     }
 
     private static MaterialKind kindOf(String id) {
@@ -207,14 +210,14 @@ public final class ToolPartsUI {
             Object valueChanged = eb.getField("ValueChanged").get(null);
             Object activating = eb.getField("Activating").get(null);
             Object pageBuilder = pageForPlayer.invoke(null, player.getPlayerRef());
-            pageBuilder = fromHtml.invoke(pageBuilder, buildHtml(snap, state, statusText));
+            pageBuilder = fromHtml.invoke(pageBuilder, buildHtml(player, snap, state, statusText));
 
             final Player fp = player;
             addListener.invoke(pageBuilder, "equipmentDropdown", valueChanged,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         PlayerRef ref = fp.getPlayerRef();
                         pendingSelections.put(ref, new SelectionState(extractEventValue(eventObj), null, null, null));
-                        pendingStatus.put(ref, "Tool changed.");
+                        pendingStatus.put(ref, LangLoader.getUITranslation(fp, "ui.tool_parts.status_tool_changed"));
                         fp.getWorld().execute(() -> openWithSync(fp));
                     });
 
@@ -223,7 +226,7 @@ public final class ToolPartsUI {
                         PlayerRef ref = fp.getPlayerRef();
                         SelectionState base = stateFromContext(ctxObj, pendingSelections.get(ref));
                         pendingSelections.put(ref, new SelectionState(base.equipmentKey, extractEventValue(eventObj), base.s2, base.s3));
-                        pendingStatus.put(ref, "Part selection updated.");
+                        pendingStatus.put(ref, LangLoader.getUITranslation(fp, "ui.tool_parts.status_part_updated"));
                         fp.getWorld().execute(() -> openWithSync(fp));
                     });
 
@@ -232,7 +235,7 @@ public final class ToolPartsUI {
                         PlayerRef ref = fp.getPlayerRef();
                         SelectionState base = stateFromContext(ctxObj, pendingSelections.get(ref));
                         pendingSelections.put(ref, new SelectionState(base.equipmentKey, base.s1, extractEventValue(eventObj), base.s3));
-                        pendingStatus.put(ref, "Part selection updated.");
+                        pendingStatus.put(ref, LangLoader.getUITranslation(fp, "ui.tool_parts.status_part_updated"));
                         fp.getWorld().execute(() -> openWithSync(fp));
                     });
 
@@ -241,7 +244,7 @@ public final class ToolPartsUI {
                         PlayerRef ref = fp.getPlayerRef();
                         SelectionState base = stateFromContext(ctxObj, pendingSelections.get(ref));
                         pendingSelections.put(ref, new SelectionState(base.equipmentKey, base.s1, base.s2, extractEventValue(eventObj)));
-                        pendingStatus.put(ref, "Part selection updated.");
+                        pendingStatus.put(ref, LangLoader.getUITranslation(fp, "ui.tool_parts.status_part_updated"));
                         fp.getWorld().execute(() -> openWithSync(fp));
                     });
 
@@ -272,7 +275,7 @@ public final class ToolPartsUI {
         return new SelectionState(eq, s1, s2, s3);
     }
 
-    private static String buildHtml(Snapshot snap, SelectionState state, String statusText) {
+    private static String buildHtml(Player player, Snapshot snap, SelectionState state, String statusText) {
         EquipmentEntry eq = resolveEquipment(snap.equipments, state.equipmentKey);
         if (eq == null) eq = snap.equipments.get(0);
         ToolProfile p = profileOf(eq.itemId);
@@ -289,23 +292,23 @@ public final class ToolPartsUI {
         int t2 = m2 != null ? m2.tier : clampTier(eq.part2Tier);
         int t3 = m3 != null ? m3.tier : clampTier(eq.part3Tier);
 
-        String tpl = loadTemplate();
+        String tpl = LangLoader.replaceUiTokens(player, loadTemplate());
         return tpl
                 .replace("{{equipmentOptions}}", equipmentOptions(snap.equipments, equipmentKeyOf(eq)))
                 .replace("{{toolName}}", esc(eq.name))
-                .replace("{{toolType}}", esc(p.kind.name()))
-                .replace("{{slot1Label}}", esc(p.slot1.name))
-                .replace("{{slot2Label}}", esc(p.slot2.name))
-                .replace("{{slot3Label}}", esc(p.slot3.name))
+                .replace("{{toolType}}", esc(toolKindLabel(player, p.kind)))
+                .replace("{{slot1Label}}", esc(slotLabel(player, p.slot1)))
+                .replace("{{slot2Label}}", esc(slotLabel(player, p.slot2)))
+                .replace("{{slot3Label}}", esc(slotLabel(player, p.slot3)))
                 .replace("{{slot1Image}}", "hilt.png")
                 .replace("{{slot2Image}}", "guard.png")
                 .replace("{{slot3Image}}", "blade.png")
-                .replace("{{slot1Options}}", materialOptions(snap.materials, p.slot1.kind, s1))
-                .replace("{{slot2Options}}", materialOptions(snap.materials, p.slot2.kind, s2))
-                .replace("{{slot3Options}}", materialOptions(snap.materials, p.slot3.kind, s3))
-                .replace("{{slot1Tier}}", t1 > 0 ? "T" + t1 : "-")
-                .replace("{{slot2Tier}}", t2 > 0 ? "T" + t2 : "-")
-                .replace("{{slot3Tier}}", t3 > 0 ? "T" + t3 : "-")
+                .replace("{{slot1Options}}", materialOptions(player, snap.materials, p.slot1.kind, s1))
+                .replace("{{slot2Options}}", materialOptions(player, snap.materials, p.slot2.kind, s2))
+                .replace("{{slot3Options}}", materialOptions(player, snap.materials, p.slot3.kind, s3))
+                .replace("{{slot1Tier}}", formatTier(player, t1))
+                .replace("{{slot2Tier}}", formatTier(player, t2))
+                .replace("{{slot3Tier}}", formatTier(player, t3))
                 .replace("{{slot1Color}}", tierColor(t1))
                 .replace("{{slot2Color}}", tierColor(t2))
                 .replace("{{slot3Color}}", tierColor(t3))
@@ -337,10 +340,10 @@ public final class ToolPartsUI {
         return sb.toString();
     }
 
-    private static String materialOptions(List<MaterialEntry> entries, MaterialKind kind, String selected) {
+    private static String materialOptions(Player player, List<MaterialEntry> entries, MaterialKind kind, String selected) {
         StringBuilder sb = new StringBuilder();
         sb.append("<option value=\"\"").append(selected == null || selected.isBlank() ? " selected=\"true\"" : "")
-                .append(">Select ").append(kind.name()).append(" material</option>");
+                .append(">").append(esc(t(player, "ui.tool_parts.select_material", materialKindLabel(player, kind)))).append("</option>");
         for (MaterialEntry e : entries) {
             if (e.kind != kind) continue;
             String key = materialKeyOf(e);
@@ -365,7 +368,7 @@ public final class ToolPartsUI {
     private static int clampTier(int tier) { return Math.max(0, Math.min(5, tier)); }
     private static String applyParts(Player player, Snapshot snap, SelectionState state) {
         EquipmentEntry eq = resolveEquipment(snap.equipments, state.equipmentKey);
-        if (eq == null) return "Select a valid tool.";
+        if (eq == null) return t(player, "ui.tool_parts.error_select_tool");
         ToolProfile p = profileOf(eq.itemId);
 
         MaterialEntry m1 = resolveMaterial(snap.materials, state.s1, p.slot1.kind);
@@ -375,12 +378,15 @@ public final class ToolPartsUI {
         if (m2 == null) m2 = firstMaterialOfKind(snap.materials, p.slot2.kind);
         if (m3 == null) m3 = firstMaterialOfKind(snap.materials, p.slot3.kind);
         if (m1 == null || m2 == null || m3 == null) {
-            return "Missing valid materials (need " + p.slot1.kind + ", " + p.slot2.kind + ", " + p.slot3.kind + ").";
+            return t(player, "ui.tool_parts.error_missing_materials",
+                    materialKindLabel(player, p.slot1.kind),
+                    materialKindLabel(player, p.slot2.kind),
+                    materialKindLabel(player, p.slot3.kind));
         }
 
         ItemStack current = readTool(player, eq);
-        if (current == null || current.isEmpty() || !ItemTypeUtils.isTool(current)) return "Selected tool changed.";
-        if (!hasMaterial(player, m1, 1) || !hasMaterial(player, m2, 1) || !hasMaterial(player, m3, 1)) return "Material stack changed. Retry.";
+        if (current == null || current.isEmpty() || !ItemTypeUtils.isTool(current)) return t(player, "ui.tool_parts.error_tool_changed");
+        if (!hasMaterial(player, m1, 1) || !hasMaterial(player, m2, 1) || !hasMaterial(player, m3, 1)) return t(player, "ui.tool_parts.error_material_changed");
 
         consume(player, m1, 1);
         consume(player, m2, 1);
@@ -400,12 +406,20 @@ public final class ToolPartsUI {
         writeTool(player, eq, updated);
         DynamicTooltipUtils.refreshAllPlayers();
 
-        return String.format(Locale.ROOT, "Applied parts on %s -> %s[%d] %s[%d] %s[%d], speed x%.2f, save %.0f%%, power x%.2f%s", eq.name,
-                m1.itemId, m1.tier, m2.itemId, m2.tier, m3.itemId, m3.tier,
-                partStats.swingSpeedMultiplier,
-                partStats.durabilitySaveChance * 100.0d,
-                partStats.breakPowerMultiplier,
-                ToolAbilityUtils.describeHatchetThrowStatus(p.kind.name(), m1.tier, m2.tier, m3.tier));
+        String extra = ToolAbilityUtils.describeHatchetThrowStatus(p.kind.name(), m1.tier, m2.tier, m3.tier);
+        if (extra != null && !extra.isBlank() && !extra.startsWith(" ")) {
+            extra = " " + extra;
+        }
+        String savePercent = String.format(Locale.ROOT, "%.0f", partStats.durabilitySaveChance * 100.0d);
+        return t(player, "ui.tool_parts.status_applied",
+                eq.name,
+                m1.itemId, m1.tier,
+                m2.itemId, m2.tier,
+                m3.itemId, m3.tier,
+                String.format(Locale.ROOT, "%.2f", partStats.swingSpeedMultiplier),
+                savePercent,
+                String.format(Locale.ROOT, "%.2f", partStats.breakPowerMultiplier),
+                extra == null ? "" : extra);
     }
 
     private static EquipmentEntry resolveEquipment(List<EquipmentEntry> entries, String key) {
@@ -506,5 +520,50 @@ public final class ToolPartsUI {
 
     private static String esc(String t) {
         return UITemplateUtils.escapeHtml(t);
+    }
+
+    private static String t(Player player, String key, Object... params) {
+        return LangLoader.getUITranslation(player, key, params);
+    }
+
+    private static String toolKindLabel(Player player, ToolKind kind) {
+        if (kind == null) {
+            return "";
+        }
+        return switch (kind) {
+            case PICKAXE -> t(player, "ui.tool_parts.tool_kind_pickaxe");
+            case HATCHET -> t(player, "ui.tool_parts.tool_kind_hatchet");
+            case SHOVEL -> t(player, "ui.tool_parts.tool_kind_shovel");
+            case HOE -> t(player, "ui.tool_parts.tool_kind_hoe");
+            case SICKLE -> t(player, "ui.tool_parts.tool_kind_sickle");
+            case SHEARS -> t(player, "ui.tool_parts.tool_kind_shears");
+            case MULTITOOL -> t(player, "ui.tool_parts.tool_kind_multitool");
+            case GENERIC -> t(player, "ui.tool_parts.tool_kind_generic");
+        };
+    }
+
+    private static String slotLabel(Player player, PartSlot slot) {
+        if (slot == null || slot.labelKey == null) {
+            return "";
+        }
+        return t(player, slot.labelKey);
+    }
+
+    private static String materialKindLabel(Player player, MaterialKind kind) {
+        if (kind == null) {
+            return "";
+        }
+        return switch (kind) {
+            case WOOD -> t(player, "ui.tool_parts.material_kind_wood");
+            case STONE -> t(player, "ui.tool_parts.material_kind_stone");
+            case METAL -> t(player, "ui.tool_parts.material_kind_metal");
+        };
+    }
+
+    private static String formatTier(Player player, int tier) {
+        if (tier <= 0) {
+            return t(player, "ui.tool_parts.tier_none");
+        }
+        return t(player, "ui.tool_parts.tier_format", tier);
     }
 }

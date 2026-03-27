@@ -16,6 +16,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
+import com.hypixel.hytale.server.core.meta.MetaKey;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
@@ -36,6 +37,11 @@ import irai.mod.reforge.Socket.SocketManager;
 public class EquipmentRefineEST extends DamageEventSystem {
     private static final String META_PARTS_DAMAGE_MULTIPLIER = "SocketReforge.Parts.DamageMultiplier";
     private static final double VOID_T5_HP_SACRIFICE_RATE_PER_ESSENCE = 0.01d;
+    private static final boolean DEBUG_DAMAGE_LOG = Boolean.parseBoolean(
+            System.getProperty("socketreforge.debug.damage", "false"));
+    public static final MetaKey<Boolean> META_SKIP_REFORGE =
+            Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
+                    "socketreforge:skip_reforge", Codec.BOOLEAN);
 
     // Refinement config - will be injected from plugin
     private RefinementConfig refinementConfig;
@@ -115,59 +121,64 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         Ref<EntityStore> attackerRef = entitySource.getRef();
+        boolean skipRefine = Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
 
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
-        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        if (attacker != null) {
-            ItemStack weapon = findWeaponInHotbar(attacker);
-            if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
-                float baseDamage = damage.getAmount();
-                int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
-                int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
-                double refinementMultiplier = getDamageMultiplier(clampedLevel);
-                double socketMultiplier = calculateSocketDamageBonus(weapon);
-                double socketFlat = calculateSocketFlatDamage(weapon);
-                double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
-                double partsMultiplier = getPartsDamageMultiplier(weapon);
-                int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
-                double critChancePercent = calculateSocketCritChancePercent(weapon);
-                double critDamagePercent = calculateSocketCritDamagePercent(weapon);
+        if (!skipRefine) {
+            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+            if (attacker != null) {
+                ItemStack weapon = findWeaponInHotbar(attacker);
+                if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
+                    float baseDamage = damage.getAmount();
+                    int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
+                    int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
+                    double refinementMultiplier = getDamageMultiplier(clampedLevel);
+                    double socketMultiplier = calculateSocketDamageBonus(weapon);
+                    double socketFlat = calculateSocketFlatDamage(weapon);
+                    double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
+                    double partsMultiplier = getPartsDamageMultiplier(weapon);
+                    int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
+                    double critChancePercent = calculateSocketCritChancePercent(weapon);
+                    double critDamagePercent = calculateSocketCritDamagePercent(weapon);
 
-                float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier * partsMultiplier) + socketFlat);
-                if (attackSpeedPercent > 0.0) {
-                    // Runtime fallback: convert attack speed bonus into effective DPS multiplier.
-                    newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
+                    float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier * partsMultiplier) + socketFlat);
+                    if (attackSpeedPercent > 0.0) {
+                        // Runtime fallback: convert attack speed bonus into effective DPS multiplier.
+                        newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
+                    }
+
+                    boolean isCrit = critChancePercent > 0.0
+                            && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent;
+                    if (isCrit && critDamagePercent > 0.0) {
+                        newDamage = (float) (newDamage * (1.0 + (critDamagePercent / 100.0)));
+                    }
+
+                    int equippedVoidEssenceCount = countEquippedVoidEssences(attacker, weapon);
+                    float bloodPactDamage = applyVoidTierFiveBloodPact(store, attackerRef, voidTier, equippedVoidEssenceCount);
+                    if (bloodPactDamage > 0f) {
+                        newDamage += bloodPactDamage;
+                    }
+
+                    damage.setAmount(newDamage);
+
+                    if (DEBUG_DAMAGE_LOG) {
+                        System.out.println("[SocketReforge][ATK_DMG] attacker=" + attacker.getUuid()
+                                + " weapon=" + weapon.getItemId()
+                                + " base=" + baseDamage
+                                + " refineMult=" + refinementMultiplier
+                                + " socketMult=" + socketMultiplier
+                                + " partsMult=" + partsMultiplier
+                                + " socketFlat=" + socketFlat
+                                + " atkSpd=" + attackSpeedPercent
+                                + " critChance=" + critChancePercent
+                                + " critDamage=" + critDamagePercent
+                                + " critApplied=" + isCrit
+                                + " voidTier=" + voidTier
+                                + " voidEssences=" + equippedVoidEssenceCount
+                                + " bloodPact=" + bloodPactDamage
+                                + " final=" + newDamage);
+                    }
                 }
-
-                boolean isCrit = critChancePercent > 0.0
-                        && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent;
-                if (isCrit && critDamagePercent > 0.0) {
-                    newDamage = (float) (newDamage * (1.0 + (critDamagePercent / 100.0)));
-                }
-
-                int equippedVoidEssenceCount = countEquippedVoidEssences(attacker, weapon);
-                float bloodPactDamage = applyVoidTierFiveBloodPact(store, attackerRef, voidTier, equippedVoidEssenceCount);
-                if (bloodPactDamage > 0f) {
-                    newDamage += bloodPactDamage;
-                }
-
-                damage.setAmount(newDamage);
-
-                System.out.println("[SocketReforge][ATK_DMG] attacker=" + attacker.getUuid()
-                        + " weapon=" + weapon.getItemId()
-                        + " base=" + baseDamage
-                        + " refineMult=" + refinementMultiplier
-                        + " socketMult=" + socketMultiplier
-                        + " partsMult=" + partsMultiplier
-                        + " socketFlat=" + socketFlat
-                        + " atkSpd=" + attackSpeedPercent
-                        + " critChance=" + critChancePercent
-                        + " critDamage=" + critDamagePercent
-                        + " critApplied=" + isCrit
-                        + " voidTier=" + voidTier
-                        + " voidEssences=" + equippedVoidEssenceCount
-                        + " bloodPact=" + bloodPactDamage
-                        + " final=" + newDamage);
             }
         }
 

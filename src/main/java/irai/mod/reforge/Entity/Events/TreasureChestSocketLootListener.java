@@ -1,6 +1,5 @@
 package irai.mod.reforge.Entity.Events;
 
-import java.lang.reflect.Field;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -10,7 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
-import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -19,13 +17,11 @@ import com.hypixel.hytale.server.core.entity.entities.player.windows.Window;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldConfig;
-import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
-import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
-import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
@@ -45,6 +41,8 @@ public final class TreasureChestSocketLootListener {
             LootInjectionUtils.rule("Refinement_Glob", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Puncher", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Stabilizer", 0.15d, 1, 5),
+            LootInjectionUtils.rule("Socket_Expander", 0.10d, 1, 2),
+            LootInjectionUtils.rule("Socket_Diffuser", 0.10d, 1, 2),
             LootInjectionUtils.rule("Ingredient_Voidheart", 0.05d, 1, 2),
             LootInjectionUtils.rule("Ingredient_Lightning_Essence", 0.015d, 1, 5),
             LootInjectionUtils.rule("Ingredient_Water_Essence", 0.025d, 1, 5)
@@ -52,14 +50,12 @@ public final class TreasureChestSocketLootListener {
     private static final double RECIPE_INJECTION_CHANCE = 0.01d;
     private static final int RECIPE_INJECTION_MIN = 1;
     private static final int RECIPE_INJECTION_MAX = 1;
-private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
+    private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             "furniture_temple_",
             "treasure_chest",
             "loot_chest",
             "dungeon_chest"
     };
-    private static Field itemContainerCustomField;
-
     private TreasureChestSocketLootListener() {}
 
     public static void onTreasureChestOpening(TreasureChestOpeningEvent event) {
@@ -297,11 +293,11 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
         if (window == null || container == null) {
             return false;
         }
-        ItemContainerState state = resolveContainerState(player, window);
-        if (state == null) {
+        ItemContainerBlock containerBlock = resolveContainerBlock(player, window);
+        if (containerBlock == null) {
             return false;
         }
-        String droplist = state.getDroplist();
+        String droplist = containerBlock.getDroplist();
         if (droplist == null || droplist.isBlank()) {
             return false;
         }
@@ -410,40 +406,21 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             String blockId = window.getBlockType() != null ? window.getBlockType().getId() : null;
             String normalizedBlockId = normalizeBlockId(blockId);
 
-            Ref<ChunkStore> ref = BlockModule.getBlockEntity(player.getWorld(), window.getX(), window.getY(), window.getZ());
-            if (ref == null || ref.getStore() == null) {
-                return isTreasureEventSource(source) && matchesGeneratedStructureChestId(blockId, normalizedBlockId);
-            }
-            BlockState state = BlockState.getBlockState(ref, ref.getStore());
-            if (state == null) {
+            ItemContainerBlock containerBlock = resolveContainerBlock(player, window);
+            if (containerBlock == null) {
                 return isTreasureEventSource(source) && matchesGeneratedStructureChestId(blockId, normalizedBlockId);
             }
 
-            if (state instanceof ItemContainerState itemContainerState) {
-                if (isCustomContainer(itemContainerState)) {
-                    return false;
-                }
-
-                String droplist = itemContainerState.getDroplist();
-                boolean hasDroplist = droplist != null && !droplist.isBlank();
-                if (hasDroplist) {
-                    // Droplist chests are world loot if their block id matches known loot chest hints.
-                    // This covers spawnEquipChest (base IDs) and structure state-definition ids.
-                    return matchesWorldLootBlockIdHint(normalizedBlockId)
-                            || matchesGeneratedStructureChestId(blockId, normalizedBlockId);
-                }
-                // If we can read the container state and there's no droplist,
-                // treat it as non-world loot (prevents player-placed chests from rolling).
-                return false;
+            String droplist = containerBlock.getDroplist();
+            boolean hasDroplist = droplist != null && !droplist.isBlank();
+            if (hasDroplist) {
+                // Droplist chests are world loot if their block id matches known loot chest hints.
+                // This covers spawnEquipChest (base IDs) and structure state-definition ids.
+                return matchesWorldLootBlockIdHint(normalizedBlockId)
+                        || matchesGeneratedStructureChestId(blockId, normalizedBlockId);
             }
-
-            if (isTreasureEventSource(source)) {
-                String stateClassName = state.getClass().getName();
-                if (stateClassName != null && stateClassName.endsWith(".TreasureChestState")) {
-                    return true;
-                }
-                return matchesGeneratedStructureChestId(blockId, normalizedBlockId);
-            }
+            // If we can read the container state and there's no droplist,
+            // treat it as non-world loot (prevents player-placed chests from rolling).
             return false;
         } catch (Throwable t) {
             return false;
@@ -501,21 +478,6 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
         return false;
     }
 
-    private static boolean isCustomContainer(ItemContainerState state) {
-        if (state == null) {
-            return false;
-        }
-        try {
-            if (itemContainerCustomField == null) {
-                itemContainerCustomField = ItemContainerState.class.getDeclaredField("custom");
-                itemContainerCustomField.setAccessible(true);
-            }
-            return itemContainerCustomField.getBoolean(state);
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
     private static String chestKey(Player player, ContainerBlockWindow window) {
         if (window == null) {
             return "unknown|0|0|0";
@@ -534,12 +496,11 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
             String normalizedBlockId = normalizeBlockId(rawBlockId);
             String stateClass = "unknown";
             String droplist = "";
-            String custom = "unknown";
-            ItemContainerState state = resolveContainerState(player, window);
-            if (state != null) {
-                stateClass = state.getClass().getName();
-                droplist = state.getDroplist();
-                custom = Boolean.toString(isCustomContainer(state));
+            String custom = "n/a";
+            ItemContainerBlock containerBlock = resolveContainerBlock(player, window);
+            if (containerBlock != null) {
+                stateClass = containerBlock.getClass().getName();
+                droplist = containerBlock.getDroplist();
             }
             int nonEmpty = countNonEmptySlots(window != null ? window.getItemContainer() : null);
             log("Chest debug: chest=" + chestKey(player, window)
@@ -629,22 +590,13 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
         if (!isMainWorld(player)) {
             return;
         }
-        ItemContainerState state = resolveContainerState(player, window);
-        if (state == null) {
+        ItemContainerBlock containerBlock = resolveContainerBlock(player, window);
+        if (containerBlock == null) {
             return;
         }
-        boolean changed = false;
-        if (!isCustomContainer(state)) {
-            state.setCustom(true);
-            changed = true;
-        }
-        String droplist = state.getDroplist();
+        String droplist = containerBlock.getDroplist();
         if (droplist != null && !droplist.isBlank()) {
-            state.setDroplist("");
-            changed = true;
-        }
-        if (changed) {
-            state.markNeedsSave();
+            containerBlock.setDroplist(null);
         }
     }
 
@@ -678,36 +630,30 @@ private static final String[] WORLD_LOOT_BLOCK_ID_HINTS = {
     }
 
     private static void clearChestCustomFlag(Player player, int x, int y, int z) {
-        ItemContainerState state = resolveContainerState(player, x, y, z);
-        if (state == null) {
-            return;
-        }
-        if (isCustomContainer(state)) {
-            state.setCustom(false);
-            state.markNeedsSave();
-        }
+        // Custom chest flag no longer available in the current container component.
     }
 
-    private static ItemContainerState resolveContainerState(Player player, ContainerBlockWindow window) {
+    private static ItemContainerBlock resolveContainerBlock(Player player, ContainerBlockWindow window) {
         if (player == null || window == null) {
             return null;
         }
-        return resolveContainerState(player, window.getX(), window.getY(), window.getZ());
+        return resolveContainerBlock(player, window.getX(), window.getY(), window.getZ());
     }
 
-    private static ItemContainerState resolveContainerState(Player player, int x, int y, int z) {
+    private static ItemContainerBlock resolveContainerBlock(Player player, int x, int y, int z) {
         if (player == null || player.getWorld() == null) {
             return null;
         }
-        Ref<ChunkStore> ref = BlockModule.getBlockEntity(player.getWorld(), x, y, z);
-        if (ref == null || ref.getStore() == null) {
+        BlockModule blockModule = BlockModule.get();
+        if (blockModule == null) {
             return null;
         }
-        BlockState state = BlockState.getBlockState(ref, ref.getStore());
-        if (state instanceof ItemContainerState containerState) {
-            return containerState;
-        }
-        return null;
+        return BlockModule.getComponent(
+                blockModule.getItemContainerBlockComponentType(),
+                player.getWorld(),
+                x,
+                y,
+                z);
     }
 
     private static final class RollResult {

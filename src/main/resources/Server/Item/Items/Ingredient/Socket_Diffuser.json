@@ -1,0 +1,49 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Socket_Diffuser.name",
+    "Description": "irai.items.Socket_Diffuser.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Deco_Potion.png",
+  "Model": "Blocks/Miscellaneous/Potion.blockymodel",
+  "Texture": "Blocks/Miscellaneous/Potion_Texture.png",
+  "IconProperties": {
+    "Scale": 0.835,
+    "Translation": [0.305, -6.895],
+    "Rotation": [22.5, 45, 22.5]
+  },
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Socket_Puncher",
+        "Quantity": 15
+      },
+      {
+        "ItemId": "Deco_Potion",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Alchemy_Potions_Misc"
+        ],
+        "Id": "Alchemybench",
+        "RequiredTierLevel": 1
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "MaxStack": 100,
+  "ItemLevel": 1,
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "Tags": {
+    "Type": [
+      "SocketMaterial",
+      "SupportingMaterial"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "Duration": 0.8,
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Block_Hit_Ice",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": {
+          "Y": 0.6
+        }
+      },
+      {
+        "SystemId": "Block_Break_Ice",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": {
+          "Y": 0.3
+        }
+      }
+    ]
+  },
+  "OverlapBehavior": "Extend"
+}

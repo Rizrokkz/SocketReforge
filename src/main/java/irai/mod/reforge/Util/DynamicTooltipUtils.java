@@ -11,9 +11,16 @@ import java.util.concurrent.ConcurrentMap;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Lore.LoreAbility;
+import irai.mod.reforge.Lore.LoreAbilityRegistry;
+import irai.mod.reforge.Lore.LoreEffectType;
+import irai.mod.reforge.Lore.LoreGemRegistry;
 import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Util.LangLoader;
+import irai.mod.reforge.Util.NameResolver;
 
 /**
  * Utility class for interacting with DynamicTooltipsLib.
@@ -52,6 +59,9 @@ public class DynamicTooltipUtils {
     private static final String SOCKET_GREATER = "[0]";
     private static final String SOCKET_EMPTY = "[ ]";
     private static final String SOCKET_LOCKED = "[x]";
+    private static final String LORE_SOCKET_FILLED = "{o}";
+    private static final String LORE_SOCKET_EMPTY = "{ }";
+    private static final String LORE_SOCKET_LOCKED = "{x}";
 
     // Parts metadata keys
     private static final String META_PARTS_PROFILE_TYPE = "SocketReforge.Parts.ProfileType";
@@ -68,6 +78,16 @@ public class DynamicTooltipUtils {
     private static final String META_RECIPE_PATTERN = "SocketReforge.Recipe.Pattern";
     private static final String META_RECIPE_TYPE = "SocketReforge.Recipe.Type";
     private static final String META_RECIPE_USAGES = "SocketReforge.Recipe.Usages";
+    private static final String META_RECIPE_NAME = "SocketReforge.Recipe.ResonanceName";
+    private static final String META_REFINEMENT_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
+    private static final String META_LORE_SOCKET_MAX = "SocketReforge.Lore.Socket.Max";
+    private static final String META_LORE_SOCKET_VALUES = "SocketReforge.Lore.Socket.Values";
+    private static final String META_LORE_SOCKET_SPIRITS = "SocketReforge.Lore.Socket.Spirits";
+    private static final String META_LORE_SOCKET_LEVELS = "SocketReforge.Lore.Socket.Levels";
+    private static final String META_LORE_SOCKET_FEED_TIERS = "SocketReforge.Lore.Socket.FeedTiers";
+    private static final String META_LORE_SOCKET_COLORS = "SocketReforge.Lore.Socket.Colors";
+    private static final String META_LORE_SOCKET_LOCKED = "SocketReforge.Lore.Socket.Locked";
+    private static final String META_LORE_SOCKET_EFFECTS = "SocketReforge.Lore.Socket.Effects";
     
     // ==================== Reforge Level ====================
     
@@ -540,9 +560,9 @@ public class DynamicTooltipUtils {
                     
                     String itemId = (String) args[0];
                     String metadata = (String) args[1];
-                    // String locale = args.length > 2 ? (String) args[2] : "en-US";
+                    String locale = args.length > 2 ? (String) args[2] : null;
                     
-                    return getTooltipDataForItem(itemId, metadata);
+                    return getTooltipDataForItem(itemId, metadata, locale);
                     
                 default:
                     return null;
@@ -553,7 +573,13 @@ public class DynamicTooltipUtils {
     /**
      * Get TooltipData for an item using reflection
      */
-    private static Object getTooltipDataForItem(String itemId, String metadata) {
+    private static Object getTooltipDataForItem(String itemId, String metadata, String locale) {
+        String langCode = resolveLangCode(locale);
+        String rawItemId = itemId;
+        String normalizedItemId = normalizeItemId(itemId);
+        if (normalizedItemId != null && !normalizedItemId.isBlank()) {
+            itemId = normalizedItemId;
+        }
         // Parse the JSON metadata to extract reforge level
         int reforgeLevel = extractReforgeLevel(metadata);
         
@@ -580,38 +606,113 @@ public class DynamicTooltipUtils {
         boolean hasRecipeType = recipeType != null && !recipeType.isBlank();
         String recipeUsages = extractStringValue(metadata, META_RECIPE_USAGES);
         boolean hasRecipeUsages = recipeUsages != null && !recipeUsages.isBlank();
+        String recipeName = extractStringValue(metadata, META_RECIPE_NAME);
+        boolean hasRecipeName = recipeName != null && !recipeName.isBlank();
         String baseItemId = extractBaseItemId(metadata);
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
+        boolean isRecipeItem = "Resonant_Recipe".equalsIgnoreCase(effectiveItemId);
         
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
-                && !hasResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages && !isEquipmentItem) {
+                && !hasResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
+                && !hasRecipeName && !isEquipmentItem) {
             return null;
         }
         
         List<String> tooltipLines = new ArrayList<>();
-        String displayName = extractDisplayName(metadata);
+        String metadataName = extractDisplayName(metadata);
+        String metadataNameKey = extractDisplayNameKey(metadata);
         boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
-        if ((shouldBloodPrefix || hasResonance) && (displayName == null || displayName.isEmpty())) {
-            displayName = buildFallbackDisplayName(baseItemId, itemId);
+        boolean hasStoredName = metadataName != null && !metadataName.isBlank();
+        boolean hasStoredKey = metadataNameKey != null && !metadataNameKey.isBlank();
+
+        boolean isCustomName = false;
+        if (!hasStoredKey && hasStoredName && !looksLikeTranslationKey(metadataName)) {
+            String defaultLang = "en-US";
+            String metaBase = stripLevelSuffix(metadataName).trim();
+            String defaultName = NameResolver.resolveItemIdTranslationExact(baseItemId, defaultLang);
+            if (defaultName == null || defaultName.isBlank()) {
+                defaultName = NameResolver.resolveItemIdTranslationExact(itemId, defaultLang);
+            }
+            if (defaultName == null || defaultName.isBlank()) {
+                defaultName = NameResolver.resolveItemIdTranslation(baseItemId, defaultLang);
+                if (defaultName == null || defaultName.isBlank()) {
+                    defaultName = NameResolver.resolveItemIdTranslation(itemId, defaultLang);
+                }
+            }
+            if (defaultName == null || defaultName.isBlank()
+                    || !defaultName.equalsIgnoreCase(metaBase)) {
+                isCustomName = true;
+            }
         }
-        if (displayName != null && !displayName.isEmpty()
-                && shouldBloodPrefix
-                && !displayName.startsWith(BLOOD_PACT_PREFIX)) {
-            displayName = BLOOD_PACT_PREFIX + displayName;
+
+        boolean translationAvailable = false;
+        if (hasStoredKey && looksLikeTranslationKey(metadataNameKey)) {
+            String translated = LangLoader.getTranslationExact(metadataNameKey, langCode);
+            translationAvailable = translated != null && !translated.isBlank() && !translated.equals(metadataNameKey);
+        } else if (hasStoredName && looksLikeTranslationKey(metadataName)) {
+            String translated = LangLoader.getTranslationExact(metadataName, langCode);
+            translationAvailable = translated != null && !translated.isBlank() && !translated.equals(metadataName);
         }
-        if (displayName != null && !displayName.isEmpty()
-                && hasResonance
-                && !displayName.startsWith(resonanceName + " ")) {
-            displayName = resonanceName + " " + displayName;
+        if (!translationAvailable) {
+            String translated = NameResolver.resolveItemIdTranslationNoFallback(baseItemId, langCode);
+            if (translated == null || translated.isBlank()) {
+                translated = NameResolver.resolveItemIdTranslationNoFallback(itemId, langCode);
+            }
+            translationAvailable = translated != null && !translated.isBlank();
         }
+        boolean shouldOverrideName = hasStoredName || hasStoredKey || isCustomName
+                || translationAvailable || shouldBloodPrefix || hasResonance
+                || extractLevelSuffix(metadataName) > 0;
+        String displayName = null;
+        if (shouldOverrideName) {
+            displayName = localizeDisplayName(metadataName, metadataNameKey, baseItemId, itemId, langCode);
+            if ((shouldBloodPrefix || hasResonance) && (displayName == null || displayName.isEmpty())) {
+                displayName = buildFallbackDisplayName(baseItemId, itemId, langCode);
+            }
+        }
+        if (displayName != null && !displayName.isEmpty() && shouldBloodPrefix) {
+            String bloodPrefix = getPrefixTranslation("name.prefix.blood_pact", BLOOD_PACT_PREFIX, langCode);
+            displayName = applyPrefix(displayName, bloodPrefix, BLOOD_PACT_PREFIX);
+        }
+        if (displayName != null && !displayName.isEmpty() && hasResonance) {
+            String localizedResonanceName = ResonanceSystem.getLocalizedName(resonanceName, langCode);
+            String desired = (localizedResonanceName == null || localizedResonanceName.isBlank())
+                    ? resonanceName
+                    : localizedResonanceName;
+            if (desired != null && !desired.isBlank()) {
+                displayName = applyPrefix(displayName, desired + " ", resonanceName + " ", localizedResonanceName + " ");
+            }
+        }
+        String localizedRecipeName = null;
+        if (hasRecipeName) {
+            localizedRecipeName = ResonanceSystem.getLocalizedName(recipeName, langCode);
+            if (localizedRecipeName == null || localizedRecipeName.isBlank()) {
+                localizedRecipeName = recipeName;
+            }
+        }
+        if (hasRecipeName && isRecipeItem && localizedRecipeName != null && !localizedRecipeName.isBlank()) {
+            String recipeDisplayName = LangLoader.formatTranslation(
+                    "ui.compendium.recipe_display_name",
+                    langCode,
+                    localizedRecipeName
+            );
+            if (recipeDisplayName == null || recipeDisplayName.isBlank()
+                    || recipeDisplayName.equals("ui.compendium.recipe_display_name")) {
+                recipeDisplayName = "Resonance Recipe: " + localizedRecipeName;
+            }
+            displayName = recipeDisplayName;
+            shouldOverrideName = true;
+        }
+        boolean displayNameHasLevel = displayName != null && extractLevelSuffix(displayName) > 0;
         
         boolean isArmorItem = isArmorType(baseItemId, itemId);
         String[] socketEntries = extractSocketEntries(metadata);
         SocketData parsedSocketData = buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries);
         boolean hasRefineOrSocketedEssence = reforgeLevel > 0 || hasSocketedEssence(socketEntries);
 
+        String damageLabel = tr(langCode, "tooltip.damage_label", "Damage");
         if (isEquipmentItem && !isArmorItem) {
             EquipmentDamageTooltipMath.StatSummary summary = EquipmentDamageTooltipMath.computeWeaponDamageSummary(
                     effectiveItemId,
@@ -621,14 +722,14 @@ public class DynamicTooltipUtils {
             );
             if (hasRefineOrSocketedEssence) {
                 tooltipLines.add(
-                        COLOR_WHITE + "Damage : "
+                        COLOR_WHITE + damageLabel + " : "
                                 + COLOR_RED + formatDamageValue(summary.getBaseValue())
                                 + COLOR_WHITE + " -> "
                                 + COLOR_GREEN + formatDamageValue(summary.getBuffedValue())
                 );
             } else {
                 tooltipLines.add(
-                        COLOR_WHITE + "Damage : "
+                        COLOR_WHITE + damageLabel + " : "
                                 + COLOR_GREEN + formatDamageValue(summary.getBaseValue())
                 );
             }
@@ -636,13 +737,18 @@ public class DynamicTooltipUtils {
 
         // Add reforge line if present
         if (reforgeLevel > 0) {
-            String upgradeName = isArmorItem ? getArmorUpgradeName(reforgeLevel) : getUpgradeName(reforgeLevel);
+            String upgradeName = isArmorItem ? getArmorUpgradeName(reforgeLevel, langCode) : getUpgradeName(reforgeLevel, langCode);
             double multiplier = isArmorItem ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
             int percentBonus = (int) ((multiplier - 1.0) * 100);
             
             ReforgeLevel reforgeLevelEnum = ReforgeLevel.fromLevel(reforgeLevel);
-            String statType = isArmorItem ? "defense" : "damage";
-            String line = COLOR_WHITE + "Refine Grade: " + reforgeLevelEnum.getColor() + upgradeName 
+            String statType = isArmorItem
+                    ? tr(langCode, "tooltip.refine_stat_defense", "defense")
+                    : tr(langCode, "tooltip.refine_stat_damage", "damage");
+            String refineLabel = tr(langCode, "tooltip.refine_grade", "Refine Grade");
+            String levelSuffix = displayNameHasLevel ? "" : " +" + reforgeLevel;
+            String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + upgradeName
+                    + levelSuffix
                     + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
             tooltipLines.add(line);
         }
@@ -671,29 +777,132 @@ public class DynamicTooltipUtils {
                     }
                 }
             }
-            String socketLine = COLOR_CYAN + "Sockets: " + COLOR_WHITE + socketDisplay.toString();
+            String socketsLabel = tr(langCode, "tooltip.sockets_label", "Sockets");
+            String socketLine = COLOR_CYAN + socketsLabel + ": " + COLOR_WHITE + socketDisplay.toString();
             tooltipLines.add(socketLine);
         }
 
+        int loreMax = extractLoreSocketMax(metadata);
+        String[] loreEntries = extractLoreSocketEntries(metadata);
+        String[] loreColors = extractLoreSocketColors(metadata);
+        String[] loreSpirits = extractLoreSocketSpirits(metadata);
+        String[] loreEffects = extractLoreSocketEffects(metadata);
+        int[] loreLevels = extractLoreSocketLevels(metadata);
+        int[] loreFeedTiers = extractLoreSocketFeedTiers(metadata);
+        int[] loreLocked = extractLoreSocketLocked(metadata);
+        int loreCount = maxArrayLength(loreEntries, loreColors, loreSpirits, loreEffects, loreLevels, loreFeedTiers, loreLocked);
+        if (loreMax > loreCount) {
+            loreCount = loreMax;
+        }
+
+        if (loreCount > 0) {
+            StringBuilder loreDisplay = new StringBuilder();
+            for (int i = 0; i < loreCount; i++) {
+                boolean isLocked = loreLocked != null && i < loreLocked.length && loreLocked[i] > 0;
+                String entry = loreEntries != null && i < loreEntries.length ? loreEntries[i] : "";
+                String color = loreColors != null && i < loreColors.length ? loreColors[i] : "";
+                String spiritId = loreSpirits != null && i < loreSpirits.length ? loreSpirits[i] : "";
+                String resolvedColor = resolveLoreSocketColor(color, entry, spiritId, itemId, i);
+                String colorTag = getLoreColorTag(resolvedColor);
+
+                boolean hasEntry = entry != null && !entry.isBlank();
+                boolean hasSpirit = spiritId != null && !spiritId.isBlank();
+                boolean hasColor = resolvedColor != null && !resolvedColor.isBlank();
+
+                if (hasEntry || hasSpirit) {
+                    loreDisplay.append(colorTag).append(LORE_SOCKET_FILLED).append("</color>");
+                } else if (isLocked) {
+                    loreDisplay.append(COLOR_RED).append(LORE_SOCKET_LOCKED).append("</color>");
+                } else if (hasColor) {
+                    loreDisplay.append(colorTag).append(LORE_SOCKET_EMPTY).append("</color>");
+                } else {
+                    loreDisplay.append(COLOR_DARK_GRAY).append(LORE_SOCKET_EMPTY).append("</color>");
+                }
+            }
+
+            String loreSocketsLabel = tr(langCode, "tooltip.lore_sockets_label", "Lore Sockets");
+            tooltipLines.add(COLOR_PURPLE + loreSocketsLabel + ": " + COLOR_WHITE + loreDisplay.toString());
+
+            String loreLabel = tr(langCode, "tooltip.lore_label", "Lore");
+            String unawakened = tr(langCode, "tooltip.lore_unawakened", "Unawakened");
+            String levelLabel = tr(langCode, "tooltip.lore_level_short", "Lv");
+            int unawakenedCount = 0;
+            for (int i = 0; i < loreCount; i++) {
+                String spiritId = loreSpirits != null && i < loreSpirits.length ? loreSpirits[i] : "";
+                String entry = loreEntries != null && i < loreEntries.length ? loreEntries[i] : "";
+                boolean hasSpirit = spiritId != null && !spiritId.isBlank();
+                boolean hasEntry = entry != null && !entry.isBlank();
+                if (!hasSpirit && !hasEntry) {
+                    continue;
+                }
+                if (!hasSpirit && hasEntry) {
+                    unawakenedCount++;
+                    continue;
+                }
+                int level = loreLevels != null && i < loreLevels.length ? loreLevels[i] : 1;
+                String spiritName = localizeLoreSpiritName(spiritId, langCode);
+                tooltipLines.add(COLOR_PURPLE + loreLabel + ": " + COLOR_WHITE + spiritName
+                        + " " + levelLabel + " " + Math.max(1, level));
+
+                LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+                String effectOverride = loreEffects != null && i < loreEffects.length ? loreEffects[i] : "";
+                ability = applyEffectOverride(ability, effectOverride);
+                if (ability != null) {
+                    int feedTier = loreFeedTiers != null && i < loreFeedTiers.length ? loreFeedTiers[i] : 0;
+                    if (feedTier < 0) {
+                        feedTier = 0;
+                    }
+                    int safeLevel = Math.max(1, level);
+                    tooltipLines.add(COLOR_GRAY + ability.describe(langCode, safeLevel, feedTier));
+                }
+            }
+            if (unawakenedCount > 0) {
+                String countSuffix = unawakenedCount > 1 ? " x" + unawakenedCount : "";
+                tooltipLines.add(COLOR_PURPLE + loreLabel + ": " + COLOR_GRAY + unawakened + countSuffix);
+            }
+        }
+
         if (hasResonance) {
-            String shownEffect = resonanceEffect != null && !resonanceEffect.isBlank() ? resonanceEffect : resonanceName;
-            tooltipLines.add(COLOR_ORANGE + "Resonance: " + COLOR_WHITE + shownEffect);
+            String localizedEffect = "";
+            ResonanceSystem.ResonanceResult resonanceResult = ResonanceSystem.getResultForRecipeName(resonanceName);
+            if (resonanceResult != null && resonanceResult.active()) {
+                resonanceResult = ResonanceSystem.applyGreaterEssenceScaling(resonanceResult, parsedSocketData);
+                localizedEffect = ResonanceSystem.buildDetailedEffect(resonanceResult, !isArmorItem, langCode);
+            }
+            if (localizedEffect == null || localizedEffect.isBlank()) {
+                localizedEffect = ResonanceSystem.getLocalizedEffect(resonanceName, resonanceEffect, langCode);
+            }
+            if (localizedEffect == null || localizedEffect.isBlank()) {
+                localizedEffect = resonanceEffect != null ? resonanceEffect : resonanceName;
+            }
+            String resonanceLabel = tr(langCode, "tooltip.resonance_label", "Resonance");
+            tooltipLines.add(COLOR_ORANGE + resonanceLabel + ": " + COLOR_WHITE + localizedEffect);
         }
         if (resonanceQuality != null && !resonanceQuality.isBlank()) {
-            tooltipLines.add(COLOR_YELLOW + "Quality: " + COLOR_WHITE + resonanceQuality);
+            String qualityLabel = tr(langCode, "tooltip.quality_label", "Quality");
+            String qualityText = localizeQuality(resonanceQuality, langCode);
+            tooltipLines.add(COLOR_YELLOW + qualityLabel + ": " + COLOR_WHITE + qualityText);
+        }
+        if (hasRecipeName && localizedRecipeName != null && !localizedRecipeName.isBlank()) {
+            String resonanceLabel = tr(langCode, "tooltip.resonance_label", "Resonance");
+            tooltipLines.add(COLOR_ORANGE + resonanceLabel + ": " + COLOR_WHITE + localizedRecipeName);
         }
         if (hasRecipeType) {
-            tooltipLines.add(COLOR_ORANGE + "Type: " + COLOR_WHITE + recipeType);
+            String typeLabel = tr(langCode, "tooltip.type_label", "Type");
+            String localizedType = ResonanceSystem.localizeAppliesTo(recipeType, langCode);
+            tooltipLines.add(COLOR_ORANGE + typeLabel + ": " + COLOR_WHITE + localizedType);
         }
         if (hasRecipePattern) {
-            tooltipLines.add(COLOR_ORANGE + "Recipe : " + COLOR_WHITE + recipePattern);
+            String recipeLabel = tr(langCode, "tooltip.recipe_label", "Recipe");
+            tooltipLines.add(COLOR_ORANGE + recipeLabel + " : " + COLOR_WHITE + recipePattern);
         }
         if (hasRecipeUsages) {
-            tooltipLines.add(COLOR_ORANGE + "Usages: " + COLOR_WHITE + recipeUsages);
+            String usagesLabel = tr(langCode, "tooltip.usages_label", "Usages");
+            tooltipLines.add(COLOR_ORANGE + usagesLabel + ": " + COLOR_WHITE + recipeUsages);
         }
 
         // Add modular parts line if present
-        String partsLine = buildPartsTooltipLine(partsProfileType, part1Tier, part2Tier, part3Tier);
+        String partsLine = buildPartsTooltipLine(partsProfileType, part1Tier, part2Tier, part3Tier, langCode);
         if (partsLine != null) {
             tooltipLines.add(partsLine);
         }
@@ -713,8 +922,12 @@ public class DynamicTooltipUtils {
                 }
                 String effectType = type.name();
                 String color = getEssenceTooltipColor("Essence_" + effectType);
-                String effectDesc = SocketManager.describeEssenceEffect(type, tier, !isArmorItem, parsedSocketData);
-                String essenceLine = color + effectType + " T" + tier + "</color> " + COLOR_GRAY + effectDesc;
+                String essenceName = localizeEssenceType(type, langCode);
+                String essenceTier = tr(langCode, "tooltip.essence_tier",
+                        essenceName + " T" + tier,
+                        essenceName, tier);
+                String effectDesc = SocketManager.describeEssenceEffect(type, tier, !isArmorItem, parsedSocketData, langCode);
+                String essenceLine = color + essenceTier + "</color> " + COLOR_GRAY + effectDesc;
                 tooltipLines.add(essenceLine);
             }
         }
@@ -746,12 +959,12 @@ public class DynamicTooltipUtils {
             Object builder = builderMethod.invoke(null);
             
             // Set hashInput - required for caching - use the metadata as-is
-            String hashInput = itemId + ":" + (metadata != null ? metadata.hashCode() : "none");
+            String hashInput = (rawItemId != null ? rawItemId : itemId) + ":" + (metadata != null ? metadata.hashCode() : "none");
             Method hashInputMethod = builder.getClass().getMethod("hashInput", String.class);
             hashInputMethod.invoke(builder, hashInput);
             
-            // Set name override if we have a display name
-            if (displayName != null && !displayName.isEmpty()) {
+            // Set name override only when we should override the client-localized name
+            if (shouldOverrideName && displayName != null && !displayName.isEmpty()) {
                 try {
                     Method nameOverrideMethod = builder.getClass().getMethod("nameOverride", String.class);
                     nameOverrideMethod.invoke(builder, displayName);
@@ -1069,7 +1282,7 @@ public class DynamicTooltipUtils {
         return null;
     }
 
-    private static String buildFallbackDisplayName(String baseItemId, String itemId) {
+    private static String buildFallbackDisplayName(String baseItemId, String itemId, String langCode) {
         String source = baseItemId;
         if (source == null || source.isBlank()) {
             source = itemId;
@@ -1079,21 +1292,13 @@ public class DynamicTooltipUtils {
         }
 
         String normalizedId = source.trim();
-        String[] keyCandidates = {
-                "items." + normalizedId + ".name",
-                "server.items." + normalizedId + ".name",
-                "wanmine.items." + normalizedId + ".name"
-        };
-
-        for (String key : keyCandidates) {
-            String localized = LangLoader.getTranslation(key);
-            if (localized != null && !localized.isBlank()) {
-                return localized;
-            }
+        String localized = NameResolver.resolveItemIdTranslation(normalizedId, langCode);
+        if (localized != null && !localized.isBlank()) {
+            return localized;
         }
 
         // Fallback through NameResolver path to keep behavior close to refinement resolution.
-        String resolved = NameResolver.resolveTranslationKey("items." + normalizedId + ".name");
+        String resolved = NameResolver.resolveTranslationKey("items." + normalizedId + ".name", langCode);
         if (resolved != null && !resolved.isBlank()) {
             return resolved;
         }
@@ -1239,6 +1444,131 @@ public class DynamicTooltipUtils {
         }
     }
 
+    private static int[] extractIntArray(String metadata, String searchKey) {
+        try {
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return null;
+            int bracketStart = metadata.indexOf("[", keyIndex);
+            int bracketEnd = metadata.indexOf("]", bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) return null;
+            String arrayContent = metadata.substring(bracketStart + 1, bracketEnd);
+            if (arrayContent.trim().isEmpty()) return new int[0];
+            String[] entries = arrayContent.split(",");
+            int[] values = new int[entries.length];
+            for (int i = 0; i < entries.length; i++) {
+                String entry = entries[i] == null ? "" : entries[i].trim();
+                entry = entry.replace("\"", "");
+                try {
+                    values[i] = Integer.parseInt(entry);
+                } catch (NumberFormatException ignored) {
+                    try {
+                        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("-?\\d+").matcher(entry);
+                        if (matcher.find()) {
+                            values[i] = Integer.parseInt(matcher.group());
+                        } else {
+                            values[i] = 0;
+                        }
+                    } catch (Exception ignoredToo) {
+                        values[i] = 0;
+                    }
+                }
+            }
+            return values;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int maxArrayLength(String[] a, String[] b, String[] c, String[] d, int[] e, int[] f, int[] g) {
+        int max = 0;
+        if (a != null) max = Math.max(max, a.length);
+        if (b != null) max = Math.max(max, b.length);
+        if (c != null) max = Math.max(max, c.length);
+        if (d != null) max = Math.max(max, d.length);
+        if (e != null) max = Math.max(max, e.length);
+        if (f != null) max = Math.max(max, f.length);
+        if (g != null) max = Math.max(max, g.length);
+        return max;
+    }
+
+    private static int extractLoreSocketMax(String metadata) {
+        return extractFirstIntegerNearKey(metadata, META_LORE_SOCKET_MAX);
+    }
+
+    private static String[] extractLoreSocketEntries(String metadata) {
+        String[] entries = extractStringArray(metadata, META_LORE_SOCKET_VALUES);
+        return entries == null ? new String[0] : entries;
+    }
+
+    private static String[] extractLoreSocketColors(String metadata) {
+        String[] entries = extractStringArray(metadata, META_LORE_SOCKET_COLORS);
+        return entries == null ? new String[0] : entries;
+    }
+
+    private static String[] extractLoreSocketSpirits(String metadata) {
+        String[] entries = extractStringArray(metadata, META_LORE_SOCKET_SPIRITS);
+        return entries == null ? new String[0] : entries;
+    }
+
+    private static String[] extractLoreSocketEffects(String metadata) {
+        String[] entries = extractStringArray(metadata, META_LORE_SOCKET_EFFECTS);
+        return entries == null ? new String[0] : entries;
+    }
+
+    private static int[] extractLoreSocketLevels(String metadata) {
+        int[] values = extractIntArray(metadata, META_LORE_SOCKET_LEVELS);
+        return values == null ? new int[0] : values;
+    }
+
+    private static int[] extractLoreSocketFeedTiers(String metadata) {
+        int[] values = extractIntArray(metadata, META_LORE_SOCKET_FEED_TIERS);
+        return values == null ? new int[0] : values;
+    }
+
+    private static int[] extractLoreSocketLocked(String metadata) {
+        int[] values = extractIntArray(metadata, META_LORE_SOCKET_LOCKED);
+        return values == null ? new int[0] : values;
+    }
+
+    private static String extractDisplayNameKey(String metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return null;
+        }
+        try {
+            String searchKey = META_REFINEMENT_NAME_KEY;
+            int keyIndex = metadata.indexOf(searchKey);
+            if (keyIndex < 0) return null;
+
+            int colonIndex = metadata.indexOf(":", keyIndex);
+            if (colonIndex < 0) return null;
+
+            int quoteStart = metadata.indexOf("\"", colonIndex);
+            if (quoteStart < 0) return null;
+
+            int quoteEnd = metadata.indexOf("\"", quoteStart + 1);
+            if (quoteEnd < 0) return null;
+
+            return metadata.substring(quoteStart + 1, quoteEnd);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String normalizeItemId(String itemId) {
+        if (itemId == null) {
+            return null;
+        }
+        String trimmed = itemId.trim();
+        if (trimmed.isEmpty()) {
+            return trimmed;
+        }
+        int dttIndex = trimmed.indexOf("__dtt_");
+        if (dttIndex > 0) {
+            return trimmed.substring(0, dttIndex);
+        }
+        return trimmed;
+    }
+
     private static String extractStringValue(String metadata, String searchKey) {
         if (metadata == null || metadata.isEmpty() || searchKey == null || searchKey.isBlank()) {
             return null;
@@ -1257,6 +1587,311 @@ public class DynamicTooltipUtils {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String resolveLangCode(String locale) {
+        String fallback = LangLoader.getFallbackLanguage();
+        if (locale == null || locale.isBlank()) {
+            return fallback;
+        }
+        String normalized = LangLoader.normalizeLanguage(locale);
+        if (normalized == null || normalized.isBlank()) {
+            return fallback;
+        }
+        // DynamicTooltipsLib can supply en-US even when the player is on another language.
+        // If we already know a non-English fallback, prefer it to keep tooltips localized.
+        if (fallback != null && !fallback.isBlank()
+                && !fallback.equalsIgnoreCase(normalized)
+                && "en-US".equalsIgnoreCase(normalized)) {
+            return fallback;
+        }
+        return normalized;
+    }
+
+    private static void appendLoreScalingLines(List<String> tooltipLines,
+                                               String langCode,
+                                               LoreAbility ability,
+                                               int level,
+                                               int feedTier) {
+        if (tooltipLines == null || ability == null) {
+            return;
+        }
+        String header = tr(langCode, "ui.lore_feed.scaling_header", "Scaling");
+        tooltipLines.add(COLOR_GRAY + header);
+
+        String chanceTemplate = tr(langCode, "ui.lore_feed.scaling_chance", "Proc Chance: {0}%");
+        String cooldownTemplate = tr(langCode, "ui.lore_feed.scaling_cooldown", "Cooldown: {0}s");
+        String radiusTemplate = tr(langCode, "ui.lore_feed.scaling_radius", "Radius: {0}m");
+        String durationTemplate = tr(langCode, "ui.lore_feed.scaling_duration", "Duration: {0}s");
+        String capTemplate = tr(langCode, "ui.lore_feed.scaling_cap", "Summon Cap: {0}");
+        String doubleCastTemplate = tr(langCode, "ui.lore_feed.scaling_double_cast", "Double Cast Bonus: {0}%");
+        String berserkTemplate = tr(langCode, "ui.lore_feed.scaling_berserk", "Berserk Bonus: {0}%");
+
+        double chance = LoreAbility.scaleProcChance(ability.getProcChance(), feedTier) * 100.0d;
+        long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
+        tooltipLines.add(COLOR_GRAY + chanceTemplate.replace("{0}", formatPercent(chance)));
+        tooltipLines.add(COLOR_GRAY + cooldownTemplate.replace("{0}", formatSeconds(cooldownMs)));
+
+        LoreEffectType effectType = ability.getEffectType();
+        if (effectType == null) {
+            return;
+        }
+
+        if (effectType == LoreEffectType.HEAL_AREA
+                || effectType == LoreEffectType.HEAL_AREA_OVER_TIME
+                || effectType == LoreEffectType.OMNISLASH) {
+            double baseRadius = effectType == LoreEffectType.OMNISLASH
+                    ? LoreAbility.BASE_OMNISLASH_RADIUS
+                    : LoreAbility.BASE_HEAL_AREA_RADIUS;
+            double radius = LoreAbility.scaleRadius(baseRadius, feedTier);
+            tooltipLines.add(COLOR_GRAY + radiusTemplate.replace("{0}", formatValue(radius)));
+        }
+
+        if (effectType == LoreEffectType.HEAL_SELF_OVER_TIME
+                || effectType == LoreEffectType.HEAL_AREA_OVER_TIME) {
+            long duration = LoreAbility.resolveHotDurationMs(feedTier);
+            tooltipLines.add(COLOR_GRAY + durationTemplate.replace("{0}", formatSeconds(duration)));
+        }
+
+        if (effectType == LoreEffectType.HEAL_AREA) {
+            long duration = LoreAbility.resolveAreaHealDurationMs(feedTier);
+            tooltipLines.add(COLOR_GRAY + durationTemplate.replace("{0}", formatSeconds(duration)));
+        }
+
+        if (effectType == LoreEffectType.APPLY_STUN) {
+            double value = ability.getValueForLevel(level);
+            long duration = LoreAbility.resolveStunFreezeDurationMs(value, feedTier);
+            tooltipLines.add(COLOR_GRAY + durationTemplate.replace("{0}", formatSeconds(duration)));
+        }
+
+        if (effectType == LoreEffectType.SUMMON_WOLF_PACK) {
+            int cap = Math.max(1, level + Math.max(0, feedTier));
+            tooltipLines.add(COLOR_GRAY + capTemplate.replace("{0}", String.valueOf(cap)));
+        }
+
+        if (effectType == LoreEffectType.DOUBLE_CAST) {
+            double scaledValue = LoreAbility.scaleEffectValue(ability.getValueForLevel(level), feedTier);
+            double pct = clampPercent(scaledValue, 0.25d, 1.0d) * 100.0d;
+            tooltipLines.add(COLOR_GRAY + doubleCastTemplate.replace("{0}", formatPercent(pct)));
+        }
+
+        if (effectType == LoreEffectType.BERSERK) {
+            long duration = LoreAbility.resolveBerserkDurationMs(feedTier);
+            tooltipLines.add(COLOR_GRAY + berserkTemplate.replace("{0}", formatSeconds(duration)));
+        }
+    }
+
+    private static String formatValue(double value) {
+        double rounded = Math.round(value * 10.0d) / 10.0d;
+        if (Math.abs(rounded - Math.rint(rounded)) < 0.0001d) {
+            return String.format(java.util.Locale.ROOT, "%.0f", rounded);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", rounded);
+    }
+
+    private static String formatPercent(double percent) {
+        double rounded = Math.round(percent * 10.0d) / 10.0d;
+        if (Math.abs(rounded - Math.rint(rounded)) < 0.0001d) {
+            return String.format(java.util.Locale.ROOT, "%.0f", rounded);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", rounded);
+    }
+
+    private static String formatSeconds(long millis) {
+        double seconds = Math.max(0.0d, millis / 1000.0d);
+        double rounded = Math.round(seconds * 10.0d) / 10.0d;
+        if (Math.abs(rounded - Math.rint(rounded)) < 0.0001d) {
+            return String.format(java.util.Locale.ROOT, "%.0f", rounded);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", rounded);
+    }
+
+    private static double clampPercent(double value, double min, double max) {
+        double pct = value <= 1.0d ? value : value / 100.0d;
+        if (pct < min) {
+            return min;
+        }
+        if (pct > max) {
+            return max;
+        }
+        return pct;
+    }
+
+    private static String tr(String langCode, String key, String fallback, Object... params) {
+        String template = LangLoader.getTranslationForLanguage(key, langCode);
+        if (template == null || template.isBlank() || template.equals(key)) {
+            template = fallback;
+        }
+        if (params.length == 0) {
+            return template;
+        }
+        for (int i = 0; i < params.length; i++) {
+            template = template.replace("{" + i + "}", String.valueOf(params[i]));
+        }
+        return template;
+    }
+
+    private static String localizeQuality(String raw, String langCode) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String key = raw.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (key.isBlank()) {
+            return raw;
+        }
+        String translated = LangLoader.getTranslationForLanguage("resonance.quality." + key, langCode);
+        if (translated == null || translated.isBlank() || translated.equals("resonance.quality." + key)) {
+            return raw;
+        }
+        return translated;
+    }
+
+    private static String localizeEssenceType(Essence.Type type, String langCode) {
+        if (type == null) {
+            return tr(langCode, "tooltip.essence.unknown", "Unknown");
+        }
+        String key = switch (type) {
+            case FIRE -> "essence.type.fire";
+            case WATER -> "essence.type.water";
+            case ICE -> "essence.type.ice";
+            case LIGHTNING -> "essence.type.lightning";
+            case LIFE -> "essence.type.life";
+            case VOID -> "essence.type.void";
+        };
+        String translated = LangLoader.getTranslationForLanguage(key, langCode);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            String raw = type.name().toLowerCase(java.util.Locale.ROOT);
+            return raw.isEmpty() ? type.name() : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        }
+        return translated;
+    }
+
+    private static String localizeDisplayName(String metadataName, String metadataNameKey, String baseItemId, String itemId, String langCode) {
+        int level = extractLevelSuffix(metadataName);
+        String baseName = stripLevelSuffix(metadataName);
+
+        String localized = null;
+        if (metadataNameKey != null && !metadataNameKey.isBlank() && looksLikeTranslationKey(metadataNameKey)) {
+            String translated = LangLoader.getTranslationExact(metadataNameKey.trim(), langCode);
+            if (translated != null && !translated.isBlank() && !translated.equals(metadataNameKey)) {
+                localized = translated;
+            }
+        } else if (baseName != null && looksLikeTranslationKey(baseName)) {
+            String translated = LangLoader.getTranslationExact(baseName.trim(), langCode);
+            if (translated != null && !translated.isBlank() && !translated.equals(baseName)) {
+                localized = translated;
+            }
+        }
+
+        if (localized == null || localized.isBlank() || localized.equals(baseName)) {
+            localized = NameResolver.resolveItemIdTranslationNoFallback(baseItemId, langCode);
+            if (localized == null || localized.isBlank()) {
+                localized = NameResolver.resolveItemIdTranslationNoFallback(itemId, langCode);
+            }
+        }
+        if (localized == null || localized.isBlank()) {
+            localized = tryTranslateItemId(baseItemId, langCode);
+        }
+        if ((localized == null || localized.isBlank()) && itemId != null) {
+            localized = tryTranslateItemId(itemId, langCode);
+        }
+        if (localized == null || localized.isBlank()) {
+            localized = baseName;
+        }
+        if (localized == null || localized.isBlank()) {
+            localized = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
+        }
+        if (localized == null || localized.isBlank()) {
+            return null;
+        }
+        if (level > 0) {
+            localized = localized + " +" + level;
+        }
+        return localized;
+    }
+
+    private static int extractLevelSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        String trimmed = value.trim();
+        if (trimmed.endsWith(" +3")) return 3;
+        if (trimmed.endsWith(" +2")) return 2;
+        if (trimmed.endsWith(" +1")) return 1;
+        return 0;
+    }
+
+    private static String stripLevelSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String trimmed = value.trim();
+        if (trimmed.endsWith(" +3") || trimmed.endsWith(" +2") || trimmed.endsWith(" +1")) {
+            return trimmed.substring(0, trimmed.length() - 3).trim();
+        }
+        return value;
+    }
+
+    private static String tryTranslateItemId(String itemId, String langCode) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        String normalizedId = itemId.trim();
+        String localized = NameResolver.resolveItemIdTranslation(normalizedId, langCode);
+        if (localized != null && !localized.isBlank()) {
+            return localized;
+        }
+        return null;
+    }
+
+    private static boolean looksLikeTranslationKey(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        if (!lower.contains(".")) {
+            return false;
+        }
+        if (lower.endsWith(".name")) {
+            return true;
+        }
+        return lower.contains(".items.") || lower.contains(".item.") || lower.contains(".entity.");
+    }
+
+    private static String getPrefixTranslation(String key, String fallback, String langCode) {
+        String translated = LangLoader.getTranslationForLanguage(key, langCode);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            return fallback;
+        }
+        if (!translated.endsWith(" ")) {
+            return translated + " ";
+        }
+        return translated;
+    }
+
+    private static String applyPrefix(String value, String desiredPrefix, String... knownPrefixes) {
+        if (value == null || value.isBlank() || desiredPrefix == null || desiredPrefix.isBlank()) {
+            return value;
+        }
+        if (knownPrefixes != null) {
+            for (String prefix : knownPrefixes) {
+                if (prefix == null || prefix.isBlank()) {
+                    continue;
+                }
+                if (value.startsWith(prefix)) {
+                    if (value.startsWith(desiredPrefix)) {
+                        return value;
+                    }
+                    return desiredPrefix + value.substring(prefix.length());
+                }
+            }
+        }
+        if (value.startsWith(desiredPrefix)) {
+            return value;
+        }
+        return desiredPrefix + value;
     }
 
     private static int extractIntValue(String metadata, String searchKey) {
@@ -1316,7 +1951,12 @@ public class DynamicTooltipUtils {
                 break;
             }
             if (numberEnd > numberStart) {
-                return Double.parseDouble(metadata.substring(numberStart, numberEnd));
+                double result = Double.parseDouble(metadata.substring(numberStart, numberEnd));
+                // Check for Infinity or NaN and return default
+                if (Double.isInfinite(result) || Double.isNaN(result)) {
+                    return defaultValue;
+                }
+                return result;
             }
         } catch (Exception ignored) {
             // Keep default
@@ -1333,7 +1973,7 @@ public class DynamicTooltipUtils {
         return String.format(java.util.Locale.ROOT, "%.1f", safe);
     }
 
-    private static String buildPartsTooltipLine(String profileType, int t1, int t2, int t3) {
+    private static String buildPartsTooltipLine(String profileType, int t1, int t2, int t3, String langCode) {
         if (profileType == null || profileType.isBlank()) {
             return null;
         }
@@ -1342,7 +1982,8 @@ public class DynamicTooltipUtils {
         String[] glyphs = getPartGlyphs(normalized);
 
         StringBuilder sb = new StringBuilder();
-        sb.append(COLOR_YELLOW).append("Parts: ").append(COLOR_WHITE)
+        String partsLabel = tr(langCode, "tooltip.parts_label", "Parts");
+        sb.append(COLOR_YELLOW).append(partsLabel).append(": ").append(COLOR_WHITE)
           .append(getTierColorTag(t1)).append(glyphs[0])
           .append(COLOR_WHITE).append("")
           .append(getTierColorTag(t2)).append(glyphs[1])
@@ -1415,6 +2056,11 @@ public class DynamicTooltipUtils {
             default: return "Ancient";
         }
     }
+
+    private static String getUpgradeName(int level, String langCode) {
+        String key = "tooltip.reforge.weapon_grade." + level;
+        return tr(langCode, key, getUpgradeName(level));
+    }
     
     private static String getArmorUpgradeName(int level) {
         switch (level) {
@@ -1423,6 +2069,11 @@ public class DynamicTooltipUtils {
             case 3: return "Fortified";
             default: return "Ancient";
         }
+    }
+
+    private static String getArmorUpgradeName(int level, String langCode) {
+        String key = "tooltip.reforge.armor_grade." + level;
+        return tr(langCode, key, getArmorUpgradeName(level));
     }
     
     private static double getDamageMultiplier(int level) {
@@ -1551,6 +2202,113 @@ public class DynamicTooltipUtils {
         if (upper.contains("WATER")) return COLOR_BLUE;        // Blue
         
         return COLOR_WHITE;
+    }
+
+    private static String getLoreColorTag(String color) {
+        if (color == null || color.isBlank()) {
+            return COLOR_WHITE;
+        }
+        String lower = color.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("red") || lower.contains("ruby")) return "<color is=\"#FF5555\">";
+        if (lower.contains("blue") || lower.contains("sapphire")) return "<color is=\"#5599FF\">";
+        if (lower.contains("green") || lower.contains("emerald")) return "<color is=\"#55FF77\">";
+        if (lower.contains("purple") || lower.contains("amethyst")) return "<color is=\"#AA55FF\">";
+        if (lower.contains("yellow") || lower.contains("topaz")) return "<color is=\"#FFFF55\">";
+        if (lower.contains("orange")) return "<color is=\"#FFAA00\">";
+        if (lower.contains("black") || lower.contains("onyx")) return "<color is=\"#555555\">";
+        if (lower.contains("white") || lower.contains("diamond")) return "<color is=\"#FFFFFF\">";
+        if (lower.contains("cyan") || lower.contains("opal")) return "<color is=\"#55FFFF\">";
+        return COLOR_WHITE;
+    }
+
+    private static String resolveLoreSocketColor(String color, String entry, String spiritId, String itemId, int index) {
+        if (color != null && !color.isBlank()) {
+            return color.trim();
+        }
+        if (entry != null && !entry.isBlank()) {
+            String gemColor = LoreGemRegistry.resolveColor(entry);
+            if (gemColor != null && !gemColor.isBlank()) {
+                return gemColor;
+            }
+        }
+        if (spiritId != null && !spiritId.isBlank()) {
+            String spiritColor = LoreGemRegistry.resolveSpiritColor(spiritId);
+            if (spiritColor != null && !spiritColor.isBlank()) {
+                return spiritColor;
+            }
+        }
+        List<String> known = LoreGemRegistry.getKnownColors();
+        if (known != null && !known.isEmpty() && itemId != null && !itemId.isBlank()) {
+            String seed = itemId.trim() + ":" + index;
+            int idx = Math.floorMod(seed.hashCode(), known.size());
+            String picked = known.get(idx);
+            if (picked != null && !picked.isBlank()) {
+                return picked;
+            }
+        }
+        return color;
+    }
+
+    private static String localizeLoreSpiritName(String spiritId, String langCode) {
+        if (spiritId == null || spiritId.isBlank()) {
+            return "";
+        }
+        String trimmed = spiritId.trim();
+        if (looksLikeTranslationKey(trimmed)) {
+            String translated = LangLoader.getTranslationForLanguage(trimmed, langCode);
+            if (translated != null && !translated.isBlank() && !translated.equals(trimmed)) {
+                return translated;
+            }
+        }
+        String raw = trimmed.contains(".") ? trimmed.substring(trimmed.lastIndexOf('.') + 1) : trimmed;
+        return humanizeToken(raw);
+    }
+
+    private static LoreAbility applyEffectOverride(LoreAbility ability, String overrideRaw) {
+        if (ability == null) {
+            return null;
+        }
+        if (overrideRaw == null || overrideRaw.isBlank()) {
+            return ability;
+        }
+        LoreEffectType override = LoreEffectType.fromString(overrideRaw, null);
+        if (override == null || override == ability.getEffectType()) {
+            return ability;
+        }
+        return new LoreAbility(
+                ability.getSpiritId(),
+                ability.getTrigger(),
+                ability.getProcChance(),
+                ability.getCooldownMs(),
+                override,
+                ability.getBaseValue(),
+                ability.getPerLevel(),
+                ability.getAbilityNameKey(),
+                ability.getAbilityNameFallback()
+        );
+    }
+
+    private static String humanizeToken(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String lower = raw.trim().replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
+        String[] parts = lower.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if (part.isEmpty()) {
+                continue;
+            }
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                sb.append(part.substring(1));
+            }
+            if (i < parts.length - 1) {
+                sb.append(' ');
+            }
+        }
+        return sb.toString();
     }
 }
 

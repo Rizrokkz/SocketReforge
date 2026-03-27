@@ -1,0 +1,11 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Ingredient_Ghastly_Essence.name",
+    "Description": "irai.items.Ingredient_Ghastly_Essence.description"
+  },
+  "ItemLevel": 1,
+  "Icon": "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
+  "Quality": "Legendary",
+  "Model": "Resources/Ingredients/Spiral_Fruit.blockymodel",
+  "Texture": "Resources/Ingredients/Spiral_Fruit_Texture.png"
+}

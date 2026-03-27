@@ -1,7 +1,7 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
-<p><strong>Latest update highlights:</strong> NEW Socket Loot System — enemies and chests can now drop socketed gear! Average damage in tooltips, Greater essences, and performance optimizations.</p>
+<p><strong>Latest update highlights:</strong> Socket Expander/Diffuser support items, spellbooks now count as staffs for resonance, and chest loot can roll expander/diffuser supports. Socket Bench previews now reflect expander/diffuser max changes.</p>
 
 <hr>
 
@@ -662,6 +662,16 @@
     <td><strong>Essence Crafting</strong></td>
     <td>Craft and upgrade essences</td>
     <td>✅ Available</td>
+  </tr>
+  <tr>
+    <td><strong>Lore System</strong></td>
+    <td>Spirit gems, lore sockets, and combat abilities tied to wild spirits</td>
+    <td>⚠️ WIP</td>
+  </tr>
+   <tr>
+    <td><strong>Gem Socketing</strong></td>
+    <td>Craft and upgrade essences</td>
+    <td>✅ WIP</td>
   </tr>
 </table>
 

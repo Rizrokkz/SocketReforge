@@ -3,6 +3,8 @@ package irai.mod.reforge.Socket;
 import java.util.Locale;
 import java.util.Random;
 
+import irai.mod.reforge.Util.LangLoader;
+
 /**
  * Canonical math for essence tier effects and display strings.
  * Keep all tier->value logic here so gameplay and UI stay in sync.
@@ -171,6 +173,110 @@ public final class SocketEffectMath {
             default:
                 return "Unknown";
         }
+    }
+
+    public static String describeEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData, double multiplier, String langCode) {
+        if (type == null) {
+            return translate(langCode, "tooltip.essence.unknown", "Unknown");
+        }
+        int safeTier = clampTier(tier);
+        double safeMultiplier = multiplier <= 0.0 ? 1.0 : multiplier;
+
+        if (isWeapon) {
+            switch (type) {
+                case FIRE:
+                case WATER: {
+                    double[] split = splitWeaponDamagePoints(socketData, type, safeTier);
+                    double percent = split[0] * safeMultiplier;
+                    double flat = split[1] * safeMultiplier;
+                    if (percent > 0.0 && flat > 0.0) {
+                        return translate(langCode, "tooltip.essence.weapon.damage_both",
+                                "+" + formatBonus(percent) + "% DMG, +" + formatBonus(flat) + " Flat DMG",
+                                formatBonus(percent), formatBonus(flat));
+                    }
+                    if (percent > 0.0) {
+                        return translate(langCode, "tooltip.essence.weapon.damage_percent",
+                                "+" + formatBonus(percent) + "% DMG",
+                                formatBonus(percent));
+                    }
+                    return translate(langCode, "tooltip.essence.weapon.damage_flat",
+                            "+" + formatBonus(flat) + " Flat DMG",
+                            formatBonus(flat));
+                }
+                case ICE:
+                    return translate(langCode, "tooltip.essence.weapon.ice",
+                            "+" + formatBonus(weaponIceDamageFlat(safeTier) * safeMultiplier) + " Cold DMG",
+                            formatBonus(weaponIceDamageFlat(safeTier) * safeMultiplier));
+                case LIGHTNING:
+                    return translate(langCode, "tooltip.essence.weapon.lightning",
+                            "+" + formatBonus(weaponLightningAttackSpeedPercent(safeTier) * safeMultiplier)
+                                    + "% ATK Spd, +" + formatBonus(weaponLightningCritChancePercent(safeTier) * safeMultiplier) + "% Crit",
+                            formatBonus(weaponLightningAttackSpeedPercent(safeTier) * safeMultiplier),
+                            formatBonus(weaponLightningCritChancePercent(safeTier) * safeMultiplier));
+                case LIFE:
+                    return translate(langCode, "tooltip.essence.weapon.life",
+                            "+" + formatBonus(weaponLifeStealPercent(safeTier) * safeMultiplier) + "% Lifesteal",
+                            formatBonus(weaponLifeStealPercent(safeTier) * safeMultiplier));
+                case VOID: {
+                    double critDmg = weaponVoidCritDamagePercent(safeTier) * safeMultiplier;
+                    if (safeTier >= 5) {
+                        String suffix = translate(langCode, "tooltip.essence.weapon.void_blood_pact_suffix",
+                                "Blood Pact (1% Max HP per equipped Void essence -> bonus DMG)");
+                        return translate(langCode, "tooltip.essence.weapon.void_blood_pact",
+                                "+" + formatBonus(critDmg) + "% Crit DMG, " + suffix,
+                                formatBonus(critDmg), suffix);
+                    }
+                    return translate(langCode, "tooltip.essence.weapon.void",
+                            "+" + formatBonus(critDmg) + "% Crit DMG",
+                            formatBonus(critDmg));
+                }
+                default:
+                    return translate(langCode, "tooltip.essence.unknown", "Unknown");
+            }
+        }
+
+        switch (type) {
+            case FIRE:
+                return translate(langCode, "tooltip.essence.armor.fire",
+                        "+" + formatBonus(armorFireDefensePercent(safeTier) * safeMultiplier) + "% Fire Defense",
+                        formatBonus(armorFireDefensePercent(safeTier) * safeMultiplier));
+            case ICE:
+                return translate(langCode, "tooltip.essence.armor.ice",
+                        "+" + formatBonus(armorIceSlowPercent(safeTier) * safeMultiplier) + "% Slow",
+                        formatBonus(armorIceSlowPercent(safeTier) * safeMultiplier));
+            case LIGHTNING:
+                return translate(langCode, "tooltip.essence.armor.lightning",
+                        "+" + formatBonus(armorLightningEvasionPercent(safeTier) * safeMultiplier) + "% Evasion",
+                        formatBonus(armorLightningEvasionPercent(safeTier) * safeMultiplier));
+            case LIFE:
+                return translate(langCode, "tooltip.essence.armor.life",
+                        "+" + formatBonus(armorLifeHealthFlat(safeTier) * safeMultiplier) + " HP",
+                        formatBonus(armorLifeHealthFlat(safeTier) * safeMultiplier));
+            case VOID:
+                return translate(langCode, "tooltip.essence.armor.void",
+                        "+" + formatBonus(armorVoidDefensePercent(safeTier) * safeMultiplier) + "% Defense",
+                        formatBonus(armorVoidDefensePercent(safeTier) * safeMultiplier));
+            case WATER:
+                return translate(langCode, "tooltip.essence.armor.water",
+                        "+" + formatBonus(armorWaterRegenFlat(safeTier) * safeMultiplier) + " Regeneration",
+                        formatBonus(armorWaterRegenFlat(safeTier) * safeMultiplier));
+            default:
+                return translate(langCode, "tooltip.essence.unknown", "Unknown");
+        }
+    }
+
+    private static String translate(String langCode, String key, String fallback, Object... params) {
+        String template = LangLoader.getTranslationForLanguage(key, langCode);
+        if (template == null || template.isBlank() || template.equals(key)) {
+            template = fallback;
+        }
+        if (params.length == 0) {
+            return template;
+        }
+        for (int i = 0; i < params.length; i++) {
+            template = template.replace("{" + i + "}", String.valueOf(params[i]));
+        }
+        return template;
     }
 
     public static String formatBonus(double value) {

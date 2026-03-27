@@ -9,19 +9,19 @@ import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.protocol.BlockPosition;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
-import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
-import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
+import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ItemTypeUtils;
@@ -30,6 +30,7 @@ import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.Util.LangLoader;
 
 
 /**
@@ -217,6 +218,7 @@ public class ReforgeEquip extends SimpleInteraction {
     private static final String META_REFINEMENT_LEVEL = "SocketReforge.Refinement.Level";
     private static final String META_BASE_ITEM_ID = "SocketReforge.Refinement.BaseItemId";
     private static final String META_REFINEMENT_NAME = "SocketReforge.Refinement.DisplayName";
+    private static final String META_REFINEMENT_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
     
     /**
      * Gets refinement level from item metadata.
@@ -243,7 +245,8 @@ public class ReforgeEquip extends SimpleInteraction {
     
     /**
      * Applies the upgrade level to an item's metadata.
-     * Stores the RESOLVED display name (not the translation key).
+     * Stores the RESOLVED display name (for base tooltip display).
+     * Also stores the translation key separately for per-player localization.
      */
     public static ItemStack withUpgradeLevel(ItemStack item, int level) {
         if (item == null || item.isEmpty()) {
@@ -257,25 +260,33 @@ public class ReforgeEquip extends SimpleInteraction {
             updated = updated.withMetadata(META_BASE_ITEM_ID, Codec.STRING, baseId);
         }
         
-        // Store the RESOLVED display name in metadata (not the translation key)
-        // Get the translation key and resolve it to the actual localized name
+        // Resolve a readable name for the base tooltip (stored name)
         String translationKey = NameResolver.getTranslationKey(item);
-        String resolvedName;
-        if (translationKey != null && !translationKey.isEmpty()) {
-            // Resolve the translation key to get the actual localized name
-            resolvedName = NameResolver.resolveTranslationKey(translationKey);
-        } else {
-            // Fall back to item ID
-            resolvedName = item.getItemId();
+        if (translationKey == null || translationKey.isBlank()) {
+            translationKey = NameResolver.resolveItemIdTranslationKey(item.getItemId(), LangLoader.getFallbackLanguage());
         }
-        
-        // Append refinement level if > 0
+
+        String baseName = null;
+        if (translationKey != null && !translationKey.isBlank()) {
+            baseName = NameResolver.resolveTranslationKey(translationKey, LangLoader.getFallbackLanguage());
+        }
+        if (baseName == null || baseName.isBlank()) {
+            baseName = NameResolver.resolveItemIdTranslation(item.getItemId(), LangLoader.getFallbackLanguage());
+        }
+        if (baseName == null || baseName.isBlank()) {
+            baseName = item.getItemId();
+        }
+
+        String resolvedName = baseName;
         if (clampedLevel > 0 && resolvedName != null) {
             resolvedName = resolvedName + " +" + clampedLevel;
         }
-        
+
         if (resolvedName != null) {
             updated = updated.withMetadata(META_REFINEMENT_NAME, Codec.STRING, resolvedName);
+        }
+        if (translationKey != null && !translationKey.isBlank()) {
+            updated = updated.withMetadata(META_REFINEMENT_NAME_KEY, Codec.STRING, translationKey);
         }
         
         return updated;
@@ -458,10 +469,17 @@ public class ReforgeEquip extends SimpleInteraction {
         if (player == null) return false;
         World world = player.getWorld();
         if (world == null) return false;
-        Ref<ChunkStore> chunk = BlockModule.getBlockEntity(world, target.x, target.y, target.z);
-        if (chunk == null) return false;
-        BlockState state = BlockState.getBlockState(chunk, chunk.getStore());
-        String blockId = state.getBlockType().getId();
+        WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunkFromBlock(target.x, target.z));
+        if (chunk == null) {
+            return false;
+        }
+        int localX = ChunkUtil.localCoordinate(target.x);
+        int localZ = ChunkUtil.localCoordinate(target.z);
+        BlockType blockType = chunk.getBlockType(localX, target.y, localZ);
+        if (blockType == null || blockType.getId() == null) {
+            return false;
+        }
+        String blockId = blockType.getId();
         for (String bench : sfxConfig.getBenches()) {
             if (blockId.equals(bench)) return true;
         }

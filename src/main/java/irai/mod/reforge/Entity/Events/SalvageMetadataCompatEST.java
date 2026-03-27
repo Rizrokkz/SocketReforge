@@ -1,7 +1,6 @@
 package irai.mod.reforge.Entity.Events;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,10 +11,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bson.BsonDocument;
 
 import com.hypixel.hytale.builtin.crafting.CraftingPlugin;
+import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
 import com.hypixel.hytale.builtin.crafting.component.CraftingManager;
+import com.hypixel.hytale.builtin.crafting.component.ProcessingBenchBlock;
 import com.hypixel.hytale.builtin.crafting.window.BenchWindow;
 import com.hypixel.hytale.builtin.crafting.window.ProcessingBenchWindow;
-import com.hypixel.hytale.builtin.crafting.state.ProcessingBenchState;
 import com.hypixel.hytale.component.ArchetypeChunk;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Store;
@@ -49,17 +49,15 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
     private static final Map<UUID, Map<Short, PendingSnapshot>> PENDING_ORIGINALS = new ConcurrentHashMap<>();
 
     private static Field benchField;
-    private static Field benchStateField;
-    private static Field processingInputContainerField;
+    private static Field benchBlockField;
+    private static Field processingBenchField;
     private static Field processingRecipeField;
     private static Field processingRecipeIdField;
     private static Field craftingRecipeIdField;
     private static Field craftingRecipePrimaryOutputQuantityField;
-    private static Method processingUpdateRecipeMethod;
-    private static Method processingClearRecipeMethod;
     private static boolean loggedBenchReflectionError;
-    private static boolean loggedBenchStateReflectionError;
-    private static boolean loggedInputContainerReflectionError;
+    private static boolean loggedBenchBlockReflectionError;
+    private static boolean loggedProcessingBenchReflectionError;
     private static boolean loggedUpdateRecipeReflectionError;
     private static boolean loggedRecipeInjectionReflectionError;
 
@@ -127,24 +125,25 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
             }
 
             sawSalvageWindow = true;
-            ProcessingBenchState state = getBenchState(processingWindow);
-            if (state != null) {
-                ItemContainer inputContainer = getProcessingInputContainer(state);
+            BenchBlock benchBlock = getBenchBlock(processingWindow);
+            ProcessingBenchBlock processingBench = getProcessingBench(processingWindow);
+            if (processingBench != null) {
+                ItemContainer inputContainer = processingBench.getInputContainer();
                 if (inputContainer != null) {
-                    if (tryInjectMetadataBoundRecipe(state, bench, inputContainer)) {
+                    if (tryInjectMetadataBoundRecipe(processingBench, bench, benchBlock, inputContainer)) {
                         restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
                         continue;
                     }
                     int changed = sanitizeContainer(inputContainer, playerId);
                     if (changed > 0) {
-                        forceRecipeRefresh(state);
+                        forceRecipeRefresh(processingBench, benchBlock);
                     }
                     restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
                 } else {
                     // Fallback: sanitize the combined window container if direct input container is unavailable.
                     int changed = sanitizeContainer(processingWindow.getItemContainer(), playerId);
                     if (changed > 0) {
-                        forceRecipeRefresh(state);
+                        forceRecipeRefresh(processingBench, benchBlock);
                     }
                 }
             } else {
@@ -176,62 +175,69 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         }
     }
 
-    private static ProcessingBenchState getBenchState(ProcessingBenchWindow window) {
+    private static BenchBlock getBenchBlock(ProcessingBenchWindow window) {
         if (window == null) {
             return null;
         }
         try {
-            if (benchStateField == null) {
-                benchStateField = BenchWindow.class.getDeclaredField("benchState");
-                benchStateField.setAccessible(true);
+            if (benchBlockField == null) {
+                benchBlockField = BenchWindow.class.getDeclaredField("benchBlock");
+                benchBlockField.setAccessible(true);
             }
-            Object state = benchStateField.get(window);
-            if (state instanceof ProcessingBenchState processingBenchState) {
-                return processingBenchState;
+            Object value = benchBlockField.get(window);
+            if (value instanceof BenchBlock benchBlock) {
+                return benchBlock;
             }
             return null;
         } catch (Throwable t) {
-            if (!loggedBenchStateReflectionError) {
-                loggedBenchStateReflectionError = true;
-                log("Failed to access BenchWindow.benchState via reflection: " + t.getMessage());
+            if (!loggedBenchBlockReflectionError) {
+                loggedBenchBlockReflectionError = true;
+                log("Failed to access BenchWindow.benchBlock via reflection: " + t.getMessage());
             }
             return null;
         }
     }
 
-    private static ItemContainer getProcessingInputContainer(ProcessingBenchState state) {
-        if (state == null) {
+    private static ProcessingBenchBlock getProcessingBench(ProcessingBenchWindow window) {
+        if (window == null) {
             return null;
         }
         try {
-            if (processingInputContainerField == null) {
-                processingInputContainerField = ProcessingBenchState.class.getDeclaredField("inputContainer");
-                processingInputContainerField.setAccessible(true);
+            if (processingBenchField == null) {
+                processingBenchField = ProcessingBenchWindow.class.getDeclaredField("processingBenchState");
+                processingBenchField.setAccessible(true);
             }
-            return (ItemContainer) processingInputContainerField.get(state);
+            Object state = processingBenchField.get(window);
+            if (state instanceof ProcessingBenchBlock processingBench) {
+                return processingBench;
+            }
+            return null;
         } catch (Throwable t) {
-            if (!loggedInputContainerReflectionError) {
-                loggedInputContainerReflectionError = true;
-                log("Failed to access ProcessingBenchState.inputContainer via reflection: " + t.getMessage());
+            if (!loggedProcessingBenchReflectionError) {
+                loggedProcessingBenchReflectionError = true;
+                log("Failed to access ProcessingBenchWindow.processingBenchState via reflection: " + t.getMessage());
             }
             return null;
         }
     }
 
-    private static boolean tryInjectMetadataBoundRecipe(ProcessingBenchState state, Bench bench, ItemContainer inputContainer) {
-        if (state == null || bench == null || inputContainer == null) {
+    private static boolean tryInjectMetadataBoundRecipe(ProcessingBenchBlock processingBench,
+                                                        Bench bench,
+                                                        BenchBlock benchBlock,
+                                                        ItemContainer inputContainer) {
+        if (processingBench == null || bench == null || inputContainer == null) {
             return false;
         }
         if (!containsMetadataSensitiveInput(inputContainer)) {
             return false;
         }
-        RecipeSelection selection = selectRecipeIgnoringMetadata(bench, state, inputContainer);
+        RecipeSelection selection = selectRecipeIgnoringMetadata(bench, benchBlock, inputContainer);
         if (selection == null) {
             return false;
         }
         try {
             CraftingRecipe clone = cloneRecipeWithBoundMetadata(selection, inputContainer);
-            setProcessingRecipe(state, clone);
+            setProcessingRecipe(processingBench, clone);
             return true;
         } catch (Throwable t) {
             if (!loggedRecipeInjectionReflectionError) {
@@ -255,8 +261,8 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         return false;
     }
 
-    private static RecipeSelection selectRecipeIgnoringMetadata(Bench bench, ProcessingBenchState state, ItemContainer inputContainer) {
-        if (bench == null || state == null || inputContainer == null) {
+    private static RecipeSelection selectRecipeIgnoringMetadata(Bench bench, BenchBlock benchBlock, ItemContainer inputContainer) {
+        if (bench == null || inputContainer == null) {
             return null;
         }
         List<CraftingRecipe> recipes = CraftingPlugin.getBenchRecipes(bench.getType(), bench.getId());
@@ -266,9 +272,10 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
 
         RecipeSelection bestSelection = null;
         int bestInputCount = -1;
+        int tierLevel = benchBlock != null ? benchBlock.getTierLevel() : 0;
 
         for (CraftingRecipe recipe : recipes) {
-            if (recipe == null || recipe.isRestrictedByBenchTierLevel(bench.getId(), state.getTierLevel())) {
+            if (recipe == null || recipe.isRestrictedByBenchTierLevel(bench.getId(), tierLevel)) {
                 continue;
             }
             MaterialQuantity[] inputs = recipe.getInput();
@@ -385,13 +392,13 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         return clone;
     }
 
-    private static void setProcessingRecipe(ProcessingBenchState state, CraftingRecipe recipe) throws Exception {
+    private static void setProcessingRecipe(ProcessingBenchBlock state, CraftingRecipe recipe) throws Exception {
         if (processingRecipeField == null) {
-            processingRecipeField = ProcessingBenchState.class.getDeclaredField("recipe");
+            processingRecipeField = ProcessingBenchBlock.class.getDeclaredField("recipe");
             processingRecipeField.setAccessible(true);
         }
         if (processingRecipeIdField == null) {
-            processingRecipeIdField = ProcessingBenchState.class.getDeclaredField("recipeId");
+            processingRecipeIdField = ProcessingBenchBlock.class.getDeclaredField("recipeId");
             processingRecipeIdField.setAccessible(true);
         }
         processingRecipeField.set(state, recipe);
@@ -618,25 +625,19 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         return metadata == null || metadata.isEmpty();
     }
 
-    private static void forceRecipeRefresh(ProcessingBenchState state) {
+    private static void forceRecipeRefresh(ProcessingBenchBlock state, BenchBlock benchBlock) {
         if (state == null) {
             return;
         }
         try {
-            if (processingClearRecipeMethod == null) {
-                processingClearRecipeMethod = ProcessingBenchState.class.getDeclaredMethod("clearRecipe");
-                processingClearRecipeMethod.setAccessible(true);
+            state.clearCurrentRecipe();
+            if (benchBlock != null) {
+                state.checkForRecipeUpdate(benchBlock);
             }
-            if (processingUpdateRecipeMethod == null) {
-                processingUpdateRecipeMethod = ProcessingBenchState.class.getDeclaredMethod("updateRecipe");
-                processingUpdateRecipeMethod.setAccessible(true);
-            }
-            processingClearRecipeMethod.invoke(state);
-            processingUpdateRecipeMethod.invoke(state);
         } catch (Throwable t) {
             if (!loggedUpdateRecipeReflectionError) {
                 loggedUpdateRecipeReflectionError = true;
-                log("Failed to invoke ProcessingBenchState.updateRecipe via reflection: " + t.getMessage());
+                log("Failed to refresh processing bench recipe: " + t.getMessage());
             }
         }
     }

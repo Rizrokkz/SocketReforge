@@ -31,6 +31,7 @@ import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * HyUI page for pulling recipes out of the Resonant Compendium.
@@ -131,7 +132,7 @@ public final class ResonantCompendiumUI {
             return;
         }
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - compendium UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -147,7 +148,7 @@ public final class ResonantCompendiumUI {
         CompendiumContext context = resolveCompendium(player);
         if (context == null) {
             closePageIfOpen(ref);
-            player.sendMessage(Message.raw("<color=#FF5555>Hold the Resonant Compendium and reopen the UI."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.error_hold")));
             return;
         }
         Snapshot snapshot = collectSnapshot(context.compendium);
@@ -216,7 +217,7 @@ public final class ResonantCompendiumUI {
 
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
-            String html = buildHtml(snapshot, state);
+            String html = buildHtml(player, snapshot, state);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
 
@@ -243,7 +244,7 @@ public final class ResonantCompendiumUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         CompendiumContext context = resolveCompendium(finalPlayer);
                         if (context == null) {
-                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>Hold the Resonant Compendium and reopen the UI."));
+                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.compendium.error_hold")));
                             return;
                         }
                         if (RecipeCombineUI.isAvailable()) {
@@ -263,7 +264,7 @@ public final class ResonantCompendiumUI {
                                 });
                             }, 100, TimeUnit.MILLISECONDS);
                         } else {
-                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - recipe combine UI disabled."));
+                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.recipe_combine.hyui_missing")));
                         }
                     });
 
@@ -297,9 +298,11 @@ public final class ResonantCompendiumUI {
         }
     }
 
-    private static String buildHtml(Snapshot snapshot, SelectionState state) {
+    private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
         String selectedKey = state != null ? state.selectedKey : null;
-        String status = state != null && state.statusText != null ? state.statusText : "Select a recipe to extract.";
+        String status = state != null && state.statusText != null
+                ? state.statusText
+                : LangLoader.getUITranslation(player, "ui.compendium.status_select_recipe");
 
         Entry selected = resolveSelection(snapshot.entries, selectedKey);
         if (selected == null && !snapshot.entries.isEmpty()) {
@@ -308,21 +311,29 @@ public final class ResonantCompendiumUI {
         }
 
         if (snapshot.entries.isEmpty()) {
-            status = "Compendium is empty.";
+            status = LangLoader.getUITranslation(player, "ui.compendium.status_empty");
         }
 
-        String recipeOptions = buildRecipeOptions(snapshot.entries, selectedKey);
-        String summaryText = buildSummaryText(snapshot);
+        String recipeOptions = buildRecipeOptions(player, snapshot.entries, selectedKey);
+        String summaryText = buildSummaryText(player, snapshot);
 
-        String recipeName = selected != null ? selected.name : "-";
-        String recipeType = selected != null ? resolveRecipeType(selected) : "-";
-        String recipeProgress = selected != null
-                ? selected.stats.revealedSlots() + "/" + selected.stats.totalSlots() + " slots revealed"
-                + (selected.stats.isComplete() ? " (complete)" : "")
-                : "-";
+        String recipeName = selected != null ? localizeRecipeName(player, selected.name) : "-";
+        String recipeType = selected != null ? resolveRecipeType(player, selected) : "-";
+        String recipeProgress = "-";
+        if (selected != null) {
+            String suffix = "";
+            if (selected.stats.isComplete()) {
+                String completeSuffix = LangLoader.getUITranslation(player, "ui.compendium.recipe_complete_suffix");
+                if (completeSuffix != null && !completeSuffix.isBlank()) {
+                    suffix = " " + completeSuffix;
+                }
+            }
+            recipeProgress = LangLoader.getUITranslation(player, "ui.compendium.recipe_progress",
+                    selected.stats.revealedSlots(), selected.stats.totalSlots(), suffix);
+        }
         String recipeQuantity = selected != null ? String.valueOf(selected.quantity) : "-";
-        String recipeUsages = selected != null ? formatUsages(selected) : "-";
-        String patternPreview = buildPatternPreviewHtml(selected);
+        String recipeUsages = selected != null ? formatUsages(player, selected) : "-";
+        String patternPreview = buildPatternPreviewHtml(player, selected);
 
         boolean canExtract = selected != null;
         String extractDisabledAttr = canExtract ? "" : "disabled=\"true\"";
@@ -338,25 +349,25 @@ public final class ResonantCompendiumUI {
         html = html.replace("{{patternPreview}}", patternPreview);
         html = html.replace("{{statusText}}", escapeHtml(status));
         html = html.replace("{{extractDisabledAttr}}", extractDisabledAttr);
-        return html;
+        return LangLoader.replaceUiTokens(player, html);
     }
 
     private static ProcessResult processExtract(Player player, Snapshot snapshot, String selectionKey) {
         if (selectionKey == null || selectionKey.isBlank()) {
-            return new ProcessResult("Pick a recipe first.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.error_pick_recipe"));
         }
         CompendiumContext context = resolveCompendium(player);
         if (context == null) {
-            return new ProcessResult("Compendium moved. Reopen the UI.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.error_compendium_moved"));
         }
         Map<String, CompendiumEntry> data = ResonantCompendiumUtils.getCompendiumData(context.compendium);
         String dataKey = decodeKey(selectionKey);
         if (dataKey == null || dataKey.isBlank()) {
-            return new ProcessResult("Recipe not found. Reopen the UI.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.error_recipe_missing"));
         }
         CompendiumEntry entry = data.get(dataKey);
         if (entry == null) {
-            return new ProcessResult("Recipe not found. Reopen the UI.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.error_recipe_missing"));
         }
 
         String pattern = entry != null && entry.pattern != null ? entry.pattern : "";
@@ -364,9 +375,9 @@ public final class ResonantCompendiumUI {
         boolean complete = stats.isComplete();
 
         int quantity = Math.max(1, entry.quantity);
-        ItemStack recipe = buildRecipeItem(entry.name, entry, complete);
+        ItemStack recipe = buildRecipeItem(player, entry.name, entry, complete);
         if (!UIInventoryUtils.addItemToInventory(player, recipe)) {
-            return new ProcessResult("Inventory full. Make space first.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.error_inventory_full"));
         }
 
         int remaining = Math.max(0, quantity - 1);
@@ -385,17 +396,19 @@ public final class ResonantCompendiumUI {
             DynamicTooltipUtils.refreshAllPlayers();
         }
         if (remaining > 0) {
-            return new ProcessResult("Extracted 1 recipe. " + remaining + " remain in the compendium.");
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.status_extracted_remaining", remaining));
         }
-        return new ProcessResult("Extracted 1 recipe.");
+        return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.status_extracted"));
     }
 
-    private static ItemStack buildRecipeItem(String recipeName, CompendiumEntry entry, boolean complete) {
+    private static ItemStack buildRecipeItem(Player player, String recipeName, CompendiumEntry entry, boolean complete) {
         String safeName = recipeName == null ? "" : recipeName.trim();
+        String displayName = localizeRecipeName(player, safeName);
         String pattern = entry != null && entry.pattern != null ? entry.pattern : "";
         String usages = entry != null && entry.usages != null ? entry.usages : "";
         ItemStack recipe = new ItemStack(ResonantRecipeUtils.RECIPE_ITEM_ID, 1)
-                .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, safeName + " Recipe")
+                .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING,
+                        LangLoader.getUITranslation(player, "ui.compendium.recipe_display_name", displayName))
                 .withMetadata(ResonantRecipeUtils.META_RECIPE_NAME, Codec.STRING, safeName)
                 .withMetadata(ResonantRecipeUtils.META_RECIPE_PATTERN, Codec.STRING, pattern);
         String type = resolveRecipeTypeFromSystem(safeName);
@@ -408,12 +421,15 @@ public final class ResonantCompendiumUI {
         return complete ? ResonantRecipeUtils.ensureRecipeUsages(recipe) : recipe;
     }
 
-    private static String resolveRecipeType(Entry entry) {
+    private static String resolveRecipeType(Player player, Entry entry) {
         if (entry == null) {
-            return "Unknown";
+            return LangLoader.getUITranslation(player, "ui.compendium.type_unknown");
         }
         String type = resolveRecipeTypeFromSystem(entry.name);
-        return type == null || type.isBlank() ? "Unknown" : type;
+        if (type == null || type.isBlank()) {
+            return LangLoader.getUITranslation(player, "ui.compendium.type_unknown");
+        }
+        return ResonanceSystem.localizeAppliesTo(type, player);
     }
 
     private static String resolveRecipeTypeFromSystem(String recipeName) {
@@ -432,12 +448,12 @@ public final class ResonantCompendiumUI {
         return "";
     }
 
-    private static String formatUsages(Entry entry) {
+    private static String formatUsages(Player player, Entry entry) {
         if (entry == null) {
-            return "-";
+            return LangLoader.getUITranslation(player, "ui.compendium.usages_none");
         }
         if (!entry.stats.isComplete()) {
-            return "Incomplete";
+            return LangLoader.getUITranslation(player, "ui.compendium.usages_incomplete");
         }
         String usages = entry.usages;
         if (usages == null || usages.isBlank()) {
@@ -446,18 +462,27 @@ public final class ResonantCompendiumUI {
         return usages;
     }
 
-    private static String buildSummaryText(Snapshot snapshot) {
+    private static String buildSummaryText(Player player, Snapshot snapshot) {
         int total = snapshot.entries.size();
         int complete = snapshot.completeCount;
         int incomplete = Math.max(0, total - complete);
         int totalQuantity = snapshot.totalQuantity;
-        return "Stored: " + total + " recipes (" + complete + " complete, " + incomplete + " incomplete), "
-                + totalQuantity + " shards total.";
+        return LangLoader.getUITranslation(player, "ui.compendium.summary",
+                total, complete, incomplete, totalQuantity);
     }
 
-    private static String buildRecipeOptions(List<Entry> entries, String selectedKey) {
+    private static String localizeRecipeName(Player player, String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return rawName == null ? "" : rawName;
+        }
+        return ResonanceSystem.getLocalizedName(rawName, player);
+    }
+
+    private static String buildRecipeOptions(Player player, List<Entry> entries, String selectedKey) {
         if (entries.isEmpty()) {
-            return "<option value=\"\" selected=\"true\">No stored recipes</option>";
+            return "<option value=\"\" selected=\"true\">"
+                    + escapeHtml(LangLoader.getUITranslation(player, "ui.compendium.empty_no_recipes"))
+                    + "</option>";
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < entries.size(); i++) {
@@ -470,13 +495,15 @@ public final class ResonantCompendiumUI {
             sb.append("<option value=\"").append(escapeHtml(key)).append("\"");
             if (selected) sb.append(" selected=\"true\"");
             sb.append(">");
-            sb.append(escapeHtml(entry.name));
+            sb.append(escapeHtml(localizeRecipeName(player, entry.name)));
             if (entry.quantity > 1) {
                 sb.append(" x").append(entry.quantity);
             }
             sb.append(" [").append(entry.stats.revealedSlots()).append("/")
                     .append(entry.stats.totalSlots()).append("]");
-            if (entry.stats.isComplete()) sb.append(" (complete)");
+            if (entry.stats.isComplete()) {
+                sb.append(" ").append(LangLoader.getUITranslation(player, "ui.compendium.recipe_complete_suffix"));
+            }
             sb.append("</option>");
         }
         return sb.toString();
@@ -498,12 +525,12 @@ public final class ResonantCompendiumUI {
         return null;
     }
 
-    private static String buildPatternPreviewHtml(Entry entry) {
+    private static String buildPatternPreviewHtml(Player player, Entry entry) {
         if (entry == null || entry.pattern == null || entry.pattern.isBlank()) {
             StringBuilder empty = new StringBuilder();
             empty.append("<div style=\"layout-mode: Left; spacing: 10;\">");
             empty.append("<div style=\"flex-weight:1;\"></div>");
-            empty.append("<p>No pattern data.</p>");
+            empty.append("<p>").append(escapeHtml(LangLoader.getUITranslation(player, "ui.compendium.no_pattern"))).append("</p>");
             empty.append("<div style=\"flex-weight:1;\"></div>");
             empty.append("</div>");
             return empty.toString();
@@ -511,7 +538,9 @@ public final class ResonantCompendiumUI {
 
         List<String> tokens = parsePatternTokens(entry.pattern);
         if (tokens.isEmpty()) {
-            return "<div style=\"layout-mode: Left; spacing: 10;\"><p>No pattern data.</p></div>";
+            return "<div style=\"layout-mode: Left; spacing: 10;\"><p>"
+                    + escapeHtml(LangLoader.getUITranslation(player, "ui.compendium.no_pattern"))
+                    + "</p></div>";
         }
 
         StringBuilder sb = new StringBuilder();

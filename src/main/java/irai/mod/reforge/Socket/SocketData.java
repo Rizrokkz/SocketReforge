@@ -426,6 +426,9 @@ public class SocketData {
             DynamicTooltipUtils.registerTooltip(itemId, "socket_stats", statLines.toArray(new String[0]));
         }
 
+        // Note: The no-ItemStack overload can't read item metadata, so some tooltip
+        // details available in the ItemStack version won't be available here.
+
         // Add essence info
         for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
             String color = getEssenceColor(entry.getKey());
@@ -475,3 +478,4 @@ public class SocketData {
         return SocketManager.describeEssenceEffect(type, tier, isWeapon, this);
     }
 }
+

@@ -1,17 +1,18 @@
 package irai.mod.reforge;
 
 import java.io.File;
-import java.util.Collection;
+import java.lang.reflect.Field;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nonnull;
 
+import com.al3x.HStats;
 import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
 import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
 import com.hypixel.hytale.event.EventPriority;
@@ -31,10 +32,16 @@ import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldConfig;
+import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
+import com.hypixel.hytale.server.core.universe.world.storage.IChunkSaver;
 import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
+import irai.mod.reforge.Commands.LoreSpiritMapCommand;
+import irai.mod.reforge.Commands.LoreAbilityMapCommand;
+import irai.mod.reforge.Commands.LoreFeedCommand;
+import irai.mod.reforge.Commands.LoreSocketCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
 import irai.mod.reforge.Commands.ResonanceListCommand;
 import irai.mod.reforge.Commands.ResonanceRecipeGiveCommand;
@@ -46,16 +53,24 @@ import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
+import irai.mod.reforge.Common.WorldDroplistRepairUtils;
+import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.LootSocketRollConfig;
+import irai.mod.reforge.Config.LoreConfig;
+import irai.mod.reforge.Config.LoreMappingConfig;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
+import irai.mod.reforge.Config.WorldRepairConfig;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
 import irai.mod.reforge.Entity.Events.LootSocketRoller;
+import irai.mod.reforge.Entity.Events.LoreEffectEST;
+import irai.mod.reforge.Entity.Events.LoreKillEST;
+import irai.mod.reforge.Entity.Events.LorePlayerStateEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
@@ -69,11 +84,17 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
+import irai.mod.reforge.Lore.LoreAbilityRegistry;
+import irai.mod.reforge.Lore.LoreAbsorptionStore;
+import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.EssenceBenchUI;
+import irai.mod.reforge.UI.LoreFeedBenchUI;
+import irai.mod.reforge.UI.LoreSocketBenchUI;
 import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.UI.ResonantCompendiumUI;
@@ -86,6 +107,9 @@ import irai.mod.reforge.Util.LangLoader;
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
+    private final LoreEffectEST loreEffectEST;
+    private final LoreKillEST loreKillEST;
+    private final LorePlayerStateEST lorePlayerStateEST;
     private final SocketStatSystem socketStatSystem;
     private final LifeHealthSystem lifeHealthSystem;
     private final WaterRegenSystem waterRegenSystem;
@@ -101,11 +125,18 @@ public class ReforgePlugin extends JavaPlugin {
     // Scheduled tasks
     private Timer autoSaveTimer;
     private Timer weaponSyncTimer;
+    private Timer worldRepairTimer;
+    private Timer chunkRemovalTimer;
+    private final AtomicBoolean worldRepairScheduled = new AtomicBoolean(false);
+    private final AtomicBoolean chunkRemovalScheduled = new AtomicBoolean(false);
 
     private final Config<SFXConfig> sfxconfig;
     private final Config<RefinementConfig> refinementConfig;
     private final Config<SocketConfig> socketConfig;
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
+    private final Config<LoreConfig> loreConfig;
+    private final Config<LoreMappingConfig> loreMappingConfig;
+    private final Config<WorldRepairConfig> worldRepairConfig;
     private final ConfigService configService;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
@@ -113,6 +144,9 @@ public class ReforgePlugin extends JavaPlugin {
         instance = this;
         refineEST = new EquipmentRefineEST();
         socketEffectEST = new SocketEffectEST();
+        loreEffectEST = new LoreEffectEST();
+        loreKillEST = new LoreKillEST();
+        lorePlayerStateEST = new LorePlayerStateEST();
         socketStatSystem = new SocketStatSystem();
         lifeHealthSystem = new LifeHealthSystem();
         waterRegenSystem = new WaterRegenSystem();
@@ -125,6 +159,9 @@ public class ReforgePlugin extends JavaPlugin {
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
+        this.loreConfig = this.withConfig("LoreConfig", LoreConfig.CODEC);
+        this.loreMappingConfig = this.withConfig("LoreMappingConfig", LoreMappingConfig.CODEC);
+        this.worldRepairConfig = this.withConfig("WorldRepairConfig", WorldRepairConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -152,6 +189,13 @@ public class ReforgePlugin extends JavaPlugin {
             CropEssenceDropUtils.setConfig(cfg);
             NPCLootSocketDropEST.setConfig(cfg);
         });
+
+        this.configService.register("LoreConfig", this.loreConfig, LoreSocketManager::initialize);
+        this.configService.register("LoreMappingConfig", this.loreMappingConfig, cfg -> {
+            LoreGemRegistry.initialize(cfg);
+            LoreAbilityRegistry.initialize(cfg);
+        });
+        this.configService.register("WorldRepairConfig", this.worldRepairConfig, cfg -> {});
     }
 
     @Override
@@ -163,6 +207,8 @@ public class ReforgePlugin extends JavaPlugin {
         // Initialize EquipmentListUI for HyUI integration
         SocketBenchUI.initialize();
         EssenceBenchUI.initialize();
+        LoreSocketBenchUI.initialize();
+        LoreFeedBenchUI.initialize();
         ReforgeBenchUI.initialize();
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
@@ -171,6 +217,7 @@ public class ReforgePlugin extends JavaPlugin {
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
+        LoreAbsorptionStore.initialize(dataFolder);
         // Register interaction
         reforgeEquip = new ReforgeEquip();
 
@@ -201,15 +248,23 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new RuntimeConfigCommand("reforgeconfig", "Open live runtime config UI", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
+        this.getCommandRegistry().registerCommand(new LoreSocketCommand("loregem", "Open lore gem socketing UI", false));
+        this.getCommandRegistry().registerCommand(new LoreFeedCommand("lorefeed", "Open lore feed UI", false));
+        this.getCommandRegistry().registerCommand(new LoreAbilityMapCommand("loreabilities", "Dump lore spirit ability map", false));
+        this.getCommandRegistry().registerCommand(new LoreSpiritMapCommand("lorecolors", "Dump lore spirit to gem color map", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipEnemyCommand("spawnequipenemy", "Spawn equipment-eligible enemy test NPCs", false));
         this.getCommandRegistry().registerCommand(new ItemMetaCommand("itemmeta", "View or modify item metadata", false));
+        this.getCommandRegistry().registerCommand(new ItemMetaCommand("showmeta", "View or modify item metadata", false));
         this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
         this.getCommandRegistry().registerCommand(new ResonanceRecipeGiveCommand("resonancerecipe", "OP: give resonant recipe shards", false));
         this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
+        this.getEntityStoreRegistry().registerSystem(loreEffectEST);
+        this.getEntityStoreRegistry().registerSystem(loreKillEST);
+        this.getEntityStoreRegistry().registerSystem(lorePlayerStateEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
         this.getEntityStoreRegistry().registerSystem(lifeHealthSystem);
         this.getEntityStoreRegistry().registerSystem(waterRegenSystem);
@@ -217,17 +272,22 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
-
-
+        
+        //HSTATS
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.4");
     }
 
     @Override
     protected void start() {
+        logDroplistPatchStatus();
+        autoRegenRegionIfNeeded();
+        scheduleChunkRemovalIfNeeded();
         injectHatchetUseInteractions();
         injectResonantRecipeUseInteraction();
         injectResonantCompendiumUseInteraction();
         configureResonanceSeedFromMainWorld();
         CropEssenceDropUtils.onServerStart();
+        scheduleWorldRepairIfNeeded();
     }
 
     protected void stop() {
@@ -238,6 +298,14 @@ public class ReforgePlugin extends JavaPlugin {
 
         if (weaponSyncTimer != null) {
             weaponSyncTimer.cancel();
+        }
+
+        if (worldRepairTimer != null) {
+            worldRepairTimer.cancel();
+        }
+
+        if (chunkRemovalTimer != null) {
+            chunkRemovalTimer.cancel();
         }
     }
 
@@ -267,6 +335,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public LootSocketRollConfig getLootSocketRollRuntimeConfig() {
         return lootSocketRollConfig.get();
+    }
+
+    public LoreConfig getLoreRuntimeConfig() {
+        return loreConfig.get();
     }
 
     /**
@@ -309,7 +381,7 @@ public class ReforgePlugin extends JavaPlugin {
             public void run() {
                 try {
                     Universe universe = Universe.get();
-                    Collection<Player> players = List.of();
+                    List<Player> players = List.of();
 
                     SyncTasks task = new SyncTasks(players);
                     task.run();
@@ -429,6 +501,302 @@ public class ReforgePlugin extends JavaPlugin {
             System.out.println("[SocketReforge] Resonance combinations seeded from main world.");
         } catch (Exception e) {
             System.err.println("[SocketReforge] Failed to set resonance seed: " + e.getMessage());
+        }
+    }
+
+    private void scheduleWorldRepairIfNeeded() {
+        WorldRepairConfig cfg = worldRepairConfig.get();
+        if (cfg == null) {
+            System.out.println("[SocketReforge] World repair skipped (config unavailable).");
+            return;
+        }
+
+        if (!cfg.isAutoFixEmptyDroplistsOnStart() || cfg.isAutoFixEmptyDroplistsDone()) {
+            return;
+        }
+
+        if (worldRepairTimer != null) {
+            worldRepairTimer.cancel();
+        }
+
+        System.out.println("[SocketReforge] World repair queued (AUTO_FIX_EMPTY_DROPLISTS_ON_START=true).");
+        worldRepairTimer = new Timer("ReforgeWorldRepair", true);
+        long initialDelayMs = 2_000L;
+        long retryDelayMs = 5_000L;
+        worldRepairTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                tryScheduleWorldRepair();
+            }
+        }, initialDelayMs, retryDelayMs);
+    }
+
+    private void scheduleChunkRemovalIfNeeded() {
+        WorldRepairConfig cfg = worldRepairConfig.get();
+        if (cfg == null) {
+            System.out.println("[SocketReforge] Chunk removal skipped (config unavailable).");
+            return;
+        }
+
+        if (!cfg.isAutoRemoveChunkOnStart() || cfg.isAutoRemoveChunkDone()) {
+            return;
+        }
+
+        if (chunkRemovalTimer != null) {
+            chunkRemovalTimer.cancel();
+        }
+
+        System.out.println("[SocketReforge] Chunk removal queued (AUTO_REMOVE_CHUNK_ON_START=true).");
+        chunkRemovalTimer = new Timer("ReforgeChunkRemoval", true);
+        long initialDelayMs = 2_000L;
+        long retryDelayMs = 5_000L;
+        chunkRemovalTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                tryScheduleChunkRemoval();
+            }
+        }, initialDelayMs, retryDelayMs);
+    }
+
+    private void tryScheduleChunkRemoval() {
+        if (!chunkRemovalScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            Universe universe = Universe.get();
+            if (universe == null) {
+                chunkRemovalScheduled.set(false);
+                return;
+            }
+
+            World world = universe.getDefaultWorld();
+            if (world == null) {
+                chunkRemovalScheduled.set(false);
+                return;
+            }
+
+            world.execute(() -> runChunkRemoval(world));
+        } catch (Exception e) {
+            chunkRemovalScheduled.set(false);
+            System.err.println("[SocketReforge] Failed to schedule chunk removal: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void runChunkRemoval(World world) {
+        try {
+            WorldRepairConfig cfg = worldRepairConfig.get();
+            if (cfg == null) {
+                System.out.println("[SocketReforge] Chunk removal skipped (config unavailable).");
+                return;
+            }
+
+            ChunkStore chunkStore = world.getChunkStore();
+            if (chunkStore == null) {
+                System.out.println("[SocketReforge] Chunk removal skipped (chunk store unavailable).");
+                return;
+            }
+
+            IChunkSaver saver = chunkStore.getSaver();
+            if (saver == null) {
+                System.out.println("[SocketReforge] Chunk removal retrying (chunk saver unavailable).");
+                return;
+            }
+
+            int chunkX = cfg.getAutoRemoveChunkX();
+            int chunkZ = cfg.getAutoRemoveChunkZ();
+            saver.removeHolder(chunkX, chunkZ).whenComplete((ignored, throwable) -> {
+                if (throwable != null) {
+                    System.err.println("[SocketReforge] Chunk removal failed for (" + chunkX + "," + chunkZ + "): "
+                            + throwable.getMessage());
+                    throwable.printStackTrace();
+                    return;
+                }
+
+                System.out.println("[SocketReforge] Chunk removed for regeneration: (" + chunkX + "," + chunkZ + ")");
+                cfg.setAutoRemoveChunkDone(true);
+                cfg.setAutoRemoveChunkOnStart(false);
+                configService.saveAndApply("WorldRepairConfig");
+                stopChunkRemovalTimer();
+            });
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Chunk removal crashed: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            chunkRemovalScheduled.set(false);
+        }
+    }
+
+    private void stopChunkRemovalTimer() {
+        if (chunkRemovalTimer != null) {
+            chunkRemovalTimer.cancel();
+            chunkRemovalTimer = null;
+        }
+    }
+
+    private void autoRegenRegionIfNeeded() {
+        WorldRepairConfig cfg = worldRepairConfig.get();
+        if (cfg == null) {
+            System.out.println("[SocketReforge] Region regen skipped (config unavailable).");
+            return;
+        }
+
+        if (!cfg.isAutoRegenRegionOnStart() || cfg.isAutoRegenRegionDone()) {
+            return;
+        }
+
+        String regionPath = cfg.getAutoRegenRegionFile();
+        if (regionPath == null || regionPath.isBlank()) {
+            System.out.println("[SocketReforge] Region regen skipped (AUTO_REGEN_REGION_FILE is blank).");
+            return;
+        }
+
+        File regionFile = new File(regionPath);
+        if (!regionFile.exists()) {
+            System.out.println("[SocketReforge] Region regen skipped (file not found): " + regionFile.getPath());
+            return;
+        }
+
+        File backupFile = resolveRegionBackupFile(regionFile);
+        if (backupFile == null) {
+            System.out.println("[SocketReforge] Region regen skipped (no backup filename available): "
+                    + regionFile.getPath());
+            return;
+        }
+
+        if (!regionFile.renameTo(backupFile)) {
+            System.out.println("[SocketReforge] Region regen failed (rename failed): " + regionFile.getPath());
+            return;
+        }
+
+        System.out.println("[SocketReforge] Region file renamed for regeneration: "
+                + regionFile.getPath()
+                + " -> "
+                + backupFile.getPath());
+
+        cfg.setAutoRegenRegionDone(true);
+        cfg.setAutoRegenRegionOnStart(false);
+        configService.saveAndApply("WorldRepairConfig");
+    }
+
+    private void logDroplistPatchStatus() {
+        boolean patched = false;
+        String version = null;
+        try {
+            Class<?> validatorClass = Class.forName("com.hypixel.hytale.assetstore.AssetKeyValidator");
+            try {
+                Field activeField = validatorClass.getDeclaredField("PATCH_ACTIVE");
+                activeField.setAccessible(true);
+                patched = activeField.getBoolean(null);
+            } catch (NoSuchFieldException ignored) {
+                patched = false;
+            }
+            try {
+                Field versionField = validatorClass.getDeclaredField("PATCH_VERSION");
+                versionField.setAccessible(true);
+                Object value = versionField.get(null);
+                if (value != null) {
+                    version = value.toString();
+                }
+            } catch (NoSuchFieldException ignored) {
+                // No version marker found.
+            }
+        } catch (Exception ignored) {
+            patched = false;
+        }
+
+        if (patched) {
+            String suffix = version == null || version.isBlank() ? "" : (" (" + version + ")");
+            System.out.println("[SocketReforge] Droplist patch active" + suffix + ".");
+        } else {
+            System.out.println("[SocketReforge] Droplist patch NOT detected. Empty droplist chunks may still crash.");
+            System.out.println("[SocketReforge] See server/patches/README.txt for the quick patch steps.");
+        }
+    }
+
+    private static File resolveRegionBackupFile(File regionFile) {
+        File parent = regionFile.getParentFile();
+        String baseName = regionFile.getName();
+        File candidate = parent == null
+                ? new File(baseName + ".bak")
+                : new File(parent, baseName + ".bak");
+        if (!candidate.exists()) {
+            return candidate;
+        }
+
+        for (int i = 1; i <= 9; i++) {
+            candidate = parent == null
+                    ? new File(baseName + ".bak" + i)
+                    : new File(parent, baseName + ".bak" + i);
+            if (!candidate.exists()) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private void tryScheduleWorldRepair() {
+        if (!worldRepairScheduled.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            Universe universe = Universe.get();
+            if (universe == null) {
+                worldRepairScheduled.set(false);
+                return;
+            }
+
+            World world = universe.getDefaultWorld();
+            if (world == null) {
+                worldRepairScheduled.set(false);
+                return;
+            }
+
+            world.execute(() -> runWorldDroplistRepair(world));
+        } catch (Exception e) {
+            worldRepairScheduled.set(false);
+            System.err.println("[SocketReforge] Failed to schedule world repair: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void runWorldDroplistRepair(World world) {
+        try {
+            WorldDroplistRepairResult result = WorldDroplistRepairUtils.clearEmptyDroplists(world);
+            if (!result.isSuccess()) {
+                System.err.println("[SocketReforge] World repair failed: " + result.error());
+                return;
+            }
+
+            System.out.println("[SocketReforge] World repair completed: "
+                    + result.droplistsCleared()
+                    + " empty droplists cleared across "
+                    + result.containersScanned()
+                    + " containers.");
+
+            WorldRepairConfig cfg = worldRepairConfig.get();
+            if (cfg != null) {
+                cfg.setAutoFixEmptyDroplistsDone(true);
+                cfg.setAutoFixEmptyDroplistsOnStart(false);
+                configService.saveAndApply("WorldRepairConfig");
+            }
+
+            stopWorldRepairTimer();
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] World repair crashed: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            worldRepairScheduled.set(false);
+        }
+    }
+
+    private void stopWorldRepairTimer() {
+        if (worldRepairTimer != null) {
+            worldRepairTimer.cancel();
+            worldRepairTimer = null;
         }
     }
 

@@ -1,0 +1,14 @@
+{
+  "Duration": 1.25,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#59f2ff",
+    "EntityTopTint": "#a5f8ff",
+    "Particles": [
+      {
+        "SystemId": "Seeds_Eternal"
+      }
+    ]
+  }
+}

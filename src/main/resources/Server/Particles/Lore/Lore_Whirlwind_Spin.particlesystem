@@ -1,0 +1,15 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin"
+    },
+    {
+      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin2"
+    },
+    {
+      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin_Soft"
+    }
+  ],
+  "BoundingRadius": 8,
+  "IsImportant": false
+}

@@ -1,0 +1,40 @@
+{
+  "Duration": 0.6,
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Lore_Pummel_Trail",
+        "TargetEntityPart": "PrimaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      },
+      {
+        "SystemId": "Lore_Pummel_Trail",
+        "TargetEntityPart": "SecondaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      },
+      {
+        "SystemId": "Lore_Pummel_Trail",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "R-Handle",
+        "PositionOffset": {
+          "X": 0.5
+        }
+      },
+      {
+        "SystemId": "Lore_Pummel_Trail",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "L-Handle",
+        "PositionOffset": {
+          "X": 0.5
+        }
+      }
+    ]
+  },
+  "OverlapBehavior": "Extend"
+}

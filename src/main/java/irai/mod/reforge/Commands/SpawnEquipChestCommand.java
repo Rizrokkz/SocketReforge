@@ -12,7 +12,6 @@ import javax.annotation.Nonnull;
 
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
-import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3i;
@@ -26,12 +25,10 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
+import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.item.ItemModule;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
-import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
-import com.hypixel.hytale.server.core.universe.world.meta.state.ItemContainerState;
-import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -139,21 +136,25 @@ public class SpawnEquipChestCommand extends CommandBase {
             // Allow re-testing when repeatedly spawning into the same coordinates.
             TreasureChestSocketLootListener.resetChestRollState(player, target.x, target.y, target.z);
 
-            Ref<ChunkStore> blockRef = BlockModule.getBlockEntity(player.getWorld(), target.x, target.y, target.z);
-            if (blockRef == null || blockRef.getStore() == null) {
+            BlockModule blockModule = BlockModule.get();
+            if (blockModule == null) {
+                context.sendMessage(Message.raw("Block module unavailable."));
+                return;
+            }
+
+            ItemContainerBlock containerBlock = BlockModule.getComponent(
+                    blockModule.getItemContainerBlockComponentType(),
+                    player.getWorld(),
+                    target.x,
+                    target.y,
+                    target.z);
+            if (containerBlock == null) {
                 context.sendMessage(Message.raw("Placed chest has no container state."));
                 return;
             }
 
-            BlockState blockState = BlockState.getBlockState(blockRef, blockRef.getStore());
-            if (!(blockState instanceof ItemContainerState containerState)) {
-                context.sendMessage(Message.raw("Placed block is not an item container."));
-                return;
-            }
-
-            containerState.setDroplist(preparedLoot.droplist.id);
-            containerState.setCustom(false);
-            int injectedSlots = injectLoot(containerState.getItemContainer(), preparedLoot.drops);
+            containerBlock.setDroplist(preparedLoot.droplist.id);
+            int injectedSlots = injectLoot(containerBlock.getItemContainer(), preparedLoot.drops);
 
             context.sendMessage(Message.raw(
                     "Spawned test chest at " + target

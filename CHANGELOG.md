@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.4] - 2026-03-27
+
+### Added
+
+- **Localization** - Added localization support for tooltips and UI elements. (only at 90%)
+- **Socket Expander** - New support material that increases max sockets by 1 (capped).
+- **Socket Diffuser** - New support material that decreases max sockets by 1.
+- **Spellbook Resonance** - Spellbooks now count as staffs for resonance effects.
+- **Chest Loot** - Socket Expander and Diffuser can now roll in treasure chests.
+
+### Changed
+
+- **Socket Bench** - Expander/Diffuser supports can apply even when sockets are at cap, and previews reflect the adjusted max.
+
+### Fixed
+
+- **Crash** - Fixed tooltip crashing when dealing with infinity values.
+- **Socket Punch Roll** - Success rolls now match configured success chances (no near-zero success at high socket counts).
+
+---
 ## [1.3.3] - 2026-03-13
 
 ### Added

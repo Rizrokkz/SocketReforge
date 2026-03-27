@@ -34,6 +34,7 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * HyUI Reforge bench page.
@@ -78,15 +79,15 @@ public final class ReforgeBenchUI {
     private enum ContainerKind { HOTBAR, STORAGE }
     private enum OutcomeType { DEGRADE, SAME, UPGRADE, JACKPOT }
     private enum HammerSupportType {
-        IRON("Iron", HAMMER_IRON_BREAK_MULTIPLIER, HAMMER_IRON_DURABILITY_LOSS_FRACTION),
-        THORIUM("Thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION);
+        IRON("ui.reforge.hammer_iron", HAMMER_IRON_BREAK_MULTIPLIER, HAMMER_IRON_DURABILITY_LOSS_FRACTION),
+        THORIUM("ui.reforge.hammer_thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION);
 
-        final String label;
+        final String labelKey;
         final double breakMultiplier;
         final double durabilityLossFraction;
 
-        HammerSupportType(String label, double breakMultiplier, double durabilityLossFraction) {
-            this.label = label;
+        HammerSupportType(String labelKey, double breakMultiplier, double durabilityLossFraction) {
+            this.labelKey = labelKey;
             this.breakMultiplier = breakMultiplier;
             this.durabilityLossFraction = durabilityLossFraction;
         }
@@ -243,7 +244,7 @@ public final class ReforgeBenchUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - reforge UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - " + LangLoader.getUITranslation(player, "ui.reforge.title") + " disabled."));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -263,14 +264,15 @@ public final class ReforgeBenchUI {
         List<Entry> equipments = new ArrayList<>();
         List<Entry> materials = new ArrayList<>();
         List<Entry> supports = new ArrayList<>();
-        collectFromContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, materials, supports);
-        collectFromContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, materials, supports);
+        collectFromContainer(player, player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, materials, supports);
+        collectFromContainer(player, player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, materials, supports);
         int total = 0;
         for (Entry e : materials) total += e.quantity;
         return new Snapshot(equipments, materials, supports, total);
     }
 
     private static void collectFromContainer(
+            Player player,
             ItemContainer container,
             ContainerKind kind,
             List<Entry> equipments,
@@ -283,7 +285,7 @@ public final class ReforgeBenchUI {
             String itemId = stack.getItemId();
             if (itemId == null || itemId.isEmpty()) continue;
 
-            String name = UIItemUtils.displayNameOrItemId(stack);
+            String name = UIItemUtils.displayNameOrItemId(stack, player);
 
             Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), name);
             if (ReforgeEquip.isWeapon(stack) || ReforgeEquip.isArmor(stack)) {
@@ -313,7 +315,7 @@ public final class ReforgeBenchUI {
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
 
-            String html = buildHtml(snapshot, state);
+            String html = buildHtml(player, snapshot, state);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
 
@@ -360,7 +362,8 @@ public final class ReforgeBenchUI {
                         Entry support = resolveSelection(finalSnapshot.supports, supVal);
 
                         processingPlayers.put(ref, true);
-                        pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal, "Refining...", 0, true));
+                        pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal,
+                                LangLoader.getUITranslation(finalPlayer, "ui.reforge.status_processing"), 0, true));
                         sfxConfig.playReforgeStart(finalPlayer);
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
 
@@ -369,7 +372,9 @@ public final class ReforgeBenchUI {
                             final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
                             scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                                 if (!Boolean.TRUE.equals(processingPlayers.get(ref))) return;
-                                pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal, "Refining...", timedProgress, true));
+                                pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal,
+                                        LangLoader.getUITranslation(finalPlayer, "ui.reforge.status_processing"),
+                                        timedProgress, true));
                                 openWithSync(finalPlayer);
                             }), delay, TimeUnit.MILLISECONDS);
                         }
@@ -395,11 +400,11 @@ public final class ReforgeBenchUI {
         }
     }
 
-    private static String buildHtml(Snapshot snapshot, SelectionState state) {
+    private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
         String eqKey = state != null ? state.equipmentKey : null;
         String matKey = state != null ? state.materialKey : null;
         String supKey = state != null ? state.supportKey : null;
-        String status = state != null && state.statusText != null ? state.statusText : "Idle";
+        String status = state != null && state.statusText != null ? state.statusText : LangLoader.getUITranslation(player, "ui.reforge.status_idle");
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
         boolean processing = state != null && state.processing;
         if (!processing) {
@@ -419,27 +424,52 @@ public final class ReforgeBenchUI {
             matKey = "0";
         }
 
-        Preview preview = buildPreview(selectedEquipment, selectedSupport);
+        Preview preview = buildPreview(player, selectedEquipment, selectedSupport);
         if (!processing) {
             if (selectedEquipment == null) {
-                status = "No reforgeable equipment found.";
+                status = LangLoader.getUITranslation(player, "ui.reforge.status_no_equipment");
             } else if (preview.currentLevel >= MAX_UPGRADE_LEVEL) {
-                status = "Item already at max refine level.";
+                status = LangLoader.getUITranslation(player, "ui.reforge.status_max_level");
             } else if (snapshot.materialCount < MATERIAL_COST) {
-                status = "Need " + MATERIAL_COST + " Refinement Globs.";
-            } else if ("Idle".equals(status)) {
-                status = "Ready to refine.";
+                status = LangLoader.getUITranslation(player, "ui.reforge.status_need_material", MATERIAL_COST);
+            } else if (LangLoader.getUITranslation(player, "ui.reforge.status_idle").equals(status)) {
+                status = LangLoader.getUITranslation(player, "ui.reforge.status_ready");
             }
         }
 
         String html = loadTemplate();
-        html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, "No reforgeable equipment found", eqKey));
-        html = html.replace("{{materialOptions}}", buildOptions(snapshot.materials, "No Refinement Glob found", matKey));
-        html = html.replace("{{supportOptions}}", buildSupportOptions(snapshot.supports, supKey));
-        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(selectedSupport)));
-        html = html.replace("{{materialCountText}}", String.valueOf(snapshot.materialCount));
+        
+        // UI translations
+        html = html.replace("{{title}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.title")));
+        html = html.replace("{{equipmentLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.equipment")));
+        html = html.replace("{{materialLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.material")));
+        html = html.replace("{{supportLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support")));
+        html = html.replace("{{metadataLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_name")));
+        html = html.replace("{{metadataNameLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_name")));
+        html = html.replace("{{metadataLevelLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_level")));
+        html = html.replace("{{metadataCurrentStatLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_current_stat")));
+        html = html.replace("{{metadataBaseStatLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_base_stat")));
+        html = html.replace("{{expectedOutcomeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_outcome")));
+        html = html.replace("{{expectedDamageLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_damage")));
+        html = html.replace("{{refineProgressLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.refine_progress")));
+        html = html.replace("{{consumesMaterialText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.consumes_material", MATERIAL_COST)));
+        html = html.replace("{{ironHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.iron_hammer_info")));
+        html = html.replace("{{thoriumHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.thorium_hammer_info")));
+        html = html.replace("{{refineButtonText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.button_refine")));
+        
+        // Dynamic content
+        html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, LangLoader.getUITranslation(player, "ui.reforge.no_equipment"), eqKey));
+        html = html.replace("{{materialOptions}}", buildOptions(snapshot.materials, LangLoader.getUITranslation(player, "ui.reforge.no_material"), matKey));
+        html = html.replace("{{supportOptions}}", buildSupportOptions(player, snapshot.supports, supKey));
+        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(player, selectedSupport)));
+        html = html.replace("{{materialCountText}}", LangLoader.getUITranslation(player, "ui.reforge.material_count", snapshot.materialCount));
         html = html.replace("{{currentStatsText}}", escapeHtml(preview.currentStats));
         html = html.replace("{{expectedStatsText}}", escapeHtml(preview.expectedStats));
+        html = html.replace("{{chanceBreakLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_break")));
+        html = html.replace("{{chanceDegradeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_degrade")));
+        html = html.replace("{{chanceSameLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_same")));
+        html = html.replace("{{chanceUpgradeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_upgrade")));
+        html = html.replace("{{chanceJackpotLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_jackpot")));
         html = html.replace("{{chanceBreakText}}", escapeHtml(preview.chanceBreak));
         html = html.replace("{{chanceDegradeText}}", escapeHtml(preview.chanceDegrade));
         html = html.replace("{{chanceSameText}}", escapeHtml(preview.chanceSame));
@@ -452,9 +482,9 @@ public final class ReforgeBenchUI {
         html = html.replace("{{expectedDamageLine3Text}}", escapeHtml(preview.expectedDamageLine3));
         html = html.replace("{{metadataNameText}}", escapeHtml(buildMetadataName(selectedEquipment)));
         html = html.replace("{{metadataLevelText}}", escapeHtml(buildMetadataLevel(selectedEquipment)));
-        html = html.replace("{{metadataCurrentStatText}}", escapeHtml(buildMetadataCurrentStat(selectedEquipment)));
-        html = html.replace("{{metadataBaseStatText}}", escapeHtml(buildMetadataBaseStat(selectedEquipment)));
-        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(selectedEquipment)));
+        html = html.replace("{{metadataCurrentStatText}}", escapeHtml(buildMetadataCurrentStat(player, selectedEquipment)));
+        html = html.replace("{{metadataBaseStatText}}", escapeHtml(buildMetadataBaseStat(player, selectedEquipment)));
+        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(player, selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
         html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, snapshot.materialCount) ? "disabled=\"true\"" : "");
@@ -484,38 +514,38 @@ public final class ReforgeBenchUI {
         return sb.toString();
     }
 
-    private static String buildSupportOptions(List<Entry> entries, String selectedKey) {
+    private static String buildSupportOptions(Player player, List<Entry> entries, String selectedKey) {
         StringBuilder sb = new StringBuilder();
         sb.append("<option value=\"\"");
         if (selectedKey == null || selectedKey.isEmpty()) {
             sb.append(" selected=\"true\"");
         }
-        sb.append(">None</option>");
+        sb.append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support_none"))).append("</option>");
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
             String key = String.valueOf(i);
             sb.append("<option value=\"").append(key).append("\"");
             if (key.equals(selectedKey)) sb.append(" selected=\"true\"");
-            sb.append(">").append(escapeHtml(entry.displayName)).append(" [Break Guard] x").append(entry.quantity).append("</option>");
+            sb.append(">").append(escapeHtml(entry.displayName)).append(" ").append(escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support_guard"))).append(" x").append(entry.quantity).append("</option>");
         }
         return sb.toString();
     }
 
-    private static Preview buildPreview(Entry equipment, Entry support) {
+    private static Preview buildPreview(Player player, Entry equipment, Entry support) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return new Preview(
-                    "No equipment selected.",
-                    "Select an item to see expected refine outcomes.",
-                    "Expected damage outcome will be shown here.",
-                    "Expected damage outcome",
-                    "will be shown here.",
+                    t(player, "ui.reforge.preview_no_equipment"),
+                    t(player, "ui.reforge.preview_select_item"),
+                    t(player, "ui.reforge.preview_expected_damage_placeholder"),
+                    t(player, "ui.reforge.preview_expected_damage_line1"),
+                    t(player, "ui.reforge.preview_expected_damage_line2"),
                     "",
                     "-",
                     "-",
                     "-",
                     "-",
                     "-",
-                    "Select equipment to preview chances.",
+                    t(player, "ui.reforge.preview_select_equipment_note"),
                     0);
         }
 
@@ -523,34 +553,42 @@ public final class ReforgeBenchUI {
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         HammerSupportType hammerSupport = getHammerSupportType(support);
         int level = Math.max(0, Math.min(MAX_UPGRADE_LEVEL, ReforgeEquip.getLevelFromItem(item)));
-        String type = isArmor ? "Armor" : "Weapon";
+        String typeLabel = isArmor ? t(player, "ui.reforge.type_armor") : t(player, "ui.reforge.type_weapon");
         String refineName = isArmor ? ReforgeEquip.getArmorUpgradeName(level) : ReforgeEquip.getUpgradeName(level);
         double currentMult = statMultiplierForLevel(level, isArmor);
-        String statLabel = isArmor ? "Defense" : "Damage";
+        String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
+        String refineSuffix = refineName == null || refineName.isBlank() ? "" : " (" + refineName + ")";
 
-        String currentStats = "Type: " + type + "\n"
-                + "Refine Level: +" + level + (refineName == null || refineName.isBlank() ? "" : " (" + refineName + ")") + "\n"
-                + "Current " + statLabel + ": x" + format3(currentMult) + " (" + formatPercent(currentMult - 1.0) + ")";
+        String currentStats = t(player, "ui.reforge.preview_type", typeLabel) + "\n"
+                + t(player, "ui.reforge.preview_refine_level", level, refineSuffix) + "\n"
+                + t(player, "ui.reforge.preview_current_stat", statLabel, format3(currentMult),
+                    formatPercent(currentMult - 1.0));
 
         if (level >= MAX_UPGRADE_LEVEL) {
-            String expectedStats = "Break: 0%\nDegrade: 0%\nSame: 0%\nUpgrade: 0%\nJackpot: 0%\n(Max level reached)";
-            String expectedDamage = "Expected after refine: max level";
+            String expectedStats = t(player, "ui.reforge.chance_break") + ": 0%\n"
+                    + t(player, "ui.reforge.chance_degrade") + ": 0%\n"
+                    + t(player, "ui.reforge.chance_same") + ": 0%\n"
+                    + t(player, "ui.reforge.chance_upgrade") + ": 0%\n"
+                    + t(player, "ui.reforge.chance_jackpot") + ": 0%\n"
+                    + t(player, "ui.reforge.preview_max_level_note");
+            String expectedDamage = t(player, "ui.reforge.preview_expected_max_level");
+            String chanceNote = hammerSupport != null
+                    ? t(player, "ui.reforge.preview_max_level_hammer", hammerLabel(player, hammerSupport),
+                        durabilityPercent(hammerSupport))
+                    : t(player, "ui.reforge.preview_max_level");
             return new Preview(
                     currentStats,
                     expectedStats,
                     expectedDamage,
-                    "Expected after refine:",
-                    "max level",
+                    t(player, "ui.reforge.preview_expected_after_refine"),
+                    t(player, "ui.reforge.preview_max_level_short"),
                     "",
                     "0%",
                     "0%",
                     "0%",
                     "0%",
                     "0%",
-                    hammerSupport != null
-                            ? "Max level reached. " + hammerSupport.label + " hammer equipped (durability -"
-                                    + durabilityPercent(hammerSupport) + "% per attempt)."
-                            : "Max level reached.",
+                    chanceNote,
                     level);
         }
 
@@ -574,49 +612,49 @@ public final class ReforgeBenchUI {
         double pJack = survive * w[3];
         double expectedWithBreak = (pDeg * mDeg) + (pSame * mSame) + (pUp * mUp) + (pJack * mJack);
 
-        String expectedStats = "Break: " + formatPercent(breakChance) + "\n"
-                + "Degrade: " + formatPercent(pDeg) + "\n"
-                + "Same: " + formatPercent(pSame) + "\n"
-                + "Upgrade: " + formatPercent(pUp) + "\n"
-                + "Jackpot: " + formatPercent(pJack);
+        String expectedStats = t(player, "ui.reforge.chance_break") + ": " + formatPercent(breakChance) + "\n"
+                + t(player, "ui.reforge.chance_degrade") + ": " + formatPercent(pDeg) + "\n"
+                + t(player, "ui.reforge.chance_same") + ": " + formatPercent(pSame) + "\n"
+                + t(player, "ui.reforge.chance_upgrade") + ": " + formatPercent(pUp) + "\n"
+                + t(player, "ui.reforge.chance_jackpot") + ": " + formatPercent(pJack);
 
-        String expectedDamage = "On Upgrade: x" + format3(mUp) + " | Jackpot: x" + format3(mJack) + "\n"
-                + "Expected " + statLabel + " (incl. break risk): x" + format3(expectedWithBreak);
+        String expectedDamage = t(player, "ui.reforge.preview_upgrade_jackpot", format3(mUp), format3(mJack)) + "\n"
+                + t(player, "ui.reforge.preview_expected_stat_with_break", statLabel, format3(expectedWithBreak));
 
         return new Preview(
                 currentStats,
                 expectedStats,
                 expectedDamage,
-                "On Upgrade: x" + format3(mUp),
-                "Jackpot: x" + format3(mJack),
-                "Expected " + statLabel + ": x" + format3(expectedWithBreak),
+                t(player, "ui.reforge.preview_upgrade_line", format3(mUp)),
+                t(player, "ui.reforge.preview_jackpot_line", format3(mJack)),
+                t(player, "ui.reforge.preview_expected_stat_line", statLabel, format3(expectedWithBreak)),
                 formatPercent(breakChance),
                 formatPercent(pDeg),
                 formatPercent(pSame),
                 formatPercent(pUp),
                 formatPercent(pJack),
                 hammerSupport != null
-                        ? hammerSupport.label + " hammer support active: break chance reduced; durability -"
-                                + durabilityPercent(hammerSupport) + "% on process."
+                        ? t(player, "ui.reforge.preview_hammer_active", hammerLabel(player, hammerSupport),
+                            durabilityPercent(hammerSupport))
                         : "",
                 level);
     }
 
     private static ProcessResult processSelection(Player player, Entry equipment, Entry material, Entry support) {
-        if (equipment == null) return new ProcessResult("Pick a valid equipment first.", 0);
+        if (equipment == null) return new ProcessResult(t(player, "ui.reforge.error_pick_equipment"), 0);
 
         ItemStack current = readCurrentStack(player, equipment);
-        if (current == null || current.isEmpty()) return new ProcessResult("Selected equipment changed; reselect.", 0);
+        if (current == null || current.isEmpty()) return new ProcessResult(t(player, "ui.reforge.error_equipment_changed"), 0);
 
         boolean isWeapon = ReforgeEquip.isWeapon(current);
         boolean isArmor = !isWeapon && ReforgeEquip.isArmor(current);
-        if (!isWeapon && !isArmor) return new ProcessResult("Selected item cannot be refined.", 0);
+        if (!isWeapon && !isArmor) return new ProcessResult(t(player, "ui.reforge.error_item_not_refinable"), 0);
 
         int level = ReforgeEquip.getLevelFromItem(current);
-        if (level >= MAX_UPGRADE_LEVEL) return new ProcessResult("Item already at max refine level.", 100);
+        if (level >= MAX_UPGRADE_LEVEL) return new ProcessResult(t(player, "ui.reforge.error_max_level"), 100);
 
         if (countMaterialGlobally(player) < MATERIAL_COST) {
-            return new ProcessResult("Not enough Refinement Globs (need " + MATERIAL_COST + ").", 0);
+            return new ProcessResult(t(player, "ui.reforge.error_need_material", MATERIAL_COST), 0);
         }
 
         HammerSupportType hammerSupport = getHammerSupportType(support);
@@ -624,25 +662,29 @@ public final class ReforgeBenchUI {
         if (hammerSupport != null) {
             hammerUse = applyHammerWear(player, support, hammerSupport.durabilityLossFraction);
             if (!hammerUse.ok) {
-                return new ProcessResult("Selected hammer stack changed; reselect and try again.", 0);
+                return new ProcessResult(t(player, "ui.reforge.error_hammer_changed"), 0);
             }
         }
 
         if (!consumeMaterialGlobally(player, MATERIAL_COST)) {
-            return new ProcessResult("Failed to consume Refinement Globs. Retry.", 0);
+            return new ProcessResult(t(player, "ui.reforge.error_material_consume"), 0);
         }
 
         double breakChance = effectiveBreakChance(level, isArmor, hammerSupport);
         String hammerSuffix = "";
         if (hammerSupport != null) {
-            hammerSuffix = hammerUse.consumed
-                    ? " " + hammerSupport.label + " hammer broke."
-                    : " " + hammerSupport.label + " hammer durability -" + durabilityPercent(hammerSupport) + "%.";
+            String hammerLabel = hammerLabel(player, hammerSupport);
+            String rawSuffix = hammerUse.consumed
+                    ? t(player, "ui.reforge.hammer_broke", hammerLabel)
+                    : t(player, "ui.reforge.hammer_durability_loss", hammerLabel, durabilityPercent(hammerSupport));
+            if (rawSuffix != null && !rawSuffix.isBlank()) {
+                hammerSuffix = " " + rawSuffix;
+            }
         }
         if (Math.random() < breakChance) {
             removeEquipment(player, equipment);
             sfxConfig.playShatter(player);
-            return new ProcessResult("Item shattered during refinement." + hammerSuffix, 0);
+            return new ProcessResult(t(player, "ui.reforge.result_shattered", hammerSuffix), 0);
         }
 
         ReforgeOutcome outcome = rollOutcome(level);
@@ -655,22 +697,22 @@ public final class ReforgeBenchUI {
         switch (outcome.type) {
             case DEGRADE -> {
                 sfxConfig.playFail(player);
-                return new ProcessResult("Refine failed: degraded +" + level + " -> +" + newLevel + hammerSuffix, 100);
+                return new ProcessResult(t(player, "ui.reforge.result_degraded", level, newLevel, hammerSuffix), 100);
             }
             case SAME -> {
                 sfxConfig.playNoChange(player);
-                return new ProcessResult("Refine failed: remained at +" + level + hammerSuffix, 100);
+                return new ProcessResult(t(player, "ui.reforge.result_same", level, hammerSuffix), 100);
             }
             case UPGRADE -> {
                 sfxConfig.playSuccess(player);
-                return new ProcessResult("Refine success: +" + level + " -> +" + newLevel + hammerSuffix, 100);
+                return new ProcessResult(t(player, "ui.reforge.result_success", level, newLevel, hammerSuffix), 100);
             }
             case JACKPOT -> {
                 sfxConfig.playJackpot(player);
-                return new ProcessResult("JACKPOT: +" + level + " -> +" + newLevel + hammerSuffix, 100);
+                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, hammerSuffix), 100);
             }
             default -> {
-                return new ProcessResult("Refine result unknown.", 0);
+                return new ProcessResult(t(player, "ui.reforge.result_unknown"), 0);
             }
         }
     }
@@ -837,16 +879,16 @@ public final class ReforgeBenchUI {
         UIInventoryUtils.removeItem(player, entry.container == ContainerKind.HOTBAR, entry.slot, 1);
     }
 
-    private static String buildMetadata(Entry equipment) {
+    private static String buildMetadata(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return "No equipment selected.";
+            return t(player, "ui.reforge.metadata_no_equipment");
         }
         ItemStack item = equipment.item;
         int level = ReforgeEquip.getLevelFromItem(item);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Name : ").append(equipment.displayName).append("\n");
-        sb.append("Refinement Level : +").append(level);
+        sb.append(t(player, "ui.reforge.metadata_line_name", equipment.displayName)).append("\n");
+        sb.append(t(player, "ui.reforge.metadata_line_level", level));
         return sb.toString();
     }
 
@@ -864,43 +906,43 @@ public final class ReforgeBenchUI {
         return "+" + ReforgeEquip.getLevelFromItem(equipment.item);
     }
 
-    private static String buildSupportDurabilityText(Entry support) {
+    private static String buildSupportDurabilityText(Player player, Entry support) {
         if (support == null || support.item == null || support.item.isEmpty()) {
-            return "Support durability: -";
+            return t(player, "ui.reforge.support_durability_none");
         }
         ItemStack item = support.item;
         double max = item.getMaxDurability();
         double cur = item.getDurability();
         if (max <= 0.0d) {
-            return "Support durability: N/A";
+            return t(player, "ui.reforge.support_durability_na");
         }
         int maxInt = (int) Math.round(max);
         int curInt = (int) Math.round(cur);
         int percent = (int) Math.round((cur / max) * 100.0);
         percent = Math.max(0, Math.min(100, percent));
-        return "Support durability: " + percent + "% (" + curInt + "/" + maxInt + ")";
+        return t(player, "ui.reforge.support_durability_value", percent, curInt, maxInt);
     }
 
-    private static String buildMetadataCurrentStat(Entry equipment) {
+    private static String buildMetadataCurrentStat(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return "Current Stat : -";
+            return t(player, "ui.reforge.metadata_current_stat_none");
         }
         ItemStack item = equipment.item;
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         int level = ReforgeEquip.getLevelFromItem(item);
         double currentMult = statMultiplierForLevel(level, isArmor);
-        String statLabel = isArmor ? "Current Defense" : "Current Damage";
-        return statLabel + " : x" + format3(currentMult) + " (" + formatPercent(currentMult - 1.0) + ")";
+        String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
+        return t(player, "ui.reforge.metadata_current_stat_value", statLabel, format3(currentMult), formatPercent(currentMult - 1.0));
     }
 
-    private static String buildMetadataBaseStat(Entry equipment) {
+    private static String buildMetadataBaseStat(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return "Base Stat : -";
+            return t(player, "ui.reforge.metadata_base_stat_none");
         }
         ItemStack item = equipment.item;
         String itemId = item.getItemId();
         if (itemId == null || itemId.isBlank()) {
-            return "Base Stat : -";
+            return t(player, "ui.reforge.metadata_base_stat_none");
         }
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         int level = ReforgeEquip.getLevelFromItem(item);
@@ -909,18 +951,20 @@ public final class ReforgeBenchUI {
             EquipmentDamageTooltipMath.StatSummary summary =
                     EquipmentDamageTooltipMath.computeArmorDefenseSummary(itemId, level, socketData);
             if (summary.getBaseValue() <= 0.0) {
-                return "Base Defense : N/A";
+                return t(player, "ui.reforge.metadata_base_defense_na");
             }
-            return "Base Defense : " + formatDamageValue(summary.getBaseValue())
-                    + " -> " + formatDamageValue(summary.getBuffedValue());
+            return t(player, "ui.reforge.metadata_base_defense_value",
+                    formatDamageValue(summary.getBaseValue()),
+                    formatDamageValue(summary.getBuffedValue()));
         }
         EquipmentDamageTooltipMath.StatSummary summary =
                 EquipmentDamageTooltipMath.computeWeaponDamageSummary(itemId, level, socketData, 1.0);
         if (summary.getBaseValue() <= 0.0) {
-            return "Base Damage : N/A";
+            return t(player, "ui.reforge.metadata_base_damage_na");
         }
-        return "Base Damage : " + formatDamageValue(summary.getBaseValue())
-                + " -> " + formatDamageValue(summary.getBuffedValue());
+        return t(player, "ui.reforge.metadata_base_damage_value",
+                formatDamageValue(summary.getBaseValue()),
+                formatDamageValue(summary.getBuffedValue()));
     }
 
     private static String loadTemplate() {
@@ -977,5 +1021,16 @@ public final class ReforgeBenchUI {
             return Long.toString(rounded);
         }
         return String.format(Locale.ROOT, "%.1f", safe);
+    }
+
+    private static String t(Player player, String key, Object... params) {
+        return LangLoader.getUITranslation(player, key, params);
+    }
+
+    private static String hammerLabel(Player player, HammerSupportType hammerSupport) {
+        if (hammerSupport == null) {
+            return "";
+        }
+        return t(player, hammerSupport.labelKey);
     }
 }

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,6 +31,7 @@ public final class EquipmentDamageTooltipMath {
 
     private static final int MAX_INTERACTION_VISITS = 512;
     private static final ConcurrentMap<String, Double> BASE_DAMAGE_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, Double> CHARGED_DAMAGE_CACHE = new ConcurrentHashMap<>();
 
     private EquipmentDamageTooltipMath() {}
 
@@ -88,6 +90,19 @@ public final class EquipmentDamageTooltipMath {
     }
 
     /**
+     * Returns the average base damage across "charged" damage interactions.
+     */
+    public static double getChargedBaseDamageFromInteractionVars(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return 0.0;
+        }
+        return CHARGED_DAMAGE_CACHE.computeIfAbsent(itemId, key -> {
+            Item item = resolveItem(key);
+            return getChargedBaseDamageFromInteractionVars(item);
+        });
+    }
+
+    /**
      * Returns the average base damage across all damage interactions referenced by getInteractionVars().
      */
     public static double getAverageBaseDamageFromInteractionVars(Item item) {
@@ -102,6 +117,62 @@ public final class EquipmentDamageTooltipMath {
 
         Set<String> rootIds = new LinkedHashSet<>();
         for (String rootId : interactionVars.values()) {
+            if (rootId != null && !rootId.isBlank()) {
+                rootIds.add(rootId);
+            }
+        }
+        if (rootIds.isEmpty()) {
+            return 0.0;
+        }
+
+        List<Double> damageSamples = new ArrayList<>();
+        Set<String> visitedInteractions = new HashSet<>();
+
+        for (String rootId : rootIds) {
+            RootInteraction root = getRootInteraction(rootId);
+            if (root == null) {
+                continue;
+            }
+            String[] interactionIds = root.getInteractionIds();
+            if (interactionIds == null || interactionIds.length == 0) {
+                continue;
+            }
+            for (String interactionId : interactionIds) {
+                collectInteractionDamage(interactionId, visitedInteractions, damageSamples);
+            }
+        }
+
+        if (damageSamples.isEmpty()) {
+            return 0.0;
+        }
+
+        double total = 0.0;
+        for (double sample : damageSamples) {
+            total += sample;
+        }
+        return total / damageSamples.size();
+    }
+
+    /**
+     * Returns the average base damage across charged damage interactions referenced by getInteractionVars().
+     */
+    public static double getChargedBaseDamageFromInteractionVars(Item item) {
+        if (item == null || item == Item.UNKNOWN) {
+            return 0.0;
+        }
+
+        Map<String, String> interactionVars = item.getInteractionVars();
+        if (interactionVars == null || interactionVars.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<String> rootIds = new LinkedHashSet<>();
+        for (Map.Entry<String, String> entry : interactionVars.entrySet()) {
+            String key = entry.getKey();
+            String rootId = entry.getValue();
+            if (!isChargedDamageKey(key) && !isChargedDamageKey(rootId)) {
+                continue;
+            }
             if (rootId != null && !rootId.isBlank()) {
                 rootIds.add(rootId);
             }
@@ -217,6 +288,18 @@ public final class EquipmentDamageTooltipMath {
 
     public static void clearCache() {
         BASE_DAMAGE_CACHE.clear();
+        CHARGED_DAMAGE_CACHE.clear();
+    }
+
+    private static boolean isChargedDamageKey(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String lower = value.toLowerCase(Locale.ROOT);
+        if (!lower.contains("charge")) {
+            return false;
+        }
+        return lower.contains("damage");
     }
 
     /**

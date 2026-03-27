@@ -7,8 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.codec.Codec;
-import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -18,7 +18,9 @@ import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.Util.MathUtils;
 
 /**
  * Shared socket-roll logic for world loot (chests, NPC drops, etc.).
@@ -114,6 +116,12 @@ public final class LootSocketRoller {
         ItemStack socketed = shouldSocketEssences(stack, source)
                 ? createSocketedEssenceLoot(stack, socketCount, profile)
                 : createBrokenSocketLoot(stack, socketCount, profile);
+
+        // Roll lore sockets separately from essence sockets.
+        Random loreRng = recipeSeed != null ? new Random(recipeSeed ^ 0x9E3779B97F4A7C15L) : ThreadLocalRandom.current();
+        socketed = LoreSocketManager.maybeRollLoreSockets(socketed, source == LootSource.CHEST, loreRng);
+        socketed = LoreSocketManager.syncLoreSocketColors(socketed);
+
         return markRollDone(socketed, 1);
     }
 
@@ -134,16 +142,17 @@ public final class LootSocketRoller {
                 config.getDropFiveSocketChance(),
                 config.getDropThreeToFourChance()
         );
-        chestResonanceChance = clamp01(config.getChestResonanceChance());
-        dropResonanceChance = clamp01(config.getDropResonanceChance());
-        chestSocketedEssenceChance = clamp01(config.getChestSocketedEssenceChance());
-        dropSocketedEssenceChance = clamp01(config.getDropSocketedEssenceChance());
-        greaterEssenceChance = clamp01(config.getGreaterEssenceChance());
+        chestResonanceChance = MathUtils.clamp01(config.getChestResonanceChance());
+        dropResonanceChance = MathUtils.clamp01(config.getDropResonanceChance());
+        chestSocketedEssenceChance = MathUtils.clamp01(config.getChestSocketedEssenceChance());
+        dropSocketedEssenceChance = MathUtils.clamp01(config.getDropSocketedEssenceChance());
+        greaterEssenceChance = MathUtils.clamp01(config.getGreaterEssenceChance());
 
         int min = Math.max(1, config.getMinBrokenSockets());
         int max = Math.max(min, config.getMaxBrokenSockets());
         minBrokenSockets = min;
         maxBrokenSockets = max;
+
     }
 
     private static ItemStack maybeRollResonance(ItemStack stack, LootSource source, Player player) {
@@ -484,7 +493,7 @@ public final class LootSocketRoller {
         }
     }
 
-    private static final class RollProfile {
+        private static final class RollProfile {
         private final double threeSocketChance;
         private final double fourSocketChance;
         private final double fiveSocketChance;
@@ -504,9 +513,9 @@ public final class LootSocketRoller {
         }
 
         private static RollProfile of(double three, double four, double five, double threeToFour) {
-            double safeThree = clamp01(three);
-            double safeFour = clamp01(four);
-            double safeFive = clamp01(five);
+            double safeThree = MathUtils.clamp01(three);
+            double safeFour = MathUtils.clamp01(four);
+            double safeFive = MathUtils.clamp01(five);
             double total = safeThree + safeFour + safeFive;
 
             if (total > 1.0d) {
@@ -517,11 +526,9 @@ public final class LootSocketRoller {
                 total = 1.0d;
             }
 
-            return new RollProfile(safeThree, safeFour, safeFive, clamp01(threeToFour), total);
+            return new RollProfile(safeThree, safeFour, safeFive, MathUtils.clamp01(threeToFour), total);
         }
     }
 
-    private static double clamp01(double value) {
-        return Math.max(0.0d, Math.min(1.0d, value));
-    }
 }
+

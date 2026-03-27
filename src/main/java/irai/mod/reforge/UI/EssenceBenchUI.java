@@ -12,6 +12,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.Map;
 
+import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -34,6 +35,7 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * HyUI essence socketing page, with reflection-based loading so plugin still works
@@ -67,6 +69,8 @@ public final class EssenceBenchUI {
     private static final String VOIDHEART_ID = "Ingredient_Voidheart";
     private static final String HAMMER_ID = "Tool_Hammer_Iron";
     private static final String HAMMER_THORIUM_ID = "Tool_Hammer_Thorium";
+    private static final String RESONANT_ESSENCE_ID = "Ingredient_Resonant_Essence";
+    private static final String META_REFINEMENT_LEVEL = "SocketReforge.Refinement.Level";
     private static final double THORIUM_MAX_SOCKET_REDUCE_CHANCE = 0.02d;
 
     private static final SFXConfig sfxConfig = new SFXConfig();
@@ -178,7 +182,7 @@ public final class EssenceBenchUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - essence bench UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.essence_bench.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -199,12 +203,13 @@ public final class EssenceBenchUI {
         List<Entry> equipments = new ArrayList<>();
         List<Entry> essences = new ArrayList<>();
         List<Entry> voidhearts = new ArrayList<>();
-        collectFromContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, essences, voidhearts);
-        collectFromContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, essences, voidhearts);
+        collectFromContainer(player, player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, essences, voidhearts);
+        collectFromContainer(player, player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, essences, voidhearts);
         return new Snapshot(equipments, essences, voidhearts);
     }
 
     private static void collectFromContainer(
+            Player player,
             ItemContainer container,
             ContainerKind kind,
             List<Entry> equipments,
@@ -216,7 +221,7 @@ public final class EssenceBenchUI {
             if (stack == null || stack.isEmpty()) continue;
             String itemId = stack.getItemId();
             if (itemId == null || itemId.isEmpty()) continue;
-            String name = UIItemUtils.displayNameOrItemId(stack);
+            String name = UIItemUtils.displayNameOrItemId(stack, player);
             Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), name);
 
             if (ReforgeEquip.isWeapon(stack) || ReforgeEquip.isArmor(stack)) {
@@ -298,7 +303,7 @@ public final class EssenceBenchUI {
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
 
-            String html = buildHtml(snapshot, state);
+            String html = buildHtml(player, snapshot, state);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
 
@@ -363,7 +368,8 @@ public final class EssenceBenchUI {
 
                         processingPlayers.put(finalPlayer.getPlayerRef(), true);
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, "Processing...", 0, true));
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal,
+                                        LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_processing"), 0, true));
                         sfxConfig.playReforgeStart(finalPlayer);
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
 
@@ -373,7 +379,9 @@ public final class EssenceBenchUI {
                             scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                                 if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
                                 pendingSelections.put(finalPlayer.getPlayerRef(),
-                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, "Processing...", timedProgress, true));
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal,
+                                                LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_processing"),
+                                                timedProgress, true));
                                 openWithSync(finalPlayer);
                             }), delay, TimeUnit.MILLISECONDS);
                         }
@@ -381,6 +389,49 @@ public final class EssenceBenchUI {
                         scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
                             try {
                                 ProcessResult result = processSelection(finalPlayer, equipment, essence, support, slotVal);
+                                pendingSelections.put(finalPlayer.getPlayerRef(),
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, result.status, result.progress, false));
+                            } finally {
+                                processingPlayers.remove(finalPlayer.getPlayerRef());
+                                openWithSync(finalPlayer);
+                            }
+                        }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
+                    });
+
+            addListener.invoke(pageBuilder, "extractButton", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        if (Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) {
+                            return;
+                        }
+                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
+                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
+                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
+                        Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
+
+                        processingPlayers.put(finalPlayer.getPlayerRef(), true);
+                        pendingSelections.put(finalPlayer.getPlayerRef(),
+                                new SelectionState(equipmentVal, essenceVal, supportVal, slotVal,
+                                        LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_extracting"), 0, true));
+                        sfxConfig.playReforgeStart(finalPlayer);
+                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+
+                        for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
+                            final int delay = elapsed;
+                            final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
+                            scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                                if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
+                                pendingSelections.put(finalPlayer.getPlayerRef(),
+                                        new SelectionState(equipmentVal, essenceVal, supportVal, slotVal,
+                                                LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_extracting"),
+                                                timedProgress, true));
+                                openWithSync(finalPlayer);
+                            }), delay, TimeUnit.MILLISECONDS);
+                        }
+
+                        scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
+                            try {
+                                ProcessResult result = processExtraction(finalPlayer, equipment);
                                 pendingSelections.put(finalPlayer.getPlayerRef(),
                                         new SelectionState(equipmentVal, essenceVal, supportVal, slotVal, result.status, result.progress, false));
                             } finally {
@@ -400,39 +451,46 @@ public final class EssenceBenchUI {
         }
     }
 
-    private static String buildHtml(Snapshot snapshot, SelectionState state) {
+    private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
         String equipmentKey = state != null ? state.equipmentKey : null;
         String essenceKey = state != null ? state.essenceKey : null;
         String supportKey = state != null ? state.supportKey : null;
         String slotKey = state != null ? state.slotKey : null;
         boolean processing = state != null && state.processing;
         int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
-        String status = state != null && state.statusText != null ? state.statusText : "Idle";
+        String status = state != null && state.statusText != null
+                ? state.statusText
+                : LangLoader.getUITranslation(player, "ui.essence_bench.status_idle");
         if (!processing) {
             progress = 0;
         }
 
         Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
         Entry selectedSupport = resolveSelection(snapshot.voidhearts, supportKey);
-        if (!processing && "Idle".equals(status) && isFilled(selectedEquipment)) {
-            status = "All sockets are filled.";
+        String idleText = LangLoader.getUITranslation(player, "ui.essence_bench.status_idle");
+        if (!processing && (idleText.equals(status) || "Idle".equals(status)) && isFilled(selectedEquipment)) {
+            status = LangLoader.getUITranslation(player, "ui.essence_bench.status_all_filled");
         }
 
         String html = loadTemplate();
-        html = html.replace("{{equipmentOptions}}", buildOptions(snapshot.equipments, "No socketed equipment found", equipmentKey));
-        html = html.replace("{{essenceOptions}}", buildEssenceOptions(snapshot.essences, essenceKey));
-        html = html.replace("{{supportOptions}}", buildSupportOptions(snapshot.voidhearts, supportKey));
-        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(selectedSupport)));
-        html = html.replace("{{supportRecipeText}}", escapeHtml(buildSupportRecipeText(selectedSupport)));
-        html = html.replace("{{effectPreviewText}}", escapeHtml(buildEffectPreviewText(selectedEquipment, selectedSupport)));
-        html = html.replace("{{slotOptions}}", buildSlotOptions(selectedEquipment, slotKey));
+        html = html.replace("{{equipmentOptions}}",
+                buildOptions(snapshot.equipments,
+                        LangLoader.getUITranslation(player, "ui.essence_bench.option_no_equipment"),
+                        equipmentKey));
+        html = html.replace("{{essenceOptions}}", buildEssenceOptions(player, snapshot.essences, essenceKey));
+        html = html.replace("{{supportOptions}}", buildSupportOptions(player, snapshot.voidhearts, supportKey));
+        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(player, selectedSupport)));
+        html = html.replace("{{supportRecipeText}}", escapeHtml(buildSupportRecipeText(player, selectedSupport)));
+        html = html.replace("{{effectPreviewText}}", escapeHtml(buildEffectPreviewText(player, selectedEquipment, selectedSupport)));
+        html = html.replace("{{slotOptions}}", buildSlotOptions(player, selectedEquipment, slotKey));
         html = html.replace("{{socketIcons}}", buildSocketIconsHtml(selectedEquipment));
-        html = html.replace("{{socketSummary}}", escapeHtml(buildSocketSummary(selectedEquipment)));
-        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(selectedEquipment)));
+        html = html.replace("{{socketSummary}}", escapeHtml(buildSocketSummary(player, selectedEquipment)));
+        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(player, selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
         html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, essenceKey, selectedSupport, slotKey) ? "disabled=\"true\"" : "");
-        return html;
+        html = html.replace("{{extractDisabledAttr}}", shouldDisableExtract(processing, selectedEquipment, player) ? "disabled=\"true\"" : "");
+        return LangLoader.replaceUiTokens(player, html);
     }
 
     private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
@@ -452,12 +510,15 @@ public final class EssenceBenchUI {
         return sb.toString();
     }
 
-    private static String buildEssenceOptions(List<Entry> entries, String selectedKey) {
+    private static String buildEssenceOptions(Player player, List<Entry> entries, String selectedKey) {
         StringBuilder sb = new StringBuilder();
         boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
-        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "").append(">None</option>");
+        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
+                .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_none"))).append("</option>");
         if (entries.isEmpty()) {
-            sb.append("<option value=\"\" disabled=\"true\">No essence found</option>");
+            sb.append("<option value=\"\" disabled=\"true\">")
+                    .append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_no_essence")))
+                    .append("</option>");
             return sb.toString();
         }
         for (int i = 0; i < entries.size(); i++) {
@@ -472,10 +533,10 @@ public final class EssenceBenchUI {
         return sb.toString();
     }
 
-    private static String buildSupportOptions(List<Entry> entries, String selectedKey) {
+    private static String buildSupportOptions(Player player, List<Entry> entries, String selectedKey) {
         StringBuilder sb = new StringBuilder();
         sb.append("<option value=\"\"").append(selectedKey == null || selectedKey.isEmpty() ? " selected=\"true\"" : "")
-                .append(">None</option>");
+                .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_none"))).append("</option>");
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
             String key = String.valueOf(i);
@@ -484,31 +545,41 @@ public final class EssenceBenchUI {
                 sb.append(" selected=\"true\"");
             }
             String suffix = isHammerItem(entry.itemId)
-                    ? " [Clear Essences]"
-                    : (isVoidheartItem(entry.itemId) ? " [Repair Broken]" : "");
+                    ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_clear")
+                    : (isVoidheartItem(entry.itemId)
+                    ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_repair")
+                    : "");
             if (suffix.isEmpty() && ResonantRecipeUtils.isResonantRecipeItem(entry.item)) {
                 ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(entry.item);
                 String usageLabel = ResonantRecipeUtils.formatUsages(usage);
-                suffix = usageLabel.isEmpty() ? " [Recipe]" : " [Recipe " + usageLabel + "]";
+                suffix = usageLabel.isEmpty()
+                        ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_recipe")
+                        : " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_recipe_usage", usageLabel);
             }
             sb.append(">").append(escapeHtml(entry.displayName)).append(suffix).append(" x").append(entry.quantity).append("</option>");
         }
         return sb.toString();
     }
 
-    private static String buildSlotOptions(Entry equipment, String selectedKey) {
+    private static String buildSlotOptions(Player player, Entry equipment, String selectedKey) {
         StringBuilder sb = new StringBuilder();
         boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
         sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
-                .append(">Auto (First Available)</option>");
+                .append(">")
+                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_auto")))
+                .append("</option>");
 
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            sb.append("<option value=\"\" disabled=\"true\">No equipment selected</option>");
+            sb.append("<option value=\"\" disabled=\"true\">")
+                    .append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_no_equipment_selected")))
+                    .append("</option>");
             return sb.toString();
         }
         SocketData sd = SocketManager.getSocketData(equipment.item);
         if (sd == null || sd.getSockets().isEmpty()) {
-            sb.append("<option value=\"\" disabled=\"true\">No sockets</option>");
+            sb.append("<option value=\"\" disabled=\"true\">")
+                    .append(escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.option_no_sockets")))
+                    .append("</option>");
             return sb.toString();
         }
 
@@ -521,40 +592,42 @@ public final class EssenceBenchUI {
             if (key.equals(selectedKey)) {
                 sb.append(" selected=\"true\"");
             }
-            sb.append(">").append(escapeHtml(buildSlotLabel(socket))).append("</option>");
+            sb.append(">").append(escapeHtml(buildSlotLabel(player, socket))).append("</option>");
         }
 
         return sb.toString();
     }
 
-    private static String buildSlotLabel(Socket socket) {
+    private static String buildSlotLabel(Player player, Socket socket) {
         if (socket == null) {
-            return "Slot ?";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.slot_unknown");
         }
         int slotNumber = socket.getSlotIndex() + 1;
         if (socket.isBroken()) {
-            return "Slot " + slotNumber + ": Broken";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.slot_broken", slotNumber);
         }
         if (socket.isLocked()) {
-            return "Slot " + slotNumber + ": Locked";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.slot_locked", slotNumber);
         }
         if (socket.isEmpty()) {
-            return "Slot " + slotNumber + ": Empty";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.slot_empty", slotNumber);
         }
-        String essenceLabel = resolveEssenceLabel(socket);
-        return "Slot " + slotNumber + ": " + essenceLabel;
+        String essenceLabel = resolveEssenceLabel(player, socket);
+        return LangLoader.getUITranslation(player, "ui.essence_bench.slot_filled", slotNumber, essenceLabel);
     }
 
-    private static String resolveEssenceLabel(Socket socket) {
+    private static String resolveEssenceLabel(Player player, Socket socket) {
         if (socket == null || socket.isEmpty()) {
-            return "Empty";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.slot_empty_short");
         }
         String essenceId = socket.getEssenceId();
         Essence essence = essenceId == null ? null : EssenceRegistry.get().getById(essenceId);
         Essence.Type type = essence != null ? essence.getType() : null;
-        String name = type != null ? formatEssenceToken(type) : "Essence";
+        String name = type != null
+                ? formatEssenceToken(player, type)
+                : LangLoader.getUITranslation(player, "ui.essence_bench.essence_generic");
         if (essenceId != null && SocketManager.isGreaterEssenceId(essenceId)) {
-            return name + " (Concentrated)";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.essence_concentrated", name);
         }
         return name;
     }
@@ -571,6 +644,14 @@ public final class EssenceBenchUI {
                     && !canRepairSelectedSlot(equipment, selectedSupport, slotKey);
         }
         return isFilled(equipment);
+    }
+
+    private static boolean shouldDisableExtract(boolean processing, Entry equipment, Player player) {
+        if (processing) return true;
+        if (equipment == null) return true;
+        ItemStack current = equipmentItem(equipment, player);
+        if (current == null || current.isEmpty()) return true;
+        return !SocketManager.hasResonance(current);
     }
 
     private static boolean canRepairSelectedSlot(Entry equipment, Entry support, String slotKey) {
@@ -876,17 +957,21 @@ public final class EssenceBenchUI {
     }
 
     private static ProcessResult processSelection(Player player, Entry equipment, Entry essence, Entry support, String slotKey) {
-        if (equipment == null) return new ProcessResult("Pick a valid equipment first.", 0);
+        if (equipment == null) return new ProcessResult(t(player, "ui.essence_bench.error_pick_equipment"), 0);
 
         ItemStack item = equipmentItem(equipment, player);
-        if (item == null || item.isEmpty()) return new ProcessResult("Selected equipment is no longer available.", 0);
+        if (item == null || item.isEmpty()) {
+            return new ProcessResult(t(player, "ui.essence_bench.error_equipment_missing"), 0);
+        }
         boolean isWeapon = ReforgeEquip.isWeapon(item);
         boolean isArmor = ReforgeEquip.isArmor(item);
-        if (!isWeapon && !isArmor) return new ProcessResult("Selected item is not valid equipment.", 0);
+        if (!isWeapon && !isArmor) {
+            return new ProcessResult(t(player, "ui.essence_bench.error_item_not_equipment"), 0);
+        }
 
         SocketData socketData = SocketManager.getSocketData(item);
         if (socketData == null || socketData.getMaxSockets() == 0 || socketData.getSockets().isEmpty()) {
-            return new ProcessResult("No sockets found. Punch sockets first.", 0);
+            return new ProcessResult(t(player, "ui.essence_bench.error_no_sockets"), 0);
         }
         int selectedSlot = resolveSlotIndex(slotKey, socketData);
 
@@ -894,7 +979,7 @@ public final class EssenceBenchUI {
         if (support != null && isHammerItem(support.itemId)) {
             Socket target = selectedSlot >= 0 ? findSocketByIndex(socketData, selectedSlot) : null;
             if (selectedSlot >= 0 && target == null) {
-                return new ProcessResult("Selected slot is invalid.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_invalid"), 0);
             }
             int clearable = 0;
             if (target != null) {
@@ -910,7 +995,7 @@ public final class EssenceBenchUI {
             }
             if (clearable <= 0) {
                 sfxConfig.playNoChange(player);
-                return new ProcessResult("No socketed essences to clear in the selected slot.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.clear_none"), 100);
             }
 
             boolean isThoriumHammer = isThoriumHammerItem(support.itemId);
@@ -945,7 +1030,7 @@ public final class EssenceBenchUI {
             }
             HammerUseResult hammerUse = applyHammerWear(player, support, hammerWear);
             if (!hammerUse.ok) {
-                return new ProcessResult("Selected hammer stack changed; reselect and try again.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_hammer_changed"), 0);
             }
 
             double successChance = SocketManager.getConfig() != null
@@ -1002,23 +1087,36 @@ public final class EssenceBenchUI {
             if (success) {
                 int refunded = isThoriumHammer ? refundEssences(player, refundCounts) : 0;
                 sfxConfig.playSuccess(player);
-                String slotSuffix = target != null ? " from slot " + (selectedSlot + 1) : "";
+                String slotSuffix = "";
+                if (target != null) {
+                    String rawSuffix = t(player, "ui.essence_bench.clear_slot_suffix", selectedSlot + 1);
+                    if (rawSuffix != null && !rawSuffix.isBlank()) {
+                        slotSuffix = " " + rawSuffix;
+                    }
+                }
                 String successStatus = hammerUse.consumed
-                        ? "Clear succeeded: removed " + removed + slotSuffix + ". Hammer broke."
-                        : "Clear succeeded: removed " + removed + " socketed essence(s)" + slotSuffix + ".";
-                successStatus += (isThoriumHammer ? buildRefundSuffix(removed, refunded) : "");
+                        ? t(player, "ui.essence_bench.clear_success_broke", removed, slotSuffix)
+                        : t(player, "ui.essence_bench.clear_success", removed, slotSuffix);
+                String refundSuffix = isThoriumHammer ? buildRefundSuffix(player, removed, refunded) : "";
+                if (refundSuffix != null && !refundSuffix.isBlank()) {
+                    successStatus += " " + refundSuffix;
+                }
                 if (reducedMaxSockets) {
-                    successStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
+                    successStatus += " " + t(player, "ui.essence_bench.clear_max_reduced", socketData.getMaxSockets());
                 }
                 return new ProcessResult(successStatus, 100);
             }
 
             sfxConfig.playShatter(player);
             String failureStatus = hammerUse.consumed
-                    ? (target != null ? "Clear failed: selected slot broke. Hammer broke." : "Clear failed: a random socket broke. Hammer broke.")
-                    : (target != null ? "Clear failed: selected slot broke." : "Clear failed: a random socket broke.");
+                    ? (target != null
+                        ? t(player, "ui.essence_bench.clear_failed_selected_broke")
+                        : t(player, "ui.essence_bench.clear_failed_random_broke"))
+                    : (target != null
+                        ? t(player, "ui.essence_bench.clear_failed_selected")
+                        : t(player, "ui.essence_bench.clear_failed_random"));
             if (reducedMaxSockets) {
-                failureStatus += " Max sockets reduced to " + socketData.getMaxSockets() + ".";
+                failureStatus += " " + t(player, "ui.essence_bench.clear_max_reduced", socketData.getMaxSockets());
             }
             return new ProcessResult(failureStatus, 100);
         }
@@ -1026,13 +1124,13 @@ public final class EssenceBenchUI {
         if (support != null && isVoidheartItem(support.itemId) && selectedSlot >= 0) {
             Socket target = findSocketByIndex(socketData, selectedSlot);
             if (target == null) {
-                return new ProcessResult("Selected slot is invalid.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_invalid"), 0);
             }
             if (!target.isBroken()) {
-                return new ProcessResult("Selected slot is not broken.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_not_broken"), 100);
             }
             if (!consumeMaterial(player, support, 1)) {
-                return new ProcessResult("Voidheart stack changed; reselect and try again.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_voidheart_changed"), 0);
             }
             target.setBroken(false);
             target.setEssenceId(null);
@@ -1041,7 +1139,7 @@ public final class EssenceBenchUI {
             socketData.registerTooltips(repaired, repaired.getItemId(), isWeapon);
             DynamicTooltipUtils.refreshAllPlayers();
             sfxConfig.playSuccess(player);
-            return new ProcessResult("Socket repaired in slot " + (selectedSlot + 1) + ". Process again to socket essence.", 100);
+            return new ProcessResult(t(player, "ui.essence_bench.status_socket_repaired_slot", selectedSlot + 1), 100);
         }
 
         boolean hasFillableSocket = false;
@@ -1055,23 +1153,23 @@ public final class EssenceBenchUI {
         // Only force repair-first when no non-broken empty sockets are available.
         if (!hasFillableSocket && socketData.hasBrokenSocket()) {
             if (support == null || !isVoidheartItem(support.itemId)) {
-                return new ProcessResult("Broken socket detected. Select Voidheart to repair first.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.error_broken_socket_select_voidheart"), 100);
             }
             if (!consumeMaterial(player, support, 1)) {
-                return new ProcessResult("Voidheart stack changed; reselect and try again.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_voidheart_changed"), 0);
             }
             if (selectedSlot >= 0) {
                 Socket target = findSocketByIndex(socketData, selectedSlot);
                 if (target == null) {
-                    return new ProcessResult("Selected slot is invalid.", 0);
+                    return new ProcessResult(t(player, "ui.essence_bench.error_slot_invalid"), 0);
                 }
                 if (!target.isBroken()) {
-                    return new ProcessResult("Selected slot is not broken.", 100);
+                    return new ProcessResult(t(player, "ui.essence_bench.error_slot_not_broken"), 100);
                 }
                 target.setBroken(false);
                 target.setEssenceId(null);
             } else if (!socketData.repairBrokenSocket()) {
-                return new ProcessResult("Repair failed. Try again.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_repair_failed"), 0);
             }
 
             ItemStack repaired = SocketManager.withSocketData(item, socketData);
@@ -1080,9 +1178,9 @@ public final class EssenceBenchUI {
             DynamicTooltipUtils.refreshAllPlayers();
             sfxConfig.playSuccess(player);
             if (selectedSlot >= 0) {
-                return new ProcessResult("Socket repaired in slot " + (selectedSlot + 1) + ". Process again to socket essence.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.status_socket_repaired_slot", selectedSlot + 1), 100);
             }
-            return new ProcessResult("Socket repaired. Process again to socket essence.", 100);
+            return new ProcessResult(t(player, "ui.essence_bench.status_socket_repaired"), 100);
         }
 
         Entry resolvedEssence = essence;
@@ -1097,41 +1195,43 @@ public final class EssenceBenchUI {
                 autoNotice = auto.notice;
             }
         }
-        if (resolvedEssence == null) return new ProcessResult("Pick an essence first.", 0);
+        if (resolvedEssence == null) {
+            return new ProcessResult(t(player, "ui.essence_bench.error_pick_essence"), 0);
+        }
 
         if (!hasFillableSocket) {
-            return new ProcessResult("All sockets are filled.", 100);
+            return new ProcessResult(t(player, "ui.essence_bench.error_all_filled"), 100);
         }
 
         if (!consumeMaterial(player, resolvedEssence, 1)) {
-            return new ProcessResult("Selected essence stack changed; reselect and try again.", 0);
+            return new ProcessResult(t(player, "ui.essence_bench.error_essence_changed"), 0);
         }
 
         String essenceType = SocketManager.resolveEssenceTypeFromItemId(resolvedEssence.itemId);
         String essenceId = SocketManager.resolveEssenceIdFromItemId(resolvedEssence.itemId);
         if (essenceType == null || essenceId == null) {
-            return new ProcessResult("Invalid essence selected.", 0);
+            return new ProcessResult(t(player, "ui.essence_bench.error_invalid_essence"), 0);
         }
         if (!EssenceRegistry.get().exists(essenceId)) {
-            return new ProcessResult("Essence not found: " + essenceId, 0);
+            return new ProcessResult(t(player, "ui.essence_bench.error_essence_not_found", essenceId), 0);
         }
         if (selectedSlot >= 0) {
             Socket target = findSocketByIndex(socketData, selectedSlot);
             if (target == null) {
-                return new ProcessResult("Selected slot is invalid.", 0);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_invalid"), 0);
             }
             if (target.isBroken()) {
-                return new ProcessResult("Selected slot is broken. Repair it first.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_broken"), 100);
             }
             if (target.isLocked()) {
-                return new ProcessResult("Selected slot is locked.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_locked"), 100);
             }
             if (!target.isEmpty()) {
-                return new ProcessResult("Selected slot is already filled.", 100);
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_filled"), 100);
             }
             target.setEssenceId(essenceId);
         } else if (!SocketManager.socketEssence(socketData, essenceId)) {
-            return new ProcessResult("Could not socket essence. Try again.", 0);
+            return new ProcessResult(t(player, "ui.essence_bench.error_socket_failed"), 0);
         }
 
         ResonanceSystem.ResonanceResult rawResonance = ResonanceSystem.evaluate(item, socketData);
@@ -1151,11 +1251,11 @@ public final class EssenceBenchUI {
                         && ResonantRecipeUtils.normalizeRecipeName(recipeName)
                         .equals(ResonantRecipeUtils.normalizeRecipeName(resonanceName));
                 if (!nameMatches) {
-                    resonanceNotice = "Recipe does not match resonance. Resonance locked.";
+                    resonanceNotice = t(player, "ui.essence_bench.error_recipe_mismatch_resonance");
                 } else {
                     ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(support.item);
                     if (!usage.hasRemaining()) {
-                        resonanceNotice = "Recipe has no usages left. Resonance locked.";
+                        resonanceNotice = t(player, "ui.essence_bench.error_recipe_no_usages");
                     } else {
                         ItemStack updatedSupport = ResonantRecipeUtils.decrementUsage(support.item);
                         if (updatedSupport != support.item) {
@@ -1166,7 +1266,7 @@ public final class EssenceBenchUI {
                     }
                 }
             } else {
-                resonanceNotice = "Resonance locked: select completed recipe support.";
+                resonanceNotice = t(player, "ui.essence_bench.error_resonance_locked");
             }
         }
 
@@ -1177,18 +1277,81 @@ public final class EssenceBenchUI {
         sfxConfig.playSuccess(player);
         String status = autoNotice != null
                 ? autoNotice
-                : (selectedSlot >= 0 ? "Essence socketed into slot " + (selectedSlot + 1) + "." : "Essence socketed successfully.");
+                : (selectedSlot >= 0
+                    ? t(player, "ui.essence_bench.status_essence_socketed_slot", selectedSlot + 1)
+                    : t(player, "ui.essence_bench.status_essence_socketed"));
         if (rawActive) {
             if (SocketManager.hasResonance(updated)) {
-                status = consumedRecipe ? "Resonance unlocked. 1 recipe usage consumed." : "Resonance active.";
+                status = consumedRecipe
+                        ? t(player, "ui.essence_bench.status_resonance_unlocked")
+                        : t(player, "ui.essence_bench.status_resonance_active");
             } else if (resonanceNotice != null) {
-                status = "Essence socketed. " + resonanceNotice;
+                status = t(player, "ui.essence_bench.status_essence_socketed_with_notice", resonanceNotice);
             }
         }
         if (autoNotice != null && !status.startsWith("Auto-") && !status.startsWith("Auto ")) {
             status = autoNotice + " " + status;
         }
         return new ProcessResult(status, 100);
+    }
+
+    private static ProcessResult processExtraction(Player player, Entry equipment) {
+        if (equipment == null) {
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_no_equipment"), 0);
+        }
+        ItemStack current = equipmentItem(equipment, player);
+        if (current == null || current.isEmpty()) {
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_no_equipment"), 0);
+        }
+        if (!SocketManager.hasResonance(current)) {
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_no_resonance"), 0);
+        }
+
+        int yield = calculateResonantEssenceYield(current);
+        ItemStack output = new ItemStack(RESONANT_ESSENCE_ID, Math.max(1, yield));
+        if (!canAddToInventory(player, output)) {
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_no_space"), 0);
+        }
+
+        boolean removed = UIInventoryUtils.removeItem(player, equipment.kind == ContainerKind.HOTBAR, equipment.slot, 1);
+        if (!removed) {
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_failed"), 0);
+        }
+        if (!UIInventoryUtils.addItemToInventory(player, output)) {
+            // Best effort restore to avoid losing the equipment.
+            UIInventoryUtils.writeItem(player, equipment.kind == ContainerKind.HOTBAR, equipment.slot, current);
+            return new ProcessResult(t(player, "ui.essence_bench.status_extract_failed"), 0);
+        }
+
+        sfxConfig.playSuccess(player);
+        return new ProcessResult(t(player, "ui.essence_bench.status_extract_done", output.getQuantity()), 100);
+    }
+
+    private static boolean canAddToInventory(Player player, ItemStack stack) {
+        if (player == null || stack == null || stack.isEmpty()) {
+            return false;
+        }
+        ItemContainer hotbar = UIInventoryUtils.getContainer(player, true);
+        if (hotbar != null && hotbar.canAddItemStack(stack)) {
+            return true;
+        }
+        ItemContainer storage = UIInventoryUtils.getContainer(player, false);
+        return storage != null && storage.canAddItemStack(stack);
+    }
+
+    private static int calculateResonantEssenceYield(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return 1;
+        }
+        int yield = 1;
+        Integer refineLevel = item.getFromMetadataOrNull(META_REFINEMENT_LEVEL, Codec.INTEGER);
+        if (refineLevel != null && refineLevel > 0) {
+            yield += Math.max(0, refineLevel / 5);
+        }
+        if (SocketManager.isResonanceLegendary(item)) {
+            yield += 1;
+        }
+        return Math.max(1, yield);
     }
 
     private static AutoEssenceSelection autoSelectEssenceForRecipe(Player player, Entry equipment, Entry support,
@@ -1201,11 +1364,11 @@ public final class EssenceBenchUI {
         }
         String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
         if (recipeName == null || recipeName.isBlank()) {
-            return new AutoEssenceSelection(null, null, "Recipe name missing on support item.");
+            return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_recipe_missing_name"));
         }
         Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(recipeName);
         if (pattern == null || pattern.length == 0) {
-            return new AutoEssenceSelection(null, null, "Recipe pattern not found for support item.");
+            return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_recipe_pattern_missing"));
         }
 
         int limit = Math.min(pattern.length, socketData.getSockets().size());
@@ -1213,20 +1376,20 @@ public final class EssenceBenchUI {
         Essence.Type targetType = null;
         if (selectedSlot >= 0) {
             if (selectedSlot >= limit) {
-                return new AutoEssenceSelection(null, null, "Selected slot is outside the recipe pattern.");
+                return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_slot_outside_pattern"));
             }
             Socket socket = findSocketByIndex(socketData, selectedSlot);
             if (socket == null) {
-                return new AutoEssenceSelection(null, null, "Selected slot is invalid.");
+                return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_slot_invalid"));
             }
             if (socket.isBroken()) {
-                return new AutoEssenceSelection(null, null, "Selected slot is broken. Repair it first.");
+                return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_slot_broken"));
             }
             if (socket.isLocked()) {
-                return new AutoEssenceSelection(null, null, "Selected slot is locked.");
+                return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_slot_locked"));
             }
             if (!socket.isEmpty()) {
-                return new AutoEssenceSelection(null, null, "Selected slot is already filled.");
+                return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_slot_filled"));
             }
             targetIndex = selectedSlot;
             targetType = pattern[selectedSlot];
@@ -1244,15 +1407,16 @@ public final class EssenceBenchUI {
         }
 
         if (targetIndex < 0 || targetType == null) {
-            return new AutoEssenceSelection(null, null, "No fillable socket matches the recipe.");
+            return new AutoEssenceSelection(null, null, t(player, "ui.essence_bench.error_no_fillable_socket"));
         }
 
         Entry best = findBestEssenceEntry(player, targetType);
         if (best == null) {
-            return new AutoEssenceSelection(null, null, "No matching essence found for recipe slot " + (targetIndex + 1) + ".");
+            return new AutoEssenceSelection(null, null,
+                    t(player, "ui.essence_bench.error_no_matching_essence", targetIndex + 1));
         }
 
-        String notice = "Auto-socketed " + best.displayName + " into slot " + (targetIndex + 1) + ".";
+        String notice = t(player, "ui.essence_bench.notice_auto_socketed", best.displayName, targetIndex + 1);
         return new AutoEssenceSelection(best, notice, null);
     }
 
@@ -1261,8 +1425,8 @@ public final class EssenceBenchUI {
             return null;
         }
         Entry best = null;
-        best = pickBetterEssence(best, findBestEssenceInContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, desiredType));
-        best = pickBetterEssence(best, findBestEssenceInContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, desiredType));
+        best = pickBetterEssence(best, findBestEssenceInContainer(player, player.getInventory().getHotbar(), ContainerKind.HOTBAR, desiredType));
+        best = pickBetterEssence(best, findBestEssenceInContainer(player, player.getInventory().getStorage(), ContainerKind.STORAGE, desiredType));
         return best;
     }
 
@@ -1277,7 +1441,7 @@ public final class EssenceBenchUI {
         return current;
     }
 
-    private static Entry findBestEssenceInContainer(ItemContainer container, ContainerKind kind, Essence.Type desiredType) {
+    private static Entry findBestEssenceInContainer(Player player, ItemContainer container, ContainerKind kind, Essence.Type desiredType) {
         if (container == null || desiredType == null) {
             return null;
         }
@@ -1291,7 +1455,7 @@ public final class EssenceBenchUI {
             if (typeName == null) continue;
             Essence.Type type = toEssenceType(typeName);
             if (type != desiredType) continue;
-            Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), UIItemUtils.displayNameOrItemId(stack));
+            Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), UIItemUtils.displayNameOrItemId(stack, player));
             best = pickBetterEssence(best, entry);
         }
         return best;
@@ -1363,17 +1527,17 @@ public final class EssenceBenchUI {
         return "Ingredient_" + cleaned + "_Essence" + (isGreater ? "_Concentrated" : "");
     }
 
-    private static String buildRefundSuffix(int removed, int refunded) {
+    private static String buildRefundSuffix(Player player, int removed, int refunded) {
         if (removed <= 0) {
             return "";
         }
         if (refunded <= 0) {
-            return " Inventory full: refund failed.";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.refund_failed");
         }
         if (refunded < removed) {
-            return " Refunded " + refunded + " of " + removed + " (inventory full).";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.refund_partial", refunded, removed);
         }
-        return " Refunded " + refunded + " essence(s).";
+        return LangLoader.getUITranslation(player, "ui.essence_bench.refund_success", refunded);
     }
 
     private static HammerUseResult applyHammerWear(Player player, Entry hammerEntry, double durabilityFraction) {
@@ -1399,11 +1563,13 @@ public final class EssenceBenchUI {
         return UIInventoryUtils.getContainer(player, kind == ContainerKind.HOTBAR);
     }
 
-    private static String buildSocketSummary(Entry equipment) {
-        if (equipment == null) return "No equipment selected.";
+    private static String buildSocketSummary(Player player, Entry equipment) {
+        if (equipment == null) {
+            return LangLoader.getUITranslation(player, "ui.essence_bench.summary_no_equipment");
+        }
         SocketData sd = SocketManager.getSocketData(equipment.item);
         if (sd == null) {
-            return "No socket data.";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.summary_no_data");
         }
         int broken = 0;
         int filled = 0;
@@ -1412,17 +1578,22 @@ public final class EssenceBenchUI {
             else if (!socket.isEmpty()) filled++;
         }
         int empty = Math.max(0, sd.getCurrentSocketCount() - filled - broken);
-        return "Filled " + filled + " | Empty " + empty + " | Broken " + broken;
+        return LangLoader.getUITranslation(player, "ui.essence_bench.summary_counts", filled, empty, broken);
     }
 
-    private static String buildMetadata(Entry equipment) {
-        if (equipment == null) return "No equipment selected.";
+    private static String buildMetadata(Player player, Entry equipment) {
+        if (equipment == null) {
+            return LangLoader.getUITranslation(player, "ui.essence_bench.metadata_no_equipment");
+        }
         StringBuilder sb = new StringBuilder();
-        sb.append("[Item]\n");
-        sb.append("Name: ").append(equipment.displayName).append("\n");
-        sb.append("Id: ").append(equipment.itemId).append("\n");
-        sb.append("Inventory: ").append(equipment.kind == ContainerKind.HOTBAR ? "Hotbar" : "Storage")
-                .append(" slot ").append(equipment.slot).append("\n\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_header_item")).append("\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_name", equipment.displayName)).append("\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_id", equipment.itemId)).append("\n");
+        String location = equipment.kind == ContainerKind.HOTBAR
+                ? LangLoader.getUITranslation(player, "ui.essence_bench.metadata_hotbar")
+                : LangLoader.getUITranslation(player, "ui.essence_bench.metadata_storage");
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_inventory", location, equipment.slot))
+                .append("\n\n");
         SocketData sd = SocketManager.getSocketData(equipment.item);
         if (sd != null) {
             int broken = 0;
@@ -1431,11 +1602,13 @@ public final class EssenceBenchUI {
                 if (socket.isBroken()) broken++;
                 else if (!socket.isEmpty()) filled++;
             }
-            sb.append("[Sockets]\n");
-            sb.append("Current/Max: ").append(sd.getCurrentSocketCount()).append("/").append(sd.getMaxSockets()).append("\n");
-            sb.append("Filled: ").append(filled).append("  Broken: ").append(broken).append("\n\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_header_sockets")).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_current_max",
+                    sd.getCurrentSocketCount(), sd.getMaxSockets())).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_filled_broken",
+                    filled, broken)).append("\n\n");
         }
-        sb.append("[Metadata]\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_header_metadata")).append("\n");
         if (equipment.item.getMetadata() != null && !equipment.item.getMetadata().isEmpty()) {
             int shown = 0;
             for (String key : equipment.item.getMetadata().keySet()) {
@@ -1444,100 +1617,123 @@ public final class EssenceBenchUI {
                 shown++;
             }
         } else {
-            sb.append("none");
+            sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.metadata_none"));
         }
         return sb.toString();
     }
 
-    private static String buildSupportDurabilityText(Entry support) {
+    private static String buildSupportDurabilityText(Player player, Entry support) {
         if (support == null || support.item == null || support.item.isEmpty()) {
-            return "Support durability: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.support_durability_none");
         }
         ItemStack item = support.item;
         if (ResonantRecipeUtils.isResonantRecipeItem(item)) {
             ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(item);
             String usageLabel = ResonantRecipeUtils.formatUsages(usage);
-            return usageLabel.isEmpty() ? "Recipe usages: -" : "Recipe usages: " + usageLabel;
+            return usageLabel.isEmpty()
+                    ? LangLoader.getUITranslation(player, "ui.essence_bench.recipe_usages_none")
+                    : LangLoader.getUITranslation(player, "ui.essence_bench.recipe_usages", usageLabel);
         }
         double max = item.getMaxDurability();
         double cur = item.getDurability();
         if (max <= 0.0d) {
-            return "Support durability: N/A";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.support_durability_na");
         }
         int maxInt = (int) Math.round(max);
         int curInt = (int) Math.round(cur);
         int percent = (int) Math.round((cur / max) * 100.0);
         percent = Math.max(0, Math.min(100, percent));
-        return "Support durability: " + percent + "% (" + curInt + "/" + maxInt + ")";
+        return LangLoader.getUITranslation(player, "ui.essence_bench.support_durability_value",
+                percent, curInt, maxInt);
     }
 
-    private static String buildSupportRecipeText(Entry support) {
+    private static String buildSupportRecipeText(Player player, Entry support) {
         if (support == null || support.item == null || support.item.isEmpty()) {
-            return "Recipe: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.recipe_none");
         }
         if (!ResonantRecipeUtils.isResonantRecipeItem(support.item)) {
-            return "Recipe: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.recipe_none");
         }
         String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
         if (recipeName == null || recipeName.isBlank()) {
-            return "Recipe: (unknown)";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.recipe_unknown");
         }
+        String localizedName = ResonanceSystem.getLocalizedName(recipeName, player);
         Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(recipeName);
-        String patternText = formatPattern(pattern);
+        String patternText = formatPattern(player, pattern);
         if (patternText.isBlank()) {
-            return "Recipe: " + recipeName;
+            return LangLoader.getUITranslation(player, "ui.essence_bench.recipe_label", localizedName);
         }
-        return "Recipe: " + recipeName + "\nPattern: " + patternText;
+        return LangLoader.getUITranslation(player, "ui.essence_bench.recipe_with_pattern", localizedName, patternText);
     }
 
-    private static String buildEffectPreviewText(Entry equipment, Entry support) {
+    private static String buildEffectPreviewText(Player player, Entry equipment, Entry support) {
         if (support == null || support.item == null || support.item.isEmpty()) {
-            return "Effect preview: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.effect_preview_none");
         }
         if (!ResonantRecipeUtils.isResonantRecipeItem(support.item)) {
-            return "Effect preview: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.effect_preview_none");
         }
         String recipeName = ResonantRecipeUtils.getRecipeName(support.item);
         if (recipeName == null || recipeName.isBlank()) {
-            return "Effect preview: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.effect_preview_none");
         }
         ResonanceSystem.ResonanceResult result = ResonanceSystem.getResultForRecipeName(recipeName);
         if (result == null || !result.active()) {
-            return "Effect preview: -";
+            return LangLoader.getUITranslation(player, "ui.essence_bench.effect_preview_none");
         }
         boolean isWeapon = equipment != null && ReforgeEquip.isWeapon(equipment.item);
         boolean isArmor = equipment != null && ReforgeEquip.isArmor(equipment.item) && !isWeapon;
         boolean useWeaponContext = equipment == null || isWeapon || !isArmor;
         StringBuilder sb = new StringBuilder();
-        sb.append("Resonance: ").append(result.name());
-        String flavor = result.effect() == null ? "" : result.effect().trim();
+        String localizedName = ResonanceSystem.getLocalizedName(result.name(), player);
+        sb.append(LangLoader.getUITranslation(player, "ui.essence_bench.effect_preview_header", localizedName));
+        String flavor = ResonanceSystem.getLocalizedEffect(result.name(), result.effect(), player);
+        if (flavor == null) {
+            flavor = "";
+        } else {
+            flavor = flavor.trim();
+        }
         if (!flavor.isBlank()) {
             sb.append("\n").append(flavor);
         }
-        String details = ResonanceSystem.buildDetailedEffect(result, useWeaponContext);
+        String details = ResonanceSystem.buildDetailedEffect(result, useWeaponContext, player);
         if (!details.isBlank()) {
             sb.append("\n").append(details);
         }
         return sb.toString();
     }
 
-    private static String formatPattern(Essence.Type[] pattern) {
+    private static String formatPattern(Player player, Essence.Type[] pattern) {
         if (pattern == null || pattern.length == 0) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
         for (Essence.Type type : pattern) {
-            sb.append('[').append(formatEssenceToken(type)).append(']');
+            sb.append('[').append(formatEssenceToken(player, type)).append(']');
         }
         return sb.toString();
     }
 
-    private static String formatEssenceToken(Essence.Type type) {
+    private static String formatEssenceToken(Player player, Essence.Type type) {
         if (type == null) {
             return "x";
         }
-        String raw = type.name().toLowerCase(Locale.ROOT);
-        return raw.isEmpty() ? "x" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        String key = switch (type) {
+            case FIRE -> "essence.type.fire";
+            case WATER -> "essence.type.water";
+            case ICE -> "essence.type.ice";
+            case LIGHTNING -> "essence.type.lightning";
+            case LIFE -> "essence.type.life";
+            case VOID -> "essence.type.void";
+        };
+        String lang = LangLoader.getPlayerLanguage(player);
+        String translated = LangLoader.getTranslationForLanguage(key, lang);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            String raw = type.name().toLowerCase(Locale.ROOT);
+            return raw.isEmpty() ? "x" : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        }
+        return translated;
     }
 
     private static String loadTemplate() {
@@ -1584,5 +1780,9 @@ public final class EssenceBenchUI {
 
     private static String escapeHtml(String text) {
         return UITemplateUtils.escapeHtml(text);
+    }
+
+    private static String t(Player player, String key, Object... params) {
+        return LangLoader.getUITranslation(player, key, params);
     }
 }

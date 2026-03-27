@@ -47,6 +47,8 @@ import irai.mod.reforge.Socket.SocketManager;
  */
 @SuppressWarnings("removal")
 public class SocketEffectEST extends DamageEventSystem {
+    private static final boolean DEBUG_DAMAGE_LOG = Boolean.parseBoolean(
+            System.getProperty("socketreforge.debug.damage", "false"));
     private static final Map<UUID, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final long FREEZE_DURATION_MILLIS = 2000L;
     private static final double FREEZE_DAMAGE_PENALTY = 0.30d;
@@ -224,9 +226,11 @@ public class SocketEffectEST extends DamageEventSystem {
             if (attackerPlayer != null) {
                 applyWeaponLifeSteal(store, attackerRef, attackerWeapon, damage.getAmount());
 
-                System.out.println("[SocketReforge][DEF_DMG] attacker=" + attackerPlayer.getUuid()
-                        + " beforeDefenderSocket=" + beforeDefenderSocketDamage
-                        + " final=" + damage.getAmount());
+                if (DEBUG_DAMAGE_LOG) {
+                    System.out.println("[SocketReforge][DEF_DMG] attacker=" + attackerPlayer.getUuid()
+                            + " beforeDefenderSocket=" + beforeDefenderSocketDamage
+                            + " final=" + damage.getAmount());
+                }
             }
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketEffectEST handle error: " + t.getMessage());

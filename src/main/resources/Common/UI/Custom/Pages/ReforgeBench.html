@@ -1,64 +1,62 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Refinement Bench" style="anchor-width: 920; anchor-height: 760;">
+    <div class="decorated-container" data-hyui-title="{{title}}" style="anchor-width: 920; anchor-height: 760;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">Refinement Bench</h2>
-            <p style="text-align:center;">Refinement Globs in inventory: {{materialCountText}}</p>
-
+            <h2 style="text-align:center;">{{title}}</h2>
+            <p style="text-align:center;">{{materialCountText}}</p>
+ 
             <hr/>
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-
-            <p style="font-weight:bold;">Equipment</p>
+ 
+            <p style="font-weight:bold;">{{equipmentLabel}}</p>
             <select id="equipmentDropdown" data-hyui-showlabel="true">
                 {{equipmentOptions}}
             </select>
-
-            <p style="font-weight:bold;">Refinement Material</p>
+ 
+            <p style="font-weight:bold;">{{materialLabel}}</p>
             <select id="materialDropdown" data-hyui-showlabel="true">
                 {{materialOptions}}
             </select>
-
-            <p style="font-weight:bold;">Support Material (Optional)</p>
+ 
+            <p style="font-weight:bold;">{{supportLabel}}</p>
             <select id="supportDropdown" data-hyui-showlabel="true">
                 {{supportOptions}}
             </select>
             <p style="font-size:11px;">{{supportDurabilityText}}</p>
-
+ 
             <hr/>
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <div style="layout-mode: Left; spacing: 14;">
                 <div style="flex-weight:1; layout-mode:Top; min-width:0;">
-                    <p style="font-weight:bold;">Selected Item Metadata</p>
+                    <p style="font-weight:bold;">{{metadataLabel}}</p>
                     <div id="metadataLabel" style="layout-mode:Top;max-height:220px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>Name : {{metadataNameText}}</p>
-                        <p>Refinement Level : {{metadataLevelText}}</p>
-                        <p>{{metadataCurrentStatText}}</p>
-                        <p>{{metadataBaseStatText}}</p>
+                        <p>{{metadataNameLabel}} : {{metadataNameText}}</p>
+                        <p>{{metadataLevelLabel}} : {{metadataLevelText}}</p>
+                        <p>{{metadataCurrentStatLabel}} : {{metadataCurrentStatText}}</p>
+                        <p>{{metadataBaseStatLabel}} : {{metadataBaseStatText}}</p>
                     </div>
                 </div>
-
+ 
                 <div style="flex-weight:1; layout-mode:Top; min-width:0;">
-                    <p style="font-weight:bold;">Expected Outcome Before Refinement</p>
+                    <p style="font-weight:bold;">{{expectedOutcomeLabel}}</p>
                     <div id="expectedStatsLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>Break : {{chanceBreakText}}</p>
-                        <p>Degrade : {{chanceDegradeText}}</p>
-                        <p>Same : {{chanceSameText}}</p>
-                        <p>Upgrade : {{chanceUpgradeText}}</p>
-                        <p>Jackpot : {{chanceJackpotText}}</p>
+                        <p>{{chanceBreakLabel}} : {{chanceBreakText}}</p>
+                        <p>{{chanceDegradeLabel}} : {{chanceDegradeText}}</p>
+                        <p>{{chanceSameLabel}} : {{chanceSameText}}</p>
+                        <p>{{chanceUpgradeLabel}} : {{chanceUpgradeText}}</p>
+                        <p>{{chanceJackpotLabel}} : {{chanceJackpotText}}</p>
                         <p>{{chanceNoteText}}</p>
                     </div>
-
+ 
                     <img src="divider.png" style="anchor-width: 440; anchor-height: 3;">
-                    <p style="font-weight:bold;">Expected Damage Outcome</p>
+                    <p style="font-weight:bold;">{{expectedDamageLabel}}</p>
                     <div id="expectedDamageLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>{{expectedDamageLine1Text}}</p>
-                        <p>{{expectedDamageLine2Text}}</p>
-                        <p>{{expectedDamageLine3Text}}</p>
+                        <p>{{expectedDamageText}}</p>
                     </div>
                 </div>
             </div>
-
+ 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-weight:bold;">Refine Progress</p>
+            <p style="font-weight:bold;">{{refineProgressLabel}}</p>
             <progress id="refineProgress"
                       max="100"
                       value="{{progressValue}}"
@@ -66,12 +64,12 @@
                       style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
             </progress>
             <p id="statusLabel">{{statusText}}</p>
-
+ 
             <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11px;">Consumes 3 Refinement Globs per attempt.</p> 
-            <p style="font-size:11px;">Iron Hammer reduces break chance (5% durability per use).</p> 
-            <p style="font-size:11px;">Thorium Hammer reduces break chance further (15% durability per use).</p>
-            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>Refine Equipment</button>
+            <p style="font-size:11px;">{{consumesMaterialText}}</p> 
+            <p style="font-size:11px;">{{ironHammerInfoText}}</p> 
+            <p style="font-size:11px;">{{thoriumHammerInfoText}}</p>
+            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{refineButtonText}}</button>
         </div>
     </div>
 </div>

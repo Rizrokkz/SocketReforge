@@ -12,6 +12,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * Runeword-like resonance matching for socket combinations.
@@ -145,6 +146,7 @@ public final class ResonanceSystem {
             def("Oathblade", "Burning crits with heavy damage scaling.",
                     ResonanceType.BURN_ON_CRIT, Scope.WEAPON, WeaponClass.SWORD,
                     b(EssenceEffect.StatType.DAMAGE, 0, 12),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
                     b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 10),
                     Essence.Type.FIRE, Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.LIFE),
             def("Winter Duelist", "Hits chain slow and punish chilled targets.",
@@ -157,6 +159,7 @@ public final class ResonanceSystem {
             def("Butcher's Mark", "Execute bonus against low-health enemies.",
                     ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.AXE,
                     b(EssenceEffect.StatType.DAMAGE, 0, 10),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
                     b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 8),
                     Essence.Type.VOID, Essence.Type.FIRE, Essence.Type.FIRE),
             def("Warhowl", "Armor-shredding impacts with aggressive tempo.",
@@ -179,6 +182,7 @@ public final class ResonanceSystem {
             def("Tomb Bell", "Execution pressure with dark impact.",
                     ResonanceType.EXECUTE, Scope.WEAPON, WeaponClass.MACE,
                     b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
                     b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 10),
                     Essence.Type.VOID, Essence.Type.ICE, Essence.Type.VOID, Essence.Type.LIFE),
             def("Siege Psalm", "Balanced offense and thunder proc potential.",
@@ -227,6 +231,7 @@ public final class ResonanceSystem {
             def("Sunshot", "Explosive burn-style crit spikes.",
                     ResonanceType.BURN_ON_CRIT, Scope.WEAPON, WeaponClass.BOW,
                     b(EssenceEffect.StatType.DAMAGE, 3, 12),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
                     b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 12),
                     Essence.Type.FIRE, Essence.Type.LIGHTNING, Essence.Type.FIRE, Essence.Type.LIFE, Essence.Type.VOID),
             def("Storm Quiver", "Charged bow shots can split into a 3-arrow multishot burst.",
@@ -488,6 +493,62 @@ public final class ResonanceSystem {
             }
         }
         return ResonanceResult.NONE;
+    }
+
+    public static String getLocalizedName(String name, Object player) {
+        return getLocalizedName(name, LangLoader.getPlayerLanguage(player));
+    }
+
+    public static String getLocalizedName(String name, String langCode) {
+        if (name == null || name.isBlank()) {
+            return name == null ? "" : name;
+        }
+        String key = resonanceKey(name);
+        if (key.isBlank()) {
+            return name;
+        }
+        String translated = LangLoader.getTranslationForLanguage("resonance." + key + ".name", langCode);
+        return translated != null && !translated.isBlank() && !translated.equals("resonance." + key + ".name")
+                ? translated
+                : name;
+    }
+
+    public static String getLocalizedEffect(String name, String rawEffect, Object player) {
+        return getLocalizedEffect(name, rawEffect, LangLoader.getPlayerLanguage(player));
+    }
+
+    public static String getLocalizedEffect(String name, String rawEffect, String langCode) {
+        if (name != null && !name.isBlank()) {
+            String key = resonanceKey(name);
+            if (!key.isBlank()) {
+                String translated = LangLoader.getTranslationForLanguage("resonance." + key + ".effect", langCode);
+                if (translated != null && !translated.isBlank() && !translated.equals("resonance." + key + ".effect")) {
+                    return translated;
+                }
+            }
+        }
+        return rawEffect == null ? "" : rawEffect;
+    }
+
+    public static String localizeAppliesTo(String raw, Object player) {
+        return localizeAppliesTo(raw, LangLoader.getPlayerLanguage(player));
+    }
+
+    public static String localizeAppliesTo(String raw, String langCode) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String key = raw.trim().toLowerCase(Locale.ROOT)
+                .replace('/', '_')
+                .replaceAll("[^a-z0-9]+", "_")
+                .replaceAll("^_+|_+$", "");
+        if (key.isBlank()) {
+            return raw;
+        }
+        String translated = LangLoader.getTranslationForLanguage("resonance.applies." + key, langCode);
+        return translated != null && !translated.isBlank() && !translated.equals("resonance.applies." + key)
+                ? translated
+                : raw;
     }
 
     public static List<RecipeDisplay> getSeededRecipeDisplays() {
@@ -822,6 +883,46 @@ public final class ResonanceSystem {
         return flavor;
     }
 
+    public static String buildDetailedEffect(ResonanceResult resonance, boolean isWeapon, Object player) {
+        return buildDetailedEffect(resonance, isWeapon, LangLoader.getPlayerLanguage(player));
+    }
+
+    public static String buildDetailedEffect(ResonanceResult resonance, boolean isWeapon, String langCode) {
+        if (resonance == null || !resonance.active()) {
+            return "";
+        }
+
+        String stats = formatBonusSummaryLocalized(resonance.bonuses(), langCode);
+        String proc = describeProcLocalized(resonance.type(), isWeapon, langCode);
+        String flavor = getLocalizedEffect(resonance.name(), resonance.effect(), langCode);
+
+        if (!stats.isBlank() && !proc.isBlank()) {
+            return LangLoader.formatTranslation("resonance.detail.stats_and_proc", langCode, stats, proc);
+        }
+        if (!stats.isBlank()) {
+            return LangLoader.formatTranslation("resonance.detail.stats_only", langCode, stats);
+        }
+        if (!proc.isBlank()) {
+            return LangLoader.formatTranslation("resonance.detail.proc_only", langCode, proc);
+        }
+        return flavor == null ? "" : flavor;
+    }
+
+    /**
+     * Applies the greater-essence multiplier to the resonance bonuses if needed.
+     * This is used for tooltips where we have the socket data but not a full item evaluation.
+     */
+    public static ResonanceResult applyGreaterEssenceScaling(ResonanceResult resonance, SocketData socketData) {
+        if (resonance == null || socketData == null) {
+            return resonance;
+        }
+        double multiplier = getResonanceGreaterMultiplier(socketData);
+        if (multiplier <= 1.0) {
+            return resonance;
+        }
+        return scaleResultBonuses(resonance, multiplier);
+    }
+
     private static List<Essence.Type> extractFilledSequence(SocketData socketData) {
         if (socketData == null || socketData.getSockets().isEmpty()) {
             return List.of();
@@ -865,6 +966,37 @@ public final class ResonanceSystem {
         };
     }
 
+    private static String describeProcLocalized(ResonanceType type, boolean isWeapon, String langCode) {
+        if (type == null || type == ResonanceType.NONE) {
+            return "";
+        }
+        String key = switch (type) {
+            case BURN_ON_CRIT -> "resonance.proc.burn_on_crit";
+            case CHAIN_SLOW -> "resonance.proc.chain_slow";
+            case EXECUTE -> "resonance.proc.execute";
+            case ARMOR_SHRED -> "resonance.proc.armor_shred";
+            case THUNDER_STRIKE -> "resonance.proc.thunder_strike";
+            case MULTISHOT_BARRAGE -> "resonance.proc.multishot_barrage";
+            case CROSSBOW_AUTO_RELOAD -> "resonance.proc.crossbow_auto_reload";
+            case PLUNDERING_BLADE -> "resonance.proc.plundering_blade";
+            case FROST_NOVA_ON_HIT -> "resonance.proc.frost_nova_on_hit";
+            case THORNS_SHOCK -> "resonance.proc.thorns_shock";
+            case CHEAT_DEATH -> "resonance.proc.cheat_death";
+            case HEAL_SURGE -> isWeapon ? "resonance.proc.heal_surge.weapon" : "resonance.proc.heal_surge.armor";
+            case SHOCK_DODGE -> "resonance.proc.shock_dodge";
+            case AURA_BURN -> "resonance.proc.aura_burn";
+            case NONE -> "";
+        };
+        if (key.isBlank()) {
+            return "";
+        }
+        String translated = LangLoader.getTranslationForLanguage(key, langCode);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            return describeProc(type, isWeapon);
+        }
+        return translated;
+    }
+
     private static String formatBonusSummary(Map<EssenceEffect.StatType, double[]> bonuses) {
         if (bonuses == null || bonuses.isEmpty()) {
             return "";
@@ -879,6 +1011,30 @@ public final class ResonanceSystem {
             double flat = values[0];
             double percent = values[1];
             String label = formatStatLabel(stat);
+            if (Math.abs(flat) > 1.0E-9) {
+                parts.add((flat > 0 ? "+" : "") + formatNumber(flat) + " " + label);
+            }
+            if (Math.abs(percent) > 1.0E-9) {
+                parts.add((percent > 0 ? "+" : "") + formatNumber(percent) + "% " + label);
+            }
+        }
+        return String.join(", ", parts);
+    }
+
+    private static String formatBonusSummaryLocalized(Map<EssenceEffect.StatType, double[]> bonuses, String langCode) {
+        if (bonuses == null || bonuses.isEmpty()) {
+            return "";
+        }
+
+        List<String> parts = new ArrayList<>();
+        for (EssenceEffect.StatType stat : EssenceEffect.StatType.values()) {
+            double[] values = bonuses.get(stat);
+            if (values == null || values.length < 2) {
+                continue;
+            }
+            double flat = values[0];
+            double percent = values[1];
+            String label = formatStatLabelLocalized(stat, langCode);
             if (Math.abs(flat) > 1.0E-9) {
                 parts.add((flat > 0 ? "+" : "") + formatNumber(flat) + " " + label);
             }
@@ -907,6 +1063,44 @@ public final class ResonanceSystem {
             case EVASION -> "Evasion";
             case LUCK -> "Luck";
         };
+    }
+
+    private static String formatStatLabelLocalized(EssenceEffect.StatType stat, String langCode) {
+        if (stat == null) {
+            return LangLoader.getTranslationForLanguage("resonance.stat.generic", langCode);
+        }
+        String key = switch (stat) {
+            case DAMAGE -> "resonance.stat.damage";
+            case DEFENSE -> "resonance.stat.defense";
+            case FIRE_DEFENSE -> "resonance.stat.fire_defense";
+            case HEALTH -> "resonance.stat.health";
+            case MOVEMENT_SPEED -> "resonance.stat.slow";
+            case REGENERATION -> "resonance.stat.regen";
+            case CRIT_CHANCE -> "resonance.stat.crit_chance";
+            case CRIT_DAMAGE -> "resonance.stat.crit_damage";
+            case ATTACK_SPEED -> "resonance.stat.attack_speed";
+            case LIFE_STEAL -> "resonance.stat.lifesteal";
+            case EVASION -> "resonance.stat.evasion";
+            case LUCK -> "resonance.stat.luck";
+        };
+        String translated = LangLoader.getTranslationForLanguage(key, langCode);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            return formatStatLabel(stat);
+        }
+        return translated;
+    }
+
+    private static String resonanceKey(String name) {
+        if (name == null) {
+            return "";
+        }
+        String key = name.trim().toLowerCase(Locale.ROOT);
+        if (key.isEmpty()) {
+            return "";
+        }
+        key = key.replaceAll("[^a-z0-9]+", "_");
+        key = key.replaceAll("^_+|_+$", "");
+        return key;
     }
 
     private static String formatNumber(double value) {
@@ -980,7 +1174,15 @@ public final class ResonanceSystem {
         if (id.contains("dagger") || id.contains("knife")) return WeaponClass.DAGGER;
         if (id.contains("crossbow")) return WeaponClass.CROSSBOW;
         if (id.contains("bow")) return WeaponClass.BOW;
-        if (id.contains("staff") || id.contains("spear")) return WeaponClass.STAFF;
+        if (id.contains("staff")
+                || id.contains("spear")
+                || id.contains("spellbook")
+                || id.contains("spell_book")
+                || id.contains("spell-book")
+                || id.contains("tome")
+                || id.contains("grimoire")) {
+            return WeaponClass.STAFF;
+        }
         return WeaponClass.GENERIC;
     }
 

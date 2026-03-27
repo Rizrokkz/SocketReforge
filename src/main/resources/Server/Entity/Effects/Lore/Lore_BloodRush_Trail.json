@@ -1,0 +1,40 @@
+{
+  "Duration": 0.6,
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Sword_Charged_Trail_Praetorian",
+        "TargetEntityPart": "PrimaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      },
+      {
+        "SystemId": "Sword_Charged_Trail_Praetorian",
+        "TargetEntityPart": "SecondaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      },
+      {
+        "SystemId": "Sword_Charged_Trail_Praetorian",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "R-Handle",
+        "PositionOffset": {
+          "X": 0.5
+        }
+      },
+      {
+        "SystemId": "Sword_Charged_Trail_Praetorian",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "L-Handle",
+        "PositionOffset": {
+          "X": 0.5
+        }
+      }
+    ]
+  },
+  "OverlapBehavior": "Extend"
+}

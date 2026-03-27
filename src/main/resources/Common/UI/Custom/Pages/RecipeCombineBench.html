@@ -1,16 +1,16 @@
 <div id="recipeCombinePage" class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Resonant Recipe Combine" style="anchor-width: 920; anchor-height: 700;">
+    <div class="decorated-container" data-hyui-title="{{ui.recipe_combine.title}}" style="anchor-width: 920; anchor-height: 700;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">Resonant Recipe Combine</h2>
-            <p style="text-align:center;">Combine recipe shards to reveal the full resonance pattern.</p>
+            <h2 style="text-align:center;">{{ui.recipe_combine.title}}</h2>
+            <p style="text-align:center;">{{ui.recipe_combine.subtitle}}</p>
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p>Recipes</p>
+            <p>{{ui.recipe_combine.section_recipes}}</p>
             <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
                 <div style="layout-mode:Left; spacing:16;">
                     <div style="anchor-width:440; layout-mode:Top;">
-                        <p style="font-weight:bold;">Base Recipe</p>
+                        <p style="font-weight:bold;">{{ui.recipe_combine.base_recipe}}</p>
                         <select id="baseRecipeDropdown" data-hyui-showlabel="false"
                                 style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
                             {{baseRecipeOptions}}
@@ -21,7 +21,7 @@
                         </button>
                     </div>
                     <div style="anchor-width:440; layout-mode:Top;">
-                        <p style="font-weight:bold;">Merge Shard</p>
+                        <p style="font-weight:bold;">{{ui.recipe_combine.merge_shard}}</p>
                         <select id="mergeRecipeDropdown" data-hyui-showlabel="false"
                                 style="anchor-width:0; anchor-height:0; opacity:0; visibility:hidden; padding:0; margin:0;">
                             {{mergeRecipeOptions}}
@@ -36,17 +36,17 @@
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p>Recipe Info</p>
+            <p>{{ui.recipe_combine.section_info}}</p>
             <div id="recipeInfoPanel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                <p>Resonance: {{recipeName}}</p>
-                <p>Type: {{recipeType}}</p>
-                <p>Progress: {{recipeProgress}}</p>
-                <p>Usages: {{recipeUsages}}</p>
+                <p>{{ui.recipe_combine.label_resonance}}: {{recipeName}}</p>
+                <p>{{ui.recipe_combine.label_type}}: {{recipeType}}</p>
+                <p>{{ui.recipe_combine.label_progress}}: {{recipeProgress}}</p>
+                <p>{{ui.recipe_combine.label_usages}}: {{recipeUsages}}</p>
             </div>
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p>Merge Preview</p>
+            <p>{{ui.recipe_combine.section_merge_preview}}</p>
             <div id="mergePreviewPanel" style="layout-mode:Top;spacing:8;background-color:#1a1a2b;padding:8;border-radius:4;min-height:160;">
                 <p style="white-space:pre-line;">{{mergePreviewText}}</p>
                 {{mergePreviewVisual}}
@@ -54,7 +54,7 @@
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p>Progress</p>
+            <p>{{ui.recipe_combine.section_progress}}</p>
             <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
                 <progress id="combineProgress"
                           max="100"
@@ -67,12 +67,12 @@
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
-            <p>Combine</p>
+            <p>{{ui.recipe_combine.section_combine}}</p>
             <div style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                <p style="font-size:11;">Combining merges the selected shard into the base recipe.</p>
-                <p style="font-size:11;">Consumed shards are removed from inventory or compendium.</p>
+                <p style="font-size:11;">{{ui.recipe_combine.combine_note_1}}</p>
+                <p style="font-size:11;">{{ui.recipe_combine.combine_note_2}}</p>
             </div>
-            <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>Combine Shards</button>
+            <button id="combineButton" style="width:100%;height:40px;" {{combineDisabledAttr}}>{{ui.recipe_combine.button_combine}}</button>
         </div>
     </div>
     {{pickerModal}}

@@ -272,7 +272,6 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             debug("flight", "start blocked because held item could not be removed from inventory");
             return false;
         }
-        player.sendInventory();
 
         flights.put(player.getUuid(), new FlightState(
                 player.getUuid(),
@@ -658,7 +657,10 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         if (held == null || held.isEmpty() || !held.isBroken()) {
             return 1.0f;
         }
-        if (player == null || playerRef == null || store == null || !player.canApplyItemStackPenalties(playerRef, store)) {
+        if (player == null || playerRef == null || store == null) {
+            return 1.0f;
+        }
+        if (player.getGameMode() == com.hypixel.hytale.protocol.GameMode.Creative) {
             return 1.0f;
         }
         if (world == null || world.getGameplayConfig() == null || world.getGameplayConfig().getItemDurabilityConfig() == null) {
@@ -886,7 +888,6 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             if (slotItem == null || slotItem.isEmpty()) {
                 var setTransaction = container.setItemStackForSlot(state.slot, returningItem);
                 if (setTransaction != null && setTransaction.succeeded()) {
-                    player.sendInventory();
                     debug("inventory", "restored " + state.itemId + " to original slot "
                             + state.sectionId + ":" + state.slot);
                     return;
@@ -895,7 +896,6 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         }
 
         var giveTransaction = player.giveItem(returningItem, playerRef, playerRef.getStore());
-        player.sendInventory();
         if (giveTransaction != null && (giveTransaction.getRemainder() == null || giveTransaction.getRemainder().isEmpty())) {
             debug("inventory", "restored " + state.itemId + " through giveItem fallback");
             return;
@@ -923,7 +923,6 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             if (slotItem == null || slotItem.isEmpty()) {
                 var setTransaction = container.setItemStackForSlot(state.slot, returningItem);
                 if (setTransaction != null && setTransaction.succeeded()) {
-                    inventory.markChanged();
                     player.markNeedsSave();
                     debug("inventory", "restored " + state.itemId + " to original slot during drain");
                     return;
@@ -931,10 +930,9 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             }
         }
 
-        var addTransaction = inventory.getCombinedEverything().addItemStack(returningItem);
-        inventory.markChanged();
+        boolean added = tryAddToInventory(inventory, returningItem);
         player.markNeedsSave();
-        if (addTransaction != null && (addTransaction.getRemainder() == null || addTransaction.getRemainder().isEmpty())) {
+        if (added) {
             debug("inventory", "restored " + state.itemId + " through combined inventory during drain");
             return;
         }
@@ -1227,6 +1225,32 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static boolean tryAddToInventory(Inventory inventory, ItemStack stack) {
+        if (inventory == null || stack == null || stack.isEmpty()) {
+            return false;
+        }
+        ItemStack remaining = stack;
+        ItemContainer[] containers = new ItemContainer[] {
+                inventory.getTools(),
+                inventory.getHotbar(),
+                inventory.getStorage(),
+                inventory.getBackpack()
+        };
+        for (ItemContainer container : containers) {
+            if (container == null || remaining == null || remaining.isEmpty()) {
+                continue;
+            }
+            var transaction = container.addItemStack(remaining);
+            if (transaction != null) {
+                remaining = transaction.getRemainder();
+            }
+            if (remaining == null || remaining.isEmpty()) {
+                return true;
+            }
+        }
+        return remaining == null || remaining.isEmpty();
     }
 
     private static final class FlightState {

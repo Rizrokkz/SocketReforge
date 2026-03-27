@@ -1,9 +1,11 @@
 package irai.mod.reforge.states;
 
+import com.hypixel.hytale.component.Component;
+import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
-import com.hypixel.hytale.server.core.universe.world.meta.BlockState;
-
-@SuppressWarnings("removal")
-public class ReforgeState extends BlockState {
-
+public class ReforgeState implements Component<ChunkStore> {
+    @Override
+    public ReforgeState clone() {
+        return new ReforgeState();
+    }
 }

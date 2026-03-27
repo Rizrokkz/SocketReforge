@@ -1,18 +1,19 @@
 package irai.mod.reforge.Socket;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.EnumMap;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Random;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Util.MetadataKeys;
 
 /**
  * Core logic for socket punching and essence operations.
@@ -25,15 +26,6 @@ public class SocketManager {
 
     private static SocketConfig config = new SocketConfig();
     private static final Random RNG    = new Random();
-    private static final String META_SOCKETS_MAX = "SocketReforge.Socket.Max";
-    private static final String META_SOCKETS_VALUES = "SocketReforge.Socket.Values";
-    private static final String META_ESSENCE_EFFECTS = "SocketReforge.Essence.Effects";
-    private static final String META_ESSENCE_TIER_MAP = "SocketReforge.Essence.TierMap";
-    private static final String META_ESSENCE_EFFECT_LINES = "SocketReforge.Essence.EffectLines";
-    private static final String META_ESSENCE_BONUS_STATS = "SocketReforge.Essence.Bonus.Stats";
-    private static final String META_ESSENCE_BONUS_FLAT = "SocketReforge.Essence.Bonus.Flat";
-    private static final String META_ESSENCE_BONUS_PERCENT = "SocketReforge.Essence.Bonus.Percent";
-    private static final String META_RESONANCE_RECIPE_NAME = "SocketReforge.Resonance.RecipeName";
     private static final String GREATER_ESSENCE_SUFFIX = "_Concentrated";
 
     // ── Config ────────────────────────────────────────────────────────────────
@@ -53,7 +45,75 @@ public class SocketManager {
         SOCKET_STABILIZER,   // Reduces lock chance
         SOCKET_REINFORCER,   // +20% success chance
         SOCKET_GUARANTOR,    // 100% success for 1st socket
-        SOCKET_EXPANDER      // 25% chance for bonus socket
+        SOCKET_EXPANDER,     // Increases max sockets by 1
+        SOCKET_DIFFUSER      // Decreases max sockets by 1
+    }
+
+    public static SupportMaterial resolveSupportMaterial(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return SupportMaterial.NONE;
+        }
+        String normalized = itemId.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "socket_stabilizer" -> SupportMaterial.SOCKET_STABILIZER;
+            case "socket_reinforcer" -> SupportMaterial.SOCKET_REINFORCER;
+            case "socket_guarantor" -> SupportMaterial.SOCKET_GUARANTOR;
+            case "socket_expander" -> SupportMaterial.SOCKET_EXPANDER;
+            case "socket_diffuser" -> SupportMaterial.SOCKET_DIFFUSER;
+            default -> SupportMaterial.NONE;
+        };
+    }
+
+    public static boolean isSupportMaterial(String itemId) {
+        return resolveSupportMaterial(itemId) != SupportMaterial.NONE;
+    }
+
+    /**
+     * Applies support material max-socket adjustments.
+     * Expander: +1 max sockets (capped at baseMax + 1).
+     * Diffuser: -1 max sockets (min 1), trims sockets if needed.
+     *
+     * @return true if max sockets changed
+     */
+    public static boolean applySupportSocketLimit(SocketData socketData, SupportMaterial support, boolean isWeapon) {
+        if (socketData == null || support == null) {
+            return false;
+        }
+        SocketConfig cfg = getConfig();
+        int baseMax = cfg != null
+                ? (isWeapon ? cfg.getMaxSocketsWeapon() : cfg.getMaxSocketsArmor())
+                : socketData.getMaxSockets();
+        return applySupportSocketLimit(socketData, support, baseMax);
+    }
+
+    public static boolean applySupportSocketLimit(SocketData socketData, SupportMaterial support, int baseMax) {
+        if (socketData == null || support == null) {
+            return false;
+        }
+        int currentMax = socketData.getMaxSockets();
+        switch (support) {
+            case SOCKET_EXPANDER -> {
+                int cap = baseMax > 0 ? baseMax + 1 : currentMax + 1;
+                if (currentMax >= cap) {
+                    return false;
+                }
+                int newMax = Math.min(currentMax + 1, cap);
+                if (newMax > currentMax) {
+                    socketData.setMaxSockets(newMax);
+                    return true;
+                }
+            }
+            case SOCKET_DIFFUSER -> {
+                if (currentMax > 1) {
+                    socketData.reduceMaxSockets();
+                    return true;
+                }
+            }
+            default -> {
+                // No max-socket change.
+            }
+        }
+        return false;
     }
 
     // ── Socket data from item ─────────────────────────────────────────────────
@@ -69,8 +129,8 @@ public class SocketManager {
         boolean isArmor  = !isWeapon && ReforgeEquip.isArmor(item);
         if (!isWeapon && !isArmor) return null;
 
-        Integer maxFromMeta = item.getFromMetadataOrNull(META_SOCKETS_MAX, Codec.INTEGER);
-        String[] socketsFromMeta = item.getFromMetadataOrNull(META_SOCKETS_VALUES, Codec.STRING_ARRAY);
+        Integer maxFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_MAX, Codec.INTEGER);
+        String[] socketsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY);
 
         int defaultMax = isWeapon
                 ? config.getMaxSocketsWeapon()
@@ -147,14 +207,14 @@ public class SocketManager {
         }
         
         return item
-                .withMetadata(META_SOCKETS_MAX, Codec.INTEGER, socketData.getMaxSockets())
-                .withMetadata(META_SOCKETS_VALUES, Codec.STRING_ARRAY, encoded)
-                .withMetadata(META_ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
-                .withMetadata(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
-                .withMetadata(META_ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY, effectLines)
-                .withMetadata(META_ESSENCE_BONUS_STATS, Codec.STRING_ARRAY, statKeys.toArray(String[]::new))
-                .withMetadata(META_ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY, flatValues.toArray(String[]::new))
-                .withMetadata(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY, percentValues.toArray(String[]::new))
+                .withMetadata(MetadataKeys.SOCKET_MAX, Codec.INTEGER, socketData.getMaxSockets())
+                .withMetadata(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY, encoded)
+                .withMetadata(MetadataKeys.ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
+                .withMetadata(MetadataKeys.ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
+                .withMetadata(MetadataKeys.ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY, effectLines)
+                .withMetadata(MetadataKeys.ESSENCE_BONUS_STATS, Codec.STRING_ARRAY, statKeys.toArray(String[]::new))
+                .withMetadata(MetadataKeys.ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY, flatValues.toArray(String[]::new))
+                .withMetadata(MetadataKeys.ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY, percentValues.toArray(String[]::new))
                 .withMetadata(ResonanceSystem.META_RESONANCE_NAME, Codec.STRING, resonance.active() ? resonance.name() : "")
                 .withMetadata(ResonanceSystem.META_RESONANCE_EFFECT, Codec.STRING, resonanceTooltipEffect)
                 .withMetadata(ResonanceSystem.META_RESONANCE_TYPE, Codec.STRING, resonance.active() ? resonance.type().name() : ResonanceSystem.ResonanceType.NONE.name())
@@ -181,7 +241,7 @@ public class SocketManager {
      */
     public static String[] getEssenceEffects(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
-        return item.getFromMetadataOrNull(META_ESSENCE_EFFECTS, Codec.STRING_ARRAY);
+        return item.getFromMetadataOrNull(MetadataKeys.ESSENCE_EFFECTS, Codec.STRING_ARRAY);
     }
     
     /**
@@ -190,17 +250,22 @@ public class SocketManager {
      */
     public static String[] getEssenceTiers(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
-        return item.getFromMetadataOrNull(META_ESSENCE_TIER_MAP, Codec.STRING_ARRAY);
+        return item.getFromMetadataOrNull(MetadataKeys.ESSENCE_TIER_MAP, Codec.STRING_ARRAY);
     }
 
     public static String[] getEssenceEffectLines(ItemStack item) {
         if (item == null || item.isEmpty()) return null;
-        return item.getFromMetadataOrNull(META_ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY);
+        return item.getFromMetadataOrNull(MetadataKeys.ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY);
     }
 
     public static String describeEssenceEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData) {
         double multiplier = getTypeEffectMultiplier(socketData, type);
         return SocketEffectMath.describeEffect(type, tier, isWeapon, socketData, multiplier);
+    }
+
+    public static String describeEssenceEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData, String langCode) {
+        double multiplier = getTypeEffectMultiplier(socketData, type);
+        return SocketEffectMath.describeEffect(type, tier, isWeapon, socketData, multiplier, langCode);
     }
 
     public static boolean isGreaterEssenceId(String essenceId) {
@@ -270,7 +335,7 @@ public class SocketManager {
         if (item == null || item.isEmpty()) {
             return null;
         }
-        String value = item.getFromMetadataOrNull(META_RESONANCE_RECIPE_NAME, Codec.STRING);
+        String value = item.getFromMetadataOrNull(MetadataKeys.RESONANCE_RECIPE_NAME, Codec.STRING);
         return value == null || value.isBlank() ? null : value.trim();
     }
 
@@ -290,7 +355,7 @@ public class SocketManager {
         if (item == null || item.isEmpty() || resonanceName == null || resonanceName.isBlank()) {
             return item;
         }
-        return item.withMetadata(META_RESONANCE_RECIPE_NAME, Codec.STRING, resonanceName.trim());
+        return item.withMetadata(MetadataKeys.RESONANCE_RECIPE_NAME, Codec.STRING, resonanceName.trim());
     }
 
     public static String getResonanceEffect(ItemStack item) {
@@ -343,9 +408,9 @@ public class SocketManager {
         }
 
         // Fallback: if socket parsing is unavailable, use persisted metadata values.
-        String[] statKeys = item.getFromMetadataOrNull(META_ESSENCE_BONUS_STATS, Codec.STRING_ARRAY);
-        String[] flatValues = item.getFromMetadataOrNull(META_ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY);
-        String[] percentValues = item.getFromMetadataOrNull(META_ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY);
+        String[] statKeys = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_STATS, Codec.STRING_ARRAY);
+        String[] flatValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY);
+        String[] percentValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY);
 
         if (statKeys != null && flatValues != null && percentValues != null) {
             int count = Math.min(statKeys.length, Math.min(flatValues.length, percentValues.length));
@@ -520,25 +585,17 @@ public class SocketManager {
         float roll = RNG.nextFloat();
 
         if (roll < breakChance) {
-            // Item broke during punch attempt
+            // Item broke during punch attempt.
             return PunchResult.BREAK;
         }
 
-        if (roll < breakChance + (1.0 - successChance)) {
-            return PunchResult.FAIL;
-        }
-
-        // Success
-        socketData.addSocket();
-
-        // SOCKET_EXPANDER: 25% chance for an extra bonus socket
-        if (support == SupportMaterial.SOCKET_EXPANDER
-                && socketData.canAddSocket()
-                && RNG.nextFloat() < 0.25f) {
+        if (roll < breakChance + successChance) {
+            // Success
             socketData.addSocket();
+            return PunchResult.SUCCESS;
         }
 
-        return PunchResult.SUCCESS;
+        return PunchResult.FAIL;
     }
 
     // ── Socket essence ────────────────────────────────────────────────────────
@@ -677,3 +734,4 @@ public class SocketManager {
         return tierMap;
     }
 }
+

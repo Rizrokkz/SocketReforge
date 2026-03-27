@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * Shared item helpers used by bench UIs.
@@ -36,12 +37,20 @@ public final class UIItemUtils {
     private UIItemUtils() {}
 
     public static String displayNameOrItemId(ItemStack itemStack) {
+        return displayNameOrItemId(itemStack, LangLoader.getDefaultUILanguage());
+    }
+
+    public static String displayNameOrItemId(ItemStack itemStack, Object player) {
+        return displayNameOrItemId(itemStack, LangLoader.getPlayerLanguage(player));
+    }
+
+    public static String displayNameOrItemId(ItemStack itemStack, String langCode) {
         if (itemStack == null || itemStack.isEmpty()) {
             return UNKNOWN_ITEM;
         }
         String itemId = itemStack.getItemId();
-        String displayName = NameResolver.getDisplayName(itemStack);
-        String essenceFallback = resolveEssenceDisplayName(itemId);
+        String displayName = NameResolver.getDisplayName(itemStack, langCode);
+        String essenceFallback = resolveEssenceDisplayName(itemId, langCode);
         if (displayName == null || displayName.isBlank() || UNKNOWN_ITEM.equals(displayName)) {
             if (itemId == null || itemId.isBlank()) {
                 return UNKNOWN_ITEM;
@@ -72,7 +81,7 @@ public final class UIItemUtils {
         return lower.contains(".items.") || lower.contains(".item.") || lower.contains(".entity.");
     }
 
-    private static String resolveEssenceDisplayName(String itemId) {
+    private static String resolveEssenceDisplayName(String itemId, String langCode) {
         if (itemId == null || itemId.isBlank()) {
             return null;
         }
@@ -121,7 +130,18 @@ public final class UIItemUtils {
         if (name.isBlank()) {
             return null;
         }
-        return concentrated ? name + " Essence (Concentrated)" : name + " Essence";
+        String essenceLabel = LangLoader.getTranslationForLanguage("ui.essence_bench.essence_generic", langCode);
+        if (essenceLabel == null || essenceLabel.isBlank() || essenceLabel.equals("ui.essence_bench.essence_generic")) {
+            essenceLabel = "Essence";
+        }
+        if (concentrated) {
+            String suffix = LangLoader.getTranslationForLanguage("ui.essence_bench.essence_concentrated_suffix", langCode);
+            if (suffix == null || suffix.isBlank() || suffix.equals("ui.essence_bench.essence_concentrated_suffix")) {
+                suffix = "(Concentrated)";
+            }
+            return name + " " + essenceLabel + " " + suffix;
+        }
+        return name + " " + essenceLabel;
     }
 
     public static String normalizeItemId(String itemId) {

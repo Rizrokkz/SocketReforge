@@ -31,6 +31,7 @@ import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.SocketManager.PunchResult;
 import irai.mod.reforge.Socket.SocketManager.SupportMaterial;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
+import irai.mod.reforge.Util.LangLoader;
 
 /**
  * HyUI socket bench page opened through command.
@@ -45,7 +46,6 @@ public class SocketBenchUI {
     private static final String SOCKET_BENCH_TEMPLATE_PATH = "Common/UI/Custom/Pages/SocketBench.html";
 
     private static final String PUNCHER_ITEM_ID = "Socket_Puncher";
-    private static final String SUPPORT_ITEM_ID = "Socket_Stabilizer";
     private static final String NONE_SUPPORT_KEY = "__NONE_SUPPORT__";
 
     private static boolean hyuiAvailable = false;
@@ -124,7 +124,7 @@ public class SocketBenchUI {
             return;
         }
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - socket bench UI disabled."));
+            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.socket_bench.hyui_missing")));
             return;
         }
 
@@ -144,12 +144,13 @@ public class SocketBenchUI {
         List<Entry> punchers = new ArrayList<>();
         List<Entry> supports = new ArrayList<>();
 
-        collectFromContainer(player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, punchers, supports);
-        collectFromContainer(player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, punchers, supports);
+        collectFromContainer(player, player.getInventory().getHotbar(), ContainerKind.HOTBAR, equipments, punchers, supports);
+        collectFromContainer(player, player.getInventory().getStorage(), ContainerKind.STORAGE, equipments, punchers, supports);
         return new BenchSnapshot(equipments, punchers, supports);
     }
 
     private static void collectFromContainer(
+            Player player,
             ItemContainer container,
             ContainerKind kind,
             List<Entry> equipments,
@@ -170,7 +171,7 @@ public class SocketBenchUI {
                 continue;
             }
 
-            String name = UIItemUtils.displayNameOrItemId(stack);
+            String name = UIItemUtils.displayNameOrItemId(stack, player);
 
             Entry entry = new Entry(kind, slot, stack, itemId, stack.getQuantity(), name);
 
@@ -182,7 +183,7 @@ public class SocketBenchUI {
             if (PUNCHER_ITEM_ID.equalsIgnoreCase(itemId)) {
                 punchers.add(entry);
             }
-            if (SUPPORT_ITEM_ID.equalsIgnoreCase(itemId)) {
+            if (SocketManager.isSupportMaterial(itemId)) {
                 supports.add(entry);
             }
         }
@@ -209,7 +210,7 @@ public class SocketBenchUI {
             Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
             Object activating = eventBindingClass.getField("Activating").get(null);
 
-            String html = buildHtml(snapshot, selectionState);
+            String html = buildHtml(player, snapshot, selectionState);
             Object pageBuilder = pageForPlayer.invoke(null, playerRef);
             pageBuilder = fromHtml.invoke(pageBuilder, html);
 
@@ -285,7 +286,7 @@ public class SocketBenchUI {
                                             keyOf(selectedEquipment),
                                             keyOf(selectedPuncher),
                                             selectedSupportKey,
-                                            "Processing...",
+                                            LangLoader.getUITranslation(finalPlayer, "ui.socket_bench.status_processing"),
                                             0,
                                             true));
                             sfxConfig.playReforgeStart(finalPlayer);
@@ -302,7 +303,7 @@ public class SocketBenchUI {
                                                     keyOf(selectedEquipment),
                                                     keyOf(selectedPuncher),
                                                     selectedSupportKey,
-                                                    "Processing...",
+                                                    LangLoader.getUITranslation(finalPlayer, "ui.socket_bench.status_processing"),
                                                     timedProgress,
                                                     true));
                                     openWithSync(finalPlayer);
@@ -346,33 +347,43 @@ public class SocketBenchUI {
         }
     }
 
-    private static String buildHtml(BenchSnapshot snapshot, SelectionState selectionState) {
+    private static String buildHtml(Player player, BenchSnapshot snapshot, SelectionState selectionState) {
         String selectedEquipmentKey = selectionState != null ? selectionState.equipmentKey : null;
         String selectedPuncherKey = selectionState != null ? selectionState.puncherKey : null;
         String selectedSupportKey = selectionState != null ? selectionState.supportKey : null;
-        String statusText = selectionState != null && selectionState.statusText != null ? selectionState.statusText : "Idle";
+        String statusText = selectionState != null && selectionState.statusText != null
+                ? selectionState.statusText
+                : LangLoader.getUITranslation(player, "ui.socket_bench.status_idle");
         int progressValue = selectionState != null ? Math.max(0, Math.min(100, selectionState.progressValue)) : 0;
         boolean isProcessing = selectionState != null && selectionState.processing;
         if (!isProcessing) {
             progressValue = 0;
         }
-        String equipmentOptions = buildEquipmentOptions(snapshot.equipments, selectedEquipmentKey);
-        String puncherOptions = buildMaterialOptions(snapshot.punchers, "No Socket Puncher found", selectedPuncherKey);
-        String supportOptions = buildSupportOptions(snapshot.supports, selectedSupportKey);
+        String equipmentOptions = buildEquipmentOptions(player, snapshot.equipments, selectedEquipmentKey);
+        String puncherOptions = buildMaterialOptions(player, snapshot.punchers,
+                LangLoader.getUITranslation(player, "ui.socket_bench.option_no_puncher"),
+                selectedPuncherKey);
+        String supportOptions = buildSupportOptions(player, snapshot.supports, selectedSupportKey);
 
         Entry selectedEquipment = findByKey(snapshot.equipments, selectedEquipmentKey);
         Entry selectedSupport = findByKey(snapshot.supports, selectedSupportKey);
+        SupportMaterial selectedSupportMaterial = selectedSupport == null
+                ? SupportMaterial.NONE
+                : SocketManager.resolveSupportMaterial(selectedSupport.itemId);
+        boolean supportOverridesMax = selectedSupportMaterial == SupportMaterial.SOCKET_EXPANDER
+                || selectedSupportMaterial == SupportMaterial.SOCKET_DIFFUSER;
         boolean socketsMaxed = isSocketsMaxed(selectedEquipment);
-        if (!isProcessing && "Idle".equals(statusText) && socketsMaxed) {
-            statusText = "Max sockets reached.";
+        String idleText = LangLoader.getUITranslation(player, "ui.socket_bench.status_idle");
+        if (!isProcessing && (idleText.equals(statusText) || "Idle".equals(statusText)) && socketsMaxed && !supportOverridesMax) {
+            statusText = LangLoader.getUITranslation(player, "ui.socket_bench.status_max_sockets");
         }
-        String processDisabledAttr = (isProcessing || socketsMaxed)
+        String processDisabledAttr = (isProcessing || (socketsMaxed && !supportOverridesMax))
                 ? "disabled data-hyui-disabled=\"true\""
                 : "";
         String defaultMetadata = selectedEquipment == null
-                ? "Select an equipment from the dropdown to view metadata."
-                : buildMetadataText(selectedEquipment.item, selectedEquipment);
-        String socketIcons = buildSocketIconsHtml(selectedEquipment);
+                ? LangLoader.getUITranslation(player, "ui.socket_bench.metadata_prompt")
+                : buildMetadataText(player, selectedEquipment.item, selectedEquipment);
+        String socketIcons = buildSocketIconsHtml(player, selectedEquipment);
 
         String selectedEquipmentValue = selectedEquipment == null ? "-1" : String.valueOf(snapshot.equipments.indexOf(selectedEquipment));
         String selectedSupportValue = selectedSupport == null ? "-1" : String.valueOf(snapshot.supports.indexOf(selectedSupport));
@@ -380,7 +391,7 @@ public class SocketBenchUI {
 
         String template = loadTemplate(SOCKET_BENCH_TEMPLATE_PATH);
         if (template != null && !template.isBlank()) {
-            return template
+            String html = template
                     .replace("{{equipmentOptions}}", equipmentOptions)
                     .replace("{{puncherOptions}}", puncherOptions)
                     .replace("{{supportOptions}}", supportOptions)
@@ -392,9 +403,11 @@ public class SocketBenchUI {
                     .replace("{{statusText}}", escapeHtml(statusText))
                     .replace("{{processDisabledAttr}}", processDisabledAttr)
                     .replace("{{metadataText}}", escapeHtml(defaultMetadata));
+            return LangLoader.replaceUiTokens(player, html);
         }
 
-        return "<div class=\"page-overlay\">"
+        return LangLoader.replaceUiTokens(player,
+                "<div class=\"page-overlay\">"
                 + "<div class=\"decorated-container\" data-hyui-title=\"Socket Punch Bench\" style=\"anchor-width: 920; anchor-height: 760;\">"
                 + "<div class=\"container-contents\" style=\"anchor-full: 14; overflow-y:auto;\">"
                 + "<h2 style=\"text-align:center;\">Socket Punch Bench</h2>"
@@ -425,7 +438,7 @@ public class SocketBenchUI {
                 + "<p style=\"font-size:11;\">Failure consumes Socket Puncher. Break can damage socket state.</p>"
                 + "<button id=\"processButton\" style=\"width:100%;height:40px;\"" + processDisabledAttr + ">Process Materials</button>"
                 + "</div>"
-                + "</div>";
+                + "</div>");
     }
 
     private static String loadTemplate(String path) {
@@ -435,16 +448,24 @@ public class SocketBenchUI {
         return UITemplateUtils.loadTemplate(SocketBenchUI.class, path, null, "SocketBenchUI");
     }
 
-    private static String buildEquipmentOptions(List<Entry> equipments, String selectedKey) {
+    private static String buildEquipmentOptions(Player player, List<Entry> equipments, String selectedKey) {
         if (equipments.isEmpty()) {
-            return "<option value=\"-1\" selected>No valid equipment found</option>";
+            return "<option value=\"-1\" selected>"
+                    + escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.option_no_equipment"))
+                    + "</option>";
         }
         StringBuilder sb = new StringBuilder();
         boolean hasSelected = selectedKey != null && findByKey(equipments, selectedKey) != null;
-        sb.append("<option value=\"-1\"").append(hasSelected ? "" : " selected").append(">Select equipment...</option>");
+        sb.append("<option value=\"-1\"").append(hasSelected ? "" : " selected").append(">")
+                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.option_select_equipment")))
+                .append("</option>");
         for (int i = 0; i < equipments.size(); i++) {
             Entry e = equipments.get(i);
-            String tag = ReforgeEquip.isWeapon(e.item) ? "Weapon" : (ReforgeEquip.isArmor(e.item) ? "Armor" : "Item");
+            String tag = ReforgeEquip.isWeapon(e.item)
+                    ? LangLoader.getUITranslation(player, "ui.socket_bench.tag_weapon")
+                    : (ReforgeEquip.isArmor(e.item)
+                        ? LangLoader.getUITranslation(player, "ui.socket_bench.tag_armor")
+                        : LangLoader.getUITranslation(player, "ui.socket_bench.tag_item"));
             String label = e.displayName + " [" + tag + "] x" + e.quantity;
             boolean isSelected = selectedKey != null && selectedKey.equals(keyOf(e));
             sb.append("<option value=\"").append(i).append("\"")
@@ -456,7 +477,7 @@ public class SocketBenchUI {
         return sb.toString();
     }
 
-    private static String buildMaterialOptions(List<Entry> entries, String emptyText, String selectedKey) {
+    private static String buildMaterialOptions(Player player, List<Entry> entries, String emptyText, String selectedKey) {
         if (entries.isEmpty()) {
             return "<option value=\"-1\">" + escapeHtml(emptyText) + "</option>";
         }
@@ -464,7 +485,8 @@ public class SocketBenchUI {
         boolean hasSelected = selectedKey != null && findByKey(entries, selectedKey) != null;
         for (int i = 0; i < entries.size(); i++) {
             Entry e = entries.get(i);
-            String label = e.itemId + " x" + e.quantity + " (" + locationText(e) + " slot " + e.slot + ")";
+            String label = LangLoader.getUITranslation(player, "ui.socket_bench.option_material_label",
+                    e.itemId, e.quantity, locationText(player, e), e.slot);
             boolean isSelected = hasSelected ? selectedKey.equals(keyOf(e)) : i == 0;
             sb.append("<option value=\"").append(i).append("\"")
                     .append(isSelected ? " selected" : "")
@@ -475,15 +497,18 @@ public class SocketBenchUI {
         return sb.toString();
     }
 
-    private static String buildSupportOptions(List<Entry> supports, String selectedKey) {
+    private static String buildSupportOptions(Player player, List<Entry> supports, String selectedKey) {
         StringBuilder sb = new StringBuilder();
         boolean noneSelected = NONE_SUPPORT_KEY.equals(selectedKey);
         boolean hasSelected = !noneSelected && selectedKey != null && findByKey(supports, selectedKey) != null;
         boolean selectNone = supports.isEmpty() || noneSelected;
-        sb.append("<option value=\"-1\"").append(selectNone ? " selected" : "").append(">None</option>");
+        sb.append("<option value=\"-1\"").append(selectNone ? " selected" : "").append(">")
+                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.option_none")))
+                .append("</option>");
         for (int i = 0; i < supports.size(); i++) {
             Entry e = supports.get(i);
-            String label = e.itemId + " x" + e.quantity + " (" + locationText(e) + " slot " + e.slot + ")";
+            String label = LangLoader.getUITranslation(player, "ui.socket_bench.option_material_label",
+                    e.itemId, e.quantity, locationText(player, e), e.slot);
             boolean isSelected = hasSelected ? selectedKey.equals(keyOf(e)) : (!noneSelected && supports.size() > 0 && i == 0);
             sb.append("<option value=\"").append(i).append("\"")
                     .append(isSelected ? " selected" : "")
@@ -523,9 +548,11 @@ public class SocketBenchUI {
         return max > 0 && socketData.getCurrentSocketCount() >= max;
     }
 
-    private static String buildSocketIconsHtml(Entry equipment) {
+    private static String buildSocketIconsHtml(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return "<div style=\"layout-mode: Left; spacing: 20;\"><div style=\"flex-weight:1;\"></div><p style=\"color:#AAAAAA;\">Select equipment</p><div style=\"flex-weight:1;\"></div></div>";
+            return "<div style=\"layout-mode: Left; spacing: 20;\"><div style=\"flex-weight:1;\"></div><p style=\"color:#AAAAAA;\">"
+                    + escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.prompt_select_equipment"))
+                    + "</p><div style=\"flex-weight:1;\"></div></div>";
         }
 
         SocketData socketData = SocketManager.getSocketData(equipment.item);
@@ -577,6 +604,7 @@ public class SocketBenchUI {
     private static void updateMetadataAndProgress(
             Object cmd,
             Class<?> uiCommandClass,
+            Player player,
             BenchSnapshot snapshot,
             String selectedValue,
             String supportValue,
@@ -586,11 +614,11 @@ public class SocketBenchUI {
         int progressValue;
         StatPreview stats;
         if (selected == null) {
-            metadataText = "No equipment selected.";
+            metadataText = LangLoader.getUITranslation(player, "ui.socket_bench.error_no_equipment");
             progressValue = 0;
             stats = new StatPreview("0%", "0%", "0 / 0");
         } else {
-            metadataText = buildMetadataText(selected.item, selected);
+            metadataText = buildMetadataText(player, selected.item, selected);
             SocketData socketData = SocketManager.getSocketData(selected.item);
             int maxSockets = socketData != null ? Math.max(1, socketData.getMaxSockets()) : 1;
             int currentSockets = socketData != null ? socketData.getCurrentSocketCount() : 0;
@@ -609,18 +637,18 @@ public class SocketBenchUI {
     private static ProcessResult processSelection(Player player, BenchSnapshot snapshot, Entry equipment, Entry puncher, Entry support) {
 
         if (equipment == null) {
-            return new ProcessResult("Pick a valid equipment first.", 0);
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_pick_equipment"), 0);
         }
         if (puncher == null) {
-            return new ProcessResult("No valid Socket Puncher selected.", 0);
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_no_puncher"), 0);
         }
 
         ItemStack freshEquipment = readCurrentStack(player, equipment);
         if (freshEquipment == null || freshEquipment.isEmpty()) {
-            return new ProcessResult("Selected equipment is no longer available.", 0);
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_equipment_missing"), 0);
         }
         if (!ReforgeEquip.isWeapon(freshEquipment) && !ReforgeEquip.isArmor(freshEquipment)) {
-            return new ProcessResult("Selected item is not valid equipment.", 0);
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_item_not_equipment"), 0);
         }
 
         SocketData socketData = SocketManager.getSocketData(freshEquipment);
@@ -628,14 +656,27 @@ public class SocketBenchUI {
             socketData = SocketData.fromDefaults(ReforgeEquip.isWeapon(freshEquipment) ? "weapon" : "armor");
         }
 
+        SupportMaterial selectedSupport = support == null ? SupportMaterial.NONE : SocketManager.resolveSupportMaterial(support.itemId);
         int currentSockets = socketData.getCurrentSocketCount();
         int maxSockets = socketData.getMaxSockets();
-        if (currentSockets >= maxSockets) {
-            return new ProcessResult("Item already has max sockets (" + maxSockets + ").", 100);
+        int previewMax = maxSockets;
+        int previewCurrent = currentSockets;
+        int baseMax = SocketManager.getConfig() != null
+                ? (ReforgeEquip.isWeapon(freshEquipment) ? SocketManager.getConfig().getMaxSocketsWeapon() : SocketManager.getConfig().getMaxSocketsArmor())
+                : maxSockets;
+        if (selectedSupport == SupportMaterial.SOCKET_EXPANDER) {
+            int cap = baseMax > 0 ? baseMax + 1 : maxSockets + 1;
+            previewMax = maxSockets >= cap ? maxSockets : Math.min(maxSockets + 1, cap);
+        } else if (selectedSupport == SupportMaterial.SOCKET_DIFFUSER) {
+            previewMax = Math.max(1, maxSockets - 1);
+            previewCurrent = Math.min(previewCurrent, previewMax);
+        }
+        if (previewCurrent >= previewMax && previewMax == maxSockets) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_max_sockets", maxSockets), 100);
         }
 
         if (!consumeMaterial(player, puncher, 1)) {
-            return new ProcessResult("Socket Puncher stack changed; reselect and try again.", 0);
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_puncher_changed"), 0);
         }
 
         boolean usedSupport = false;
@@ -643,7 +684,19 @@ public class SocketBenchUI {
             usedSupport = consumeMaterial(player, support, 1);
         }
 
-        SupportMaterial supportMaterial = usedSupport ? SupportMaterial.SOCKET_STABILIZER : SupportMaterial.NONE;
+        SupportMaterial supportMaterial = usedSupport ? SocketManager.resolveSupportMaterial(support.itemId) : SupportMaterial.NONE;
+        boolean supportAdjusted = SocketManager.applySupportSocketLimit(socketData, supportMaterial, ReforgeEquip.isWeapon(freshEquipment));
+
+        currentSockets = socketData.getCurrentSocketCount();
+        maxSockets = socketData.getMaxSockets();
+        if (currentSockets >= maxSockets) {
+            if (supportAdjusted) {
+                writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_support_applied"), 100);
+            }
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_max_sockets", maxSockets), 100);
+        }
+
         PunchResult result = SocketManager.punchSocket(socketData, supportMaterial);
 
         switch (result) {
@@ -659,7 +712,7 @@ public class SocketBenchUI {
                 }
                 writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
                 sfxConfig.playSuccess(player);
-                return new ProcessResult("Success: socket punched.", 100);
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_success"), 100);
             case BREAK:
                 socketData.breakSocket();
                 if (socketData.getMaxSockets() > 1) {
@@ -670,11 +723,14 @@ public class SocketBenchUI {
                 }
                 writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
                 sfxConfig.playShatter(player);
-                return new ProcessResult("Result: socket broke.", 100);
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_broke"), 100);
             case FAIL:
             default:
+                if (supportAdjusted) {
+                    writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
+                }
                 sfxConfig.playFail(player);
-                return new ProcessResult("Process failed. No socket added.", 100);
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"), 100);
         }
     }
 
@@ -723,17 +779,23 @@ public class SocketBenchUI {
         return keyOf(selectedSupport);
     }
 
-    private static String buildMetadataText(ItemStack item, Entry entry) {
+    private static String buildMetadataText(Player player, ItemStack item, Entry entry) {
         if (item == null || item.isEmpty()) {
-            return "No item selected.";
+            return LangLoader.getUITranslation(player, "ui.socket_bench.metadata_no_item");
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("[Item]\n");
-        sb.append("Name: ").append(entry.displayName).append("\n");
-        sb.append("Id: ").append(item.getItemId()).append("\n");
-        sb.append("Type: ").append(ReforgeEquip.isWeapon(item) ? "Weapon" : (ReforgeEquip.isArmor(item) ? "Armor" : "Unknown")).append("\n");
-        sb.append("Inventory: ").append(locationText(entry)).append(" slot ").append(entry.slot).append("\n\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_header_item")).append("\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_name", entry.displayName)).append("\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_id", item.getItemId())).append("\n");
+        String typeLabel = ReforgeEquip.isWeapon(item)
+                ? LangLoader.getUITranslation(player, "ui.socket_bench.type_weapon")
+                : (ReforgeEquip.isArmor(item)
+                    ? LangLoader.getUITranslation(player, "ui.socket_bench.type_armor")
+                    : LangLoader.getUITranslation(player, "ui.socket_bench.type_unknown"));
+        sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_type", typeLabel)).append("\n");
+        sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_inventory",
+                locationText(player, entry), entry.slot)).append("\n\n");
 
         SocketData socketData = SocketManager.getSocketData(item);
         if (socketData != null) {
@@ -743,24 +805,20 @@ public class SocketBenchUI {
                 if (socket.isBroken()) broken++;
                 else if (!socket.isEmpty()) filled++;
             }
-            sb.append("[Sockets]\n");
-            sb.append("Current/Max: ")
-                    .append(socketData.getCurrentSocketCount())
-                    .append("/")
-                    .append(socketData.getMaxSockets())
-                    .append("\nFilled: ")
-                    .append(filled)
-                    .append("   Broken: ")
-                    .append(broken)
-                    .append("\n\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_header_sockets")).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_current_max",
+                    socketData.getCurrentSocketCount(), socketData.getMaxSockets())).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_filled_broken",
+                    filled, broken)).append("\n\n");
         } else {
-            sb.append("[Sockets]\nN/A\n\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_header_sockets")).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_na")).append("\n\n");
         }
 
         BsonDocument metadata = item.getMetadata();
         if (metadata != null && !metadata.isEmpty()) {
-            sb.append("[Metadata]\n");
-            sb.append("Keys: ").append(metadata.keySet().size()).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_header_metadata")).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_keys", metadata.keySet().size())).append("\n");
             int shown = 0;
             for (String key : metadata.keySet()) {
                 if (shown >= 6) break;
@@ -768,13 +826,16 @@ public class SocketBenchUI {
                 shown++;
             }
         } else {
-            sb.append("[Metadata]\nnone");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_header_metadata")).append("\n");
+            sb.append(LangLoader.getUITranslation(player, "ui.socket_bench.metadata_none"));
         }
         return sb.toString();
     }
 
-    private static String locationText(Entry entry) {
-        return entry.containerKind == ContainerKind.HOTBAR ? "Hotbar" : "Storage";
+    private static String locationText(Player player, Entry entry) {
+        return entry.containerKind == ContainerKind.HOTBAR
+                ? LangLoader.getUITranslation(player, "ui.socket_bench.location_hotbar")
+                : LangLoader.getUITranslation(player, "ui.socket_bench.location_storage");
     }
 
     private static String extractEventValue(Object eventObj) {
@@ -797,18 +858,40 @@ public class SocketBenchUI {
             data = SocketData.fromDefaults(ReforgeEquip.isWeapon(equipment.item) ? "weapon" : "armor");
         }
 
+        SupportMaterial supportMaterial = support == null ? SupportMaterial.NONE : SocketManager.resolveSupportMaterial(support.itemId);
         int current = data.getCurrentSocketCount();
         int max = data.getMaxSockets();
-        double success = SocketManager.getConfig() != null ? SocketManager.getConfig().getSuccessChance(current) : 0.75;
-        double breakChance = SocketManager.getConfig() != null ? SocketManager.getConfig().getBreakChance(current) : 0.10;
-        if (support != null) {
-            success = Math.min(1.0, success + 0.15);
-            breakChance = Math.max(0.0, breakChance - 0.05);
+        int previewMax = max;
+        int previewCurrent = current;
+        int baseMax = SocketManager.getConfig() != null
+                ? (ReforgeEquip.isWeapon(equipment.item) ? SocketManager.getConfig().getMaxSocketsWeapon() : SocketManager.getConfig().getMaxSocketsArmor())
+                : max;
+        if (supportMaterial == SupportMaterial.SOCKET_EXPANDER) {
+            int cap = baseMax > 0 ? baseMax + 1 : max + 1;
+            previewMax = max >= cap ? max : Math.min(max + 1, cap);
+        } else if (supportMaterial == SupportMaterial.SOCKET_DIFFUSER) {
+            previewMax = Math.max(1, max - 1);
+            previewCurrent = Math.min(previewCurrent, previewMax);
+        }
+
+        double success = SocketManager.getConfig() != null ? SocketManager.getConfig().getSuccessChance(previewCurrent) : 0.75;
+        double breakChance = SocketManager.getConfig() != null ? SocketManager.getConfig().getBreakChance(previewCurrent) : 0.10;
+        switch (supportMaterial) {
+            case SOCKET_STABILIZER -> breakChance *= 0.50;
+            case SOCKET_REINFORCER -> success = Math.min(1.0, success + 0.20);
+            case SOCKET_GUARANTOR -> {
+                if (previewCurrent == 0) {
+                    success = 1.0;
+                }
+            }
+            default -> {
+                // NONE / SOCKET_EXPANDER / SOCKET_DIFFUSER: no success modifier
+            }
         }
 
         String successText = String.format(java.util.Locale.ROOT, "%.0f%%", success * 100.0);
         String breakText = String.format(java.util.Locale.ROOT, "%.0f%%", breakChance * 100.0);
-        String socketsText = current + " / " + max;
+        String socketsText = previewCurrent + " / " + previewMax;
         return new StatPreview(successText, breakText, socketsText);
     }
 

@@ -1,37 +1,37 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="Socket Punch Bench" style="anchor-width: 920; anchor-height: 760;">
+    <div class="decorated-container" data-hyui-title="{{ui.socket_bench.title}}" style="anchor-width: 920; anchor-height: 760;">
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">Socket Punch Bench Tool</h2>
-            <p style="text-align:center;">Select equipment and materials from inventory.</p>
+            <h2 style="text-align:center;">{{ui.socket_bench.tool_title}}</h2>
+            <p style="text-align:center;">{{ui.socket_bench.subtitle}}</p>
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>Equipment</p>
+            <p>{{ui.socket_bench.equipment}}</p>
             <select id="equipmentDropdown" data-hyui-showlabel="true">
                 {{equipmentOptions}}
             </select>
 
-            <p>Main Material (Socket Puncher)</p>
+            <p>{{ui.socket_bench.puncher}}</p>
             <select id="puncherDropdown" data-hyui-showlabel="true">
                 {{puncherOptions}}
             </select>
 
-            <p>Support Material (Optional)</p>
+            <p>{{ui.socket_bench.support}}</p>
             <select id="supportDropdown" data-hyui-showlabel="true">
                 {{supportOptions}}
             </select>
             <p></p>    
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>Socket Preview</p>
+            <p>{{ui.socket_bench.socket_preview}}</p>
             <div id="socketIconsRow">{{socketIcons}}</div>
             <div style="layout-mode: Left; spacing: 12;">
-                <p style="flex-weight:1;">Success: <span id="successChanceLabel">{{successText}}</span></p>
-                <p style="flex-weight:1;">Item Break: <span id="breakChanceLabel">{{breakText}}</span></p>
-                <p style="flex-weight:1;">Sockets: <span id="socketCountLabel">{{socketsText}}</span></p>
+                <p style="flex-weight:1;">{{ui.socket_bench.success_label}}: <span id="successChanceLabel">{{successText}}</span></p>
+                <p style="flex-weight:1;">{{ui.socket_bench.break_label}}: <span id="breakChanceLabel">{{breakText}}</span></p>
+                <p style="flex-weight:1;">{{ui.socket_bench.sockets_label}}: <span id="socketCountLabel">{{socketsText}}</span></p>
             </div>
             
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>Progress</p>
+            <p>{{ui.socket_bench.progress}}</p>
             <progress id="socketProgress"
                       max="100"
                       value="{{progressValue}}"
@@ -41,12 +41,12 @@
             <p id="statusLabel">{{statusText}}</p>
 
             <hr/>
-            <p>Selected Item Metadata</p>
+            <p>{{ui.socket_bench.metadata}}</p>
             <p id="metadataLabel" style="white-space:pre-line;max-height:180px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">{{metadataText}}</p>
 
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11;">Failure consumes Socket Puncher. Break can damage socket state.</p>
-            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>Process Materials</button>
+            <p style="font-size:11;">{{ui.socket_bench.failure_note}}</p>
+            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{ui.socket_bench.process_button}}</button>
         </div>
     </div>
 </div>

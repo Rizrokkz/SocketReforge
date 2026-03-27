@@ -43,7 +43,13 @@ public class SocketPunchBench extends SimpleInteraction {
 
     // Item IDs for materials
     private static final String MAIN_MATERIAL_ID = "Socket_Puncher";
-    private static final String SUPPORT_MATERIAL_ID = "Socket_Stabilizer";
+    private static final String[] SUPPORT_MATERIAL_IDS = {
+            "Socket_Diffuser",
+            "Socket_Guarantor",
+            "Socket_Reinforcer",
+            "Socket_Stabilizer",
+            "Socket_Expander"
+    };
     
     // Default costs (1 of each material)
     private static final int MAIN_MATERIAL_COST = 1;
@@ -108,14 +114,6 @@ public class SocketPunchBench extends SimpleInteraction {
             socketData = SocketData.fromDefaults(isWeapon ? "weapon" : "armor");
         }
         
-        int currentSockets = socketData.getCurrentSocketCount();
-        int maxSockets = socketData.getMaxSockets();
-
-        if (currentSockets >= maxSockets) {
-            player.sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
-            return;
-        }
-
         // Check for main material in inventory
         if (!hasEnoughMaterial(player, MAIN_MATERIAL_ID, MAIN_MATERIAL_COST)) {
             player.sendMessage(Message.raw("Not enough Socket Punchers (need " + MAIN_MATERIAL_COST + ")"));
@@ -124,18 +122,48 @@ public class SocketPunchBench extends SimpleInteraction {
         }
 
         // Check for support material (optional)
-        boolean hasSupport = hasEnoughMaterial(player, SUPPORT_MATERIAL_ID, SUPPORT_MATERIAL_COST);
+        String supportItemId = findSupportMaterialId(player);
+        SupportMaterial supportMaterial = SocketManager.resolveSupportMaterial(supportItemId);
+        boolean hasSupport = supportMaterial != SupportMaterial.NONE;
 
         // Calculate success and break chances
+        int currentSockets = socketData.getCurrentSocketCount();
+        int maxSockets = socketData.getMaxSockets();
+        int previewMax = maxSockets;
+        int previewCurrent = currentSockets;
+        int baseMax = config != null
+                ? (isWeapon ? config.getMaxSocketsWeapon() : config.getMaxSocketsArmor())
+                : maxSockets;
+        if (supportMaterial == SupportMaterial.SOCKET_EXPANDER) {
+            int cap = baseMax > 0 ? baseMax + 1 : maxSockets + 1;
+            previewMax = maxSockets >= cap ? maxSockets : Math.min(maxSockets + 1, cap);
+        } else if (supportMaterial == SupportMaterial.SOCKET_DIFFUSER) {
+            previewMax = Math.max(1, maxSockets - 1);
+            previewCurrent = Math.min(previewCurrent, previewMax);
+        }
+        if (previewCurrent >= previewMax && previewMax == maxSockets) {
+            player.sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
+            return;
+        }
+
         double baseSuccessChance = config != null ? config.getSuccessChance(currentSockets) : 0.75;
         double baseBreakChance = config != null ? config.getBreakChance(currentSockets) : 0.10;
 
         // Support material bonuses
-        double supportBonus = hasSupport ? 0.15 : 0.0; // +15% success chance
-        double breakReduction = hasSupport ? 0.05 : 0.0; // -5% break chance
-
-        double finalSuccessChance = Math.min(1.0, baseSuccessChance + supportBonus);
-        double finalBreakChance = Math.max(0.0, baseBreakChance - breakReduction);
+        double finalSuccessChance = baseSuccessChance;
+        double finalBreakChance = baseBreakChance;
+        switch (supportMaterial) {
+            case SOCKET_STABILIZER -> finalBreakChance *= 0.50;
+            case SOCKET_REINFORCER -> finalSuccessChance = Math.min(1.0, finalSuccessChance + 0.20);
+            case SOCKET_GUARANTOR -> {
+                if (currentSockets == 0) {
+                    finalSuccessChance = 1.0;
+                }
+            }
+            default -> {
+                // NONE / SOCKET_EXPANDER / SOCKET_DIFFUSER have no success modifier
+            }
+        }
 
         // Show chances to player
         player.sendMessage(Message.raw(""));
@@ -144,9 +172,9 @@ public class SocketPunchBench extends SimpleInteraction {
         player.sendMessage(Message.raw("Success Chance: " + String.format("%.0f%%", finalSuccessChance * 100)));
         player.sendMessage(Message.raw("Break Chance: " + String.format("%.0f%%", finalBreakChance * 100)));
         if (hasSupport) {
-            player.sendMessage(Message.raw("Stabilizer Bonus: +" + String.format("%.0f%%", supportBonus * 100) + " success, -" + String.format("%.0f%%", breakReduction * 100) + " break"));
+            player.sendMessage(Message.raw("Support Material: " + supportItemId));
         } else {
-            player.sendMessage(Message.raw("Tip: Add Socket Stabilizer for better chances"));
+            player.sendMessage(Message.raw("Tip: Add a Socket support material for improved effects"));
         }
 
         // Consume main material
@@ -157,11 +185,27 @@ public class SocketPunchBench extends SimpleInteraction {
         
         // Consume support material if present
         if (hasSupport) {
-            consumeMaterial(player, SUPPORT_MATERIAL_ID, SUPPORT_MATERIAL_COST);
+            consumeMaterial(player, supportItemId, SUPPORT_MATERIAL_COST);
+        }
+
+        boolean supportAdjusted = SocketManager.applySupportSocketLimit(socketData, supportMaterial, isWeapon);
+        currentSockets = socketData.getCurrentSocketCount();
+        maxSockets = socketData.getMaxSockets();
+        if (currentSockets >= maxSockets) {
+            if (supportAdjusted) {
+                short adjustedSlot = context.getHeldItemSlot();
+                ItemStack updatedItem = SocketManager.withSocketData(equipment, socketData);
+                player.getInventory().getHotbar().setItemStackForSlot(adjustedSlot, updatedItem);
+                socketData.registerTooltips(updatedItem, updatedItem.getItemId(), isWeapon);
+                DynamicTooltipUtils.refreshAllPlayers();
+                player.sendMessage(Message.raw("Support material applied. Max sockets updated to " + maxSockets + "."));
+            } else {
+                player.sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
+            }
+            return;
         }
 
         // Use SocketManager to process the punch
-        SupportMaterial supportMaterial = hasSupport ? SupportMaterial.SOCKET_STABILIZER : SupportMaterial.NONE;
         PunchResult result = SocketManager.punchSocket(socketData, supportMaterial);
 
         // Handle result
@@ -239,8 +283,27 @@ public class SocketPunchBench extends SimpleInteraction {
                 player.sendMessage(Message.raw("---------------------------------"));
                 player.sendMessage(Message.raw("     Socket Punching Failed!     "));
                 player.sendMessage(Message.raw("---------------------------------"));
+                if (supportAdjusted) {
+                    short failSlot = context.getHeldItemSlot();
+                    ItemStack failItem = SocketManager.withSocketData(equipment, socketData);
+                    player.getInventory().getHotbar().setItemStackForSlot(failSlot, failItem);
+                    socketData.registerTooltips(failItem, failItem.getItemId(), isWeapon);
+                    DynamicTooltipUtils.refreshAllPlayers();
+                }
                 break;
         }
+    }
+
+    private String findSupportMaterialId(Player player) {
+        if (player == null) {
+            return null;
+        }
+        for (String itemId : SUPPORT_MATERIAL_IDS) {
+            if (hasEnoughMaterial(player, itemId, SUPPORT_MATERIAL_COST)) {
+                return itemId;
+            }
+        }
+        return null;
     }
 
     /**

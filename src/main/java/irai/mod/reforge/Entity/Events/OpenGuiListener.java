@@ -33,15 +33,28 @@ public class OpenGuiListener {
     private static final AtomicBoolean refreshQueued = new AtomicBoolean(false);
 
     public static void openGui(PlayerReadyEvent event) {
-        Player player = event.getPlayer();
         Ref<EntityStore> ref = event.getPlayerRef();
-        Store<EntityStore> store = ref.getStore();
-        PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+        Player player = event.getPlayer();
         World world = player.getWorld();
+        if (world == null) {
+            return;
+        }
+        world.execute(() -> openGuiOnWorldThread(ref));
+    }
 
-        assert world != null;
-        assert playerRef != null;
-        
+    private static void openGuiOnWorldThread(Ref<EntityStore> ref) {
+        if (ref == null) {
+            return;
+        }
+        Store<EntityStore> store = ref.getStore();
+        Player player = store.getComponent(ref, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
+        PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+        if (playerRef == null) {
+            return;
+        }
         // Scan player inventory and register tooltips for items with reforge/socket metadata
         scanAndRegisterTooltips(player);
     }

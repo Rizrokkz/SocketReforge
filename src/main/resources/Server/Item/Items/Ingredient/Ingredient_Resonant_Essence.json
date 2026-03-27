@@ -1,0 +1,11 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Ingredient_Resonant_Essence.name",
+    "Description": "irai.items.Ingredient_Resonant_Essence.description"
+  },
+  "ItemLevel": 1,
+  "Icon": "Icons/ItemsGenerated/Ingredient_Resonant_Essence.png",
+  "Quality": "Legendary",
+  "Model": "Resources/Ingredients/Ingredient_Resonant_Essence_Model.blockymodel",
+  "Texture": "Resources/Ingredients/Ingredient_Resonant_Essence_TX.png"
+}
