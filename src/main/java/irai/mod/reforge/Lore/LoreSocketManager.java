@@ -95,6 +95,9 @@ public final class LoreSocketManager {
         if (item == null || item.isEmpty()) {
             return false;
         }
+        if (hasLoreSockets(item)) {
+            return true;
+        }
         if (!ReforgeEquip.isWeapon(item)) {
             return false;
         }

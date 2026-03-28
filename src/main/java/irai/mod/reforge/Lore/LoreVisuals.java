@@ -412,7 +412,7 @@ public final class LoreVisuals {
         if (store == null || particleId == null || particleId.isBlank()) {
             return;
         }
-        Vector3d pos = LoreProcHandler.resolveCenterPosition(store, targetRef, attackerRef);
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, attackerRef);
         if (pos == null) {
             return;
         }

@@ -853,7 +853,7 @@ public class DynamicTooltipUtils {
                         feedTier = 0;
                     }
                     int safeLevel = Math.max(1, level);
-                    tooltipLines.add(COLOR_GRAY + ability.describe(langCode, safeLevel, feedTier));
+                    tooltipLines.add(COLOR_GRAY + ability.describeEffectOnly(langCode, safeLevel, feedTier));
                 }
             }
             if (unawakenedCount > 0) {

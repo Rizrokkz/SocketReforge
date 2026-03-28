@@ -35,6 +35,9 @@ import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Lore.LoreStatusTracker;
+import irai.mod.reforge.Lore.LoreDamageUtils;
+import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.ResonanceSystem;
@@ -55,6 +58,7 @@ public class SocketEffectEST extends DamageEventSystem {
     private static final double ICE_SLOW_DAMAGE_PENALTY_CAP = 50.0d;
     private static final double FIRE_BURN_REFLECT_RATIO = 0.05d;
     private static final float FIRE_BURN_MIN_DAMAGE = 1.0f;
+    private static final double BLUR_EVASION_PERCENT = 50.0d;
     private static final Map<String, Long> RESONANCE_COOLDOWNS = new ConcurrentHashMap<>();
     private static final float RESONANCE_CHEAT_DEATH_BUFFER_HP = 1.0f;
     private static final String[] BURN_EFFECT_IDS = {
@@ -124,6 +128,9 @@ public class SocketEffectEST extends DamageEventSystem {
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
         try {
+            if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
+                return;
+            }
             float beforeDefenderSocketDamage = damage.getAmount();
             // Get target (entity receiving damage)
             Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
@@ -135,6 +142,8 @@ public class SocketEffectEST extends DamageEventSystem {
             }
 
             Ref<EntityStore> attackerRef = entitySource.getRef();
+            LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
+            LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.before");
             Player attackerPlayer = null;
             ItemStack attackerWeapon = null;
             ResonanceSystem.ResonanceType attackerResonanceType = ResonanceSystem.ResonanceType.NONE;
@@ -160,6 +169,12 @@ public class SocketEffectEST extends DamageEventSystem {
                 // This is independent of defender armor and is applied as a short debuff.
                 if (attacker != null) {
                     applyIceFreezeOnHit(attacker, defenderPlayer);
+                }
+
+                boolean blurActive = LoreStatusTracker.isBlurActive(defenderPlayer.getUuid());
+                if (blurActive && ThreadLocalRandom.current().nextDouble(100.0) < BLUR_EVASION_PERCENT) {
+                    damage.setAmount(0f);
+                    return;
                 }
 
                 List<ItemStack> armorPieces = getAllEquippedArmor(defenderPlayer);
@@ -206,6 +221,10 @@ public class SocketEffectEST extends DamageEventSystem {
 
                     applyArmorResonanceOnHit(store, defenderPlayer, targetRef, attacker, attackerRef, armorPieces, damage);
                 }
+
+                if (blurActive && attackerRef != null && !attackerRef.equals(targetRef) && beforeDefenderSocketDamage > 0f) {
+                    applyDirectHealthLoss(store, attackerRef, beforeDefenderSocketDamage);
+                }
             }
 
             if (attacker != null && targetRef != null && attackerWeapon != null) {
@@ -232,6 +251,7 @@ public class SocketEffectEST extends DamageEventSystem {
                             + " final=" + damage.getAmount());
                 }
             }
+            LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.after");
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketEffectEST handle error: " + t.getMessage());
             t.printStackTrace();

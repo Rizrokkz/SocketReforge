@@ -53,3 +53,46 @@ tasks.register<Copy>("copyServerResources") {
     from("src/main/resources/Server")
     into(file("server/Server"))
 }
+
+// Standalone DynamicFloatingDamageFormatter jars
+val dynamicFormatterJar by tasks.registering(Jar::class) {
+    archiveBaseName.set("DynamicFloatingDamageFormatter")
+    archiveClassifier.set("core")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    destinationDirectory.set(file("build/libs"))
+    from(sourceSets.main.get().output) {
+        include("irai/mod/DynamicFloatingDamageFormatter/**")
+    }
+    from("DynamicFloatingDamageFormatter/manifest.json")
+}
+
+val dynamicFormatterAdapterJar by tasks.registering(Jar::class) {
+    archiveBaseName.set("DynamicFloatingDamageFormatter")
+    archiveClassifier.set("with-adapter")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    destinationDirectory.set(file("build/libs"))
+    from(sourceSets.main.get().output) {
+        include("irai/mod/DynamicFloatingDamageFormatter/**")
+        include("irai/mod/reforge/Entity/Events/DamageNumberEST.class")
+        include("irai/mod/reforge/Util/DamageNumberFormatter.class")
+    }
+    from("DynamicFloatingDamageFormatter/manifest.json")
+    from("src/main/resources/Server/Config/DamageNumberConfig.json") {
+        into("Server/Config")
+    }
+}
+
+// Distribution folder with jars + manifest + examples
+tasks.register<Copy>("dynamicFormatterDist") {
+    dependsOn(dynamicFormatterJar, dynamicFormatterAdapterJar)
+    from(dynamicFormatterJar.map { it.archiveFile })
+    from(dynamicFormatterAdapterJar.map { it.archiveFile })
+    from("DynamicFloatingDamageFormatter/manifest.json")
+    from("examples") {
+        into("examples")
+    }
+    from("src/main/resources/Server/Config/DamageNumberConfig.json") {
+        into("examples/Server/Config")
+    }
+    into("dist/DynamicFloatingDamageFormatter")
+}

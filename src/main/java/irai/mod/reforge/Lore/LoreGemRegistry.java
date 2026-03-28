@@ -96,6 +96,26 @@ public final class LoreGemRegistry {
         return null;
     }
 
+    public static String resolveGemItemIdForColor(String color) {
+        if (color == null || color.isBlank()) {
+            return null;
+        }
+        String normalized = color.trim().toLowerCase(Locale.ROOT);
+        List<GemColorRule> rules = gemRules;
+        if (rules == null || rules.isEmpty()) {
+            return null;
+        }
+        for (GemColorRule rule : rules) {
+            if (rule == null || rule.color == null || rule.token == null) {
+                continue;
+            }
+            if (rule.color.trim().equalsIgnoreCase(normalized)) {
+                return rule.token;
+            }
+        }
+        return null;
+    }
+
     private static String inferGemColor(String lowerItemId) {
         if (lowerItemId == null || lowerItemId.isBlank()) {
             return null;

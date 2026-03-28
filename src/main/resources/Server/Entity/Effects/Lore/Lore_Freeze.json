@@ -3,10 +3,10 @@
   "ApplicationEffects": {
     "Particles": [
       {
-        "SystemId": "Block_Hit_Ice",
+        "SystemId": "IceBall_Explosion",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.6
+          "Y": 0.1
         }
       },
       {

@@ -119,50 +119,50 @@ public final class LoreAbilityRegistry {
 
     private static final SignatureAbility[] SIGNATURE_ABILITIES = new SignatureAbility[] {
             new SignatureAbility("SIGNATURE_VORTEXSTRIKE",
-                    "tooltip.lore.signature.vortexstrike", "Vortexstrike",
+                    "tooltip.lore.technique.vortexstrike", "Vortexstrike",
                     LoreTrigger.ON_HIT, 0.06d, 4600L, LoreEffectType.VORTEXSTRIKE, 0.42d, 0.02d),
             new SignatureAbility("SIGNATURE_GROUNDSLAM",
-                    "tooltip.lore.signature.groundslam", "Groundslam",
+                    "tooltip.lore.technique.groundslam", "Groundslam",
                     LoreTrigger.ON_HIT, 0.07d, 5200L, LoreEffectType.APPLY_STUN, 1.5d, 0.10d),
             new SignatureAbility("SIGNATURE_RAZORSTRIKE",
-                    "tooltip.lore.signature.razorstrike", "Razorstrike",
+                    "tooltip.lore.technique.razorstrike", "Razorstrike",
                     LoreTrigger.ON_CRIT, 0.08d, 3800L, LoreEffectType.APPLY_BLEED, 2.2d, 0.12d),
             new SignatureAbility("SIGNATURE_WHIRLWIND",
-                    "tooltip.lore.signature.whirlwind", "Whirlwind",
+                    "tooltip.lore.technique.whirlwind", "Whirlwind",
                     LoreTrigger.ON_HIT, 0.06d, 4800L, LoreEffectType.BERSERK, 0.35d, 0.02d),
             new SignatureAbility("SIGNATURE_VOLLEY",
-                    "tooltip.lore.signature.volley", "Volley",
+                    "tooltip.lore.technique.volley", "Volley",
                     LoreTrigger.ON_HIT, 0.07d, 4200L, LoreEffectType.DOUBLE_CAST, 0.40d, 0.02d),
             new SignatureAbility("SIGNATURE_BIG_ARROW",
-                    "tooltip.lore.signature.big_arrow", "Big Arrow",
+                    "tooltip.lore.technique.big_arrow", "Big Arrow",
                     LoreTrigger.ON_CRIT, 0.06d, 5000L, LoreEffectType.DAMAGE_TARGET, 3.4d, 0.18d),
             new SignatureAbility("SIGNATURE_OMNISLASH",
-                    "tooltip.lore.signature.omnislash", "Omnislash",
+                    "tooltip.lore.technique.omnislash", "Omnislash",
                     LoreTrigger.ON_HIT, 0.05d, 180000L, LoreEffectType.OMNISLASH, 0.35d, 0.012d),
             new SignatureAbility("SIGNATURE_OCTASLASH",
-                    "tooltip.lore.signature.octaslash", "Octaslash",
+                    "tooltip.lore.technique.octaslash", "Octaslash",
                     LoreTrigger.ON_HIT, 0.05d, 180000L, LoreEffectType.OCTASLASH, 0.32d, 0.010d),
             new SignatureAbility("SIGNATURE_PUMMEL",
-                    "tooltip.lore.signature.pummel", "Pummel",
+                    "tooltip.lore.technique.pummel", "Pummel",
                     LoreTrigger.ON_HIT, 0.08d, 60000L, LoreEffectType.PUMMEL, 0.28d, 0.010d),
             new SignatureAbility("SIGNATURE_BLOOD_RUSH",
-                    "tooltip.lore.signature.blood_rush", "Blood Rush",
+                    "tooltip.lore.technique.blood_rush", "Blood Rush",
                     LoreTrigger.ON_HIT, 0.06d, 120000L, LoreEffectType.BLOOD_RUSH, 0.30d, 0.012d),
             new SignatureAbility("SIGNATURE_CHARGE_ATTACK",
-                    "tooltip.lore.signature.charge_attack", "Charge Attack",
+                    "tooltip.lore.technique.charge_attack", "Charge Attack",
                     LoreTrigger.ON_HIT, 0.07d, 7000L, LoreEffectType.CHARGE_ATTACK, 0.40d, 0.015d),
             new SignatureAbility("SIGNATURE_AREA_HEAL",
-                    "tooltip.lore.signature.area_heal", "Area Heal",
+                    "tooltip.lore.technique.area_heal", "Area Heal",
                     LoreTrigger.ON_HIT, 0.06d, 8000L, LoreEffectType.HEAL_AREA, 2.0d, 0.10d)
             ,
             new SignatureAbility("SIGNATURE_CAUSTIC_FINALE",
-                    "tooltip.lore.signature.caustic_finale", "Caustic Finale",
+                    "tooltip.lore.technique.caustic_finale", "Caustic Finale",
                     LoreTrigger.ON_KILL, 0.08d, 12000L, LoreEffectType.CAUSTIC_FINALE, 2.0d, 0.10d),
             new SignatureAbility("SIGNATURE_SHRAPNEL",
-                    "tooltip.lore.signature.shrapnel_finale", "Shrapnel",
+                    "tooltip.lore.technique.shrapnel_finale", "Shrapnel",
                     LoreTrigger.ON_KILL, 0.08d, 12000L, LoreEffectType.SHRAPNEL_FINALE, 2.0d, 0.10d),
             new SignatureAbility("SIGNATURE_BURN_FINALE",
-                    "tooltip.lore.signature.burn_finale", "Inferno",
+                    "tooltip.lore.technique.burn_finale", "Inferno",
                     LoreTrigger.ON_KILL, 0.08d, 12000L, LoreEffectType.BURN_FINALE, 2.0d, 0.10d)
     };
 
@@ -212,7 +212,7 @@ public final class LoreAbilityRegistry {
         for (String raw : entries) {
             LoreAbility ability = parseEntry(raw);
             if (ability != null && ability.getSpiritId() != null && !ability.getSpiritId().isBlank()) {
-                EXPLICIT.put(normalizeSpiritId(ability.getSpiritId()), ability);
+                EXPLICIT.put(LoreIds.normalizeSpiritId(ability.getSpiritId()), ability);
             }
         }
     }
@@ -221,7 +221,7 @@ public final class LoreAbilityRegistry {
         if (spiritId == null || spiritId.isBlank()) {
             return null;
         }
-        LoreAbility explicit = EXPLICIT.get(normalizeSpiritId(spiritId));
+        LoreAbility explicit = EXPLICIT.get(LoreIds.normalizeSpiritId(spiritId));
         if (explicit != null) {
             return explicit;
         }
@@ -341,7 +341,7 @@ public final class LoreAbilityRegistry {
                 LoreEffectType.SUMMON_WOLF_PACK,
                 1.0d,
                 0.0d,
-                "tooltip.lore.signature.wolfpack",
+                "tooltip.lore.technique.wolfpack",
                 "Wolf Pack"
         );
     }
@@ -1161,9 +1161,7 @@ public final class LoreAbilityRegistry {
         };
     }
 
-    private static String normalizeSpiritId(String spiritId) {
-        return spiritId.trim().toLowerCase(Locale.ROOT);
-    }
+    // normalization centralized in LoreIds
 
     private static double parseDouble(String raw, double fallback) {
         if (raw == null || raw.isBlank()) {
@@ -1180,3 +1178,4 @@ public final class LoreAbilityRegistry {
         return Math.max(0.0d, Math.min(1.0d, v));
     }
 }
+

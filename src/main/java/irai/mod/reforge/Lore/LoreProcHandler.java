@@ -16,15 +16,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.hypixel.hytale.component.Archetype;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.ResourceType;
-import com.hypixel.hytale.component.spatial.SpatialResource;
-import com.hypixel.hytale.component.spatial.SpatialStructure;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Vector3d;
 import com.hypixel.hytale.math.vector.Vector3f;
 import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
@@ -37,20 +33,14 @@ import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
-import com.hypixel.hytale.server.core.modules.entity.component.NPCMarkerComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
-import com.hypixel.hytale.server.core.modules.entity.AllLegacyLivingEntityTypesQuery;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
-import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
-import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
-import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
-import com.hypixel.hytale.protocol.SoundCategory;
 import com.hypixel.hytale.protocol.VelocityThresholdStyle;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter;
@@ -58,21 +48,27 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
 import com.hypixel.hytale.server.core.modules.splitvelocity.VelocityConfig;
 import com.hypixel.hytale.server.core.modules.interaction.InteractionModule;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.data.Collector;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.data.CollectorTag;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.LaunchProjectileInteraction;
+import com.hypixel.hytale.server.core.modules.projectile.ProjectileModule;
+import com.hypixel.hytale.server.core.modules.projectile.config.ProjectileConfig;
+import com.hypixel.hytale.server.core.modules.projectile.interaction.ProjectileInteraction;
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.protocol.AnimationSlot;
+import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.InteractionType;
+import com.hypixel.hytale.protocol.ModelTransform;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
-import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
-import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Util.LangLoader;
-import irai.mod.reforge.Socket.SocketData;
-import irai.mod.reforge.Socket.SocketManager;
 
 import it.unimi.dsi.fastutil.Pair;
 
@@ -88,7 +84,14 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> BURN_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> POISON_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Integer> POISON_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> DRAIN_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> BURN_VFX_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> POISON_VFX_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<String, ProjectileConfig> STAFF_PROJECTILE_CONFIGS = new ConcurrentHashMap<>();
+    private static final Set<String> STAFF_PROJECTILE_MISSES = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Long> ABILITY1_ACTIVE_UNTIL = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> WHIRLWIND_ACTIVE_UNTIL = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> WHIRLWIND_SWING_INDEX = new ConcurrentHashMap<>();
@@ -112,6 +115,18 @@ public final class LoreProcHandler {
     private static final double BLEED_BASE_MAX_HP_PCT = 0.005d;
     private static final long DRAIN_DOT_TICK_MS = 300L;
     private static final long DRAIN_BASE_DURATION_MS = 3000L;
+    private static final long BURN_DOT_TICK_MS = 1000L;
+    private static final long BURN_BASE_DURATION_MS = 3000L;
+    private static final long POISON_DOT_TICK_MS = 1000L;
+    private static final long POISON_BASE_DURATION_MS = 5000L;
+    private static final double BURN_DOT_MIN_WEAPON_PCT = 0.12d;
+    private static final double POISON_DOT_MIN_WEAPON_PCT = 0.08d;
+    private static final int POISON_DOT_MAX_STACKS = 3;
+    private static final long POISON_STACK_BONUS_MS = 1000L;
+    private static final long BURN_VFX_DURATION_MS = 3000L;
+    private static final long POISON_VFX_DURATION_MS = 3000L;
+    private static final int STAFF_PROJECTILE_INTERACTION_LIMIT = 128;
+    private static final double STAFF_PROJECTILE_FALLBACK_SPEED = 12.0d;
     private static final long SIGNATURE_FALLBACK_EFFECT_MS = 2000L;
     private static final long WHIRLWIND_TICK_MS = 500L;
     private static final long WHIRLWIND_SPIN_BURST_MS = 150L;
@@ -145,6 +160,7 @@ public final class LoreProcHandler {
     private static final double SIGNATURE_GROUNDSLAM_PCT = 0.40d;
     private static final double SIGNATURE_WHIRLWIND_PCT = 0.28d;
     private static final double SIGNATURE_RAZORSTRIKE_PCT = 0.32d;
+    private static final String SIGNATURE_KEY_PREFIX = "tooltip.lore.technique.";
     private static final double VORTEXSTRIKE_LUNGE_DISTANCE = 3.0d;
     private static final double VORTEXSTRIKE_LUNGE_FORCE_MIN = 3.5d;
     private static final double VORTEXSTRIKE_LUNGE_FORCE_MAX = 8.0d;
@@ -162,6 +178,21 @@ public final class LoreProcHandler {
                 thread.setDaemon(true);
                 return thread;
             });
+    private static final String[] LORE_SFX_DEFAULT = {"SFX_Unarmed_Swing"};
+    private static final String[] LORE_SFX_BURN = {"SFX_Mace_T1_Impact"};
+    private static final String[] LORE_SFX_FREEZE = {"SFX_Ice_Break"};
+    private static final String[] LORE_SFX_SHOCK = {"SFX_Weapon_Charge_Swing"};
+    private static final String[] LORE_SFX_BLEED = {"SFX_Daggers_T2_Signature_P1"};
+    private static final String[] LORE_SFX_POISON = {"SFX_Light_Melee_T1_Swing"};
+    private static final String[] LORE_SFX_SLOW = {"SFX_Sword_T1_Swing"};
+    private static final String[] LORE_SFX_WEAKNESS = {"SFX_Sword_T1_Swing"};
+    private static final String[] LORE_SFX_BLIND = {"SFX_Longsword_Special_Swing"};
+    private static final String[] LORE_SFX_ROOT = {"SFX_Axe_Iron_Swing"};
+    private static final String[] LORE_SFX_STUN = {"SFX_Mace_T1_Impact"};
+    private static final String[] LORE_SFX_FEAR = {"SFX_Weapon_Charge_Swing"};
+    private static final String[] LORE_SFX_HASTE = {"SFX_Weapon_Charge_Swing"};
+    private static final String[] LORE_SFX_BLUR = {"SFX_Weapon_Charge_Swing"};
+    private static final String[] LORE_SFX_SHIELD = {"SFX_Weapon_Charge_Swing"};
     static {
         LoreVisuals.setScheduler(OMNISLASH_SCHEDULER);
     }
@@ -186,34 +217,42 @@ public final class LoreProcHandler {
         f.setAccessible(true);
         f.set(config, value);
     }
-    private static final Object NPC_QUERY_LOCK = new Object();
-    private static volatile Query<EntityStore> npcQuery;
-    private static final Object NPC_MARKER_QUERY_LOCK = new Object();
-    private static volatile Query<EntityStore> npcMarkerQuery;
-    private static final Object STAT_QUERY_LOCK = new Object();
-    private static volatile Query<EntityStore> statQuery;
-    private static final Object TRANSFORM_QUERY_LOCK = new Object();
-    private static volatile Query<EntityStore> transformQuery;
-    private static final Object PLAYER_QUERY_LOCK = new Object();
-    private static volatile Query<EntityStore> playerQuery;
     private static final boolean LORE_DISABLE_SIGNATURE_ENERGY = true;
+    private static final boolean LORE_DISABLE_SIGNATURE_EFFECTS = false;
+    private static final boolean LORE_PRESERVE_SIGNATURE_ENERGY = false;
+    private static final float LORE_SIGNATURE_ENERGY_BONUS_PER_POINT = 0.0075f; // 0.75% per point
+    private static final float LORE_SIGNATURE_ENERGY_BONUS_MAX = 0.20f; // 20% cap
+    private static final float LORE_SIGNATURE_ENERGY_MIN_SPEND = 0.5f;
+    private static final long SIGNATURE_LOCK_MS = 500L;
+    private static final long SIGNATURE_LOCK_TICK_MS = 60L;
+    private static final Map<UUID, SignatureEnergyLock> SIGNATURE_ENERGY_LOCKS = new ConcurrentHashMap<>();
+    private static final boolean DEBUG_SIGNATURE_ENERGY_TRACE = Boolean.parseBoolean(
+            System.getProperty("socketreforge.debug.signatureEnergyTrace", "true"));
     private static final Map<String, String> SIGNATURE_ROOT_BY_KEY = Map.of(
-            "tooltip.lore.signature.groundslam", "Root_Weapon_Mace_Signature_Groundslam",
-            "tooltip.lore.signature.vortexstrike", "Root_Weapon_Sword_Signature_Vortexstrike",
-            "tooltip.lore.signature.whirlwind", "Root_Weapon_Battleaxe_Signature_Whirlwind",
-            "tooltip.lore.signature.razorstrike", "Root_Weapon_Daggers_Signature_Razorstrike",
-            "tooltip.lore.signature.big_arrow", "Root_Weapon_Crossbow_Signature_BigArrow",
-            "tooltip.lore.signature.volley", "Root_Weapon_Shortbow_Signature_Volley"
+            "tooltip.lore.technique.groundslam", "Root_Weapon_Mace_Signature_Groundslam",
+            "tooltip.lore.technique.vortexstrike", "Root_Weapon_Sword_Signature_Vortexstrike",
+            "tooltip.lore.technique.whirlwind", "Root_Weapon_Battleaxe_Signature_Whirlwind",
+            "tooltip.lore.technique.razorstrike", "Root_Weapon_Daggers_Signature_Razorstrike",
+            "tooltip.lore.technique.big_arrow", "Root_Weapon_Crossbow_Signature_BigArrow",
+            "tooltip.lore.technique.volley", "Root_Weapon_Shortbow_Signature_Volley"
     );
-    private static final String META_PARTS_DAMAGE_MULTIPLIER = "SocketReforge.Parts.DamageMultiplier";
     private static final long SIGNATURE_RESTORE_DELAY_MS = 450L;
+    private static final long SIGNATURE_VERIFY_DELAY_MS = 220L;
+    private static final long SIGNATURE_TRACE_DELAY_MS = 80L;
+    private static final long SIGNATURE_TRACE_DELAY_2_MS = 180L;
     private static final Object INTERACTION_BUFFER_LOCK = new Object();
     private static volatile Field interactionManagerCommandBufferField;
 
     private static final String[] BURN_EFFECT_IDS = {
+            "Lore/Lore_Burn",
+            "Lore_Burn",
             "Status/Burn", "Status/Lava_Burn", "Weapons/Flame_Staff_Burn",
             "Burn", "Lava_Burn", "Flame_Staff_Burn",
             "EntityEffect_Burning", "EntityEffect_Burn", "Effect_Burn", "Burning"
+    };
+    private static final String[] BURN_VFX_IDS = {
+            "Lore/Lore_Burn",
+            "Lore_Burn"
     };
     private static final String[] FREEZE_EFFECT_IDS = {
             "Lore/Lore_Freeze",
@@ -241,51 +280,83 @@ public final class LoreProcHandler {
             "Block_Hit_Ice"
     };
     private static final String[] SHOCK_EFFECT_IDS = {
+            "Lore/Lore_Shock",
+            "Lore_Shock",
             "Status/Stun",
             "Shock", "Shocked",
             "EntityEffect_Shocked", "EntityEffect_Shock", "Effect_Shock"
     };
     private static final String[] BLEED_EFFECT_IDS = {
+            "Lore/Lore_Bleed",
+            "Lore_Bleed",
             "Status/Bleed",
             "Bleed", "Bleeding",
             "EntityEffect_Bleed", "EntityEffect_Bleeding", "Effect_Bleed"
     };
     private static final String[] POISON_EFFECT_IDS = {
+            "Lore/Lore_Poison",
+            "Lore_Poison",
             "Status/Poison", "Status/Poison_T1", "Status/Poison_T2", "Status/Poison_T3",
             "Poison", "Poisoned",
             "EntityEffect_Poison", "Effect_Poison"
     };
+    private static final String[] POISON_VFX_IDS = {
+            "Lore/Lore_Poison",
+            "Lore_Poison"
+    };
     private static final String[] DRAIN_EFFECT_IDS = {
+            "Lore/Lore_Drain",
+            "Lore_Drain",
             "Status/Life_Drain", "Status/Drain_Life",
             "Life_Drain", "Drain_Life",
             "EntityEffect_Poison", "Effect_Poison"
     };
     private static final String[] SLOW_EFFECT_IDS = {
+            "Lore/Lore_Slow",
+            "Lore_Slow",
             "Status/Slow", "Deployables/Slowness_Totem_Slow",
             "Slow", "Slowness",
             "EntityEffect_Slow", "EntityEffect_Slowness", "Effect_Slow"
     };
     private static final String[] WEAKNESS_EFFECT_IDS = {
+            "Lore/Lore_Weakness",
+            "Lore_Weakness",
             "Status/Slow",
             "Weakness", "Weakened",
             "EntityEffect_Weakness", "Effect_Weakness"
     };
     private static final String[] BLIND_EFFECT_IDS = {
+            "Lore/Lore_Blind",
+            "Lore_Blind",
             "Status/Slow",
             "Blind", "Blindness",
             "EntityEffect_Blind", "EntityEffect_Blindness", "Effect_Blind"
     };
     private static final String[] ROOT_EFFECT_IDS = {
+            "Lore/Lore_Root",
+            "Lore_Root",
             "Status/Root",
             "Root", "Rooted",
             "EntityEffect_Root", "EntityEffect_Rooted", "Effect_Root"
     };
     private static final String[] STUN_EFFECT_IDS = {
+            "Lore/Lore_Stun",
+            "Lore_Stun",
             "Status/Stun", "Projectiles/Bomb/Bomb_Explode_Stun", "Tests/Stick_Stun",
             "Stun", "Stunned",
             "EntityEffect_Stun", "Effect_Stun"
     };
+    private static final String[] STUN_PARTICLE_IDS = {
+            "Combat/Mace/Signature/Impact_Mace_Signature",
+            "Impact_Mace_Signature",
+            "Combat/Mace/Signature/Mace_Signature_Ground_Hit",
+            "Mace_Signature_Ground_Hit",
+            "Combat/Daggers/Basic/Impact_Dagger_Slash",
+            "Impact_Dagger_Slash"
+    };
     private static final String[] FEAR_EFFECT_IDS = {
+            "Lore/Lore_Fear",
+            "Lore_Fear",
             "Status/Slow",
             "Fear", "Feared",
             "EntityEffect_Fear", "Effect_Fear"
@@ -410,13 +481,22 @@ public final class LoreProcHandler {
             "Combat/Daggers/Signature/Daggers_Signature_Slash",
             "Daggers_Signature_Slash",
             "Combat/Sword/Charged/Sword_Charged_Trail_Praetorian",
-            "Sword_Charged_Trail_Praetorian"
+            "Sword_Charged_Trail_Praetorian",
+            "Impact_Sword_Signature_Spin"
+    };
+    private static final String[] BURN_HIT_PARTICLE_IDS = {
+            "Impact_Sword_Signature_Spin",
+            "Combat/Mace/Signature/Mace_Signature_Slash",
+            "Mace_Signature_Slash"
+    };
+    private static final String[] POISON_HIT_PARTICLE_IDS = {
+            "Impact_Sword_Signature_Spin",
+            "Combat/Daggers/Signature/Daggers_Signature_Slash",
+            "Daggers_Signature_Slash"
     };
     private static final String[] OMNISLASH_TRAIL_EFFECT_IDS = {
-            "Weapons/Dagger_Signature",
-            "Dagger_Signature",
-            "Weapons/Mace_Signature",
-            "Mace_Signature"
+            "Lore/Lore_Pummel_Trail",
+            "Lore_Pummel_Trail"
     };
     private static final String[] BLOOD_RUSH_TRAIL_EFFECT_IDS = {
             "Lore/Lore_BloodRush_Trail",
@@ -440,15 +520,25 @@ public final class LoreProcHandler {
     };
     private static final double GROUNDSLAM_AUGMENT_CHANCE_MULTIPLIER = 3.0d;
     private static final Map<UUID, GroundslamContext> GROUNDSLAM_CONTEXTS = new ConcurrentHashMap<>();
-    private static final String[] INVISIBLE_EFFECT_IDS = {
+    private static final String[] BLUR_EFFECT_IDS = {
+            "Lore/Lore_Blur",
+            "Lore_Blur",
+            "Lore/Lore_Invisible",
+            "Lore_Invisible",
             "Status/Antidote",
             "Invisible", "Invisibility",
             "EntityEffect_Invisible", "EntityEffect_Invisibility", "Effect_Invisible"
     };
     private static final String[] SHIELD_EFFECT_IDS = {
+            "Lore/Lore_Shield",
+            "Lore_Shield",
             "Status/Immune",
             "Shield", "Barrier",
             "EntityEffect_Shield", "EntityEffect_Barrier", "Effect_Shield"
+    };
+    private static final String[] READY_WEAPON_EFFECT_IDS = {
+            "Lore/Lore_Ready_Weapon",
+            "Lore_Ready_Weapon"
     };
 
     public static final class ProcState {
@@ -511,16 +601,6 @@ public final class LoreProcHandler {
         ProcCollectResult(UUID playerId, boolean ability1Active) {
             this.playerId = playerId;
             this.ability1Active = ability1Active;
-        }
-    }
-
-    private static final class DamageBaseResult {
-        final float amount;
-        final boolean skipRefine;
-
-        DamageBaseResult(float amount, boolean skipRefine) {
-            this.amount = amount;
-            this.skipRefine = skipRefine;
         }
     }
 
@@ -623,6 +703,7 @@ public final class LoreProcHandler {
         final int totalHits;
         final String slashParticleId;
         final float finalMultiplier;
+        final int feedTier;
         int hitsApplied;
 
         OmnislashSequence(Store<EntityStore> store,
@@ -633,7 +714,8 @@ public final class LoreProcHandler {
                           boolean skipRefine,
                           int totalHits,
                           String slashParticleId,
-                          float finalMultiplier) {
+                          float finalMultiplier,
+                          int feedTier) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.targets = targets;
@@ -643,6 +725,7 @@ public final class LoreProcHandler {
             this.totalHits = Math.max(1, totalHits);
             this.slashParticleId = slashParticleId;
             this.finalMultiplier = finalMultiplier <= 0f ? 1.0f : finalMultiplier;
+            this.feedTier = Math.max(0, feedTier);
         }
     }
 
@@ -766,7 +849,7 @@ public final class LoreProcHandler {
             if (spiritId == null || spiritId.isBlank()) {
                 continue;
             }
-            String normalized = normalizeSpiritId(spiritId);
+            String normalized = LoreIds.normalizeSpiritId(spiritId);
             if (usedSpirits != null && usedSpirits.contains(normalized)) {
                 continue;
             }
@@ -780,12 +863,12 @@ public final class LoreProcHandler {
                 continue;
             }
             if (ability1Active && shouldBlockLoreDuringAbility1(resolved)) {
-                LoreDebug.logKv("proc.skip", "reason", "Ability1Active", "effect", resolved.getEffectType(),
+                LoreDebug.logKv("proc.skip", "reason", "Ability1Active", "effect", resolveLogEffectLabel(resolved),
                         "spirit", spiritId);
                 continue;
             }
             if (isCoreEffectType(resolved.getEffectType()) && !isCoreColorForSpirit(spiritId)) {
-                LoreDebug.logKv("proc.skip", "reason", "NonCoreColor", "effect", resolved.getEffectType(),
+                LoreDebug.logKv("proc.skip", "reason", "NonCoreColor", "effect", resolveLogEffectLabel(resolved),
                         "spirit", spiritId);
                 continue;
             }
@@ -826,7 +909,7 @@ public final class LoreProcHandler {
             if (spiritId == null || spiritId.isBlank()) {
                 continue;
             }
-            String normalized = normalizeSpiritId(spiritId);
+            String normalized = LoreIds.normalizeSpiritId(spiritId);
             if (usedSpirits != null && usedSpirits.contains(normalized)) {
                 continue;
             }
@@ -1035,11 +1118,7 @@ public final class LoreProcHandler {
         if (store == null) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> executeBatch(batch, null, null));
+        LoreWorldTasks.queue(store, () -> executeBatch(batch, null, null));
     }
 
     private static void executeBatch(LoreProcBatch batch,
@@ -1165,7 +1244,7 @@ public final class LoreProcHandler {
             if (spiritId == null || spiritId.isBlank()) {
                 continue;
             }
-            String normalized = normalizeSpiritId(spiritId);
+            String normalized = LoreIds.normalizeSpiritId(spiritId);
             if (usedSpirits != null && usedSpirits.contains(normalized)) {
                 continue;
             }
@@ -1248,7 +1327,7 @@ public final class LoreProcHandler {
             return false;
         }
         long now = System.currentTimeMillis();
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         Long until = COOLDOWNS.get(key);
         if (until != null && now < until) {
             return false;
@@ -1268,7 +1347,7 @@ public final class LoreProcHandler {
             return false;
         }
         long now = System.currentTimeMillis();
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         Long until = COOLDOWNS.get(key);
         if (until != null && now < until) {
             return false;
@@ -1294,7 +1373,7 @@ public final class LoreProcHandler {
         }
         double chance = Math.min(1.0d, baseChance * Math.max(0.0d, multiplier));
         long now = System.currentTimeMillis();
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         Long until = COOLDOWNS.get(key);
         if (until != null && now < until) {
             return false;
@@ -1381,44 +1460,51 @@ public final class LoreProcHandler {
             scheduleReadyNotification(store, selfRef, playerId, spiritId, ability, safeFeedTier);
         }
 
-        boolean isSignatureAbility = selfIsAttacker && isSignatureAbility(ability);
+        boolean isSignatureStyle = selfIsAttacker && isLoreSignatureStyle(ability);
         boolean isVortexstrike = ability.getEffectType() == LoreEffectType.VORTEXSTRIKE;
-        boolean allowBuiltInSignature = !LORE_DISABLE_SIGNATURE_ENERGY
-                && !isVortexstrike
-                && !isWhirlwindSignature(ability);
+        SignatureEnergySnapshot signatureSnapshot = null;
+        Ref<EntityStore> signatureOwnerRef = selfRef;
+        if (LORE_PRESERVE_SIGNATURE_ENERGY && primaryProc && signatureOwnerRef != null) {
+            signatureSnapshot = captureSignatureEnergy(store, signatureOwnerRef);
+        }
+        if (primaryProc && signatureSnapshot != null && signatureSnapshot.value > 0.01f && playerId != null) {
+            lockSignatureEnergy(store, selfRef, playerId, signatureSnapshot.value);
+        }
+        SignatureEnergyBonus energyBonus = consumeSignatureEnergyBonus(store, attackerRef, ability, selfIsAttacker, primaryProc);
+        float damageMultiplier = energyBonus.multiplier;
+        float damageAmount = amount * damageMultiplier;
         boolean ranSignature = false;
-        if (primaryProc && selfIsAttacker && isSignatureAbility && allowBuiltInSignature) {
-            ranSignature = tryRunBuiltInSignature(store, commandBuffer, ability, attackerRef, playerId, spiritId);
-        }
-        if (isSignatureAbility && !isVortexstrike) {
-            if (primaryProc) {
-                applySignatureFallbackVfx(store, attackerRef, defenderRef, ability, safeFeedTier);
+        try {
+            // Lore abilities should not execute built-in signature chains.
+            if (!LORE_DISABLE_SIGNATURE_EFFECTS && isSignatureStyle && !isVortexstrike) {
+                if (primaryProc) {
+                    applySignatureFallbackVfx(store, attackerRef, defenderRef, ability, safeFeedTier);
+                }
+                applySignatureFallbackDamage(store, attackerRef, defenderRef, ability, damage, amount,
+                        safeFeedTier, selfIsAttacker, damageMultiplier);
             }
-            applySignatureFallbackDamage(store, attackerRef, defenderRef, ability, damage, amount,
-                    safeFeedTier, selfIsAttacker);
-        }
 
-        switch (ability.getEffectType()) {
+            switch (ability.getEffectType()) {
             case DAMAGE_TARGET -> {
                 if (selfIsAttacker && damage != null && opponentRef != null) {
-                    damage.setAmount(damage.getAmount() + amount);
+                    damage.setAmount(damage.getAmount() + damageAmount);
                 } else if (opponentRef != null) {
-                    applyCombatDamage(store, attackerRef, opponentRef, amount, false);
+                    LoreDamageUtils.applyLoreDamage(store, attackerRef, opponentRef, damageAmount, false, safeFeedTier);
                 }
             }
             case DAMAGE_ATTACKER -> {
                 if (attackerRef != null) {
-                    applyCombatDamage(store, defenderRef, attackerRef, amount, false);
+                    LoreDamageUtils.applyLoreDamage(store, defenderRef, attackerRef, amount, false, safeFeedTier);
                 }
             }
             case HEAL_SELF -> {
                 if (selfRef != null) {
-                    applyHeal(store, selfRef, amount);
+                    LoreDamageUtils.applyHeal(store, selfRef, amount);
                 }
             }
             case HEAL_DEFENDER -> {
                 if (defenderRef != null) {
-                    applyHeal(store, defenderRef, amount);
+                    LoreDamageUtils.applyHeal(store, defenderRef, amount);
                 }
             }
             case HEAL_SELF_OVER_TIME -> {
@@ -1437,79 +1523,161 @@ public final class LoreProcHandler {
                     double pct = value <= 1.0d ? value : value / 100.0d;
                     float heal = base > 0f ? (float) (base * pct) : amount;
                     if (heal > 0f) {
-                        applyHeal(store, selfRef, heal);
+                        LoreDamageUtils.applyHeal(store, selfRef, heal);
                     }
                 }
             }
             case APPLY_BURN -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, BURN_EFFECT_IDS);
-                markFinaleTarget(BURN_FINALE_MARKS, playerId, spiritId, opponentRef, store, amount, safeFeedTier);
+                queueBurnVisualEffect(store, opponentRef);
+                spawnHitParticle(store, attackerRef, opponentRef, BURN_HIT_PARTICLE_IDS);
+                Ref<EntityStore> burnSource = selfRef != null ? selfRef : attackerRef;
+                applyBurnOverTime(store, burnSource, opponentRef, damageAmount, safeFeedTier);
+                markFinaleTarget(BURN_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_BURN);
+                }
             }
             case APPLY_FREEZE -> {
                 if (opponentRef != null) {
                     applyFrozenForDuration(store, opponentRef, resolveStunFreezeDurationMs(value, safeFeedTier));
                 }
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_FREEZE);
+                }
             }
-            case APPLY_SHOCK -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, SHOCK_EFFECT_IDS);
+            case APPLY_SHOCK -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, SHOCK_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_SHOCK);
+                }
+            }
             case APPLY_BLEED -> {
                 LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLEED_EFFECT_IDS);
                 Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
-                applyBleedOverTime(store, bleedSource, opponentRef, amount, safeFeedTier);
-                markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, opponentRef, store, amount, safeFeedTier);
+                applyBleedOverTime(store, bleedSource, opponentRef, damageAmount, safeFeedTier);
+                markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_BLEED);
+                }
             }
             case APPLY_POISON -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, POISON_EFFECT_IDS);
-                markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, opponentRef, store, amount, safeFeedTier);
+                queuePoisonVisualEffect(store, opponentRef);
+                spawnHitParticle(store, attackerRef, opponentRef, POISON_HIT_PARTICLE_IDS);
+                Ref<EntityStore> poisonSource = selfRef != null ? selfRef : attackerRef;
+                applyPoisonOverTime(store, poisonSource, opponentRef, damageAmount, safeFeedTier);
+                markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_POISON);
+                }
             }
-            case APPLY_SLOW -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, SLOW_EFFECT_IDS);
-            case APPLY_WEAKNESS -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, WEAKNESS_EFFECT_IDS);
-            case APPLY_BLIND -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLIND_EFFECT_IDS);
-            case APPLY_ROOT -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, ROOT_EFFECT_IDS);
+            case APPLY_SLOW -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, SLOW_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_SLOW);
+                }
+            }
+            case APPLY_WEAKNESS -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, WEAKNESS_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_WEAKNESS);
+                }
+            }
+            case APPLY_BLIND -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLIND_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_BLIND);
+                }
+            }
+            case APPLY_ROOT -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, ROOT_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_ROOT);
+                }
+            }
             case APPLY_STUN -> {
                 if (opponentRef != null) {
                     long durationMs = resolveStunFreezeDurationMs(value, safeFeedTier);
                     LoreVisuals.tryApplyTimedVisualEffectOverride(store, opponentRef, durationMs, STUN_EFFECT_IDS);
                 }
+                if (primaryProc) {
+                    spawnStunParticles(store, opponentRef, attackerRef);
+                    playLoreEffectSound(store, selfRef, LORE_SFX_STUN);
+                }
             }
-            case APPLY_FEAR -> LoreVisuals.tryApplyVisualEffect(store, opponentRef, FEAR_EFFECT_IDS);
-            case APPLY_HASTE -> LoreVisuals.tryApplyVisualEffect(store, selfRef, HASTE_EFFECT_IDS);
-            case APPLY_INVISIBLE -> LoreVisuals.tryApplyVisualEffect(store, selfRef, INVISIBLE_EFFECT_IDS);
-            case APPLY_SHIELD -> LoreVisuals.tryApplyVisualEffect(store, selfRef, SHIELD_EFFECT_IDS);
+            case APPLY_FEAR -> {
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, FEAR_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_FEAR);
+                }
+            }
+            case APPLY_HASTE -> {
+                LoreVisuals.tryApplyVisualEffect(store, selfRef, HASTE_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_HASTE);
+                }
+            }
+            case APPLY_INVISIBLE -> {
+                if (selfRef == null) {
+                    break;
+                }
+                long durationMs = resolveBlurDurationMs(value, safeFeedTier);
+                if (playerId != null) {
+                    LoreStatusTracker.applyBlur(playerId, durationMs);
+                }
+                if (durationMs > 0L) {
+                    LoreVisuals.tryApplyTimedVisualEffectOverride(store, selfRef, durationMs, BLUR_EFFECT_IDS);
+                } else {
+                    LoreVisuals.tryApplyVisualEffect(store, selfRef, BLUR_EFFECT_IDS);
+                }
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_BLUR);
+                }
+            }
+            case APPLY_SHIELD -> {
+                LoreVisuals.tryApplyVisualEffect(store, selfRef, SHIELD_EFFECT_IDS);
+                if (primaryProc) {
+                    playLoreEffectSound(store, selfRef, LORE_SFX_SHIELD);
+                }
+            }
             case DOUBLE_CAST -> {
                 float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                base *= damageMultiplier;
                 double scaledValue = LoreAbility.scaleEffectValue(value, safeFeedTier);
                 double pct = clampPercentDamage(scaledValue, 0.25d, 1.0d);
                 float extra = (float) (base * pct);
                 if (selfIsAttacker && damage != null && opponentRef != null) {
                     damage.setAmount(damage.getAmount() + extra);
                 } else if (opponentRef != null) {
-                    applyCombatDamage(store, attackerRef, opponentRef, extra, false);
+                    LoreDamageUtils.applyLoreDamage(store, attackerRef, opponentRef, extra, false, safeFeedTier);
                 }
             }
             case VORTEXSTRIKE -> {
-                applyVortexstrike(store, attackerRef, opponentRef, selfIsAttacker, damage, value, safeFeedTier);
+                applyVortexstrike(store, attackerRef, opponentRef, selfIsAttacker, damage, value, safeFeedTier,
+                        damageMultiplier);
             }
             case MULTI_HIT -> {
                 if (opponentRef == null) {
                     return true;
                 }
                 float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                base *= damageMultiplier;
                 boolean skipRefine = selfIsAttacker && damage != null;
                 double pct = clampPercentDamage(value, 0.15d, 0.75d);
                 int extraHits = Math.max(1, Math.min(3, calcExtraHits(value) + safeFeedTier));
                 float perHit = (float) (base * pct);
                 for (int i = 0; i < extraHits; i++) {
-                    applyCombatDamage(store, attackerRef, opponentRef, perHit, skipRefine);
+                    LoreDamageUtils.applyLoreDamage(store, attackerRef, opponentRef, perHit, skipRefine, safeFeedTier);
                 }
             }
             case CRIT_CHARGE -> {
                 float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                base *= damageMultiplier;
                 double pct = clampPercentDamage(value, 0.20d, 1.25d);
                 float extra = (float) (base * pct);
                 if (selfIsAttacker && damage != null && opponentRef != null) {
                     damage.setAmount(damage.getAmount() + extra);
                 } else if (opponentRef != null) {
-                    applyCombatDamage(store, attackerRef, opponentRef, extra, false);
+                    LoreDamageUtils.applyLoreDamage(store, attackerRef, opponentRef, extra, false, safeFeedTier);
                 }
             }
             case BERSERK -> {
@@ -1526,7 +1694,7 @@ public final class LoreProcHandler {
                     if (isEntityAlive(store, defenderRef)
                             && hasActiveEffect(store, defenderRef, POISON_EFFECT_IDS)) {
                         markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, defenderRef, store,
-                                amount, safeFeedTier);
+                                damageAmount, safeFeedTier);
                     } else {
                         if (DEBUG_LORE_PROCS) {
                             LoreDebug.logKv("finale.skip", "reason", "unmarked", "effect", "CAUSTIC_FINALE");
@@ -1534,7 +1702,7 @@ public final class LoreProcHandler {
                         return true;
                     }
                 }
-                applyFinaleExplosion(store, attackerRef, defenderRef, amount, safeFeedTier,
+                applyFinaleExplosion(store, attackerRef, defenderRef, damageAmount, safeFeedTier,
                         POISON_EFFECT_IDS, CAUSTIC_FINALE_PARTICLE_IDS, true,
                         playerId, spiritId, true);
                 clearFinaleMark(CAUSTIC_FINALE_MARKS, playerId, spiritId, defenderRef);
@@ -1547,7 +1715,7 @@ public final class LoreProcHandler {
                     if (isEntityAlive(store, defenderRef)
                             && hasActiveEffect(store, defenderRef, BLEED_EFFECT_IDS)) {
                         markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, defenderRef, store,
-                                amount, safeFeedTier);
+                                damageAmount, safeFeedTier);
                     } else {
                         if (DEBUG_LORE_PROCS) {
                             LoreDebug.logKv("finale.skip", "reason", "unmarked", "effect", "SHRAPNEL_FINALE");
@@ -1555,7 +1723,7 @@ public final class LoreProcHandler {
                         return true;
                     }
                 }
-                applyFinaleExplosion(store, attackerRef, defenderRef, amount, safeFeedTier,
+                applyFinaleExplosion(store, attackerRef, defenderRef, damageAmount, safeFeedTier,
                         BLEED_EFFECT_IDS, SHRAPNEL_FINALE_PARTICLE_IDS, true,
                         playerId, spiritId, true);
                 clearFinaleMark(SHRAPNEL_FINALE_MARKS, playerId, spiritId, defenderRef);
@@ -1568,7 +1736,7 @@ public final class LoreProcHandler {
                     if (isEntityAlive(store, defenderRef)
                             && hasActiveEffect(store, defenderRef, BURN_EFFECT_IDS)) {
                         markFinaleTarget(BURN_FINALE_MARKS, playerId, spiritId, defenderRef, store,
-                                amount, safeFeedTier);
+                                damageAmount, safeFeedTier);
                     } else {
                         if (DEBUG_LORE_PROCS) {
                             LoreDebug.logKv("finale.skip", "reason", "unmarked", "effect", "BURN_FINALE");
@@ -1576,22 +1744,23 @@ public final class LoreProcHandler {
                         return true;
                     }
                 }
-                applyFinaleExplosion(store, attackerRef, defenderRef, amount, safeFeedTier,
+                applyFinaleExplosion(store, attackerRef, defenderRef, damageAmount, safeFeedTier,
                         BURN_EFFECT_IDS, BURN_FINALE_PARTICLE_IDS, false,
                         playerId, spiritId, true);
                 clearFinaleMark(BURN_FINALE_MARKS, playerId, spiritId, defenderRef);
             }
             case DRAIN_LIFE -> {
                 Ref<EntityStore> drainSource = selfRef != null ? selfRef : attackerRef;
-                applyDrainOverTime(store, drainSource, opponentRef, amount, safeFeedTier);
+                applyDrainOverTime(store, drainSource, opponentRef, damageAmount, safeFeedTier);
             }
             case CHARGE_ATTACK -> {
-                applyChargeAttack(store, attackerRef, opponentRef, selfIsAttacker, damage, amount, value, safeFeedTier);
+                applyChargeAttack(store, attackerRef, opponentRef, selfIsAttacker, damage, amount, value, safeFeedTier,
+                        damageMultiplier, commandBuffer);
             }
             case OMNISLASH -> {
-                DamageBaseResult baseResult =
-                        resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, amount);
-                float base = baseResult.amount;
+                LoreDamageUtils.DamageBaseResult baseResult =
+                        LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, amount);
+                float base = baseResult.amount * damageMultiplier;
                 double scaledValue = LoreAbility.scaleEffectValue(value, safeFeedTier);
                 double pct = clampPercentDamage(scaledValue, 0.15d, 0.60d);
                 float perHit = (float) (base * pct);
@@ -1599,12 +1768,13 @@ public final class LoreProcHandler {
                 int hits = resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, safeFeedTier);
                 double radius = LoreAbility.scaleRadius(OMNISLASH_RADIUS, safeFeedTier);
                 applyOmnislash(store, attackerRef, opponentRef, perHit, canTeleport, baseResult.skipRefine, hits, radius,
-                        OMNISLASH_FINAL_MULTIPLIER);
+                        OMNISLASH_FINAL_MULTIPLIER, safeFeedTier);
             }
             case OCTASLASH -> applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
                     LoreAbility.scaleEffectValue(value, safeFeedTier),
                     resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, safeFeedTier), 0.12d, 0.55d,
-                    OMNISLASH_SLASH_PARTICLE_IDS, OCTASLASH_FINAL_MULTIPLIER, OCTASLASH_RAMP_PER_HIT);
+                    OMNISLASH_SLASH_PARTICLE_IDS, OCTASLASH_FINAL_MULTIPLIER, OCTASLASH_RAMP_PER_HIT,
+                    damageMultiplier, safeFeedTier);
             case PUMMEL -> {
                 int hits = resolveFeedScaledHits(PUMMEL_BASE_HITS, PUMMEL_MAX_HITS, safeFeedTier);
                 Ref<EntityStore> trailRef = attackerRef != null ? attackerRef : selfRef;
@@ -1615,7 +1785,7 @@ public final class LoreProcHandler {
                     scheduleTrailParticles(store, trailRef, PUMMEL_TRAIL_PARTICLE_IDS, hits, MULTIHIT_HIT_DELAY_MS);
                 }
                 applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
-                        value, hits, 0.20d, 0.70d);
+                        value, hits, 0.20d, 0.70d, null, 1.0f, 0.0d, damageMultiplier, safeFeedTier);
             }
             case BLOOD_RUSH -> {
                 int hits = resolveFeedScaledHits(BLOOD_RUSH_BASE_HITS, BLOOD_RUSH_MAX_HITS, safeFeedTier);
@@ -1627,14 +1797,17 @@ public final class LoreProcHandler {
                     scheduleTrailParticles(store, trailRef, BLOOD_RUSH_TRAIL_PARTICLE_IDS, hits, MULTIHIT_HIT_DELAY_MS);
                 }
                 applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
-                        value, hits, 0.15d, 0.60d);
+                        value, hits, 0.15d, 0.60d, null, 1.0f, 0.0d, damageMultiplier, safeFeedTier);
             }
             case SUMMON_WOLF_PACK -> trySummonWolfPack(store, attackerOrSelfRef, playerId, spiritId, level, safeFeedTier);
-            default -> {
-                // no-op
+                default -> {
+                    // no-op
+                }
             }
+            return !ranSignature;
+        } finally {
+            preserveSignatureEnergyIfConsumed(store, signatureOwnerRef, signatureSnapshot, ranSignature);
         }
-        return !ranSignature;
     }
 
     private static boolean tryRunBuiltInSignature(Store<EntityStore> store,
@@ -1646,7 +1819,7 @@ public final class LoreProcHandler {
         if (ability == null) {
             return false;
         }
-        if (LORE_DISABLE_SIGNATURE_ENERGY) {
+        if (LORE_DISABLE_SIGNATURE_ENERGY || LORE_DISABLE_SIGNATURE_EFFECTS) {
             return false;
         }
         LoreEffectType effectType = ability.getEffectType();
@@ -1692,6 +1865,7 @@ public final class LoreProcHandler {
             logSignatureSkip(rootId, playerId, spiritId, "interaction manager missing");
             return false;
         }
+        ensureInteractionCommandBuffer(manager, commandBuffer);
         if (hasActiveAbility1Chain(manager)) {
             LoreDebug.log("signature.skip", "reason=Ability1Active");
             return false;
@@ -1700,7 +1874,7 @@ public final class LoreProcHandler {
         int signatureIndex = -1;
         EntityStatMap statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
         if (statMap != null) {
-            signatureIndex = getSignatureEnergyStatIndex(statMap);
+            signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
             if (signatureIndex >= 0) {
                 EntityStatValue value = statMap.get(signatureIndex);
                 if (value != null) {
@@ -1729,25 +1903,26 @@ public final class LoreProcHandler {
             logSignatureSkip(rootId, playerId, spiritId, "context create failed");
             return false;
         }
-        InteractionChain chain = manager.initChain(InteractionType.Ability1, context, root, false);
-        if (chain == null) {
-            logSignatureSkip(rootId, playerId, spiritId, "initChain failed");
-            restoreSignatureEnergy(store, attackerRef, signatureIndex, originalEnergy);
-            return false;
-        }
-        boolean rulesPassed = manager.applyRules(context, chain.getChainData(), InteractionType.Ability1, root);
-        if (!rulesPassed) {
+        boolean started = manager.tryStartChain(attackerRef, commandBuffer, InteractionType.Ability1, context, root);
+        if (!started) {
             if (!FORCE_SIGNATURE_RULES) {
-                logSignatureSkip(rootId, playerId, spiritId, "applyRules failed");
+                logSignatureSkip(rootId, playerId, spiritId, "tryStartChain failed");
                 restoreSignatureEnergy(store, attackerRef, signatureIndex, originalEnergy);
                 return false;
             }
-            if (DEBUG_LORE_PROCS) {
+            InteractionChain chain = manager.initChain(InteractionType.Ability1, context, root, false);
+            if (chain == null) {
+                logSignatureSkip(rootId, playerId, spiritId, "initChain failed");
+                restoreSignatureEnergy(store, attackerRef, signatureIndex, originalEnergy);
+                return false;
+            }
+            boolean rulesPassed = manager.applyRules(context, chain.getChainData(), InteractionType.Ability1, root);
+            if (!rulesPassed && DEBUG_LORE_PROCS) {
                 LoreDebug.logKv("signature.force", "root", rootId, "player", playerId,
                         "spirit", (spiritId == null ? "unknown" : spiritId));
             }
+            manager.queueExecuteChain(chain);
         }
-        manager.queueExecuteChain(chain);
         LoreDebug.logKv("signature.run", "root", rootId, "player", playerId,
                 "spirit", (spiritId == null ? "unknown" : spiritId));
         if (signatureIndex >= 0 && originalEnergy >= 0f) {
@@ -1756,7 +1931,7 @@ public final class LoreProcHandler {
         return true;
     }
 
-    private static boolean isSignatureAbility(LoreAbility ability) {
+    private static boolean isLoreSignatureStyle(LoreAbility ability) {
         if (ability == null) {
             return false;
         }
@@ -1774,7 +1949,34 @@ public final class LoreProcHandler {
         if (ability == null) {
             return false;
         }
-        return "tooltip.lore.signature.whirlwind".equals(ability.getAbilityNameKey());
+        return "tooltip.lore.technique.whirlwind".equals(ability.getAbilityNameKey());
+    }
+
+    private static void spawnStunParticles(Store<EntityStore> store,
+                                           Ref<EntityStore> targetRef,
+                                           Ref<EntityStore> attackerRef) {
+        if (store == null || targetRef == null) {
+            return;
+        }
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, attackerRef);
+        if (pos == null) {
+            return;
+        }
+        pos.add(0.0d, 0.5d, 0.0d);
+        LoreVisuals.queueSignatureParticles(store, pos, 1.0f, STUN_PARTICLE_IDS);
+    }
+
+    private static void playLoreEffectSound(Store<EntityStore> store,
+                                            Ref<EntityStore> sourceRef,
+                                            String... soundIds) {
+        if (store == null || sourceRef == null || soundIds == null || soundIds.length == 0) {
+            return;
+        }
+        Player player = store.getComponent(sourceRef, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
+        LoreVisuals.playSignatureSound(player, soundIds);
     }
 
     private static void applySignatureFallbackVfx(Store<EntityStore> store,
@@ -1789,38 +1991,34 @@ public final class LoreProcHandler {
         if (key == null || key.isBlank() || !SIGNATURE_ROOT_BY_KEY.containsKey(key)) {
             return;
         }
-        Vector3d attackerPos = getPosition(store, attackerRef);
-        Vector3d defenderPos = getPosition(store, defenderRef);
+        Vector3d attackerPos = LoreTargetingUtils.getPosition(store, attackerRef);
+        Vector3d defenderPos = LoreTargetingUtils.getPosition(store, defenderRef);
         Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
         switch (key) {
-            case "tooltip.lore.signature.groundslam" -> {
+            case "tooltip.lore.technique.groundslam" -> {
                 Vector3d pos = attackerPos != null ? attackerPos : defenderPos;
                 if (pos == null) {
                     return;
                 }
                 LoreVisuals.queueSignatureParticles(store, pos, 1.4f, SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
-                LoreVisuals.tryApplyTimedVisualEffect(store, attackerRef, SIGNATURE_FALLBACK_EFFECT_MS,
-                        SIGNATURE_GROUNDSLAM_EFFECT_IDS);
                 LoreVisuals.playSignatureSound(attacker,
                         "SFX_Mace_T2_Signature_Impact",
                         "SFX_Mace_T2_Signature_Impact_Local",
                         "SFX_Mace_T1_Impact");
             }
-            case "tooltip.lore.signature.vortexstrike" -> {
+            case "tooltip.lore.technique.vortexstrike" -> {
                 Vector3d pos = attackerPos != null ? attackerPos : defenderPos;
                 if (pos == null) {
                     return;
                 }
                 LoreVisuals.queueSignatureParticles(store, pos, 1.2f, SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
-                LoreVisuals.tryApplyTimedVisualEffect(store, attackerRef, SIGNATURE_FALLBACK_EFFECT_MS,
-                        SIGNATURE_VORTEXSTRIKE_EFFECT_IDS);
                 LoreVisuals.playSignatureSound(attacker,
                         "SFX_Sword_T2_Signature_Part_1",
                         "SFX_Sword_T2_Signature_Part_1_Local",
                         "SFX_Sword_T2_Signature_Part_2",
                         "SFX_Sword_T2_Signature_Part_2_Local");
             }
-            case "tooltip.lore.signature.whirlwind" -> {
+            case "tooltip.lore.technique.whirlwind" -> {
                 Vector3d pos = attackerPos != null ? attackerPos : defenderPos;
                 if (pos == null) {
                     return;
@@ -1836,20 +2034,18 @@ public final class LoreProcHandler {
                         "SFX_Battleaxe_T2_Signature_Swing",
                         "SFX_Battleaxe_T2_Signature_Swing_Local");
             }
-            case "tooltip.lore.signature.razorstrike" -> {
+            case "tooltip.lore.technique.razorstrike" -> {
                 Vector3d pos = defenderPos != null ? defenderPos : attackerPos;
                 if (pos == null) {
                     return;
                 }
                 LoreVisuals.queueSignatureParticles(store, pos, 1.1f, SIGNATURE_RAZORSTRIKE_PARTICLE_IDS);
-                LoreVisuals.tryApplyTimedVisualEffect(store, attackerRef, SIGNATURE_FALLBACK_EFFECT_MS,
-                        SIGNATURE_RAZORSTRIKE_EFFECT_IDS);
                 LoreVisuals.playSignatureSound(attacker,
                         "SFX_Daggers_T2_Signature_P1",
                         "SFX_Daggers_T2_Signature_P2",
                         "SFX_Daggers_T2_Signature_P3");
             }
-            case "tooltip.lore.signature.volley" -> {
+            case "tooltip.lore.technique.volley" -> {
                 if (attackerPos == null) {
                     return;
                 }
@@ -1860,7 +2056,7 @@ public final class LoreProcHandler {
                         "SFX_Bow_T2_Signature_Nock",
                         "SFX_Bow_T2_Signature_Nock_Local");
             }
-            case "tooltip.lore.signature.big_arrow" -> {
+            case "tooltip.lore.technique.big_arrow" -> {
                 if (attackerPos == null) {
                     return;
                 }
@@ -1939,12 +2135,9 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
+        if (!LoreWorldTasks.queue(store, () -> playWhirlwindAnimation(store, attackerRef))) {
             playWhirlwindAnimation(store, attackerRef);
-            return;
         }
-        entityStore.getWorld().execute(() -> playWhirlwindAnimation(store, attackerRef));
     }
 
     private static void playWhirlwindAnimation(Store<EntityStore> store,
@@ -1960,7 +2153,7 @@ public final class LoreProcHandler {
             return;
         }
         int swingIndex = nextWhirlwindSwingIndex(player);
-        playSwingAnimation(store, attackerRef, swingIndex);
+        LoreAnimationUtils.playSwingAnimation(store, attackerRef, swingIndex);
     }
 
     private static void queueWhirlwindEffectCleanup(Store<EntityStore> store,
@@ -1981,25 +2174,21 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
+        if (!LoreWorldTasks.queue(store, () -> {
             stopWhirlwindAnimationSlots(attackerRef, store);
             resetWhirlwindIdle(store, attackerRef);
             LoreVisuals.tryRemoveVisualEffectsById(store, attackerRef, SIGNATURE_WHIRLWIND_EFFECT_IDS);
             LoreVisuals.tryRemoveVisualEffectsByContains(store, attackerRef, "whirlwind");
             LoreVisuals.logActiveEffectIds(store, attackerRef, "whirlwind-cleanup");
             clearWhirlwindActive(store, attackerRef);
-            return;
+        })) {
+            stopWhirlwindAnimationSlots(attackerRef, store);
+            resetWhirlwindIdle(store, attackerRef);
+            LoreVisuals.tryRemoveVisualEffectsById(store, attackerRef, SIGNATURE_WHIRLWIND_EFFECT_IDS);
+            LoreVisuals.tryRemoveVisualEffectsByContains(store, attackerRef, "whirlwind");
+            LoreVisuals.logActiveEffectIds(store, attackerRef, "whirlwind-cleanup");
+            clearWhirlwindActive(store, attackerRef);
         }
-        entityStore.getWorld().execute(
-                () -> {
-                    stopWhirlwindAnimationSlots(attackerRef, store);
-                    resetWhirlwindIdle(store, attackerRef);
-                    LoreVisuals.tryRemoveVisualEffectsById(store, attackerRef, SIGNATURE_WHIRLWIND_EFFECT_IDS);
-                    LoreVisuals.tryRemoveVisualEffectsByContains(store, attackerRef, "whirlwind");
-                    LoreVisuals.logActiveEffectIds(store, attackerRef, "whirlwind-cleanup");
-                    clearWhirlwindActive(store, attackerRef);
-                });
     }
 
     private static void stopWhirlwindAnimationSlots(Ref<EntityStore> attackerRef, Store<EntityStore> store) {
@@ -2110,10 +2299,10 @@ public final class LoreProcHandler {
         if (player == null) {
             return;
         }
-        String animSet = resolvePlayerAnimationSet(player);
-        String idleAnim = resolveAnimationIdByContains(animSet, "idle");
+        String animSet = LoreAnimationUtils.resolvePlayerAnimationSet(player);
+        String idleAnim = LoreAnimationUtils.resolveAnimationIdByContains(animSet, "idle");
         if ((idleAnim == null || idleAnim.isBlank()) && !"Battleaxe".equalsIgnoreCase(animSet)) {
-            String battleaxeIdle = resolveAnimationIdByContains("Battleaxe", "idle");
+            String battleaxeIdle = LoreAnimationUtils.resolveAnimationIdByContains("Battleaxe", "idle");
             if (battleaxeIdle != null && !battleaxeIdle.isBlank()) {
                 animSet = "Battleaxe";
                 idleAnim = battleaxeIdle;
@@ -2135,12 +2324,9 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || particleId == null || particleId.isBlank()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
+        if (!LoreWorldTasks.queue(store, () -> applyWhirlwindSpinBurst(store, attackerRef, particleId))) {
             applyWhirlwindSpinBurst(store, attackerRef, particleId);
-            return;
         }
-        entityStore.getWorld().execute(() -> applyWhirlwindSpinBurst(store, attackerRef, particleId));
     }
 
     private static void applyWhirlwindSpinBurst(Store<EntityStore> store,
@@ -2152,7 +2338,7 @@ public final class LoreProcHandler {
         if (!isEntityAlive(store, attackerRef)) {
             return;
         }
-        Vector3d pos = getPosition(store, attackerRef);
+        Vector3d pos = LoreTargetingUtils.getPosition(store, attackerRef);
         if (pos == null) {
             return;
         }
@@ -2168,13 +2354,10 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || particleId == null || particleId.isBlank()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
+        if (!LoreWorldTasks.queue(store, () ->
+                LoreVisuals.spawnSlashParticles(store, attackerRef, defenderRef, particleId, 1.05f))) {
             LoreVisuals.spawnSlashParticles(store, attackerRef, defenderRef, particleId, 1.05f);
-            return;
         }
-        entityStore.getWorld().execute(() ->
-                LoreVisuals.spawnSlashParticles(store, attackerRef, defenderRef, particleId, 1.05f));
     }
 
     private static void applySignatureFallbackDamage(Store<EntityStore> store,
@@ -2184,7 +2367,8 @@ public final class LoreProcHandler {
                                                      Damage damage,
                                                      float fallbackAmount,
                                                      int feedTier,
-                                                     boolean selfIsAttacker) {
+                                                     boolean selfIsAttacker,
+                                                     float damageMultiplier) {
         if (store == null || ability == null) {
             return;
         }
@@ -2194,46 +2378,47 @@ public final class LoreProcHandler {
         }
         switch (type) {
             case APPLY_STUN -> {
-                DamageBaseResult baseResult =
-                        resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-                float base = baseResult.amount;
+                LoreDamageUtils.DamageBaseResult baseResult =
+                        LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
+                float base = baseResult.amount * damageMultiplier;
                 if (base <= 0f) {
                     return;
                 }
                 double pct = clampPercentDamage(LoreAbility.scaleEffectValue(SIGNATURE_GROUNDSLAM_PCT, feedTier), 0.20d, 0.85d);
                 float perTarget = (float) (base * pct);
                 double radius = LoreAbility.scaleRadius(SIGNATURE_GROUNDSLAM_RADIUS, feedTier);
-                applySignatureAoEDamage(store, attackerRef, defenderRef, perTarget, radius, baseResult.skipRefine);
+                applySignatureAoEDamage(store, attackerRef, defenderRef, perTarget, radius, baseResult.skipRefine, feedTier);
             }
             case BERSERK -> {
                 if (isWhirlwindSignature(ability)) {
-                    applyWhirlwindDamageOverTime(store, attackerRef, defenderRef, damage, fallbackAmount, feedTier, selfIsAttacker);
+                    applyWhirlwindDamageOverTime(store, attackerRef, defenderRef, damage, fallbackAmount, feedTier,
+                            selfIsAttacker, damageMultiplier);
                     return;
                 }
-                DamageBaseResult baseResult =
-                        resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-                float base = baseResult.amount;
+                LoreDamageUtils.DamageBaseResult baseResult =
+                        LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
+                float base = baseResult.amount * damageMultiplier;
                 if (base <= 0f) {
                     return;
                 }
                 double pct = clampPercentDamage(LoreAbility.scaleEffectValue(SIGNATURE_WHIRLWIND_PCT, feedTier), 0.15d, 0.70d);
                 float perTarget = (float) (base * pct);
                 double radius = LoreAbility.scaleRadius(SIGNATURE_WHIRLWIND_RADIUS, feedTier);
-                applySignatureAoEDamage(store, attackerRef, defenderRef, perTarget, radius, baseResult.skipRefine);
+                applySignatureAoEDamage(store, attackerRef, defenderRef, perTarget, radius, baseResult.skipRefine, feedTier);
             }
             case APPLY_BLEED -> {
                 if (defenderRef == null) {
                     return;
                 }
-                DamageBaseResult baseResult =
-                        resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-                float base = baseResult.amount;
+                LoreDamageUtils.DamageBaseResult baseResult =
+                        LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
+                float base = baseResult.amount * damageMultiplier;
                 if (base <= 0f) {
                     return;
                 }
                 double pct = clampPercentDamage(LoreAbility.scaleEffectValue(SIGNATURE_RAZORSTRIKE_PCT, feedTier), 0.20d, 0.80d);
                 float perHit = (float) (base * pct);
-                applyCombatDamage(store, attackerRef, defenderRef, perHit, baseResult.skipRefine);
+                LoreDamageUtils.applyLoreDamage(store, attackerRef, defenderRef, perHit, baseResult.skipRefine, feedTier);
             }
             default -> {
                 // Other signature types already deal damage through their main effect.
@@ -2247,13 +2432,14 @@ public final class LoreProcHandler {
                                                      Damage damage,
                                                      float fallbackAmount,
                                                      int feedTier,
-                                                     boolean selfIsAttacker) {
+                                                     boolean selfIsAttacker,
+                                                     float damageMultiplier) {
         if (store == null || attackerRef == null) {
             return;
         }
-        DamageBaseResult baseResult =
-                resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-        float base = baseResult.amount;
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
+        float base = baseResult.amount * damageMultiplier;
         if (base <= 0f) {
             return;
         }
@@ -2265,7 +2451,7 @@ public final class LoreProcHandler {
         for (int i = 0; i < ticks; i++) {
             long delay = i * WHIRLWIND_TICK_MS;
             OMNISLASH_SCHEDULER.schedule(
-                    () -> queueWhirlwindDamageTick(store, attackerRef, perTarget, radius, baseResult.skipRefine),
+                    () -> queueWhirlwindDamageTick(store, attackerRef, perTarget, radius, baseResult.skipRefine, feedTier),
                     delay,
                     TimeUnit.MILLISECONDS);
         }
@@ -2275,75 +2461,30 @@ public final class LoreProcHandler {
                                                  Ref<EntityStore> attackerRef,
                                                  float perTarget,
                                                  double radius,
-                                                 boolean skipRefine) {
+                                                 boolean skipRefine,
+                                                 int feedTier) {
         if (store == null || attackerRef == null || perTarget <= 0f || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            applyWhirlwindDamageTick(store, attackerRef, perTarget, radius, skipRefine);
-            return;
+        if (!LoreWorldTasks.queue(store,
+                () -> applyWhirlwindDamageTick(store, attackerRef, perTarget, radius, skipRefine, feedTier))) {
+            applyWhirlwindDamageTick(store, attackerRef, perTarget, radius, skipRefine, feedTier);
         }
-        entityStore.getWorld().execute(() -> applyWhirlwindDamageTick(store, attackerRef, perTarget, radius, skipRefine));
     }
 
     private static void applyWhirlwindDamageTick(Store<EntityStore> store,
                                                  Ref<EntityStore> attackerRef,
                                                  float perTarget,
                                                  double radius,
-                                                 boolean skipRefine) {
+                                                 boolean skipRefine,
+                                                 int feedTier) {
         if (store == null || attackerRef == null || perTarget <= 0f || store.isShutdown()) {
             return;
         }
         if (!isEntityAlive(store, attackerRef)) {
             return;
         }
-        applySignatureAoEDamage(store, attackerRef, null, perTarget, radius, skipRefine);
-    }
-
-    private static float resolveSignatureDamageBase(Store<EntityStore> store,
-                                                    Ref<EntityStore> attackerRef,
-                                                    boolean selfIsAttacker,
-                                                    Damage damage,
-                                                    float fallbackAmount) {
-        return resolveLoreDamageBase(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-    }
-
-    private static float resolveWeaponDamageBaseForLoreHits(Store<EntityStore> store,
-                                                            Ref<EntityStore> attackerRef,
-                                                            boolean selfIsAttacker,
-                                                            Damage damage,
-                                                            float fallbackAmount) {
-        if (selfIsAttacker && damage != null) {
-            float eventBase = resolveDamageBase(true, damage, fallbackAmount);
-            if (eventBase > 0f) {
-                return eventBase;
-            }
-        }
-        return resolveWeaponRefinedDamage(store, attackerRef, fallbackAmount);
-    }
-
-    private static DamageBaseResult resolveLoreDamageBaseResult(Store<EntityStore> store,
-                                                                Ref<EntityStore> attackerRef,
-                                                                boolean selfIsAttacker,
-                                                                Damage damage,
-                                                                float fallbackAmount) {
-        if (selfIsAttacker) {
-            float rawWeapon = resolveWeaponBaseDamage(store, attackerRef);
-            if (rawWeapon > 0f) {
-                return new DamageBaseResult(rawWeapon, false);
-            }
-            float eventBase = resolveDamageBase(true, damage, fallbackAmount);
-            if (eventBase > 0f) {
-                return new DamageBaseResult(eventBase, true);
-            }
-            return new DamageBaseResult(fallbackAmount, true);
-        }
-        float eventBase = resolveDamageBase(false, damage, fallbackAmount);
-        if (eventBase > 0f) {
-            return new DamageBaseResult(eventBase, true);
-        }
-        return new DamageBaseResult(fallbackAmount, true);
+        applySignatureAoEDamage(store, attackerRef, null, perTarget, radius, skipRefine, feedTier);
     }
 
     private static void applySignatureAoEDamage(Store<EntityStore> store,
@@ -2351,17 +2492,20 @@ public final class LoreProcHandler {
                                                 Ref<EntityStore> targetRef,
                                                 float perTarget,
                                                 double radius,
-                                                boolean skipRefine) {
+                                                boolean skipRefine,
+                                                int feedTier) {
         if (store == null || perTarget <= 0f) {
             return;
         }
         double radiusSq = radius * radius;
-        List<Ref<EntityStore>> targets = collectOmnislashTargets(store, attackerRef, targetRef, radius, radiusSq, "signature");
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, targetRef, radius, radiusSq, "signature",
+                DEBUG_LORE_PROCS, OMNISLASH_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS);
         if (targets.isEmpty()) {
             return;
         }
         for (Ref<EntityStore> target : targets) {
-            applyCombatDamage(store, attackerRef, target, perTarget, skipRefine);
+            LoreDamageUtils.applyLoreDamage(store, attackerRef, target, perTarget, skipRefine, feedTier);
         }
     }
 
@@ -2371,7 +2515,8 @@ public final class LoreProcHandler {
                                           boolean selfIsAttacker,
                                           Damage damage,
                                           double value,
-                                          int feedTier) {
+                                          int feedTier,
+                                          float damageMultiplier) {
         if (store == null || attackerRef == null) {
             return;
         }
@@ -2380,16 +2525,16 @@ public final class LoreProcHandler {
             double lungeDistance = LoreAbility.scaleRadius(VORTEXSTRIKE_LUNGE_DISTANCE, feedTier);
             lungeTowardTarget(store, attackerRef, targetRef, lungeDistance);
         }
-        DamageBaseResult baseResult =
-                resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, (float) value);
-        float base = baseResult.amount;
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, (float) value);
+        float base = baseResult.amount * damageMultiplier;
         if (base <= 0f) {
             return;
         }
         double pct = clampPercentDamage(LoreAbility.scaleEffectValue(value, feedTier), 0.20d, 0.85d);
         float perTarget = (float) (base * pct);
         double radius = LoreAbility.scaleRadius(LoreAbility.BASE_VORTEXSTRIKE_RADIUS, feedTier);
-        applySignatureAoEDamage(store, attackerRef, targetRef, perTarget, radius, baseResult.skipRefine);
+        applySignatureAoEDamage(store, attackerRef, targetRef, perTarget, radius, baseResult.skipRefine, feedTier);
     }
 
     private static void applyVortexstrikeVfx(Store<EntityStore> store,
@@ -2398,14 +2543,12 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null) {
             return;
         }
-        Vector3d attackerPos = getPosition(store, attackerRef);
-        Vector3d targetPos = getPosition(store, targetRef);
+        Vector3d attackerPos = LoreTargetingUtils.getPosition(store, attackerRef);
+        Vector3d targetPos = LoreTargetingUtils.getPosition(store, targetRef);
         Vector3d pos = targetPos != null ? targetPos : attackerPos;
         if (pos != null) {
             LoreVisuals.queueSignatureParticles(store, pos, 1.2f, SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
         }
-        LoreVisuals.tryApplyTimedVisualEffect(store, attackerRef, SIGNATURE_FALLBACK_EFFECT_MS,
-                SIGNATURE_VORTEXSTRIKE_EFFECT_IDS);
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
         LoreVisuals.playSignatureSound(attacker,
                 "SFX_Sword_T2_Signature_Part_1",
@@ -2494,11 +2637,7 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> restoreSignatureEnergy(store, attackerRef, statIndex, originalEnergy));
+        LoreWorldTasks.queue(store, () -> restoreSignatureEnergy(store, attackerRef, statIndex, originalEnergy));
     }
 
     private static void restoreSignatureEnergy(Store<EntityStore> store,
@@ -2522,8 +2661,409 @@ public final class LoreProcHandler {
             return;
         }
         float current = value.get();
-        if (current < originalEnergy) {
-            statMap.addStatValue(statIndex, originalEnergy - current);
+        if (current + 0.01f < originalEnergy) {
+            setSignatureEnergy(statMap, statIndex, originalEnergy);
+        }
+    }
+
+    private static void setSignatureEnergy(EntityStatMap statMap, int statIndex, float value) {
+        if (statMap == null || statIndex < 0) {
+            return;
+        }
+        try {
+            statMap.setStatValue(EntityStatMap.Predictable.NONE, statIndex, value);
+        } catch (Throwable ignored) {
+            statMap.setStatValue(statIndex, value);
+        }
+    }
+
+    private static SignatureEnergyBonus consumeSignatureEnergyBonus(Store<EntityStore> store,
+                                                                    Ref<EntityStore> attackerRef,
+                                                                    LoreAbility ability,
+                                                                    boolean selfIsAttacker,
+                                                                    boolean primaryProc) {
+        if (!primaryProc || !selfIsAttacker || store == null || attackerRef == null || ability == null) {
+            return SignatureEnergyBonus.NONE;
+        }
+        if (!shouldSpendSignatureEnergy(ability)) {
+            return SignatureEnergyBonus.NONE;
+        }
+        EntityStatMap statMap;
+        try {
+            statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        } catch (IllegalStateException ignored) {
+            return SignatureEnergyBonus.NONE;
+        }
+        if (statMap == null) {
+            return SignatureEnergyBonus.NONE;
+        }
+        int signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
+        if (signatureIndex < 0) {
+            return SignatureEnergyBonus.NONE;
+        }
+        EntityStatValue value = statMap.get(signatureIndex);
+        if (value == null) {
+            return SignatureEnergyBonus.NONE;
+        }
+        float current = value.get();
+        if (current <= LORE_SIGNATURE_ENERGY_MIN_SPEND) {
+            return SignatureEnergyBonus.NONE;
+        }
+        float spent = Math.max(0f, current);
+        float bonusPct = Math.min(spent * LORE_SIGNATURE_ENERGY_BONUS_PER_POINT, LORE_SIGNATURE_ENERGY_BONUS_MAX);
+        float multiplier = 1.0f + Math.max(0f, bonusPct);
+        setSignatureEnergy(statMap, signatureIndex, current - spent);
+        if (DEBUG_LORE_PROCS) {
+            LoreDebug.logKv("signature.energy.spend",
+                    "spent", String.format(Locale.ROOT, "%.3f", spent),
+                    "bonusPct", String.format(Locale.ROOT, "%.2f", bonusPct * 100.0f),
+                    "multiplier", String.format(Locale.ROOT, "%.3f", multiplier));
+        }
+        return new SignatureEnergyBonus(spent, multiplier);
+    }
+
+    private static boolean shouldSpendSignatureEnergy(LoreAbility ability) {
+        if (ability == null) {
+            return false;
+        }
+        if (isLoreSignatureStyle(ability)) {
+            return true;
+        }
+        LoreEffectType type = ability.getEffectType();
+        if (type == null) {
+            return false;
+        }
+        return switch (type) {
+            case DAMAGE_TARGET,
+                 MULTI_HIT,
+                 DOUBLE_CAST,
+                 CRIT_CHARGE,
+                 VORTEXSTRIKE,
+                 BERSERK,
+                 CHARGE_ATTACK,
+                 OMNISLASH,
+                 OCTASLASH,
+                 PUMMEL,
+                 BLOOD_RUSH,
+                 APPLY_BURN,
+                 APPLY_BLEED,
+                 APPLY_POISON,
+                 CAUSTIC_FINALE,
+                 SHRAPNEL_FINALE,
+                 BURN_FINALE,
+                 DRAIN_LIFE -> true;
+            default -> false;
+        };
+    }
+
+    private static SignatureEnergySnapshot captureSignatureEnergy(Store<EntityStore> store,
+                                                                  Ref<EntityStore> attackerRef) {
+        if (store == null || attackerRef == null) {
+            return null;
+        }
+        EntityStatMap statMap;
+        try {
+            statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+        if (statMap == null) {
+            return null;
+        }
+        int signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
+        if (signatureIndex < 0) {
+            return null;
+        }
+        EntityStatValue value = statMap.get(signatureIndex);
+        if (value == null) {
+            return null;
+        }
+        return new SignatureEnergySnapshot(signatureIndex, value.get());
+    }
+
+    private static void preserveSignatureEnergyIfConsumed(Store<EntityStore> store,
+                                                          Ref<EntityStore> attackerRef,
+                                                          SignatureEnergySnapshot snapshot,
+                                                          boolean ranSignature) {
+        if (!LORE_PRESERVE_SIGNATURE_ENERGY || ranSignature || snapshot == null) {
+            return;
+        }
+        if (store == null || attackerRef == null) {
+            return;
+        }
+        if (DEBUG_SIGNATURE_ENERGY_TRACE) {
+            scheduleSignatureEnergyTrace(store, attackerRef, snapshot);
+        }
+        scheduleSignatureEnergyVerify(store, attackerRef, snapshot);
+        EntityStatMap statMap;
+        try {
+            statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        } catch (IllegalStateException ignored) {
+            return;
+        }
+        if (statMap == null) {
+            return;
+        }
+        EntityStatValue value = statMap.get(snapshot.statIndex);
+        if (value == null) {
+            return;
+        }
+        float current = value.get();
+        if (Math.abs(current - snapshot.value) > 0.01f) {
+            // Try to restore immediately to avoid visible drops/sounds, then schedule verify.
+            setSignatureEnergy(statMap, snapshot.statIndex, snapshot.value);
+            queueSignatureEnergyRestore(store, attackerRef, snapshot.statIndex, snapshot.value);
+            if (DEBUG_LORE_PROCS) {
+                LoreDebug.logKv("signature.energy.restore",
+                        "from", current,
+                        "to", snapshot.value,
+                        "mode", "immediate");
+            }
+        }
+    }
+
+    private static void scheduleSignatureEnergyTrace(Store<EntityStore> store,
+                                                     Ref<EntityStore> attackerRef,
+                                                     SignatureEnergySnapshot snapshot) {
+        if (store == null || attackerRef == null || snapshot == null) {
+            return;
+        }
+        if (snapshot.value <= 0.01f) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> queueSignatureEnergyTrace(store, attackerRef, snapshot, "trace1"),
+                SIGNATURE_TRACE_DELAY_MS,
+                TimeUnit.MILLISECONDS
+        );
+        OMNISLASH_SCHEDULER.schedule(
+                () -> queueSignatureEnergyTrace(store, attackerRef, snapshot, "trace2"),
+                SIGNATURE_TRACE_DELAY_2_MS,
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    private static void queueSignatureEnergyTrace(Store<EntityStore> store,
+                                                  Ref<EntityStore> attackerRef,
+                                                  SignatureEnergySnapshot snapshot,
+                                                  String label) {
+        if (store == null || attackerRef == null || snapshot == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> checkSignatureEnergyTrace(store, attackerRef, snapshot, label));
+    }
+
+    private static void checkSignatureEnergyTrace(Store<EntityStore> store,
+                                                  Ref<EntityStore> attackerRef,
+                                                  SignatureEnergySnapshot snapshot,
+                                                  String label) {
+        if (store == null || attackerRef == null || snapshot == null || store.isShutdown()) {
+            return;
+        }
+        float current = LoreDamageUtils.getSignatureEnergy(store, attackerRef);
+        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, null, "lore.proc." + label);
+    }
+
+    public static void enforceSignatureEnergyLock(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || attackerRef == null) {
+            return;
+        }
+        Player player;
+        try {
+            player = store.getComponent(attackerRef, Player.getComponentType());
+        } catch (Throwable ignored) {
+            return;
+        }
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUuid();
+        if (playerId == null) {
+            return;
+        }
+        SignatureEnergyLock lock = SIGNATURE_ENERGY_LOCKS.get(playerId);
+        if (lock == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now > lock.until) {
+            SIGNATURE_ENERGY_LOCKS.remove(playerId);
+            return;
+        }
+        EntityStatMap statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        if (statMap == null) {
+            return;
+        }
+        int signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
+        if (signatureIndex < 0) {
+            return;
+        }
+        EntityStatValue value = statMap.get(signatureIndex);
+        if (value == null) {
+            return;
+        }
+        float current = value.get();
+        if (Math.abs(current - lock.value) > 0.01f) {
+            setSignatureEnergy(statMap, signatureIndex, lock.value);
+        }
+    }
+
+    private static void lockSignatureEnergy(Store<EntityStore> store,
+                                            Ref<EntityStore> attackerRef,
+                                            UUID playerId,
+                                            float value) {
+        if (playerId == null || value <= 0.01f || store == null || attackerRef == null) {
+            return;
+        }
+        long until = System.currentTimeMillis() + SIGNATURE_LOCK_MS;
+        SignatureEnergyLock lock = new SignatureEnergyLock(value, until);
+        SIGNATURE_ENERGY_LOCKS.put(playerId, lock);
+        scheduleSignatureEnergyLockTicks(store, attackerRef, playerId, lock);
+    }
+
+    private static final class SignatureEnergyLock {
+        private final float value;
+        private final long until;
+
+        private SignatureEnergyLock(float value, long until) {
+            this.value = value;
+            this.until = until;
+        }
+    }
+
+    private static void scheduleSignatureEnergyLockTicks(Store<EntityStore> store,
+                                                         Ref<EntityStore> attackerRef,
+                                                         UUID playerId,
+                                                         SignatureEnergyLock lock) {
+        if (store == null || attackerRef == null || playerId == null || lock == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long remaining = Math.max(0L, lock.until - now);
+        int ticks = (int) Math.ceil(remaining / (double) SIGNATURE_LOCK_TICK_MS);
+        for (int i = 0; i <= ticks; i++) {
+            long delay = i * SIGNATURE_LOCK_TICK_MS;
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> queueSignatureEnergyLockTick(store, attackerRef, playerId),
+                    delay,
+                    TimeUnit.MILLISECONDS
+            );
+        }
+    }
+
+    private static void queueSignatureEnergyLockTick(Store<EntityStore> store,
+                                                     Ref<EntityStore> attackerRef,
+                                                     UUID playerId) {
+        if (store == null || attackerRef == null || playerId == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> applySignatureEnergyLockTick(store, attackerRef, playerId));
+    }
+
+    private static void applySignatureEnergyLockTick(Store<EntityStore> store,
+                                                     Ref<EntityStore> attackerRef,
+                                                     UUID playerId) {
+        if (store == null || attackerRef == null || playerId == null || store.isShutdown()) {
+            return;
+        }
+        SignatureEnergyLock lock = SIGNATURE_ENERGY_LOCKS.get(playerId);
+        if (lock == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now > lock.until) {
+            SIGNATURE_ENERGY_LOCKS.remove(playerId);
+            return;
+        }
+        EntityStatMap statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        if (statMap == null) {
+            return;
+        }
+        int signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
+        if (signatureIndex < 0) {
+            return;
+        }
+        EntityStatValue value = statMap.get(signatureIndex);
+        if (value == null) {
+            return;
+        }
+        float current = value.get();
+        if (Math.abs(current - lock.value) > 0.01f) {
+            setSignatureEnergy(statMap, signatureIndex, lock.value);
+        }
+    }
+
+    private static void scheduleSignatureEnergyVerify(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      SignatureEnergySnapshot snapshot) {
+        if (store == null || attackerRef == null || snapshot == null) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> queueSignatureEnergyVerify(store, attackerRef, snapshot),
+                SIGNATURE_VERIFY_DELAY_MS,
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    private static void queueSignatureEnergyVerify(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   SignatureEnergySnapshot snapshot) {
+        if (store == null || attackerRef == null || snapshot == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> verifyAndRestoreSignatureEnergy(store, attackerRef, snapshot));
+    }
+
+    private static void verifyAndRestoreSignatureEnergy(Store<EntityStore> store,
+                                                        Ref<EntityStore> attackerRef,
+                                                        SignatureEnergySnapshot snapshot) {
+        if (store == null || attackerRef == null || snapshot == null || store.isShutdown()) {
+            return;
+        }
+        if (isAbility1Active(store, attackerRef)) {
+            return;
+        }
+        EntityStatMap statMap;
+        try {
+            statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        } catch (IllegalStateException ignored) {
+            return;
+        }
+        if (statMap == null) {
+            return;
+        }
+        EntityStatValue value = statMap.get(snapshot.statIndex);
+        if (value == null) {
+            return;
+        }
+        float current = value.get();
+        if (Math.abs(current - snapshot.value) > 0.01f) {
+            setSignatureEnergy(statMap, snapshot.statIndex, snapshot.value);
+            if (DEBUG_LORE_PROCS) {
+                LoreDebug.logKv("signature.energy.restore.delayed", "from", current, "to", snapshot.value);
+            }
+        }
+    }
+
+    private static final class SignatureEnergySnapshot {
+        private final int statIndex;
+        private final float value;
+
+        private SignatureEnergySnapshot(int statIndex, float value) {
+            this.statIndex = statIndex;
+            this.value = value;
+        }
+    }
+
+    private static final class SignatureEnergyBonus {
+        private static final SignatureEnergyBonus NONE = new SignatureEnergyBonus(0f, 1.0f);
+        private final float spent;
+        private final float multiplier;
+
+        private SignatureEnergyBonus(float spent, float multiplier) {
+            this.spent = spent;
+            this.multiplier = multiplier;
         }
     }
 
@@ -2539,7 +3079,7 @@ public final class LoreProcHandler {
         double chance = LoreAbility.scaleProcChance(ability.getProcChance(), feedTier) * 100.0d;
         long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
         String trigger = ability.getTrigger() == null ? "UNKNOWN" : ability.getTrigger().name();
-        String effect = ability.getEffectType() == null ? "UNKNOWN" : ability.getEffectType().name();
+        String effect = resolveLogEffectLabel(ability);
         double value = ability.getValueForLevel(Math.max(0, level));
         String side = selfIsAttacker ? "attacker" : "defender";
         LoreDebug.logKv("proc",
@@ -2553,6 +3093,43 @@ public final class LoreProcHandler {
                 "chancePct", String.format(Locale.ROOT, "%.2f", chance),
                 "cooldownMs", cooldownMs,
                 "side", side);
+    }
+
+    private static String resolveLogEffectLabel(LoreAbility ability) {
+        if (ability == null) {
+            return "UNKNOWN";
+        }
+        String effectType = ability.getEffectType() == null ? "UNKNOWN" : ability.getEffectType().name();
+        String key = ability.getAbilityNameKey();
+        if (key == null || key.isBlank() || !key.startsWith(SIGNATURE_KEY_PREFIX)) {
+            return effectType;
+        }
+        String suffix = key.substring(SIGNATURE_KEY_PREFIX.length());
+        if (suffix.isBlank()) {
+            return effectType;
+        }
+        StringBuilder normalized = new StringBuilder();
+        boolean lastUnderscore = false;
+        for (int i = 0; i < suffix.length(); i++) {
+            char c = suffix.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                normalized.append(Character.toUpperCase(c));
+                lastUnderscore = false;
+            } else if (!lastUnderscore) {
+                normalized.append('_');
+                lastUnderscore = true;
+            }
+        }
+        while (normalized.length() > 0 && normalized.charAt(0) == '_') {
+            normalized.deleteCharAt(0);
+        }
+        while (normalized.length() > 0 && normalized.charAt(normalized.length() - 1) == '_') {
+            normalized.deleteCharAt(normalized.length() - 1);
+        }
+        if (normalized.length() == 0) {
+            return effectType;
+        }
+        return "TECHNIQUE_" + normalized;
     }
 
     private static void scheduleReadyNotification(Store<EntityStore> store,
@@ -2569,7 +3146,7 @@ public final class LoreProcHandler {
             return;
         }
         long readyAt = System.currentTimeMillis() + cooldownMs;
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         long updated = READY_NOTIFICATION_AT.merge(key, readyAt, Math::max);
         if (updated != readyAt) {
             readyAt = updated;
@@ -2593,11 +3170,7 @@ public final class LoreProcHandler {
         if (store == null || playerRef == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> sendReadyNotification(store, playerRef, playerId, spiritId,
+        LoreWorldTasks.queue(store, () -> sendReadyNotification(store, playerRef, playerId, spiritId,
                 ability, feedTier, expectedReadyAt));
     }
 
@@ -2611,7 +3184,7 @@ public final class LoreProcHandler {
         if (store == null || playerRef == null || playerId == null || spiritId == null || ability == null) {
             return;
         }
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         Long scheduledAt = READY_NOTIFICATION_AT.get(key);
         if (scheduledAt == null || scheduledAt.longValue() != expectedReadyAt) {
             return;
@@ -2669,6 +3242,7 @@ public final class LoreProcHandler {
             return;
         }
         NotificationUtil.sendNotification(handler, Message.raw(title), Message.raw(body), NotificationStyle.Success);
+        LoreVisuals.tryApplyTimedVisualEffectOverride(store, playerRef, 900L, READY_WEAPON_EFFECT_IDS);
     }
 
     private static String resolveAbilityDisplayName(LoreAbility ability, String langCode) {
@@ -2719,9 +3293,10 @@ public final class LoreProcHandler {
                                                   double value,
                                                   int hits,
                                                   double minPct,
-                                                  double maxPct) {
+                                                  double maxPct,
+                                                  int feedTier) {
         applyMultiHitSingleTarget(store, attackerRef, targetRef, selfIsAttacker, damage, fallbackAmount, value, hits,
-                minPct, maxPct, null, 1.0f, 0.0d);
+                minPct, maxPct, null, 1.0f, 0.0d, 1.0f, feedTier);
     }
 
     private static void applyMultiHitSingleTarget(Store<EntityStore> store,
@@ -2736,13 +3311,15 @@ public final class LoreProcHandler {
                                                   double maxPct,
                                                   String[] particleIds,
                                                   float finalMultiplier,
-                                                  double rampPerHit) {
+                                                  double rampPerHit,
+                                                  float damageMultiplier,
+                                                  int feedTier) {
         if (store == null || targetRef == null || hits <= 0) {
             return;
         }
-        DamageBaseResult baseResult =
-                resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
-        float base = baseResult.amount;
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, fallbackAmount);
+        float base = baseResult.amount * damageMultiplier;
         if (base <= 0f) {
             return;
         }
@@ -2753,12 +3330,12 @@ public final class LoreProcHandler {
         }
         String particleId = LoreVisuals.resolveParticleEffectId(particleIds);
         if (hits == 1) {
-            applySingleTargetHit(store, attackerRef, targetRef, perHit, 0, baseResult.skipRefine, particleId, 1, finalMultiplier,
-                    rampPerHit);
+            applySingleTargetHit(store, attackerRef, targetRef, perHit, 0, baseResult.skipRefine, particleId, 1,
+                    finalMultiplier, rampPerHit, feedTier);
             return;
         }
         scheduleSingleTargetHits(store, attackerRef, targetRef, perHit, hits, MULTIHIT_HIT_DELAY_MS, baseResult.skipRefine,
-                particleId, finalMultiplier, rampPerHit);
+                particleId, finalMultiplier, rampPerHit, feedTier);
     }
 
     private static void applyChargeAttack(Store<EntityStore> store,
@@ -2768,26 +3345,30 @@ public final class LoreProcHandler {
                                           Damage damage,
                                           float fallbackAmount,
                                           double value,
-                                          int feedTier) {
+                                          int feedTier,
+                                          float damageMultiplier,
+                                          CommandBuffer<EntityStore> commandBuffer) {
         if (store == null || targetRef == null) {
             return;
         }
-        float base = resolveDamageBase(selfIsAttacker, damage, fallbackAmount);
+        float base = LoreDamageUtils.resolveDamageBase(selfIsAttacker, damage, fallbackAmount);
         if (base <= 0f) {
             return;
         }
         float chargeBase = resolveChargeAttackBase(store, attackerRef, base);
+        chargeBase *= damageMultiplier;
         double pct = clampPercentDamage(value, 0.25d, 0.85d);
         float perHit = (float) (chargeBase * pct);
         if (perHit <= 0f) {
             return;
         }
+        trySpawnStaffProjectile(store, attackerRef, commandBuffer);
         int hits = resolveFeedScaledHits(CHARGE_ATTACK_BASE_HITS, CHARGE_ATTACK_MAX_HITS, feedTier);
         if (hits <= 1) {
-            applyChargeAttackHit(store, attackerRef, targetRef, perHit, 0);
+            applyChargeAttackHit(store, attackerRef, targetRef, perHit, 0, feedTier);
             return;
         }
-        scheduleChargeAttackHits(store, attackerRef, targetRef, perHit, hits, CHARGE_ATTACK_HIT_DELAY_MS);
+        scheduleChargeAttackHits(store, attackerRef, targetRef, perHit, hits, CHARGE_ATTACK_HIT_DELAY_MS, feedTier);
     }
 
     private static int resolveFeedScaledHits(int baseHits, int maxHits, int feedTier) {
@@ -2979,7 +3560,7 @@ public final class LoreProcHandler {
             return false;
         }
         String key = ability.getAbilityNameKey();
-        if (key != null && key.equalsIgnoreCase("tooltip.lore.signature.groundslam")) {
+        if (key != null && key.equalsIgnoreCase("tooltip.lore.technique.groundslam")) {
             return true;
         }
         String fallback = ability.getAbilityNameFallback();
@@ -3140,9 +3721,6 @@ public final class LoreProcHandler {
         if (ability == null) {
             return false;
         }
-        if (isSignatureAbility(ability)) {
-            return true;
-        }
         LoreEffectType type = ability.getEffectType();
         if (type == null) {
             return false;
@@ -3241,7 +3819,7 @@ public final class LoreProcHandler {
             return false;
         }
         long now = System.currentTimeMillis();
-        String key = playerId + "|" + normalizeSpiritId(spiritId);
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
         Long until = COOLDOWNS.get(key);
         if (until != null && now < until) {
             return false;
@@ -3261,12 +3839,12 @@ public final class LoreProcHandler {
         if (pending == null || pending.isEmpty() || spiritId == null || spiritId.isBlank()) {
             return false;
         }
-        String normalized = normalizeSpiritId(spiritId);
+        String normalized = LoreIds.normalizeSpiritId(spiritId);
         for (PendingLoreProc proc : pending) {
             if (proc == null || proc.spiritId == null) {
                 continue;
             }
-            if (normalized.equals(normalizeSpiritId(proc.spiritId))) {
+            if (normalized.equals(LoreIds.normalizeSpiritId(proc.spiritId))) {
                 return true;
             }
         }
@@ -3281,12 +3859,15 @@ public final class LoreProcHandler {
                                        boolean skipRefine,
                                        int totalHits,
                                        double radius,
-                                       float finalMultiplier) {
+                                       float finalMultiplier,
+                                       int feedTier) {
         if (store == null || perHit <= 0f) {
             return;
         }
         double radiusSq = radius * radius;
-        List<Ref<EntityStore>> targets = collectOmnislashTargets(store, attackerRef, targetRef, radius, radiusSq, "omnislash");
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, targetRef, radius, radiusSq, "omnislash",
+                DEBUG_LORE_PROCS, OMNISLASH_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS);
         LoreDebug.logKv("omnislash.scan",
                 "targets", targets.size(),
                 "radius", String.format(Locale.ROOT, "%.2f", radius),
@@ -3300,7 +3881,7 @@ public final class LoreProcHandler {
         }
         String slashParticleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
         OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, teleportAttacker,
-                skipRefine, totalHits, slashParticleId, finalMultiplier);
+                skipRefine, totalHits, slashParticleId, finalMultiplier, feedTier);
         scheduleOmnislash(sequence);
     }
 
@@ -3322,11 +3903,7 @@ public final class LoreProcHandler {
         if (store == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> applyOmnislashHit(sequence));
+        LoreWorldTasks.queue(store, () -> applyOmnislashHit(sequence));
     }
 
     private static void applyOmnislashHit(OmnislashSequence sequence) {
@@ -3349,7 +3926,7 @@ public final class LoreProcHandler {
             teleportToTarget(store, sequence.attackerRef, targetRef);
         }
         int hitIndex = sequence.hitsApplied;
-        playSwingAnimation(store, sequence.attackerRef, hitIndex);
+        LoreAnimationUtils.playSwingAnimation(store, sequence.attackerRef, hitIndex);
         if (sequence.slashParticleId != null) {
             LoreVisuals.spawnSlashParticles(store, sequence.attackerRef, targetRef, sequence.slashParticleId, 1.05f);
         }
@@ -3363,7 +3940,8 @@ public final class LoreProcHandler {
             }
         }
         float actualPerHit = sequence.perHit * multiplier;
-        applyCombatDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine);
+        LoreDamageUtils.applyLoreDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine,
+                sequence.feedTier);
         tryApplyGroundslamAugment(store, sequence.attackerRef, targetRef);
         sequence.hitsApplied++;
     }
@@ -3375,7 +3953,7 @@ public final class LoreProcHandler {
                                                  int hits,
                                                  long delayMs,
                                                  boolean skipRefine) {
-        scheduleSingleTargetHits(store, attackerRef, targetRef, perHit, hits, delayMs, skipRefine, null, 1.0f, 0.0d);
+        scheduleSingleTargetHits(store, attackerRef, targetRef, perHit, hits, delayMs, skipRefine, null, 1.0f, 0.0d, 0);
     }
 
     private static void scheduleSingleTargetHits(Store<EntityStore> store,
@@ -3387,7 +3965,8 @@ public final class LoreProcHandler {
                                                  boolean skipRefine,
                                                  String particleId,
                                                  float finalMultiplier,
-                                                 double rampPerHit) {
+                                                 double rampPerHit,
+                                                 int feedTier) {
         if (store == null || targetRef == null || perHit <= 0f || hits <= 0) {
             return;
         }
@@ -3396,7 +3975,7 @@ public final class LoreProcHandler {
             long delay = i * spacing;
             int hitIndex = i;
             OMNISLASH_SCHEDULER.schedule(() -> queueSingleTargetHit(store, attackerRef, targetRef, perHit, hitIndex,
-                            skipRefine, particleId, hits, finalMultiplier, rampPerHit),
+                            skipRefine, particleId, hits, finalMultiplier, rampPerHit, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
     }
@@ -3410,16 +3989,13 @@ public final class LoreProcHandler {
                                              String particleId,
                                              int totalHits,
                                              float finalMultiplier,
-                                             double rampPerHit) {
+                                             double rampPerHit,
+                                             int feedTier) {
         if (store == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> applySingleTargetHit(store, attackerRef, targetRef, perHit, hitIndex,
-                skipRefine, particleId, totalHits, finalMultiplier, rampPerHit));
+        LoreWorldTasks.queue(store, () -> applySingleTargetHit(store, attackerRef, targetRef, perHit, hitIndex,
+                skipRefine, particleId, totalHits, finalMultiplier, rampPerHit, feedTier));
     }
 
     private static void scheduleTrailParticles(Store<EntityStore> store,
@@ -3449,11 +4025,7 @@ public final class LoreProcHandler {
         if (store == null || store.isShutdown() || sourceRef == null || particleId == null) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> spawnTrailParticle(store, sourceRef, particleId));
+        LoreWorldTasks.queue(store, () -> spawnTrailParticle(store, sourceRef, particleId));
     }
 
     private static void spawnTrailParticle(Store<EntityStore> store,
@@ -3462,7 +4034,7 @@ public final class LoreProcHandler {
         if (store == null || sourceRef == null || particleId == null || particleId.isBlank()) {
             return;
         }
-        Vector3d pos = getPosition(store, sourceRef);
+        Vector3d pos = LoreTargetingUtils.getPosition(store, sourceRef);
         if (pos == null) {
             return;
         }
@@ -3483,6 +4055,20 @@ public final class LoreProcHandler {
         }
     }
 
+    private static void spawnHitParticle(Store<EntityStore> store,
+                                         Ref<EntityStore> attackerRef,
+                                         Ref<EntityStore> targetRef,
+                                         String[] particleIds) {
+        if (store == null || targetRef == null) {
+            return;
+        }
+        String particleId = LoreVisuals.resolveParticleEffectId(particleIds);
+        if (particleId == null) {
+            return;
+        }
+        LoreVisuals.spawnSlashParticles(store, attackerRef, targetRef, particleId, 1.15f);
+    }
+
     private static void applySingleTargetHit(Store<EntityStore> store,
                                              Ref<EntityStore> attackerRef,
                                              Ref<EntityStore> targetRef,
@@ -3492,7 +4078,8 @@ public final class LoreProcHandler {
                                              String particleId,
                                              int totalHits,
                                              float finalMultiplier,
-                                             double rampPerHit) {
+                                             double rampPerHit,
+                                             int feedTier) {
         if (store == null || targetRef == null || perHit <= 0f || store.isShutdown()) {
             return;
         }
@@ -3509,11 +4096,11 @@ public final class LoreProcHandler {
             }
         }
         float actualPerHit = perHit * multiplier;
-        playSwingAnimation(store, attackerRef, hitIndex);
+        LoreAnimationUtils.playSwingAnimation(store, attackerRef, hitIndex);
         if (particleId != null) {
             LoreVisuals.spawnSlashParticles(store, attackerRef, targetRef, particleId, 1.0f);
         }
-        applyCombatDamage(store, attackerRef, targetRef, actualPerHit, skipRefine);
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, actualPerHit, skipRefine, feedTier);
         tryApplyGroundslamAugment(store, attackerRef, targetRef);
     }
 
@@ -3522,7 +4109,8 @@ public final class LoreProcHandler {
                                                  Ref<EntityStore> targetRef,
                                                  float perHit,
                                                  int hits,
-                                                 long delayMs) {
+                                                 long delayMs,
+                                                 int feedTier) {
         if (store == null || targetRef == null || perHit <= 0f || hits <= 0) {
             return;
         }
@@ -3530,7 +4118,8 @@ public final class LoreProcHandler {
         for (int i = 0; i < hits; i++) {
             long delay = i * spacing;
             int hitIndex = i;
-            OMNISLASH_SCHEDULER.schedule(() -> queueChargeAttackHit(store, attackerRef, targetRef, perHit, hitIndex),
+            OMNISLASH_SCHEDULER.schedule(() -> queueChargeAttackHit(store, attackerRef, targetRef, perHit, hitIndex,
+                            feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
     }
@@ -3539,313 +4128,29 @@ public final class LoreProcHandler {
                                              Ref<EntityStore> attackerRef,
                                              Ref<EntityStore> targetRef,
                                              float perHit,
-                                             int hitIndex) {
+                                             int hitIndex,
+                                             int feedTier) {
         if (store == null || store.isShutdown()) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> applyChargeAttackHit(store, attackerRef, targetRef, perHit, hitIndex));
+        LoreWorldTasks.queue(store, () -> applyChargeAttackHit(store, attackerRef, targetRef, perHit, hitIndex, feedTier));
     }
 
     private static void applyChargeAttackHit(Store<EntityStore> store,
                                              Ref<EntityStore> attackerRef,
                                              Ref<EntityStore> targetRef,
                                              float perHit,
-                                             int hitIndex) {
+                                             int hitIndex,
+                                             int feedTier) {
         if (store == null || targetRef == null || perHit <= 0f || store.isShutdown()) {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
             return;
         }
-        playChargeAttackAnimation(store, attackerRef, hitIndex);
-        applyCombatDamage(store, attackerRef, targetRef, perHit, false);
+        LoreAnimationUtils.playChargeAttackAnimation(store, attackerRef, hitIndex);
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, perHit, false, feedTier);
         tryApplyGroundslamAugment(store, attackerRef, targetRef);
-    }
-
-    private static void playSwingAnimation(Store<EntityStore> store,
-                                           Ref<EntityStore> attackerRef,
-                                           int swingIndex) {
-        if (store == null || attackerRef == null) {
-            return;
-        }
-        Player player = store.getComponent(attackerRef, Player.getComponentType());
-        if (player == null) {
-            return;
-        }
-        String animSet = resolvePlayerAnimationSet(player);
-        String anim = resolveSwingAnimationId(animSet, swingIndex);
-        if (anim == null) {
-            ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-            String fallbackSet = resolveFallbackAnimationSet(stack);
-            if (fallbackSet != null && !fallbackSet.equalsIgnoreCase(animSet)) {
-                String fallbackAnim = resolveSwingAnimationId(fallbackSet, swingIndex);
-                if (fallbackAnim != null) {
-                    animSet = fallbackSet;
-                    anim = fallbackAnim;
-                }
-            }
-        }
-        if (anim != null) {
-            try {
-                AnimationUtils.playAnimation(attackerRef, AnimationSlot.Action, animSet, anim, true, store);
-            } catch (Throwable ignored) {
-                // best-effort
-            }
-        }
-        playSwingSound(store, player);
-    }
-
-    private static String resolveSwingAnimationId(String animSet, int swingIndex) {
-        if (animSet == null || animSet.isBlank()) {
-            return null;
-        }
-        boolean left = swingIndex % 2 == 0;
-        String anim = resolveAnimationId(
-                animSet,
-                left ? "SwingLeft" : "SwingRight",
-                left ? "SwingLeftCharged" : "SwingRightCharged",
-                left ? "SwingLeftAttack" : "SwingRightAttack",
-                left ? "AttackLeft" : "AttackRight",
-                "Attack",
-                "Swing",
-                "Slash",
-                "Strike",
-                "Stab"
-        );
-        if (anim != null) {
-            return anim;
-        }
-        anim = resolveAnimationIdByContains(animSet, "swing");
-        if (anim != null) {
-            return anim;
-        }
-        anim = resolveAnimationIdByContains(animSet, "attack");
-        if (anim != null) {
-            return anim;
-        }
-        anim = resolveAnimationIdByContains(animSet, "slash");
-        if (anim != null) {
-            return anim;
-        }
-        anim = resolveAnimationIdByContains(animSet, "strike");
-        if (anim != null) {
-            return anim;
-        }
-        return resolveAnimationIdByContains(animSet, "stab");
-    }
-
-    private static String resolveFallbackAnimationSet(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return "Item";
-        }
-        Item item = stack.getItem();
-        String animId = item == null ? null : item.getPlayerAnimationsId();
-        String key = animId != null && !animId.isBlank() ? animId : stack.getItemId();
-        if (key == null || key.isBlank()) {
-            return "Item";
-        }
-        String lower = key.toLowerCase(Locale.ROOT);
-        if (lower.contains("battleaxe")) {
-            return "Battleaxe";
-        }
-        if (lower.contains("mace") || lower.contains("hammer") || lower.contains("club")) {
-            return "Mace";
-        }
-        if (lower.contains("dagger") || lower.contains("daggers") || lower.contains("knife") || lower.contains("claw")) {
-            return "Daggers";
-        }
-        if (lower.contains("sword") || lower.contains("sabre") || lower.contains("rapier")) {
-            return "Sword";
-        }
-        if (lower.contains("axe")) {
-            return "Axe";
-        }
-        return "Item";
-    }
-
-    private static void playChargeAttackAnimation(Store<EntityStore> store,
-                                                  Ref<EntityStore> attackerRef,
-                                                  int swingIndex) {
-        if (store == null || attackerRef == null) {
-            return;
-        }
-        Player player = store.getComponent(attackerRef, Player.getComponentType());
-        if (player == null) {
-            return;
-        }
-        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-        String anim = resolveChargeAnimationId(stack, swingIndex);
-        if (anim == null || anim.isBlank()) {
-            playSwingAnimation(store, attackerRef, swingIndex);
-            return;
-        }
-        try {
-            String animSet = resolvePlayerAnimationSet(player);
-            AnimationUtils.playAnimation(attackerRef, AnimationSlot.Action, animSet, anim, true, store);
-        } catch (Throwable ignored) {
-            playSwingAnimation(store, attackerRef, swingIndex);
-            return;
-        }
-        playChargeSound(store, player);
-    }
-
-    private static String resolvePlayerAnimationSet(Player player) {
-        if (player == null) {
-            return "Item";
-        }
-        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-        if (stack == null || stack.isEmpty()) {
-            return "Item";
-        }
-        Item item = stack.getItem();
-        String animId = item == null ? null : item.getPlayerAnimationsId();
-        if (animId == null || animId.isBlank()) {
-            return "Item";
-        }
-        return animId;
-    }
-
-    private static String resolveAnimationId(String animSet, String... animIds) {
-        if (animSet == null || animSet.isBlank() || animIds == null || animIds.length == 0) {
-            return null;
-        }
-        try {
-            var assetMap = com.hypixel.hytale.server.core.asset.type.itemanimation.config.ItemPlayerAnimations.getAssetMap();
-            if (assetMap != null) {
-                var anims = assetMap.getAsset(animSet);
-                if (anims != null) {
-                    var map = anims.getAnimations();
-                    if (map != null) {
-                        for (String animId : animIds) {
-                            if (animId == null || animId.isBlank()) {
-                                continue;
-                            }
-                            if (map.containsKey(animId)) {
-                                return animId;
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-            // best-effort
-        }
-        return null;
-    }
-
-    private static void playSwingSound(Store<EntityStore> store, Player player) {
-        if (store == null || player == null) {
-            return;
-        }
-        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-        String soundId = resolveSwingSoundId(stack);
-        if (soundId == null || soundId.isBlank()) {
-            return;
-        }
-        int soundIndex = SoundEvent.getAssetMap().getIndex(soundId);
-        if (soundIndex < 0) {
-            LoreDebug.logKv("sound.missing", "id", soundId);
-            return;
-        }
-        try {
-            SoundUtil.playSoundEvent2dToPlayer(player.getPlayerRef(), soundIndex, SoundCategory.SFX);
-        } catch (Throwable ignored) {
-            // best-effort
-        }
-    }
-
-    private static void playChargeSound(Store<EntityStore> store, Player player) {
-        if (store == null || player == null) {
-            return;
-        }
-        int soundIndex = SoundEvent.getAssetMap().getIndex("SFX_Weapon_Charge_Swing");
-        if (soundIndex >= 0) {
-            try {
-                SoundUtil.playSoundEvent2dToPlayer(player.getPlayerRef(), soundIndex, SoundCategory.SFX);
-                return;
-            } catch (Throwable ignored) {
-                // fallback below
-            }
-        }
-        playSwingSound(store, player);
-    }
-
-    private static String resolveSwingSoundId(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return "SFX_Unarmed_Swing";
-        }
-        Item item = stack.getItem();
-        String animId = item == null ? null : item.getPlayerAnimationsId();
-        String key = animId != null && !animId.isBlank() ? animId : stack.getItemId();
-        if (key == null || key.isBlank()) {
-            return "SFX_Unarmed_Swing";
-        }
-        String lower = key.toLowerCase(Locale.ROOT);
-        if (lower.contains("longsword")) {
-            return "SFX_Longsword_Special_Swing";
-        }
-        if (lower.contains("battleaxe")) {
-            return "SFX_Battleaxe_T2_Swing";
-        }
-        if (lower.contains("axe")) {
-            return "SFX_Axe_Iron_Swing";
-        }
-        if (lower.contains("mace") || lower.contains("hammer") || lower.contains("club")) {
-            return "SFX_Mace_T1_Swing";
-        }
-        if (lower.contains("spear") || lower.contains("staff") || lower.contains("polearm")) {
-            return "SFX_Light_Melee_T1_Swing";
-        }
-        if (lower.contains("dagger") || lower.contains("daggers") || lower.contains("knife") || lower.contains("claw")) {
-            return "SFX_Sword_T1_Swing";
-        }
-        if (lower.contains("sword") || lower.contains("sabre") || lower.contains("rapier")) {
-            return "SFX_Sword_T1_Swing";
-        }
-        return "SFX_Unarmed_Swing";
-    }
-
-    private static String resolveChargeAnimationId(ItemStack stack, int swingIndex) {
-        boolean left = swingIndex % 2 == 0;
-        if (stack == null || stack.isEmpty()) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        Item item = stack.getItem();
-        String animId = item == null ? null : item.getPlayerAnimationsId();
-        String key = animId != null && !animId.isBlank() ? animId : stack.getItemId();
-        if (key == null) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        String lower = key.toLowerCase(Locale.ROOT);
-        if (lower.contains("dagger")) {
-            return left ? "StabDoubleCharged" : "LungeDoubleCharged";
-        }
-        if (lower.contains("spear")) {
-            return "ThrowCharged";
-        }
-        if (lower.contains("staff")) {
-            return "CastSummonCharged";
-        }
-        if (lower.contains("bow") || lower.contains("crossbow")) {
-            return "ShootCharged";
-        }
-        if (lower.contains("mace") || lower.contains("hammer") || lower.contains("club")) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        if (lower.contains("battleaxe")) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        if (lower.contains("axe")) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        if (lower.contains("sword") || lower.contains("sabre") || lower.contains("rapier")) {
-            return left ? "SwingLeftCharged" : "SwingRightCharged";
-        }
-        return left ? "SwingLeftCharged" : "SwingRightCharged";
     }
 
     private static float resolveChargeAttackBase(Store<EntityStore> store,
@@ -3880,6 +4185,336 @@ public final class LoreProcHandler {
             }
         }
         return (float) chargedBase;
+    }
+
+    private static void trySpawnStaffProjectile(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || attackerRef == null || commandBuffer == null || store.isShutdown()) {
+            return;
+        }
+        Player player = store.getComponent(attackerRef, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
+        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+        Item item = stack.getItem();
+        if (item == null || item == Item.UNKNOWN) {
+            return;
+        }
+        ProjectileConfig config = resolveStaffProjectileConfig(item);
+        if (config == null) {
+            return;
+        }
+        spawnStaffProjectile(store, attackerRef, commandBuffer, config);
+    }
+
+    private static void spawnStaffProjectile(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             CommandBuffer<EntityStore> commandBuffer,
+                                             ProjectileConfig config) {
+        if (store == null || attackerRef == null || commandBuffer == null || config == null) {
+            return;
+        }
+        TransformComponent transform = store.getComponent(attackerRef, TransformComponent.getComponentType());
+        if (transform == null || transform.getPosition() == null) {
+            return;
+        }
+        Vector3d basePos = transform.getPosition().clone();
+        Vector3f rotation = resolveLookRotation(transform);
+        if (rotation == null) {
+            rotation = new Vector3f(0f, 0f, 0f);
+        }
+        try {
+            Vector3d offset = config.getCalculatedOffset(rotation.getYaw(), rotation.getPitch());
+            if (offset != null) {
+                basePos.add(offset);
+            }
+        } catch (Throwable ignored) {
+            // best-effort, fall back to base position
+        }
+
+        Vector3d direction = null;
+        try {
+            Transform look = new Transform(basePos.clone(), rotation);
+            direction = look.getDirection();
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+        if (direction == null || direction.length() < 0.001d) {
+            direction = new Vector3d(0.0d, 0.0d, 1.0d);
+        } else {
+            direction.normalize();
+        }
+        double speed = config.getMuzzleVelocity();
+        if (speed <= 0.01d) {
+            speed = config.getLaunchForce();
+        }
+        if (speed <= 0.01d) {
+            speed = STAFF_PROJECTILE_FALLBACK_SPEED;
+        }
+        Vector3d velocity = direction.clone().scale(speed);
+
+        try {
+            ProjectileModule module = ProjectileModule.get();
+            if (module != null) {
+                module.spawnProjectile(attackerRef, commandBuffer, config, basePos, velocity);
+            }
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+    }
+
+    private static ProjectileConfig resolveStaffProjectileConfig(Item item) {
+        if (item == null || item == Item.UNKNOWN) {
+            return null;
+        }
+        String itemId = item.getId();
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        ProjectileConfig cached = STAFF_PROJECTILE_CONFIGS.get(itemId);
+        if (cached != null) {
+            return cached;
+        }
+        if (STAFF_PROJECTILE_MISSES.contains(itemId)) {
+            return null;
+        }
+        Map<String, String> interactionVars = item.getInteractionVars();
+        if (!looksLikeStaffItem(item, interactionVars)) {
+            STAFF_PROJECTILE_MISSES.add(itemId);
+            return null;
+        }
+        Set<String> seedIds = new java.util.LinkedHashSet<>();
+        collectStaffInteractionSeeds(interactionVars, seedIds);
+        if (seedIds.isEmpty()) {
+            STAFF_PROJECTILE_MISSES.add(itemId);
+            return null;
+        }
+        ProjectileConfig config = findProjectileConfigFromInteractions(seedIds, interactionVars);
+        if (config != null) {
+            STAFF_PROJECTILE_CONFIGS.put(itemId, config);
+            return config;
+        }
+        STAFF_PROJECTILE_MISSES.add(itemId);
+        return null;
+    }
+
+    private static boolean looksLikeStaffItem(Item item, Map<String, String> interactionVars) {
+        if (item == null) {
+            return false;
+        }
+        String itemId = item.getId();
+        if (itemId != null && itemId.toLowerCase(Locale.ROOT).contains("staff")) {
+            return true;
+        }
+        String animationId = item.getPlayerAnimationsId();
+        if (animationId != null && animationId.toLowerCase(Locale.ROOT).contains("staff")) {
+            return true;
+        }
+        if (interactionVars == null || interactionVars.isEmpty()) {
+            return false;
+        }
+        for (Map.Entry<String, String> entry : interactionVars.entrySet()) {
+            String key = entry.getKey();
+            if (key != null && key.toLowerCase(Locale.ROOT).contains("staff")) {
+                return true;
+            }
+            String value = entry.getValue();
+            if (value != null && value.toLowerCase(Locale.ROOT).contains("staff")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void collectStaffInteractionSeeds(Map<String, String> interactionVars, Set<String> out) {
+        if (interactionVars != null) {
+            for (Map.Entry<String, String> entry : interactionVars.entrySet()) {
+                String value = entry.getValue();
+                if (value != null && !value.isBlank()) {
+                    out.add(value);
+                }
+                String key = entry.getKey();
+                if (key != null && key.toLowerCase(Locale.ROOT).contains("staff")) {
+                    out.add(key);
+                }
+            }
+        }
+        out.add("Staff_Cast_Summon_Launch");
+        out.add("Staff_Cast_Launch");
+    }
+
+    private static ProjectileConfig findProjectileConfigFromInteractions(Set<String> seedIds,
+                                                                         Map<String, String> interactionVars) {
+        if (seedIds == null || seedIds.isEmpty()) {
+            return null;
+        }
+        InteractionContext context = InteractionContext.withoutEntity();
+        if (interactionVars != null && !interactionVars.isEmpty()) {
+            context.setInteractionVarsGetter(ctx -> interactionVars);
+        }
+        Deque<String> pending = new ArrayDeque<>(seedIds);
+        Set<String> visited = new java.util.HashSet<>();
+        while (!pending.isEmpty() && visited.size() < STAFF_PROJECTILE_INTERACTION_LIMIT) {
+            String interactionId = pending.removeFirst();
+            if (interactionId == null || interactionId.isBlank()) {
+                continue;
+            }
+            if (!visited.add(interactionId)) {
+                continue;
+            }
+            Interaction interaction = Interaction.getInteractionOrUnknown(interactionId);
+            if (interaction == null || interaction.isUnknown()) {
+                continue;
+            }
+            ProjectileConfig config = findProjectileConfig(interaction, context);
+            if (config != null) {
+                return config;
+            }
+            Set<String> chainedIds = new java.util.LinkedHashSet<>();
+            collectChainedInteractionIds(interaction, chainedIds);
+            for (String chainedId : chainedIds) {
+                if (chainedId == null || chainedId.isBlank()) {
+                    continue;
+                }
+                if (!visited.contains(chainedId)) {
+                    pending.addLast(chainedId);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ProjectileConfig findProjectileConfig(Interaction interaction, InteractionContext context) {
+        if (interaction == null) {
+            return null;
+        }
+        ProjectileCollector collector = new ProjectileCollector();
+        try {
+            interaction.walk(collector, context);
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+        return collector.config;
+    }
+
+    private static final class ProjectileCollector implements Collector {
+        private ProjectileConfig config;
+
+        @Override
+        public void start() {}
+
+        @Override
+        public void into(InteractionContext context, Interaction interaction) {}
+
+        @Override
+        public boolean collect(CollectorTag tag, InteractionContext context, Interaction interaction) {
+            if (config != null || interaction == null) {
+                return false;
+            }
+            if (interaction instanceof LaunchProjectileInteraction launch) {
+                config = resolveProjectileConfig(launch.getProjectileId());
+            } else if (interaction instanceof ProjectileInteraction projectile) {
+                config = projectile.getConfig();
+            }
+            return config == null;
+        }
+
+        @Override
+        public void outof() {}
+
+        @Override
+        public void finished() {}
+    }
+
+    private static ProjectileConfig resolveProjectileConfig(String projectileId) {
+        if (projectileId == null || projectileId.isBlank()) {
+            return null;
+        }
+        try {
+            return ProjectileConfig.getAssetMap().getAsset(projectileId);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void collectChainedInteractionIds(Object source, Set<String> out) {
+        if (source == null || out == null) {
+            return;
+        }
+        for (Field field : getAllFields(source.getClass())) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            try {
+                field.setAccessible(true);
+                Object value = field.get(source);
+                if (value instanceof String stringValue) {
+                    if (!stringValue.isBlank()) {
+                        out.add(stringValue);
+                    }
+                } else if (value instanceof String[] arrayValue) {
+                    for (String entry : arrayValue) {
+                        if (entry != null && !entry.isBlank()) {
+                            out.add(entry);
+                        }
+                    }
+                } else if (value instanceof Map<?, ?> mapValue) {
+                    for (Object key : mapValue.keySet()) {
+                        if (key instanceof String stringKey && !stringKey.isBlank()) {
+                            out.add(stringKey);
+                        }
+                    }
+                    for (Object mapEntryValue : mapValue.values()) {
+                        if (mapEntryValue instanceof String stringMapValue && !stringMapValue.isBlank()) {
+                            out.add(stringMapValue);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Ignore inaccessible/invalid fields.
+            }
+        }
+    }
+
+    private static List<Field> getAllFields(Class<?> type) {
+        List<Field> fields = new ArrayList<>();
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            Field[] declared = current.getDeclaredFields();
+            for (Field field : declared) {
+                fields.add(field);
+            }
+            current = current.getSuperclass();
+        }
+        return fields;
+    }
+
+    private static Vector3f resolveLookRotation(TransformComponent transform) {
+        if (transform == null) {
+            return null;
+        }
+        ModelTransform sentTransform = transform.getSentTransform();
+        if (sentTransform != null && sentTransform.lookOrientation != null) {
+            return toRotationVector(sentTransform.lookOrientation);
+        }
+        Vector3f rotation = transform.getRotation();
+        return rotation == null ? null : rotation.clone();
+    }
+
+    private static Vector3f toRotationVector(Direction direction) {
+        if (direction == null) {
+            return null;
+        }
+        Vector3f rotation = new Vector3f();
+        rotation.setPitch(direction.pitch);
+        rotation.setYaw(direction.yaw);
+        rotation.setRoll(direction.roll);
+        return rotation;
     }
 
     private static Ref<EntityStore> selectOmnislashTarget(Store<EntityStore> store, OmnislashSequence sequence) {
@@ -3974,10 +4609,7 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || dest == null || rotation == null) {
             return;
         }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore != null && entityStore.getWorld() != null) {
-            entityStore.getWorld().execute(() -> applyTeleportInternal(store, attackerRef, dest, rotation));
-        } else {
+        if (!LoreWorldTasks.queue(store, () -> applyTeleportInternal(store, attackerRef, dest, rotation))) {
             applyTeleportInternal(store, attackerRef, dest, rotation);
         }
     }
@@ -4013,10 +4645,7 @@ public final class LoreProcHandler {
             return;
         }
         Vector3d applied = direction.clone().normalize().scale(force);
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore != null && entityStore.getWorld() != null) {
-            entityStore.getWorld().execute(() -> applyLungeForceInternal(store, attackerRef, applied));
-        } else {
+        if (!LoreWorldTasks.queue(store, () -> applyLungeForceInternal(store, attackerRef, applied))) {
             applyLungeForceInternal(store, attackerRef, applied);
         }
     }
@@ -4035,586 +4664,6 @@ public final class LoreProcHandler {
             return;
         }
         velocity.addInstruction(force, VORTEXSTRIKE_LUNGE_CONFIG, com.hypixel.hytale.protocol.ChangeVelocityType.Add);
-    }
-
-    private static List<Ref<EntityStore>> collectOmnislashTargets(Store<EntityStore> store,
-                                                                  Ref<EntityStore> attackerRef,
-                                                                  Ref<EntityStore> targetRef,
-                                                                  double radius,
-                                                                  double radiusSq,
-                                                                  String debugLabel) {
-        List<Ref<EntityStore>> targets = new ArrayList<>();
-        if (targetRef != null) {
-            targets.add(targetRef);
-        }
-        Vector3d center = resolveCenterPosition(store, targetRef, attackerRef);
-        if (center == null) {
-            return targets;
-        }
-
-        boolean usedSpatial = collectTargetsFromNpcSpatialResource(store, attackerRef, targetRef, center, radius, targets, debugLabel);
-        final int[] inspected = new int[]{0};
-        if (!usedSpatial) {
-            var npcType = NPCEntity.getComponentType();
-            var transformType = TransformComponent.getComponentType();
-            var markerType = NPCMarkerComponent.getComponentType();
-            if (transformType == null) {
-                return targets;
-            }
-
-            Query<EntityStore> npcEntityQuery = resolveNpcQuery(npcType, transformType);
-            Query<EntityStore> markerQuery = resolveNpcMarkerQuery(markerType, transformType);
-            Query<EntityStore> statsQuery = resolveStatQuery(EntityStatMap.getComponentType(), transformType);
-            Query<EntityStore> transformOnlyQuery = resolveTransformQuery(transformType);
-            if (npcEntityQuery != null) {
-                collectTargetsForQuery(store, npcEntityQuery, attackerRef, targetRef, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (markerQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForQuery(store, markerQuery, attackerRef, targetRef, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (targets.size() < OMNISLASH_MAX_TARGETS && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForLivingQuery(store, attackerRef, targetRef, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (statsQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForStatQuery(store, statsQuery, attackerRef, targetRef, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (transformOnlyQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForStatQuery(store, transformOnlyQuery, attackerRef, targetRef, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-        }
-
-        if (DEBUG_LORE_PROCS) {
-            String logLabel = debugLabel == null || debugLabel.isBlank() ? "aoe" : debugLabel;
-            LoreDebug.logKv(logLabel + ".scan", "inspected", inspected[0], "targets", targets.size());
-            for (int i = 0; i < targets.size(); i++) {
-                Ref<EntityStore> ref = targets.get(i);
-                Vector3d pos = getPosition(store, ref);
-                String entityLabel = resolveDebugEntityLabel(store, ref);
-                LoreDebug.logKv(logLabel + ".target", "index", i, "entity", entityLabel, "pos", formatVector(pos));
-            }
-        }
-
-        return targets;
-    }
-
-    private static List<Ref<EntityStore>> collectTargetsAtPosition(Store<EntityStore> store,
-                                                                   Ref<EntityStore> attackerRef,
-                                                                   Vector3d center,
-                                                                   double radius,
-                                                                   double radiusSq,
-                                                                   String debugLabel) {
-        List<Ref<EntityStore>> targets = new ArrayList<>();
-        if (store == null || center == null) {
-            return targets;
-        }
-
-        boolean usedSpatial = collectTargetsFromNpcSpatialResource(store, attackerRef, null, center, radius, targets, debugLabel);
-        final int[] inspected = new int[]{0};
-        if (!usedSpatial) {
-            var npcType = NPCEntity.getComponentType();
-            var transformType = TransformComponent.getComponentType();
-            var markerType = NPCMarkerComponent.getComponentType();
-            if (transformType == null) {
-                return targets;
-            }
-
-            Query<EntityStore> npcEntityQuery = resolveNpcQuery(npcType, transformType);
-            Query<EntityStore> markerQuery = resolveNpcMarkerQuery(markerType, transformType);
-            Query<EntityStore> statsQuery = resolveStatQuery(EntityStatMap.getComponentType(), transformType);
-            Query<EntityStore> transformOnlyQuery = resolveTransformQuery(transformType);
-            if (npcEntityQuery != null) {
-                collectTargetsForQuery(store, npcEntityQuery, attackerRef, null, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (markerQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForQuery(store, markerQuery, attackerRef, null, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (targets.size() < OMNISLASH_MAX_TARGETS && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForLivingQuery(store, attackerRef, null, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (statsQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForStatQuery(store, statsQuery, attackerRef, null, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-            if (transformOnlyQuery != null && targets.size() < OMNISLASH_MAX_TARGETS
-                    && inspected[0] < OMNISLASH_MAX_NPC_CHECKS) {
-                collectTargetsForStatQuery(store, transformOnlyQuery, attackerRef, null, center, targets, inspected,
-                        transformType, radiusSq);
-            }
-        }
-
-        if (DEBUG_LORE_PROCS) {
-            String logLabel = debugLabel == null || debugLabel.isBlank() ? "aoe" : debugLabel;
-            LoreDebug.logKv(logLabel + ".scan", "inspected", inspected[0], "targets", targets.size());
-            for (int i = 0; i < targets.size(); i++) {
-                Ref<EntityStore> ref = targets.get(i);
-                Vector3d pos = getPosition(store, ref);
-                String entityLabel = resolveDebugEntityLabel(store, ref);
-                LoreDebug.logKv(logLabel + ".target", "index", i, "entity", entityLabel, "pos", formatVector(pos));
-            }
-        }
-
-        return targets;
-    }
-
-    private static boolean collectTargetsFromNpcSpatialResource(Store<EntityStore> store,
-                                                                Ref<EntityStore> attackerRef,
-                                                                Ref<EntityStore> targetRef,
-                                                                Vector3d center,
-                                                                double radius,
-                                                                List<Ref<EntityStore>> targets,
-                                                                String debugLabel) {
-        if (store == null || center == null || targets == null) {
-            return false;
-        }
-        NPCPlugin npcPlugin;
-        try {
-            npcPlugin = NPCPlugin.get();
-        } catch (Throwable ignored) {
-            return false;
-        }
-        if (npcPlugin == null) {
-            return false;
-        }
-        var resourceType = npcPlugin.getNpcSpatialResource();
-        if (resourceType == null) {
-            return false;
-        }
-        SpatialResource<Ref<EntityStore>, EntityStore> spatial;
-        try {
-            spatial = store.getResource(resourceType);
-        } catch (Throwable ignored) {
-            return false;
-        }
-        if (spatial == null) {
-            return false;
-        }
-        SpatialStructure<Ref<EntityStore>> structure = spatial.getSpatialStructure();
-        if (structure == null) {
-            return false;
-        }
-        List<Ref<EntityStore>> nearby = SpatialResource.getThreadLocalReferenceList();
-        nearby.clear();
-        try {
-            structure.collect(center, radius, nearby);
-        } catch (Throwable ignored) {
-            return false;
-        }
-        for (Ref<EntityStore> ref : nearby) {
-            if (targets.size() >= OMNISLASH_MAX_TARGETS) {
-                break;
-            }
-            if (ref == null || ref.equals(attackerRef)) {
-                continue;
-            }
-            if (targetRef != null && ref.equals(targetRef)) {
-                continue;
-            }
-            if (containsRef(targets, ref)) {
-                continue;
-            }
-            targets.add(ref);
-        }
-        if (DEBUG_LORE_PROCS) {
-            String label = debugLabel == null || debugLabel.isBlank() ? "aoe" : debugLabel;
-            LoreDebug.logKv(label + ".spatial", "hits", nearby.size());
-        }
-        return true;
-    }
-
-    private static void collectTargetsForQuery(Store<EntityStore> store,
-                                               Query<EntityStore> query,
-                                               Ref<EntityStore> attackerRef,
-                                               Ref<EntityStore> targetRef,
-                                               Vector3d center,
-                                               List<Ref<EntityStore>> targets,
-                                               int[] inspected,
-                                               com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType,
-                                               double radiusSq) {
-        if (store == null || query == null || center == null || targets == null || inspected == null) {
-            return;
-        }
-        store.forEachChunk(query, (chunk, commandBuffer) -> {
-            int size = chunk.size();
-            for (int i = 0; i < size; i++) {
-                if (targets.size() >= OMNISLASH_MAX_TARGETS) {
-                    return false;
-                }
-                if (inspected[0]++ >= OMNISLASH_MAX_NPC_CHECKS) {
-                    return false;
-                }
-                Ref<EntityStore> ref = chunk.getReferenceTo(i);
-                if (ref == null || ref.equals(attackerRef)) {
-                    continue;
-                }
-                if (targetRef != null && ref.equals(targetRef)) {
-                    continue;
-                }
-                TransformComponent npcTransform = chunk.getComponent(i, transformType);
-                if (npcTransform == null) {
-                    continue;
-                }
-                Vector3d pos = npcTransform.getPosition();
-                if (pos == null || distanceSquared(center, pos) > radiusSq) {
-                    continue;
-                }
-                if (containsRef(targets, ref)) {
-                    continue;
-                }
-                targets.add(ref);
-            }
-            return true;
-        });
-    }
-
-    private static void collectTargetsForLivingQuery(Store<EntityStore> store,
-                                                     Ref<EntityStore> attackerRef,
-                                                     Ref<EntityStore> targetRef,
-                                                     Vector3d center,
-                                                     List<Ref<EntityStore>> targets,
-                                                     int[] inspected,
-                                                     com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType,
-                                                     double radiusSq) {
-        if (store == null || center == null || targets == null || inspected == null || transformType == null) {
-            return;
-        }
-        Query<EntityStore> query = AllLegacyLivingEntityTypesQuery.INSTANCE;
-        store.forEachChunk(query, (chunk, commandBuffer) -> {
-            int size = chunk.size();
-            for (int i = 0; i < size; i++) {
-                if (targets.size() >= OMNISLASH_MAX_TARGETS) {
-                    return false;
-                }
-                if (inspected[0]++ >= OMNISLASH_MAX_NPC_CHECKS) {
-                    return false;
-                }
-                Ref<EntityStore> ref = chunk.getReferenceTo(i);
-                if (ref == null || ref.equals(attackerRef)) {
-                    continue;
-                }
-                if (targetRef != null && ref.equals(targetRef)) {
-                    continue;
-                }
-                if (chunk.getComponent(i, Player.getComponentType()) != null) {
-                    continue;
-                }
-                TransformComponent npcTransform = chunk.getComponent(i, transformType);
-                if (npcTransform == null) {
-                    continue;
-                }
-                Vector3d pos = npcTransform.getPosition();
-                if (pos == null || distanceSquared(center, pos) > radiusSq) {
-                    continue;
-                }
-                if (containsRef(targets, ref)) {
-                    continue;
-                }
-                targets.add(ref);
-            }
-            return true;
-        });
-    }
-
-    private static void collectTargetsForStatQuery(Store<EntityStore> store,
-                                                   Query<EntityStore> query,
-                                                   Ref<EntityStore> attackerRef,
-                                                   Ref<EntityStore> targetRef,
-                                                   Vector3d center,
-                                                   List<Ref<EntityStore>> targets,
-                                                   int[] inspected,
-                                                   com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType,
-                                                   double radiusSq) {
-        if (store == null || query == null || center == null || targets == null || inspected == null) {
-            return;
-        }
-        var statType = EntityStatMap.getComponentType();
-        if (statType == null) {
-            return;
-        }
-        store.forEachChunk(query, (chunk, commandBuffer) -> {
-            int size = chunk.size();
-            for (int i = 0; i < size; i++) {
-                if (targets.size() >= OMNISLASH_MAX_TARGETS) {
-                    return false;
-                }
-                if (inspected[0]++ >= OMNISLASH_MAX_NPC_CHECKS) {
-                    return false;
-                }
-                Ref<EntityStore> ref = chunk.getReferenceTo(i);
-                if (ref == null || ref.equals(attackerRef)) {
-                    continue;
-                }
-                if (targetRef != null && ref.equals(targetRef)) {
-                    continue;
-                }
-                if (chunk.getComponent(i, Player.getComponentType()) != null) {
-                    continue;
-                }
-                TransformComponent npcTransform = chunk.getComponent(i, transformType);
-                if (npcTransform == null) {
-                    continue;
-                }
-                Vector3d pos = npcTransform.getPosition();
-                if (pos == null || distanceSquared(center, pos) > radiusSq) {
-                    continue;
-                }
-                EntityStatMap statMap = chunk.getComponent(i, statType);
-                if (statMap == null || getHealthStatIndex(statMap) < 0) {
-                    continue;
-                }
-                if (containsRef(targets, ref)) {
-                    continue;
-                }
-                targets.add(ref);
-            }
-            return true;
-        });
-    }
-
-    static Vector3d resolveCenterPosition(Store<EntityStore> store,
-                                          Ref<EntityStore> primary,
-                                          Ref<EntityStore> fallback) {
-        Vector3d pos = getPosition(store, primary);
-        if (pos == null) {
-            pos = getPosition(store, fallback);
-        }
-        return pos;
-    }
-
-    private static Vector3d getPosition(Store<EntityStore> store, Ref<EntityStore> ref) {
-        if (store == null || ref == null) {
-            return null;
-        }
-        try {
-            TransformComponent transform = store.getComponent(ref, TransformComponent.getComponentType());
-            if (transform == null) {
-                return null;
-            }
-            Vector3d pos = transform.getPosition();
-            return pos == null ? null : pos.clone();
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private static boolean containsRef(List<Ref<EntityStore>> refs, Ref<EntityStore> ref) {
-        if (refs == null || refs.isEmpty() || ref == null) {
-            return false;
-        }
-        for (Ref<EntityStore> existing : refs) {
-            if (ref.equals(existing)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static double distanceSquared(Vector3d a, Vector3d b) {
-        double dx = a.getX() - b.getX();
-        double dy = a.getY() - b.getY();
-        double dz = a.getZ() - b.getZ();
-        return (dx * dx) + (dy * dy) + (dz * dz);
-    }
-
-    private static String formatVector(Vector3d pos) {
-        if (pos == null) {
-            return "null";
-        }
-        return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", pos.getX(), pos.getY(), pos.getZ());
-    }
-
-    private static String resolveDebugEntityLabel(Store<EntityStore> store, Ref<EntityStore> ref) {
-        if (store == null || ref == null) {
-            return "unknown";
-        }
-        try {
-            Player player = store.getComponent(ref, Player.getComponentType());
-            if (player != null) {
-                String name = player.getDisplayName();
-                if (name == null || name.isBlank()) {
-                    return "Player:" + String.valueOf(player.getPlayerRef());
-                }
-                return "Player:" + name;
-            }
-        } catch (Throwable ignored) {
-            // best-effort
-        }
-        try {
-            NPCEntity npc = store.getComponent(ref, NPCEntity.getComponentType());
-            if (npc != null) {
-                String type = npc.getNPCTypeId();
-                if (type != null && !type.isBlank()) {
-                    return "NPC:" + type;
-                }
-            }
-        } catch (Throwable ignored) {
-            // best-effort
-        }
-        return String.valueOf(ref);
-    }
-
-    private static Query<EntityStore> resolveNpcQuery(
-            com.hypixel.hytale.component.ComponentType<EntityStore, NPCEntity> npcType,
-            com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType) {
-        Query<EntityStore> cached = npcQuery;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (NPC_QUERY_LOCK) {
-            cached = npcQuery;
-            if (cached != null) {
-                return cached;
-            }
-            if (npcType == null || transformType == null) {
-                return null;
-            }
-            try {
-                cached = Archetype.of(npcType, transformType);
-                npcQuery = cached;
-                return cached;
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-    }
-
-    private static Query<EntityStore> resolveNpcMarkerQuery(
-            com.hypixel.hytale.component.ComponentType<EntityStore, NPCMarkerComponent> markerType,
-            com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType) {
-        Query<EntityStore> cached = npcMarkerQuery;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (NPC_MARKER_QUERY_LOCK) {
-            cached = npcMarkerQuery;
-            if (cached != null) {
-                return cached;
-            }
-            if (markerType == null || transformType == null) {
-                return null;
-            }
-            try {
-                cached = Archetype.of(markerType, transformType);
-                npcMarkerQuery = cached;
-                return cached;
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-    }
-
-    private static Query<EntityStore> resolveStatQuery(
-            com.hypixel.hytale.component.ComponentType<EntityStore, EntityStatMap> statType,
-            com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType) {
-        Query<EntityStore> cached = statQuery;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (STAT_QUERY_LOCK) {
-            cached = statQuery;
-            if (cached != null) {
-                return cached;
-            }
-            if (statType == null || transformType == null) {
-                return null;
-            }
-            try {
-                cached = Archetype.of(statType, transformType);
-                statQuery = cached;
-                return cached;
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-    }
-
-    private static Query<EntityStore> resolveTransformQuery(
-            com.hypixel.hytale.component.ComponentType<EntityStore, TransformComponent> transformType) {
-        Query<EntityStore> cached = transformQuery;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (TRANSFORM_QUERY_LOCK) {
-            cached = transformQuery;
-            if (cached != null) {
-                return cached;
-            }
-            if (transformType == null) {
-                return null;
-            }
-            try {
-                cached = Archetype.of(transformType);
-                transformQuery = cached;
-                return cached;
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-    }
-
-    private static void trySummonWolfPack(Store<EntityStore> store,
-                                          Ref<EntityStore> summonerRef,
-                                          UUID playerId,
-                                          String spiritId,
-                                          int level,
-                                          int feedTier) {
-        if (store == null || summonerRef == null || playerId == null) {
-            return;
-        }
-        int cap = Math.max(1, level + Math.max(0, feedTier));
-        String key = playerId + "|" + normalizeSpiritId(spiritId == null ? "wolf" : spiritId);
-        Set<Ref<EntityStore>> summons = WOLF_SUMMONS.computeIfAbsent(key, k -> ConcurrentHashMap.newKeySet());
-        int active = pruneSummons(store, summons);
-        if (active >= cap) {
-            cleanupSummonKey(key, summons);
-            return;
-        }
-
-        NPCPlugin npcPlugin = NPCPlugin.get();
-        if (npcPlugin == null) {
-            cleanupSummonKey(key, summons);
-            return;
-        }
-
-        TransformComponent transform = store.getComponent(summonerRef, TransformComponent.getComponentType());
-        if (transform == null || transform.getPosition() == null) {
-            cleanupSummonKey(key, summons);
-            return;
-        }
-        Vector3d basePos = transform.getPosition().clone();
-        Vector3f rotation = transform.getRotation() != null
-                ? transform.getRotation().clone()
-                : new Vector3f(0f, 0f, 0f);
-
-        String primaryRole = resolveWolfRoleName(spiritId);
-        String fallbackRole = "Wolf_Black";
-
-        for (int attempt = 0; attempt < WOLF_SUMMON_MAX_ATTEMPTS; attempt++) {
-            Vector3d spawnPos = buildWolfSpawnPosition(basePos, attempt);
-            Ref<EntityStore> spawned = spawnWolf(npcPlugin, store, primaryRole, spawnPos, rotation, playerId);
-            if (spawned == null && fallbackRole != null
-                    && (primaryRole == null || !fallbackRole.equalsIgnoreCase(primaryRole))) {
-                spawned = spawnWolf(npcPlugin, store, fallbackRole, spawnPos, rotation, playerId);
-            }
-            if (spawned != null) {
-                summons.add(spawned);
-                break;
-            }
-        }
-
-        cleanupSummonKey(key, summons);
     }
 
     private static Ref<EntityStore> spawnWolf(NPCPlugin npcPlugin,
@@ -4642,36 +4691,6 @@ public final class LoreProcHandler {
         } catch (Throwable ignored) {
             return null;
         }
-    }
-
-    private static String resolveAnimationIdByContains(String animSet, String token) {
-        if (animSet == null || animSet.isBlank() || token == null || token.isBlank()) {
-            return null;
-        }
-        String tokenLower = token.toLowerCase(Locale.ROOT);
-        try {
-            var assetMap =
-                    com.hypixel.hytale.server.core.asset.type.itemanimation.config.ItemPlayerAnimations.getAssetMap();
-            if (assetMap != null) {
-                var anims = assetMap.getAsset(animSet);
-                if (anims != null) {
-                    var map = anims.getAnimations();
-                    if (map != null) {
-                        for (String key : map.keySet()) {
-                            if (key == null) {
-                                continue;
-                            }
-                            if (key.toLowerCase(Locale.ROOT).contains(tokenLower)) {
-                                return key;
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-            return null;
-        }
-        return null;
     }
 
     private static Vector3d buildWolfSpawnPosition(Vector3d base, int attempt) {
@@ -4768,212 +4787,291 @@ public final class LoreProcHandler {
         );
     }
 
-    private static void applyCombatDamage(Store<EntityStore> store,
-                                          Ref<EntityStore> sourceRef,
-                                          Ref<EntityStore> targetRef,
-                                          float rawDamage,
-                                          boolean skipRefine) {
-        if (store == null || targetRef == null || rawDamage <= 0f) {
-            LoreDebug.logKv("damage.skip", "reason", "invalid", "rawDamage", rawDamage);
-            return;
-        }
-        if (applyDamageEvent(store, sourceRef, targetRef, rawDamage, skipRefine)) {
-            return;
-        }
-        applyDirectHealthLoss(store, targetRef, rawDamage);
+    private static long resolveStunFreezeDurationMs(double value, int feedTier) {
+        return LoreAbility.resolveStunFreezeDurationMs(value, feedTier);
     }
 
-    private static boolean applyDamageEvent(Store<EntityStore> store,
-                                            Ref<EntityStore> sourceRef,
-                                            Ref<EntityStore> targetRef,
-                                            float rawDamage,
-                                            boolean skipRefine) {
-        try {
-            Damage.Source source = sourceRef == null
-                    ? Damage.NULL_SOURCE
-                    : new Damage.EntitySource(sourceRef);
-            Damage damage = new Damage(source, DamageCause.PHYSICAL, rawDamage);
-            if (skipRefine) {
-                damage.putMetaObject(EquipmentRefineEST.META_SKIP_REFORGE, Boolean.TRUE);
-            }
-            store.invoke(targetRef, damage);
-            LoreDebug.logKv("damage.event", "amount", rawDamage);
-            return true;
-        } catch (Throwable ignored) {
+    private static long resolveBlurDurationMs(double value, int feedTier) {
+        return LoreAbility.resolveBlurDurationMs(value, feedTier);
+    }
+
+    private static void applyFrozenForDuration(Store<EntityStore> store, Ref<EntityStore> targetRef, long durationMs) {
+        if (store == null || targetRef == null || durationMs <= 0L) {
+            return;
+        }
+        long until = System.currentTimeMillis() + durationMs;
+        FROZEN_UNTIL.merge(targetRef, until, Math::max);
+        queueFrozenApply(store, targetRef, until);
+        queueFrozenVisualEffect(store, targetRef, durationMs);
+        OMNISLASH_SCHEDULER.schedule(() -> queueFrozenRemoval(store, targetRef, until),
+                durationMs, TimeUnit.MILLISECONDS);
+        LoreDebug.logKv("freeze.apply", "durationMs", durationMs);
+    }
+
+    private static void queueFrozenApply(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> applyFrozenComponent(store, targetRef, expectedUntil));
+    }
+
+    private static void applyFrozenComponent(Store<EntityStore> store,
+                                             Ref<EntityStore> targetRef,
+                                             long expectedUntil) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        if (System.currentTimeMillis() > expectedUntil) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        store.ensureComponent(targetRef, Frozen.getComponentType());
+    }
+
+    private static void queueFrozenRemoval(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> removeFrozenIfExpired(store, targetRef, expectedUntil));
+    }
+
+    public static boolean tryApplyFrozenShatter(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> targetRef,
+                                                Damage damage) {
+        if (store == null || targetRef == null || damage == null) {
             return false;
         }
+        if (damage.getAmount() <= 0f) {
+            return false;
+        }
+        if (!isFrozenActive(store, targetRef)) {
+            return false;
+        }
+        damage.setAmount(damage.getAmount() * 2.0f);
+        queueFrozenShatter(store, targetRef, attackerRef);
+        LoreDebug.log("freeze.shatter", "doubleDamage=true");
+        return true;
     }
 
-    private static void applyDirectHealthLoss(Store<EntityStore> store, Ref<EntityStore> targetRef, float rawDamage) {
-        if (store == null || targetRef == null || rawDamage <= 0f) {
-            LoreDebug.logKv("damage.direct.skip", "reason", "invalid", "rawDamage", rawDamage);
-            return;
-        }
-        EntityStatMap statMap = store.getComponent(targetRef, EntityStatMap.getComponentType());
-        if (statMap == null) {
-            LoreDebug.logKv("damage.direct.skip", "reason", "noStatMap");
-            return;
-        }
-        int healthStatIndex = getHealthStatIndex(statMap);
-        if (healthStatIndex < 0) {
-            LoreDebug.logKv("damage.direct.skip", "reason", "noHealthStat");
-            return;
-        }
-        EntityStatValue health = statMap.get(healthStatIndex);
-        if (health == null || health.get() <= 0f) {
-            LoreDebug.logKv("damage.direct.skip", "reason", "targetDead");
-            return;
-        }
-        float maxSpendable = Math.max(0f, health.get() - 0.1f);
-        float applied = Math.min(rawDamage, maxSpendable);
-        if (applied <= 0f) {
-            LoreDebug.logKv("damage.direct.skip", "reason", "applied<=0", "maxSpendable", maxSpendable);
-            return;
-        }
-        statMap.addStatValue(healthStatIndex, -applied);
-        LoreDebug.logKv("damage.direct", "applied", applied);
-    }
-
-    private static float resolveDamageBase(boolean selfIsAttacker, Damage damage, float fallback) {
-        if (!selfIsAttacker || damage == null) {
-            return fallback;
-        }
-        float amount = damage.getAmount();
-        float initial = damage.getInitialAmount();
-        float base = Math.max(amount, initial);
-        if (base <= 0f) {
-            base = amount;
-        }
-        if (base <= 0f) {
-            base = fallback;
-        }
-        return base;
-    }
-
-    private static float resolveLoreDamageBase(Store<EntityStore> store,
-                                               Ref<EntityStore> attackerRef,
-                                               boolean selfIsAttacker,
-                                               Damage damage,
-                                               float fallback) {
-        float eventBase = resolveDamageBase(selfIsAttacker, damage, fallback);
-        if (eventBase > 0f) {
-            return eventBase;
-        }
-        float refined = resolveWeaponRefinedDamage(store, attackerRef, fallback);
-        if (refined > 0f) {
-            return refined;
-        }
-        return fallback;
-    }
-
-    private static float resolveWeaponRefinedDamage(Store<EntityStore> store,
-                                                    Ref<EntityStore> attackerRef,
-                                                    float fallback) {
-        if (store == null || attackerRef == null) {
-            return fallback;
-        }
-        Player player = store.getComponent(attackerRef, Player.getComponentType());
-        if (player == null) {
-            return fallback;
-        }
-        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-        if (stack == null || stack.isEmpty() || !ReforgeEquip.isWeapon(stack)) {
-            return fallback;
-        }
-        Item item = stack.getItem();
-        if (item == null || item == Item.UNKNOWN) {
-            return fallback;
-        }
-        double base = EquipmentDamageTooltipMath.getAverageBaseDamageFromInteractionVars(item);
-        if (base <= 0.0d) {
-            return fallback;
-        }
-        SocketData socketData = SocketManager.getSocketData(stack);
-        int level = ReforgeEquip.getLevelFromItem(stack);
-        double partsMultiplier = resolvePartsDamageMultiplier(stack);
-        double refined = EquipmentDamageTooltipMath.computeBuffedWeaponDamage(stack.getItemId(),
-                base, level, socketData, partsMultiplier);
-        if (refined <= 0.0d) {
-            return fallback;
-        }
-        return (float) refined;
-    }
-
-    private static float resolveWeaponBaseDamage(Store<EntityStore> store,
-                                                 Ref<EntityStore> attackerRef) {
-        if (store == null || attackerRef == null) {
-            return 0f;
-        }
-        Player player = store.getComponent(attackerRef, Player.getComponentType());
-        if (player == null) {
-            return 0f;
-        }
-        ItemStack stack = PlayerInventoryUtils.getHeldItem(player);
-        if (stack == null || stack.isEmpty() || !ReforgeEquip.isWeapon(stack)) {
-            return 0f;
-        }
-        Item item = stack.getItem();
-        if (item == null || item == Item.UNKNOWN) {
-            return 0f;
-        }
-        double base = EquipmentDamageTooltipMath.getAverageBaseDamageFromInteractionVars(item);
-        if (base <= 0.0d) {
-            return 0f;
-        }
-        return (float) base;
-    }
-
-    private static double resolvePartsDamageMultiplier(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            return 1.0d;
-        }
-        Double value = stack.getFromMetadataOrNull(META_PARTS_DAMAGE_MULTIPLIER, Codec.DOUBLE);
-        if (value == null) {
-            return 1.0d;
-        }
-        return Math.max(0.5d, Math.min(2.0d, value.doubleValue()));
-    }
-
-    private static float resolveMaxHealth(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+    private static boolean isFrozenActive(Store<EntityStore> store, Ref<EntityStore> targetRef) {
         if (store == null || targetRef == null) {
-            return 0f;
+            return false;
         }
-        EntityStatMap statMap = store.getComponent(targetRef, EntityStatMap.getComponentType());
-        if (statMap == null) {
-            return 0f;
+        Long until = FROZEN_UNTIL.get(targetRef);
+        if (until != null && until > System.currentTimeMillis()) {
+            return true;
         }
-        int healthStatIndex = getHealthStatIndex(statMap);
-        if (healthStatIndex < 0) {
-            return 0f;
-        }
-        EntityStatValue health = statMap.get(healthStatIndex);
-        if (health == null) {
-            return 0f;
-        }
-        return Math.max(0f, health.getMax());
+        return store.getComponent(targetRef, Frozen.getComponentType()) != null;
     }
 
-    private static void applyHeal(Store<EntityStore> store, Ref<EntityStore> targetRef, float amount) {
-        if (store == null || targetRef == null || amount <= 0f) {
+    private static void queueFrozenShatter(Store<EntityStore> store,
+                                           Ref<EntityStore> targetRef,
+                                           Ref<EntityStore> attackerRef) {
+        if (store == null || targetRef == null || store.isShutdown()) {
             return;
         }
-        EntityStatMap statMap = store.getComponent(targetRef, EntityStatMap.getComponentType());
-        if (statMap == null) {
+        if (!LoreWorldTasks.queue(store, () -> applyFrozenShatter(store, targetRef, attackerRef))) {
+            applyFrozenShatter(store, targetRef, attackerRef);
+        }
+    }
+
+    private static void applyFrozenShatter(Store<EntityStore> store,
+                                           Ref<EntityStore> targetRef,
+                                           Ref<EntityStore> attackerRef) {
+        if (store == null || targetRef == null || store.isShutdown()) {
             return;
         }
-        int healthStatIndex = getHealthStatIndex(statMap);
-        if (healthStatIndex < 0) {
+        FROZEN_UNTIL.remove(targetRef);
+        if (!isEntityAlive(store, targetRef)) {
             return;
         }
-        EntityStatValue health = statMap.get(healthStatIndex);
-        if (health == null || health.getMax() <= 0f) {
+        store.tryRemoveComponent(targetRef, Frozen.getComponentType());
+        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
+        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, attackerRef);
+        if (pos != null) {
+            pos.add(0.0d, 0.6d, 0.0d);
+            String particleId = LoreVisuals.resolveParticleEffectId(SHATTER_PARTICLE_IDS);
+            if (particleId != null) {
+                LoreVisuals.spawnScaledParticle(store, particleId, pos, 1.4f);
+            }
+        }
+        Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
+        LoreVisuals.playSignatureSound(attacker, "SFX_Ice_Break");
+    }
+
+    private static void removeFrozenIfExpired(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
+        if (store == null || targetRef == null || store.isShutdown()) {
             return;
         }
-        float missing = health.getMax() - health.get();
-        if (missing <= 0f) {
+        Long current = FROZEN_UNTIL.get(targetRef);
+        if (current == null || current > expectedUntil) {
             return;
         }
-        statMap.addStatValue(healthStatIndex, Math.min(missing, amount));
+        FROZEN_UNTIL.remove(targetRef);
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        store.tryRemoveComponent(targetRef, Frozen.getComponentType());
+        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
+        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
+        LoreDebug.log("freeze.remove", "status=expired");
+    }
+
+    private static void queueFrozenVisualEffect(Store<EntityStore> store,
+                                                Ref<EntityStore> targetRef,
+                                                long durationMs) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        if (!LoreWorldTasks.queue(store, () -> applyFrozenVisualEffect(store, targetRef, durationMs))) {
+            applyFrozenVisualEffect(store, targetRef, durationMs);
+        }
+    }
+
+    private static void applyFrozenVisualEffect(Store<EntityStore> store,
+                                                Ref<EntityStore> targetRef,
+                                                long durationMs) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
+        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
+        LoreVisuals.tryApplyTimedVisualEffectOverride(store, targetRef, durationMs, FREEZE_EFFECT_IDS);
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, null);
+        if (pos != null) {
+            pos.add(0.0d, 0.6d, 0.0d);
+            String particleId = LoreVisuals.resolveParticleEffectId(FREEZE_PARTICLE_IDS);
+            if (particleId != null) {
+                LoreVisuals.spawnScaledParticle(store, particleId, pos, 1.0f);
+            }
+        }
+        int pulses = (int) Math.max(1, Math.min(FREEZE_MAX_PULSES, durationMs / FREEZE_PULSE_MS));
+        for (int i = 1; i < pulses; i++) {
+            long delay = FREEZE_PULSE_MS * i;
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> spawnFreezePulse(store, targetRef),
+                    delay,
+                    TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void spawnFreezePulse(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+        if (store == null || targetRef == null || store.isShutdown()) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        if (!isFrozenActive(store, targetRef)) {
+            return;
+        }
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, null);
+        if (pos == null) {
+            return;
+        }
+        pos.add(0.0d, 0.6d, 0.0d);
+        String particleId = LoreVisuals.resolveParticleEffectId(FREEZE_PARTICLE_IDS);
+        if (particleId != null) {
+            LoreVisuals.spawnScaledParticle(store, particleId, pos, 0.85f);
+        }
+    }
+
+    private static void queueSpawnHealTotemParticles(Store<EntityStore> store,
+                                                     Ref<EntityStore> sourceRef,
+                                                     double radius) {
+        if (store == null || sourceRef == null || store.isShutdown()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> spawnHealTotemParticles(store, sourceRef, radius));
+    }
+
+    private static void spawnHealTotemParticles(Store<EntityStore> store,
+                                                Ref<EntityStore> sourceRef,
+                                                double radius) {
+        if (store == null || sourceRef == null) {
+            return;
+        }
+        Vector3d pos = LoreTargetingUtils.getPosition(store, sourceRef);
+        if (pos == null) {
+            return;
+        }
+        String particleId = LoreVisuals.resolveParticleEffectId(HEAL_TOTEM_PARTICLE_IDS);
+        if (particleId == null) {
+            LoreDebug.logKv("heal.missing", "ids", String.join(",", HEAL_TOTEM_PARTICLE_IDS));
+            return;
+        }
+        double baseRadius = Math.max(0.01d, HEAL_AREA_RADIUS);
+        double ratio = Math.max(0.35d, Math.min(1.4d, radius / baseRadius));
+        try {
+            LoreVisuals.spawnScaledParticle(store, particleId, pos, (float) ratio);
+            LoreDebug.logKv("heal.spawn", "id", particleId, "scale", String.format(Locale.ROOT, "%.2f", ratio));
+        } catch (Throwable ignored) {
+            try {
+                ParticleUtil.spawnParticleEffect(particleId, pos, store);
+            } catch (Throwable ignored2) {
+                // best-effort
+            }
+        }
+    }
+
+    private static void trySummonWolfPack(Store<EntityStore> store,
+                                          Ref<EntityStore> summonerRef,
+                                          UUID playerId,
+                                          String spiritId,
+                                          int level,
+                                          int feedTier) {
+        if (store == null || summonerRef == null || playerId == null) {
+            return;
+        }
+        int cap = Math.max(1, level + Math.max(0, feedTier));
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId == null ? "wolf" : spiritId);
+        Set<Ref<EntityStore>> summons = WOLF_SUMMONS.computeIfAbsent(key, k -> ConcurrentHashMap.newKeySet());
+        int active = pruneSummons(store, summons);
+        if (active >= cap) {
+            cleanupSummonKey(key, summons);
+            return;
+        }
+
+        NPCPlugin npcPlugin = NPCPlugin.get();
+        if (npcPlugin == null) {
+            cleanupSummonKey(key, summons);
+            return;
+        }
+
+        TransformComponent transform = store.getComponent(summonerRef, TransformComponent.getComponentType());
+        if (transform == null || transform.getPosition() == null) {
+            cleanupSummonKey(key, summons);
+            return;
+        }
+        Vector3d basePos = transform.getPosition().clone();
+        Vector3f rotation = transform.getRotation() != null
+                ? transform.getRotation().clone()
+                : new Vector3f(0f, 0f, 0f);
+
+        String primaryRole = resolveWolfRoleName(spiritId);
+        String fallbackRole = "Wolf_Black";
+
+        for (int attempt = 0; attempt < WOLF_SUMMON_MAX_ATTEMPTS; attempt++) {
+            Vector3d spawnPos = buildWolfSpawnPosition(basePos, attempt);
+            Ref<EntityStore> spawned = spawnWolf(npcPlugin, store, primaryRole, spawnPos, rotation, playerId);
+            if (spawned == null && fallbackRole != null
+                    && (primaryRole == null || !fallbackRole.equalsIgnoreCase(primaryRole))) {
+                spawned = spawnWolf(npcPlugin, store, fallbackRole, spawnPos, rotation, playerId);
+            }
+            if (spawned != null) {
+                summons.add(spawned);
+                break;
+            }
+        }
+
+        cleanupSummonKey(key, summons);
     }
 
     private static void applyHealOverTime(Store<EntityStore> store,
@@ -5020,7 +5118,7 @@ public final class LoreProcHandler {
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
         float basePerTick = 0f;
-        float maxHealth = resolveMaxHealth(store, targetRef);
+        float maxHealth = LoreDamageUtils.resolveMaxHealth(store, targetRef);
         if (maxHealth > 0f) {
             basePerTick = (float) (maxHealth * BLEED_BASE_MAX_HP_PCT);
             basePerTick = (float) LoreAbility.scaleEffectValue(basePerTick, feedTier);
@@ -5040,7 +5138,7 @@ public final class LoreProcHandler {
             long delay = i * BLEED_DOT_TICK_MS;
             double ramp = 1.0d + (BLEED_RAMP_PER_TICK * i);
             float perTick = (float) (basePerTick * ramp);
-            OMNISLASH_SCHEDULER.schedule(() -> queueBleedTick(store, sourceRef, targetRef, perTick, until),
+            OMNISLASH_SCHEDULER.schedule(() -> queueBleedTick(store, sourceRef, targetRef, perTick, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
     }
@@ -5068,7 +5166,8 @@ public final class LoreProcHandler {
                                        Ref<EntityStore> sourceRef,
                                        Ref<EntityStore> targetRef,
                                        float perTick,
-                                       long expectedUntil) {
+                                       long expectedUntil,
+                                       int feedTier) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
@@ -5076,14 +5175,15 @@ public final class LoreProcHandler {
         if (entityStore == null || entityStore.getWorld() == null) {
             return;
         }
-        entityStore.getWorld().execute(() -> applyBleedTick(store, sourceRef, targetRef, perTick, expectedUntil));
+        entityStore.getWorld().execute(() -> applyBleedTick(store, sourceRef, targetRef, perTick, expectedUntil, feedTier));
     }
 
     private static void applyBleedTick(Store<EntityStore> store,
                                        Ref<EntityStore> sourceRef,
                                        Ref<EntityStore> targetRef,
                                        float perTick,
-                                       long expectedUntil) {
+                                       long expectedUntil,
+                                       int feedTier) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
@@ -5097,8 +5197,209 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        applyCombatDamage(store, sourceRef, targetRef, perTick, true);
+        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BLEED, feedTier);
         LoreVisuals.spawnBleedParticles(store, sourceRef, targetRef, BLEED_PARTICLE_IDS);
+        spawnHitParticle(store, sourceRef, targetRef, BLEED_PARTICLE_IDS);
+    }
+
+    private static void applyBurnOverTime(Store<EntityStore> store,
+                                          Ref<EntityStore> sourceRef,
+                                          Ref<EntityStore> targetRef,
+                                          float totalAmount,
+                                          int feedTier) {
+        if (store == null || targetRef == null || totalAmount <= 0f) {
+            return;
+        }
+        long duration = LoreAbility.scaleDurationMs(BURN_BASE_DURATION_MS, feedTier);
+        int ticks = (int) Math.ceil((double) duration / (double) BURN_DOT_TICK_MS);
+        ticks = Math.max(1, ticks);
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
+        float perTick = scaledTotal / (float) ticks;
+        if (perTick <= 0f) {
+            return;
+        }
+        float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
+        if (weaponBase > 0f) {
+            float minPerTick = (float) (weaponBase * BURN_DOT_MIN_WEAPON_PCT);
+            if (minPerTick > 0f) {
+                minPerTick = (float) LoreAbility.scaleEffectValue(minPerTick, feedTier);
+                perTick = Math.max(perTick, minPerTick);
+            }
+        }
+        final float perTickFinal = perTick;
+        long now = System.currentTimeMillis();
+        long until = now + duration;
+        BURN_DOT_UNTIL.put(targetRef, until);
+        scheduleBurnExpiry(targetRef, until, duration);
+
+        for (int i = 0; i < ticks; i++) {
+            long delay = i * BURN_DOT_TICK_MS;
+            OMNISLASH_SCHEDULER.schedule(() -> queueBurnTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
+                    delay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void scheduleBurnExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
+        if (targetRef == null || delayMs <= 0L) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> expireBurn(targetRef, expectedUntil), delayMs,
+                TimeUnit.MILLISECONDS);
+    }
+
+    private static void expireBurn(Ref<EntityStore> targetRef, long expectedUntil) {
+        if (targetRef == null) {
+            return;
+        }
+        Long current = BURN_DOT_UNTIL.get(targetRef);
+        if (current == null || current > expectedUntil) {
+            return;
+        }
+        BURN_DOT_UNTIL.remove(targetRef);
+    }
+
+    private static void queueBurnTick(Store<EntityStore> store,
+                                      Ref<EntityStore> sourceRef,
+                                      Ref<EntityStore> targetRef,
+                                      float perTick,
+                                      long expectedUntil,
+                                      int feedTier) {
+        if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
+            return;
+        }
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) {
+            return;
+        }
+        entityStore.getWorld().execute(() -> applyBurnTick(store, sourceRef, targetRef, perTick, expectedUntil, feedTier));
+    }
+
+    private static void applyBurnTick(Store<EntityStore> store,
+                                      Ref<EntityStore> sourceRef,
+                                      Ref<EntityStore> targetRef,
+                                      float perTick,
+                                      long expectedUntil,
+                                      int feedTier) {
+        if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        Long current = BURN_DOT_UNTIL.get(targetRef);
+        if (current == null || current.longValue() != expectedUntil) {
+            return;
+        }
+        if (System.currentTimeMillis() > expectedUntil) {
+            return;
+        }
+        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN, feedTier);
+    }
+
+    private static void applyPoisonOverTime(Store<EntityStore> store,
+                                            Ref<EntityStore> sourceRef,
+                                            Ref<EntityStore> targetRef,
+                                            float totalAmount,
+                                            int feedTier) {
+        if (store == null || targetRef == null || totalAmount <= 0f) {
+            return;
+        }
+        long baseDuration = LoreAbility.scaleDurationMs(POISON_BASE_DURATION_MS, feedTier);
+        int currentStacks = POISON_DOT_STACKS.getOrDefault(targetRef, 0);
+        int stackCount = Math.max(1, Math.min(POISON_DOT_MAX_STACKS, currentStacks + 1));
+        long bonusDuration = (long) (Math.max(0, stackCount - 1) * POISON_STACK_BONUS_MS);
+        long totalDuration = baseDuration + bonusDuration;
+        int ticks = (int) Math.ceil((double) totalDuration / (double) POISON_DOT_TICK_MS);
+        ticks = Math.max(1, ticks);
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
+        float perTick = scaledTotal / (float) ticks;
+        if (perTick <= 0f) {
+            return;
+        }
+        perTick *= stackCount;
+        float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
+        if (weaponBase > 0f) {
+            float minPerTick = (float) (weaponBase * POISON_DOT_MIN_WEAPON_PCT * stackCount);
+            if (minPerTick > 0f) {
+                minPerTick = (float) LoreAbility.scaleEffectValue(minPerTick, feedTier);
+                perTick = Math.max(perTick, minPerTick);
+            }
+        }
+        final float perTickFinal = perTick;
+        long now = System.currentTimeMillis();
+        long until = now + totalDuration;
+        POISON_DOT_UNTIL.put(targetRef, until);
+        POISON_DOT_STACKS.put(targetRef, stackCount);
+        schedulePoisonExpiry(targetRef, until, totalDuration);
+
+        for (int i = 0; i < ticks; i++) {
+            long delay = i * POISON_DOT_TICK_MS;
+            OMNISLASH_SCHEDULER.schedule(() -> queuePoisonTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
+                    delay, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void schedulePoisonExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
+        if (targetRef == null || delayMs <= 0L) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> expirePoison(targetRef, expectedUntil), delayMs,
+                TimeUnit.MILLISECONDS);
+    }
+
+    private static void expirePoison(Ref<EntityStore> targetRef, long expectedUntil) {
+        if (targetRef == null) {
+            return;
+        }
+        Long current = POISON_DOT_UNTIL.get(targetRef);
+        if (current == null || current > expectedUntil) {
+            return;
+        }
+        POISON_DOT_UNTIL.remove(targetRef);
+        POISON_DOT_STACKS.remove(targetRef);
+    }
+
+    private static void queuePoisonTick(Store<EntityStore> store,
+                                        Ref<EntityStore> sourceRef,
+                                        Ref<EntityStore> targetRef,
+                                        float perTick,
+                                        long expectedUntil,
+                                        int feedTier) {
+        if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
+            return;
+        }
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) {
+            return;
+        }
+        entityStore.getWorld().execute(() -> applyPoisonTick(store, sourceRef, targetRef, perTick, expectedUntil, feedTier));
+    }
+
+    private static void applyPoisonTick(Store<EntityStore> store,
+                                        Ref<EntityStore> sourceRef,
+                                        Ref<EntityStore> targetRef,
+                                        float perTick,
+                                        long expectedUntil,
+                                        int feedTier) {
+        if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        Long current = POISON_DOT_UNTIL.get(targetRef);
+        if (current == null || current.longValue() != expectedUntil) {
+            return;
+        }
+        if (System.currentTimeMillis() > expectedUntil) {
+            return;
+        }
+        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.POISON, true, feedTier);
+        DamageNumberEST.queueCombatTextDirect(store, targetRef, perTick,
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.POISON);
     }
 
     private static void applyDrainOverTime(Store<EntityStore> store,
@@ -5129,7 +5430,7 @@ public final class LoreProcHandler {
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * DRAIN_DOT_TICK_MS;
-            OMNISLASH_SCHEDULER.schedule(() -> queueDrainTick(store, sourceRef, targetRef, perTick, until),
+            OMNISLASH_SCHEDULER.schedule(() -> queueDrainTick(store, sourceRef, targetRef, perTick, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
     }
@@ -5173,6 +5474,98 @@ public final class LoreProcHandler {
         LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, DRAIN_EFFECT_IDS);
     }
 
+    private static void queueBurnVisualEffect(Store<EntityStore> store,
+                                              Ref<EntityStore> targetRef) {
+        queueTimedLoreVisualEffect(store, targetRef, BURN_VFX_UNTIL, BURN_VFX_DURATION_MS, BURN_VFX_IDS);
+    }
+
+    private static void queuePoisonVisualEffect(Store<EntityStore> store,
+                                                Ref<EntityStore> targetRef) {
+        queueTimedLoreVisualEffect(store, targetRef, POISON_VFX_UNTIL, POISON_VFX_DURATION_MS, POISON_VFX_IDS);
+    }
+
+    private static void queueTimedLoreVisualEffect(Store<EntityStore> store,
+                                                   Ref<EntityStore> targetRef,
+                                                   Map<Ref<EntityStore>, Long> untilMap,
+                                                   long durationMs,
+                                                   String[] effectIds) {
+        if (store == null || targetRef == null || untilMap == null || durationMs <= 0L
+                || effectIds == null || effectIds.length == 0 || store.isShutdown()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long until = now + durationMs;
+        untilMap.merge(targetRef, until, Math::max);
+        scheduleTimedLoreVisualExpiry(store, targetRef, untilMap, until, durationMs, effectIds);
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) {
+            applyTimedLoreVisualEffect(store, targetRef, effectIds);
+            return;
+        }
+        entityStore.getWorld().execute(() -> applyTimedLoreVisualEffect(store, targetRef, effectIds));
+    }
+
+    private static void applyTimedLoreVisualEffect(Store<EntityStore> store,
+                                                   Ref<EntityStore> targetRef,
+                                                   String[] effectIds) {
+        if (store == null || targetRef == null || effectIds == null || store.isShutdown()) {
+            return;
+        }
+        if (!isEntityAlive(store, targetRef)) {
+            return;
+        }
+        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, effectIds);
+        LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
+    }
+
+    private static void scheduleTimedLoreVisualExpiry(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      Map<Ref<EntityStore>, Long> untilMap,
+                                                      long expectedUntil,
+                                                      long delayMs,
+                                                      String[] effectIds) {
+        if (store == null || targetRef == null || untilMap == null || delayMs <= 0L) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> queueTimedLoreVisualExpiry(store, targetRef, untilMap, expectedUntil, effectIds),
+                delayMs,
+                TimeUnit.MILLISECONDS);
+    }
+
+    private static void queueTimedLoreVisualExpiry(Store<EntityStore> store,
+                                                   Ref<EntityStore> targetRef,
+                                                   Map<Ref<EntityStore>, Long> untilMap,
+                                                   long expectedUntil,
+                                                   String[] effectIds) {
+        if (store == null || targetRef == null || untilMap == null || store.isShutdown()) {
+            return;
+        }
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) {
+            expireTimedLoreVisualEffect(store, targetRef, untilMap, expectedUntil, effectIds);
+            return;
+        }
+        entityStore.getWorld().execute(() -> expireTimedLoreVisualEffect(store, targetRef, untilMap,
+                expectedUntil, effectIds));
+    }
+
+    private static void expireTimedLoreVisualEffect(Store<EntityStore> store,
+                                                    Ref<EntityStore> targetRef,
+                                                    Map<Ref<EntityStore>, Long> untilMap,
+                                                    long expectedUntil,
+                                                    String[] effectIds) {
+        if (store == null || targetRef == null || untilMap == null || store.isShutdown()) {
+            return;
+        }
+        Long current = untilMap.get(targetRef);
+        if (current == null || current > expectedUntil) {
+            return;
+        }
+        untilMap.remove(targetRef);
+        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, effectIds);
+    }
+
     private static void queueDrainVisualEffect(Store<EntityStore> store,
                                                Ref<EntityStore> targetRef,
                                                long durationMs) {
@@ -5204,7 +5597,8 @@ public final class LoreProcHandler {
                                        Ref<EntityStore> sourceRef,
                                        Ref<EntityStore> targetRef,
                                        float perTick,
-                                       long expectedUntil) {
+                                       long expectedUntil,
+                                       int feedTier) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
@@ -5212,14 +5606,15 @@ public final class LoreProcHandler {
         if (entityStore == null || entityStore.getWorld() == null) {
             return;
         }
-        entityStore.getWorld().execute(() -> applyDrainTick(store, sourceRef, targetRef, perTick, expectedUntil));
+        entityStore.getWorld().execute(() -> applyDrainTick(store, sourceRef, targetRef, perTick, expectedUntil, feedTier));
     }
 
     private static void applyDrainTick(Store<EntityStore> store,
                                        Ref<EntityStore> sourceRef,
                                        Ref<EntityStore> targetRef,
                                        float perTick,
-                                       long expectedUntil) {
+                                       long expectedUntil,
+                                       int feedTier) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
@@ -5233,9 +5628,9 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        applyCombatDamage(store, sourceRef, targetRef, perTick, true);
+        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true, feedTier);
         if (sourceRef != null && isEntityAlive(store, sourceRef)) {
-            applyHeal(store, sourceRef, perTick);
+            LoreDamageUtils.applyHeal(store, sourceRef, perTick);
         }
     }
 
@@ -5253,7 +5648,7 @@ public final class LoreProcHandler {
         if (store == null || defenderRef == null) {
             return;
         }
-        Vector3d center = getPosition(store, defenderRef);
+        Vector3d center = LoreTargetingUtils.getPosition(store, defenderRef);
         FinaleMark mark = null;
         if (statusEffectIds == POISON_EFFECT_IDS) {
             mark = getFinaleMark(CAUSTIC_FINALE_MARKS, playerId, spiritId, defenderRef);
@@ -5275,9 +5670,12 @@ public final class LoreProcHandler {
         if (attackerPlayer != null) {
             LoreVisuals.playSignatureSound(attackerPlayer, FINALE_SOUND_IDS);
         }
+        int maxTargets = Math.max(1, FINALE_MAX_TARGETS);
         List<Ref<EntityStore>> targets = isEntityAlive(store, defenderRef)
-                ? collectOmnislashTargets(store, attackerRef, defenderRef, radius, radiusSq, "finale")
-                : collectTargetsAtPosition(store, attackerRef, center, radius, radiusSq, "finale");
+                ? LoreTargetingUtils.collectOmnislashTargets(store, attackerRef, defenderRef, radius, radiusSq,
+                        "finale", DEBUG_LORE_PROCS, maxTargets, OMNISLASH_MAX_NPC_CHECKS)
+                : LoreTargetingUtils.collectTargetsAtPosition(store, attackerRef, center, radius, radiusSq,
+                        "finale", DEBUG_LORE_PROCS, maxTargets, OMNISLASH_MAX_NPC_CHECKS);
         if (targets.isEmpty()) {
             return;
         }
@@ -5285,13 +5683,13 @@ public final class LoreProcHandler {
             String effectLabel = statusEffectIds == POISON_EFFECT_IDS
                     ? "CAUSTIC_FINALE"
                     : (statusEffectIds == BLEED_EFFECT_IDS ? "SHRAPNEL_FINALE" : "BURN_FINALE");
-            String defenderLabel = resolveDebugEntityLabel(store, defenderRef);
-            Vector3d defenderPos = getPosition(store, defenderRef);
+            String defenderLabel = LoreTargetingUtils.resolveDebugEntityLabel(store, defenderRef);
+            Vector3d defenderPos = LoreTargetingUtils.getPosition(store, defenderRef);
             LoreDebug.logKv("finale.explode",
                     "effect", effectLabel,
                     "target", defenderLabel,
-                    "targetPos", formatVector(defenderPos),
-                    "center", formatVector(center),
+                    "targetPos", LoreTargetingUtils.formatVector(defenderPos),
+                    "center", LoreTargetingUtils.formatVector(center),
                     "radius", String.format(Locale.ROOT, "%.2f", radius),
                     "targets", targets.size());
         }
@@ -5307,8 +5705,8 @@ public final class LoreProcHandler {
             eligibleCount++;
         }
         int stackCount = Math.max(1, Math.min(FINALE_MAX_STACKS, eligibleCount));
-        DamageBaseResult baseResult =
-                resolveLoreDamageBaseResult(store, attackerRef, true, null, fallbackAmount);
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, fallbackAmount);
         float base = baseResult.amount;
         float perTarget = base > 0f
                 ? (float) (base * clampPercentDamage(LoreAbility.scaleEffectValue(FINALE_DAMAGE_PCT, feedTier), 0.10d, 0.90d))
@@ -5323,12 +5721,12 @@ public final class LoreProcHandler {
             if (isEntityDeadOrDying(store, target)) {
                 continue;
             }
-            applyCombatDamage(store, attackerRef, target, perTarget, baseResult.skipRefine);
+            LoreDamageUtils.applyLoreDamage(store, attackerRef, target, perTarget, baseResult.skipRefine, feedTier);
             if (statusEffectIds != null && statusEffectIds.length > 0) {
                 if (stackStatus) {
                     applyEffectStacks(store, target, statusEffectIds, stackCount);
                 } else {
-                    LoreVisuals.tryApplyVisualEffect(store, target, statusEffectIds);
+                    applyStatusVisualEffect(store, target, statusEffectIds);
                 }
                 if (isBleed) {
                     int bleedStacks = stackStatus ? stackCount : 1;
@@ -5359,51 +5757,32 @@ public final class LoreProcHandler {
         if (store == null || targetRef == null || effectIds == null || effectIds.length == 0 || stacks <= 0) {
             return;
         }
+        if (effectIds == BURN_EFFECT_IDS) {
+            queueBurnVisualEffect(store, targetRef);
+            return;
+        }
+        if (effectIds == POISON_EFFECT_IDS) {
+            queuePoisonVisualEffect(store, targetRef);
+            return;
+        }
         int count = Math.max(1, stacks);
         for (int i = 0; i < count; i++) {
             LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
         }
     }
 
-    private static void markFinaleTargetsOnHit(Store<EntityStore> store,
-                                               Player self,
-                                               Ref<EntityStore> targetRef,
-                                               LoreSocketData data) {
-        if (self == null || targetRef == null || data == null) {
+    private static void applyStatusVisualEffect(Store<EntityStore> store,
+                                                Ref<EntityStore> targetRef,
+                                                String[] effectIds) {
+        if (effectIds == BURN_EFFECT_IDS) {
+            queueBurnVisualEffect(store, targetRef);
             return;
         }
-        UUID playerId = self.getUuid();
-        if (playerId == null) {
+        if (effectIds == POISON_EFFECT_IDS) {
+            queuePoisonVisualEffect(store, targetRef);
             return;
         }
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            if (socket == null || socket.isEmpty() || !socket.hasSpirit()) {
-                continue;
-            }
-            String spiritId = socket.getSpiritId();
-            if (spiritId == null || spiritId.isBlank()) {
-                continue;
-            }
-            LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
-            if (ability == null) {
-                continue;
-            }
-            LoreAbility resolved = applyEffectOverride(ability, socket.getEffectOverride());
-            if (resolved == null) {
-                continue;
-            }
-            LoreEffectType effectType = resolved.getEffectType();
-            float amount = (float) Math.max(0.0d, resolved.getValueForLevel(socket.getLevel()));
-            int feedTier = Math.max(0, socket.getFeedTier());
-            if (effectType == LoreEffectType.BURN_FINALE) {
-                markFinaleTarget(BURN_FINALE_MARKS, playerId, spiritId, targetRef, store, amount, feedTier);
-            } else if (effectType == LoreEffectType.CAUSTIC_FINALE) {
-                markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, targetRef, store, amount, feedTier);
-            } else if (effectType == LoreEffectType.SHRAPNEL_FINALE) {
-                markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, targetRef, store, amount, feedTier);
-            }
-        }
+        LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
     }
 
     private static void markFinaleTarget(Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap,
@@ -5420,17 +5799,17 @@ public final class LoreProcHandler {
         long until = System.currentTimeMillis() + FINALE_MARK_DURATION_MS;
         Map<Ref<EntityStore>, FinaleMark> marks =
                 markMap.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-        Vector3d position = getPosition(store, targetRef);
+        Vector3d position = LoreTargetingUtils.getPosition(store, targetRef);
         FinaleMark previous = marks.get(targetRef);
         boolean isNew = previous == null || System.currentTimeMillis() > previous.until;
         marks.put(targetRef, new FinaleMark(until, position, amount, feedTier, spiritId));
         if (DEBUG_LORE_PROCS) {
             String effectLabel = resolveFinaleEffectLabel(markMap);
-            String targetLabel = resolveDebugEntityLabel(store, targetRef);
+            String targetLabel = LoreTargetingUtils.resolveDebugEntityLabel(store, targetRef);
             LoreDebug.logKv("finale.marked",
                     "effect", effectLabel,
                     "target", targetLabel,
-                    "pos", formatVector(position));
+                    "pos", LoreTargetingUtils.formatVector(position));
         }
         if (isNew) {
             scheduleFinaleMarkCheck(store, playerId, targetRef, markMap);
@@ -5502,6 +5881,19 @@ public final class LoreProcHandler {
         return "FINALE";
     }
 
+    private static LoreEffectType resolveFinaleEffectType(Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap) {
+        if (markMap == CAUSTIC_FINALE_MARKS) {
+            return LoreEffectType.CAUSTIC_FINALE;
+        }
+        if (markMap == SHRAPNEL_FINALE_MARKS) {
+            return LoreEffectType.SHRAPNEL_FINALE;
+        }
+        if (markMap == BURN_FINALE_MARKS) {
+            return LoreEffectType.BURN_FINALE;
+        }
+        return null;
+    }
+
     private static String[] resolveFinaleStatusIds(Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap) {
         if (markMap == CAUSTIC_FINALE_MARKS) {
             return POISON_EFFECT_IDS;
@@ -5510,6 +5902,53 @@ public final class LoreProcHandler {
             return BLEED_EFFECT_IDS;
         }
         return BURN_EFFECT_IDS;
+    }
+
+    private static boolean playerHasFinaleAbility(Store<EntityStore> store,
+                                                  UUID playerId,
+                                                  Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap) {
+        if (store == null || playerId == null) {
+            return false;
+        }
+        LoreEffectType finaleType = resolveFinaleEffectType(markMap);
+        if (finaleType == null) {
+            return false;
+        }
+        for (String spiritId : LoreAbsorptionStore.getAbsorbed(playerId)) {
+            LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+            if (ability != null && ability.getEffectType() == finaleType) {
+                return true;
+            }
+        }
+        Ref<EntityStore> playerRef = resolvePlayerRefByUuid(store, playerId);
+        Player player = resolvePlayerFromRef(store, playerRef);
+        if (player == null) {
+            return false;
+        }
+        ItemStack held = PlayerInventoryUtils.getHeldItem(player);
+        if (held == null || held.isEmpty()) {
+            return false;
+        }
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(held);
+        if (data == null) {
+            return false;
+        }
+        for (int i = 0; i < data.getSocketCount(); i++) {
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            if (socket == null || socket.isEmpty() || !socket.hasSpirit()) {
+                continue;
+            }
+            String spiritId = socket.getSpiritId();
+            if (spiritId == null || spiritId.isBlank()) {
+                continue;
+            }
+            LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+            LoreAbility resolved = applyEffectOverride(ability, socket.getEffectOverride());
+            if (resolved != null && resolved.getEffectType() == finaleType) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String[] resolveFinaleParticleIds(Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap) {
@@ -5568,6 +6007,13 @@ public final class LoreProcHandler {
             scheduleFinaleMarkCheck(store, playerId, targetRef, markMap);
             return;
         }
+        if (!playerHasFinaleAbility(store, playerId, markMap)) {
+            if (DEBUG_LORE_PROCS) {
+                LoreDebug.logKv("finale.skip", "reason", "noFinaleSocket", "effect", resolveFinaleEffectLabel(markMap));
+            }
+            clearFinaleMark(markMap, playerId, "finale", targetRef);
+            return;
+        }
 
         Ref<EntityStore> attackerRef = resolvePlayerRefByUuid(store, playerId);
         String[] statusIds = resolveFinaleStatusIds(markMap);
@@ -5583,7 +6029,7 @@ public final class LoreProcHandler {
         if (store == null || playerId == null) {
             return null;
         }
-        Query<EntityStore> query = resolvePlayerQuery();
+        var query = LoreTargetingUtils.resolvePlayerQuery();
         if (query == null) {
             return null;
         }
@@ -5633,7 +6079,7 @@ public final class LoreProcHandler {
             if (statMap == null) {
                 return false;
             }
-            int healthStatIndex = getHealthStatIndex(statMap);
+            int healthStatIndex = LoreDamageUtils.getHealthStatIndex(statMap);
             if (healthStatIndex < 0) {
                 return false;
             }
@@ -5711,7 +6157,8 @@ public final class LoreProcHandler {
         float scaledAmount = (float) LoreAbility.scaleEffectValue(amount, feedTier);
         double radius = LoreAbility.scaleRadius(HEAL_AREA_RADIUS, feedTier);
         double radiusSq = radius * radius;
-        List<Ref<EntityStore>> targets = collectNearbyPlayers(store, sourceRef, radiusSq);
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectNearbyPlayers(
+                store, sourceRef, radiusSq, HEAL_MAX_PLAYER_CHECKS);
         for (Ref<EntityStore> targetRef : targets) {
             applyHealOverTime(store, sourceRef, targetRef, scaledAmount, true, feedTier, radiusSq);
         }
@@ -5746,9 +6193,10 @@ public final class LoreProcHandler {
         if (spawnParticles) {
             spawnHealTotemParticles(store, sourceRef, Math.sqrt(radiusSq));
         }
-        List<Ref<EntityStore>> targets = collectNearbyPlayers(store, sourceRef, radiusSq);
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectNearbyPlayers(
+                store, sourceRef, radiusSq, HEAL_MAX_PLAYER_CHECKS);
         for (Ref<EntityStore> targetRef : targets) {
-            applyHeal(store, targetRef, amount);
+            LoreDamageUtils.applyHeal(store, targetRef, amount);
             LoreVisuals.tryApplyVisualEffect(store, targetRef, HEAL_TOTEM_EFFECT_IDS);
         }
     }
@@ -5809,7 +6257,7 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > hotUntil) {
             return;
         }
-        applyHeal(store, targetRef, perTick);
+        LoreDamageUtils.applyHeal(store, targetRef, perTick);
     }
 
     private static boolean isWithinHealRange(Store<EntityStore> store,
@@ -5819,371 +6267,15 @@ public final class LoreProcHandler {
         if (store == null || sourceRef == null || targetRef == null) {
             return false;
         }
-        Vector3d sourcePos = getPosition(store, sourceRef);
-        Vector3d targetPos = getPosition(store, targetRef);
+        Vector3d sourcePos = LoreTargetingUtils.getPosition(store, sourceRef);
+        Vector3d targetPos = LoreTargetingUtils.getPosition(store, targetRef);
         if (sourcePos == null || targetPos == null) {
             return false;
         }
-        return distanceSquared(sourcePos, targetPos) <= radiusSq;
+        return LoreTargetingUtils.distanceSquared(sourcePos, targetPos) <= radiusSq;
     }
 
-    private static List<Ref<EntityStore>> collectNearbyPlayers(Store<EntityStore> store,
-                                                               Ref<EntityStore> sourceRef,
-                                                               double radiusSq) {
-        List<Ref<EntityStore>> targets = new ArrayList<>();
-        if (store == null || sourceRef == null) {
-            return targets;
-        }
-        Vector3d center = getPosition(store, sourceRef);
-        if (center == null) {
-            return targets;
-        }
-        Query<EntityStore> query = resolvePlayerQuery();
-        if (query == null) {
-            return targets;
-        }
-        var playerType = Player.getComponentType();
-        var transformType = TransformComponent.getComponentType();
-        if (playerType == null || transformType == null) {
-            return targets;
-        }
-        final int[] inspected = new int[]{0};
-        store.forEachChunk(query, (chunk, commandBuffer) -> {
-            int size = chunk.size();
-            for (int i = 0; i < size; i++) {
-                if (inspected[0]++ >= HEAL_MAX_PLAYER_CHECKS) {
-                    return false;
-                }
-                Player player = chunk.getComponent(i, playerType);
-                if (player == null) {
-                    continue;
-                }
-                Ref<EntityStore> ref = chunk.getReferenceTo(i);
-                if (ref == null) {
-                    continue;
-                }
-                TransformComponent playerTransform = chunk.getComponent(i, transformType);
-                if (playerTransform == null) {
-                    continue;
-                }
-                Vector3d pos = playerTransform.getPosition();
-                if (pos == null || distanceSquared(center, pos) > radiusSq) {
-                    continue;
-                }
-                if (containsRef(targets, ref)) {
-                    continue;
-                }
-                targets.add(ref);
-            }
-            return true;
-        });
-        return targets;
-    }
-
-    private static Query<EntityStore> resolvePlayerQuery() {
-        Query<EntityStore> cached = playerQuery;
-        if (cached != null) {
-            return cached;
-        }
-        synchronized (PLAYER_QUERY_LOCK) {
-            cached = playerQuery;
-            if (cached != null) {
-                return cached;
-            }
-            var playerType = Player.getComponentType();
-            var transformType = TransformComponent.getComponentType();
-            if (playerType == null || transformType == null) {
-                return null;
-            }
-            try {
-                cached = Archetype.of(playerType, transformType);
-                playerQuery = cached;
-                return cached;
-            } catch (Throwable ignored) {
-                return null;
-            }
-        }
-    }
-
-    private static int getHealthStatIndex(EntityStatMap statMap) {
-        int byDefault = DefaultEntityStatTypes.getHealth();
-        if (byDefault >= 0) {
-            EntityStatValue value = statMap.get(byDefault);
-            if (value != null) return value.getIndex();
-        }
-        String[] aliases = {"health", "Health", "HP", "hp"};
-        for (String alias : aliases) {
-            EntityStatValue value = statMap.get(alias);
-            if (value != null) return value.getIndex();
-        }
-        return -1;
-    }
-
-    private static int getSignatureEnergyStatIndex(EntityStatMap statMap) {
-        int byDefault = DefaultEntityStatTypes.getSignatureEnergy();
-        if (byDefault >= 0) {
-            EntityStatValue value = statMap.get(byDefault);
-            if (value != null) return value.getIndex();
-        }
-        String[] aliases = {"SignatureEnergy", "signatureEnergy", "signature_energy", "signature"};
-        for (String alias : aliases) {
-            EntityStatValue value = statMap.get(alias);
-            if (value != null) return value.getIndex();
-        }
-        return -1;
-    }
-
-    private static long resolveStunFreezeDurationMs(double value, int feedTier) {
-        return LoreAbility.resolveStunFreezeDurationMs(value, feedTier);
-    }
-
-    private static void applyFrozenForDuration(Store<EntityStore> store, Ref<EntityStore> targetRef, long durationMs) {
-        if (store == null || targetRef == null || durationMs <= 0L) {
-            return;
-        }
-        long until = System.currentTimeMillis() + durationMs;
-        FROZEN_UNTIL.merge(targetRef, until, Math::max);
-        queueFrozenApply(store, targetRef, until);
-        queueFrozenVisualEffect(store, targetRef, durationMs);
-        OMNISLASH_SCHEDULER.schedule(() -> queueFrozenRemoval(store, targetRef, until),
-                durationMs, TimeUnit.MILLISECONDS);
-        LoreDebug.logKv("freeze.apply", "durationMs", durationMs);
-    }
-
-    private static void queueFrozenApply(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> applyFrozenComponent(store, targetRef, expectedUntil));
-    }
-
-    private static void applyFrozenComponent(Store<EntityStore> store,
-                                             Ref<EntityStore> targetRef,
-                                             long expectedUntil) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        if (System.currentTimeMillis() > expectedUntil) {
-            return;
-        }
-        if (!isEntityAlive(store, targetRef)) {
-            return;
-        }
-        store.ensureComponent(targetRef, Frozen.getComponentType());
-    }
-
-    private static void queueFrozenRemoval(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> removeFrozenIfExpired(store, targetRef, expectedUntil));
-    }
-
-    public static boolean tryApplyFrozenShatter(Store<EntityStore> store,
-                                                Ref<EntityStore> attackerRef,
-                                                Ref<EntityStore> targetRef,
-                                                Damage damage) {
-        if (store == null || targetRef == null || damage == null) {
-            return false;
-        }
-        if (damage.getAmount() <= 0f) {
-            return false;
-        }
-        if (!isFrozenActive(store, targetRef)) {
-            return false;
-        }
-        damage.setAmount(damage.getAmount() * 2.0f);
-        queueFrozenShatter(store, targetRef, attackerRef);
-        LoreDebug.log("freeze.shatter", "doubleDamage=true");
-        return true;
-    }
-
-    private static boolean isFrozenActive(Store<EntityStore> store, Ref<EntityStore> targetRef) {
-        if (store == null || targetRef == null) {
-            return false;
-        }
-        Long until = FROZEN_UNTIL.get(targetRef);
-        if (until != null && until > System.currentTimeMillis()) {
-            return true;
-        }
-        return store.getComponent(targetRef, Frozen.getComponentType()) != null;
-    }
-
-    private static void queueFrozenShatter(Store<EntityStore> store,
-                                           Ref<EntityStore> targetRef,
-                                           Ref<EntityStore> attackerRef) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            applyFrozenShatter(store, targetRef, attackerRef);
-            return;
-        }
-        entityStore.getWorld().execute(() -> applyFrozenShatter(store, targetRef, attackerRef));
-    }
-
-    private static void applyFrozenShatter(Store<EntityStore> store,
-                                           Ref<EntityStore> targetRef,
-                                           Ref<EntityStore> attackerRef) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        FROZEN_UNTIL.remove(targetRef);
-        if (!isEntityAlive(store, targetRef)) {
-            return;
-        }
-        store.tryRemoveComponent(targetRef, Frozen.getComponentType());
-        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
-        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
-        Vector3d pos = resolveCenterPosition(store, targetRef, attackerRef);
-        if (pos != null) {
-            pos.add(0.0d, 0.6d, 0.0d);
-            String particleId = LoreVisuals.resolveParticleEffectId(SHATTER_PARTICLE_IDS);
-            if (particleId != null) {
-                LoreVisuals.spawnScaledParticle(store, particleId, pos, 1.4f);
-            }
-        }
-        Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
-        LoreVisuals.playSignatureSound(attacker, "SFX_Ice_Break");
-    }
-
-    private static void removeFrozenIfExpired(Store<EntityStore> store, Ref<EntityStore> targetRef, long expectedUntil) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        Long current = FROZEN_UNTIL.get(targetRef);
-        if (current == null || current > expectedUntil) {
-            return;
-        }
-        FROZEN_UNTIL.remove(targetRef);
-        if (!isEntityAlive(store, targetRef)) {
-            return;
-        }
-        store.tryRemoveComponent(targetRef, Frozen.getComponentType());
-        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
-        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
-        LoreDebug.log("freeze.remove", "status=expired");
-    }
-
-    private static void queueFrozenVisualEffect(Store<EntityStore> store,
-                                                Ref<EntityStore> targetRef,
-                                                long durationMs) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            applyFrozenVisualEffect(store, targetRef, durationMs);
-            return;
-        }
-        entityStore.getWorld().execute(() -> applyFrozenVisualEffect(store, targetRef, durationMs));
-    }
-
-    private static void applyFrozenVisualEffect(Store<EntityStore> store,
-                                                Ref<EntityStore> targetRef,
-                                                long durationMs) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        if (!isEntityAlive(store, targetRef)) {
-            return;
-        }
-        LoreVisuals.tryRemoveVisualEffectsById(store, targetRef, FREEZE_EFFECT_IDS);
-        LoreVisuals.tryRemoveVisualEffectsByContains(store, targetRef, "freeze", "frozen", "ice");
-        LoreVisuals.tryApplyTimedVisualEffectOverride(store, targetRef, durationMs, FREEZE_EFFECT_IDS);
-        Vector3d pos = resolveCenterPosition(store, targetRef, null);
-        if (pos != null) {
-            pos.add(0.0d, 0.6d, 0.0d);
-            String particleId = LoreVisuals.resolveParticleEffectId(FREEZE_PARTICLE_IDS);
-            if (particleId != null) {
-                LoreVisuals.spawnScaledParticle(store, particleId, pos, 1.0f);
-            }
-        }
-        int pulses = (int) Math.max(1, Math.min(FREEZE_MAX_PULSES, durationMs / FREEZE_PULSE_MS));
-        for (int i = 1; i < pulses; i++) {
-            long delay = FREEZE_PULSE_MS * i;
-            OMNISLASH_SCHEDULER.schedule(
-                    () -> spawnFreezePulse(store, targetRef),
-                    delay,
-                    TimeUnit.MILLISECONDS);
-        }
-    }
-
-    private static void spawnFreezePulse(Store<EntityStore> store, Ref<EntityStore> targetRef) {
-        if (store == null || targetRef == null || store.isShutdown()) {
-            return;
-        }
-        if (!isEntityAlive(store, targetRef)) {
-            return;
-        }
-        if (!isFrozenActive(store, targetRef)) {
-            return;
-        }
-        Vector3d pos = resolveCenterPosition(store, targetRef, null);
-        if (pos == null) {
-            return;
-        }
-        pos.add(0.0d, 0.6d, 0.0d);
-        String particleId = LoreVisuals.resolveParticleEffectId(FREEZE_PARTICLE_IDS);
-        if (particleId != null) {
-            LoreVisuals.spawnScaledParticle(store, particleId, pos, 0.85f);
-        }
-    }
-
-    private static void queueSpawnHealTotemParticles(Store<EntityStore> store,
-                                                     Ref<EntityStore> sourceRef,
-                                                     double radius) {
-        if (store == null || sourceRef == null || store.isShutdown()) {
-            return;
-        }
-        EntityStore entityStore = store.getExternalData();
-        if (entityStore == null || entityStore.getWorld() == null) {
-            return;
-        }
-        entityStore.getWorld().execute(() -> spawnHealTotemParticles(store, sourceRef, radius));
-    }
-
-    private static void spawnHealTotemParticles(Store<EntityStore> store,
-                                                Ref<EntityStore> sourceRef,
-                                                double radius) {
-        if (store == null || sourceRef == null) {
-            return;
-        }
-        Vector3d pos = getPosition(store, sourceRef);
-        if (pos == null) {
-            return;
-        }
-        String particleId = LoreVisuals.resolveParticleEffectId(HEAL_TOTEM_PARTICLE_IDS);
-        if (particleId == null) {
-            LoreDebug.logKv("heal.missing", "ids", String.join(",", HEAL_TOTEM_PARTICLE_IDS));
-            return;
-        }
-        double baseRadius = Math.max(0.01d, HEAL_AREA_RADIUS);
-        double ratio = Math.max(0.35d, Math.min(1.4d, radius / baseRadius));
-        try {
-            LoreVisuals.spawnScaledParticle(store, particleId, pos, (float) ratio);
-            LoreDebug.logKv("heal.spawn", "id", particleId, "scale", String.format(Locale.ROOT, "%.2f", ratio));
-        } catch (Throwable ignored) {
-            try {
-                ParticleUtil.spawnParticleEffect(particleId, pos, store);
-            } catch (Throwable ignored2) {
-                // best-effort
-            }
-        }
-    }
-
-    private static String normalizeSpiritId(String spiritId) {
-        return spiritId.trim().toLowerCase(Locale.ROOT);
-    }
+    // normalization centralized in LoreIds
 
     private static double clampPercent(double value, double min, double max) {
         double pct = normalizePercent(value);
@@ -6219,3 +6311,4 @@ public final class LoreProcHandler {
         return Math.max(1, Math.min(3, hits));
     }
 }
+

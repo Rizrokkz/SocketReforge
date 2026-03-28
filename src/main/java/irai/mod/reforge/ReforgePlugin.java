@@ -38,6 +38,7 @@ import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
+import irai.mod.reforge.Commands.LoreApplyCommand;
 import irai.mod.reforge.Commands.LoreSpiritMapCommand;
 import irai.mod.reforge.Commands.LoreAbilityMapCommand;
 import irai.mod.reforge.Commands.LoreFeedCommand;
@@ -56,6 +57,7 @@ import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
@@ -64,6 +66,7 @@ import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Config.WorldRepairConfig;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
+import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
@@ -103,11 +106,13 @@ import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
     private final LoreEffectEST loreEffectEST;
+    private final DamageNumberEST damageNumberEST;
     private final LoreKillEST loreKillEST;
     private final LorePlayerStateEST lorePlayerStateEST;
     private final SocketStatSystem socketStatSystem;
@@ -136,6 +141,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
     private final Config<LoreConfig> loreConfig;
     private final Config<LoreMappingConfig> loreMappingConfig;
+    private final Config<DamageNumberConfig> damageNumberConfig;
     private final Config<WorldRepairConfig> worldRepairConfig;
     private final ConfigService configService;
 
@@ -145,6 +151,7 @@ public class ReforgePlugin extends JavaPlugin {
         refineEST = new EquipmentRefineEST();
         socketEffectEST = new SocketEffectEST();
         loreEffectEST = new LoreEffectEST();
+        damageNumberEST = new DamageNumberEST();
         loreKillEST = new LoreKillEST();
         lorePlayerStateEST = new LorePlayerStateEST();
         socketStatSystem = new SocketStatSystem();
@@ -161,6 +168,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
         this.loreConfig = this.withConfig("LoreConfig", LoreConfig.CODEC);
         this.loreMappingConfig = this.withConfig("LoreMappingConfig", LoreMappingConfig.CODEC);
+        this.damageNumberConfig = this.withConfig("DamageNumberConfig", DamageNumberConfig.CODEC);
         this.worldRepairConfig = this.withConfig("WorldRepairConfig", WorldRepairConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
@@ -195,6 +203,7 @@ public class ReforgePlugin extends JavaPlugin {
             LoreGemRegistry.initialize(cfg);
             LoreAbilityRegistry.initialize(cfg);
         });
+        this.configService.register("DamageNumberConfig", this.damageNumberConfig, DamageNumbers::applyConfig);
         this.configService.register("WorldRepairConfig", this.worldRepairConfig, cfg -> {});
     }
 
@@ -250,6 +259,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
         this.getCommandRegistry().registerCommand(new LoreSocketCommand("loregem", "Open lore gem socketing UI", false));
         this.getCommandRegistry().registerCommand(new LoreFeedCommand("lorefeed", "Open lore feed UI", false));
+        this.getCommandRegistry().registerCommand(new LoreApplyCommand("loreapply", "OP: apply a lore spirit to the held weapon", false));
         this.getCommandRegistry().registerCommand(new LoreAbilityMapCommand("loreabilities", "Dump lore spirit ability map", false));
         this.getCommandRegistry().registerCommand(new LoreSpiritMapCommand("lorecolors", "Dump lore spirit to gem color map", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
@@ -259,10 +269,12 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
         this.getCommandRegistry().registerCommand(new ResonanceRecipeGiveCommand("resonancerecipe", "OP: give resonant recipe shards", false));
         this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
+        disableBuiltinCombatText();
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(loreEffectEST);
+        this.getEntityStoreRegistry().registerSystem(damageNumberEST);
         this.getEntityStoreRegistry().registerSystem(loreKillEST);
         this.getEntityStoreRegistry().registerSystem(lorePlayerStateEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
@@ -275,6 +287,24 @@ public class ReforgePlugin extends JavaPlugin {
         
         //HSTATS
         new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.4");
+    }
+
+    private void disableBuiltinCombatText() {
+        try {
+            Object proxy = this.getEntityStoreRegistry();
+            java.lang.reflect.Field registryField = proxy.getClass().getDeclaredField("registry");
+            registryField.setAccessible(true);
+            Object registryObj = registryField.get(proxy);
+            if (registryObj instanceof com.hypixel.hytale.component.ComponentRegistry<?> registry) {
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                Class systemClass = Class.forName(
+                        "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems$EntityUIEvents");
+                registry.unregisterSystem(systemClass);
+                System.out.println("[SocketReforge] Disabled built-in combat text system.");
+            }
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to disable built-in combat text system: " + t.getMessage());
+        }
     }
 
     @Override

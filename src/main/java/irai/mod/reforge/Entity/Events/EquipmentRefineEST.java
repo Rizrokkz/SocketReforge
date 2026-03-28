@@ -31,6 +31,9 @@ import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Lore.LoreDamageUtils;
+import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 
 
 @SuppressWarnings("removal")
@@ -110,6 +113,9 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
+            return;
+        }
 
         // Get target (entity receiving damage)
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
@@ -121,6 +127,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         Ref<EntityStore> attackerRef = entitySource.getRef();
+        LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
+        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
         boolean skipRefine = Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
 
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
@@ -149,6 +157,9 @@ public class EquipmentRefineEST extends DamageEventSystem {
 
                     boolean isCrit = critChancePercent > 0.0
                             && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent;
+                    if (isCrit) {
+                        DamageNumberMeta.markCritical(damage);
+                    }
                     if (isCrit && critDamagePercent > 0.0) {
                         newDamage = (float) (newDamage * (1.0 + (critDamagePercent / 100.0)));
                     }
@@ -204,6 +215,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 damage.setAmount(reducedDamage);
             }
         }
+
+        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.after");
     }
 
     /**

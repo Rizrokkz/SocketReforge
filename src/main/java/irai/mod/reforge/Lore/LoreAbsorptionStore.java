@@ -6,7 +6,6 @@ import java.io.FileOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -38,7 +37,7 @@ public final class LoreAbsorptionStore {
         if (set == null || set.isEmpty()) {
             return false;
         }
-        return set.contains(normalizeSpiritId(spiritId));
+        return set.contains(LoreIds.normalizeSpiritId(spiritId));
     }
 
     public static Set<String> getAbsorbed(UUID playerId) {
@@ -56,7 +55,7 @@ public final class LoreAbsorptionStore {
         if (playerId == null || spiritId == null || spiritId.isBlank()) {
             return false;
         }
-        String normalized = normalizeSpiritId(spiritId);
+        String normalized = LoreIds.normalizeSpiritId(spiritId);
         Set<String> set = ABSORBED.computeIfAbsent(playerId, ignored -> new LinkedHashSet<>());
         boolean added = set.add(normalized);
         if (added) {
@@ -85,7 +84,7 @@ public final class LoreAbsorptionStore {
                     Arrays.stream(value.split(","))
                             .map(String::trim)
                             .filter(v -> !v.isEmpty())
-                            .map(LoreAbsorptionStore::normalizeSpiritId)
+                            .map(LoreIds::normalizeSpiritId)
                             .forEach(spirits::add);
                 }
                 if (!spirits.isEmpty()) {
@@ -118,7 +117,5 @@ public final class LoreAbsorptionStore {
         }
     }
 
-    private static String normalizeSpiritId(String spiritId) {
-        return spiritId.trim().toLowerCase(Locale.ROOT);
-    }
+    // normalization centralized in LoreIds
 }

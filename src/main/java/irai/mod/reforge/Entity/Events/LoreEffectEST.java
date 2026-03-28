@@ -24,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Lore.LoreTrigger;
@@ -56,6 +57,9 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (store == null || damage == null) {
             return;
         }
+        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
+            return;
+        }
 
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         Damage.Source source = damage.getSource();
@@ -63,6 +67,9 @@ public final class LoreEffectEST extends DamageEventSystem {
             return;
         }
         Ref<EntityStore> attackerRef = entitySource.getRef();
+
+        LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
+        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "LoreEffectEST.before");
 
         Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
         Player defender = targetRef == null ? null : store.getComponent(targetRef, Player.getComponentType());
@@ -77,6 +84,8 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (defender != null) {
             applyDefenderLore(store, defender, targetRef, attackerRef, damage, commandBuffer);
         }
+
+        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "LoreEffectEST.after");
     }
 
     private void applyAttackerLore(Store<EntityStore> store,

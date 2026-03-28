@@ -1,0 +1,9 @@
+{
+  "Duration": 3.0,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#3a2b1a",
+    "EntityTopTint": "#9a7b4f"
+  }
+}

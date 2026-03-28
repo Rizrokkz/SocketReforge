@@ -1,0 +1,18 @@
+{
+  "Duration": 2.5,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#3b3300",
+    "EntityTopTint": "#ffd45a",
+    "Particles": [
+      {
+        "SystemId": "Impact_Mace_Signature",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": {
+          "Y": 0.9
+        }
+      }
+    ]
+  }
+}

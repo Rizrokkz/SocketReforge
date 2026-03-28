@@ -1,0 +1,18 @@
+{
+  "Duration": 3.0,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#5a1400",
+    "EntityTopTint": "#ff6b2d",
+    "Particles": [
+      {
+        "SystemId": "Torch_Fire",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": {
+          "Y": 0.1
+        }
+      }
+    ]
+  }
+}

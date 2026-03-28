@@ -66,7 +66,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
     private static final String PROXIMITY_MESSAGE_KEY = "irai.lore.proximity_hint";
     private static final String[] HIGHLIGHT_AVOID_TOKENS = {
             "burn", "freeze", "shock", "bleed", "poison", "slow", "stun", "fear", "damage",
-            "heal", "regen", "regeneration", "shield", "invulnerable", "invisible", "root"
+            "heal", "regen", "regeneration", "shield", "invulnerable", "invisible", "blur", "root"
     };
     private static final String HIGHLIGHT_EFFECT_ID = "Lore_Spirit_Highlight";
     private static final String[] HIGHLIGHT_FALLBACK_IDS = {

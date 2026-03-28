@@ -27,6 +27,7 @@ public final class LoreAbility {
     public static final long BASE_AREA_HEAL_DURATION_MS = 3000L;
     public static final long BASE_AREA_HEAL_TICK_MS = 1000L;
     public static final long BASE_BERSERK_DURATION_MS = 3000L;
+    public static final long BASE_BLUR_DURATION_MS = 2500L;
     private static final double STUN_DEFAULT_SECONDS = 1.5d;
     private static final double STUN_MIN_SECONDS = 0.6d;
     private static final double STUN_MAX_SECONDS = 4.0d;
@@ -193,6 +194,14 @@ public final class LoreAbility {
         double seconds = value > 0.0d ? value : STUN_DEFAULT_SECONDS;
         seconds = Math.max(STUN_MIN_SECONDS, Math.min(STUN_MAX_SECONDS, seconds));
         long baseMs = Math.round(seconds * 1000.0d);
+        return scaleDurationMs(baseMs, feedTier);
+    }
+
+    public static long resolveBlurDurationMs(double value, int feedTier) {
+        long baseMs = BASE_BLUR_DURATION_MS;
+        if (value >= 1.0d) {
+            baseMs = Math.round(value * 1000.0d);
+        }
         return scaleDurationMs(baseMs, feedTier);
     }
 
@@ -409,8 +418,10 @@ public final class LoreAbility {
             }
             case APPLY_INVISIBLE -> {
                 key = "tooltip.lore.effect.invisible";
-                fallback = "Become invisible";
-                return formatEffect(langCode, key, fallback, formatted);
+                fallback = "Blur: 50% evasion and counter on hit";
+                String effect = formatEffect(langCode, key, fallback, formatted);
+                long durationMs = resolveBlurDurationMs(value, safeFeedTier);
+                return effect + " (" + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_SHIELD -> {
                 key = "tooltip.lore.effect.shield";
@@ -452,7 +463,7 @@ public final class LoreAbility {
                 return formatEffect(langCode, key, fallback, percent);
             }
             case BERSERK -> {
-                if ("tooltip.lore.signature.whirlwind".equals(abilityNameKey)) {
+                if ("tooltip.lore.technique.whirlwind".equals(abilityNameKey)) {
                     String percent = formatPercent(toPercent(scaleEffectValue(value, safeFeedTier)));
                     long durationMs = resolveBerserkDurationMs(safeFeedTier);
                     double radius = scaleRadius(BASE_WHIRLWIND_RADIUS, safeFeedTier);
@@ -604,3 +615,4 @@ public final class LoreAbility {
         return Math.max(1, Math.min(max, hits));
     }
 }
+

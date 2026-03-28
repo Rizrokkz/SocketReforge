@@ -1,0 +1,25 @@
+{
+  "Duration": 0.9,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Impact_Mace_Signature",
+        "TargetEntityPart": "PrimaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      },
+      {
+        "SystemId": "Impact_Mace_Signature",
+        "TargetEntityPart": "SecondaryItem",
+        "TargetNodeName": "Handle",
+        "PositionOffset": {
+          "X": 0.85
+        }
+      }
+    ]
+  }
+}

@@ -71,6 +71,11 @@
       ],
       "Id": "Arcanebench"
     },
+    "BlockEntity": {
+      "Components": {
+        "BenchBlock": {}
+      }
+    },
     "State": {
       "Id": "crafting",
       "Definitions": {

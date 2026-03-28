@@ -4,8 +4,6 @@
     "Description": "irai.items.Socket_Diffuser.description"
   },
   "Icon": "Icons/ItemsGenerated/Deco_Potion.png",
-  "Model": "Blocks/Miscellaneous/Potion.blockymodel",
-  "Texture": "Blocks/Miscellaneous/Potion_Texture.png",
   "IconProperties": {
     "Scale": 0.835,
     "Translation": [0.305, -6.895],
