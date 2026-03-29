@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.5] - 2026-03-29
+
+### Added
+
+- **Custom Floating Damage Numbers** - Added custom floating damage numbers.
+
+### Fixed
+
+- **Arcane Bench** - Fixed interaction issues. If you already placed one, you may need to break and recraft it.
+
+---
+
 ## [1.3.4] - 2026-03-27
 
 ### Added

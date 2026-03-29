@@ -1,0 +1,12 @@
+{
+  "ApplicationEffects": {
+    "Particles": [
+      { "SystemId": "CombatText_Icon_Fire" }
+    ]
+  },
+  "Duration": 0.35,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "Infinite": false,
+  "Debuff": false
+}

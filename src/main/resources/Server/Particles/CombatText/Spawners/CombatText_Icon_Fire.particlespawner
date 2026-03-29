@@ -1,0 +1,47 @@
+{
+  "RenderMode": "Erosion",
+  "EmitOffset": {
+    "X": { "Min": 0, "Max": 0 },
+    "Y": { "Min": 0, "Max": 0 },
+    "Z": { "Min": 0, "Max": 0 }
+  },
+  "ParticleRotationInfluence": "BillboardY",
+  "LinearFiltering": true,
+  "LightInfluence": 0.0,
+  "ParticleRotateWithSpawner": true,
+  "InitialVelocity": {},
+  "Particle": {
+    "Texture": "Particles/Textures/CombatText/fire.png",
+    "ScaleRatioConstraint": "OneToOne",
+    "UVOption": "None",
+    "Animation": {
+      "0": {
+        "Rotation": {
+          "X": { "Min": 0, "Max": 0 },
+          "Y": { "Min": 0, "Max": 0 },
+          "Z": { "Min": 0, "Max": 0 }
+        },
+        "Opacity": 0.8
+      },
+      "50": { "Opacity": 1.0 },
+      "100": { "Opacity": 0.8 }
+    },
+    "InitialAnimationFrame": {
+      "Rotation": {
+        "X": { "Min": 0, "Max": 0 },
+        "Y": { "Min": 0, "Max": 0 },
+        "Z": { "Min": 0, "Max": 0 }
+      },
+      "Opacity": 1.0,
+      "Scale": { "X": { "Min": 0.35, "Max": 0.35 } }
+    },
+    "SoftParticles": "Enable"
+  },
+  "TrailSpawnerPositionMultiplier": 0.0,
+  "TrailSpawnerRotationMultiplier": 0.0,
+  "ParticleLifeSpan": { "Min": 0.35, "Max": 0.35 },
+  "SpawnRate": { "Min": 1.0, "Max": 1.0 },
+  "SpawnBurst": true,
+  "MaxConcurrentParticles": 1,
+  "WaveDelay": { "Min": 0.0, "Max": 0.0 }
+}

@@ -39,6 +39,8 @@ import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
 
 DamageNumbers.kind("POISON")
     .label("Poison")
+    .icon("<item is=\"Ingredient_Poison\"/>")
+    .format("{icon}{label} {amount}")
     .ui("SocketReforge_CombatText_Poison")
     .dot(true)
     .register();
@@ -72,8 +74,10 @@ The config file is loaded from:
 It supports:
 
 - `DEFAULTS` for global formatting rules
-- `KINDS` for per-damage styling (label, UI asset, dot behavior)
+- `KINDS` for per-damage styling (label, icon, format, UI asset, dot behavior)
 - `ALIASES` for mapping custom cause names to known kinds
+
+Format placeholders: `{iconBg}`, `{icon}`, `{iconOverlay}`, `{label}`, `{amount}`, `{kind}`.
 
 ## Build the Distribution
 

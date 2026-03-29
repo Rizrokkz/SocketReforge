@@ -1,0 +1,10 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "CombatText_Icon_Critical",
+      "PositionOffset": { "X": 0, "Y": 1.4, "Z": 0 }
+    }
+  ],
+  "CullDistance": 64.0,
+  "IsImportant": false
+}

@@ -1,6 +1,9 @@
 package irai.mod.reforge.Entity.Events;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
@@ -13,7 +16,21 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.SystemGroup;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.math.vector.Transform;
+import com.hypixel.hytale.math.vector.Vector3d;
+import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.protocol.Color;
+import com.hypixel.hytale.protocol.CombatTextUpdate;
+import com.hypixel.hytale.protocol.Direction;
+import com.hypixel.hytale.protocol.EntityUIType;
+import com.hypixel.hytale.protocol.ModelTransform;
+import com.hypixel.hytale.protocol.UIComponentsUpdate;
+import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
+import com.hypixel.hytale.server.core.asset.type.particle.config.ParticleSystem;
+import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
+import com.hypixel.hytale.server.core.modules.entity.component.BoundingBox;
+import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
@@ -24,16 +41,25 @@ import com.hypixel.hytale.server.core.modules.entityui.EntityUIModule;
 import com.hypixel.hytale.server.core.modules.entityui.UIComponentList;
 import com.hypixel.hytale.server.core.modules.entityui.asset.EntityUIComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
-import com.hypixel.hytale.protocol.CombatTextUpdate;
-import com.hypixel.hytale.protocol.EntityUIType;
-import com.hypixel.hytale.protocol.UIComponentsUpdate;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
+import irai.mod.reforge.Lore.LoreTargetingUtils;
 
 public class DamageNumberEST extends DamageEventSystem {
     private static final float NON_DOT_RANDOM_JITTER_DEGREES = 240f;
+    private static final double FLOATING_DAMAGE_DEFAULT_HEIGHT = 1.4d;
+    private static final double FLOATING_DAMAGE_Y_OFFSET = 0.15d;
+    private static final double FLOATING_DAMAGE_SPREAD = 0.3d;
+    private static final double FLOATING_DAMAGE_DIGIT_SPACING = 0.08d;
+    private static final double FLOATING_DAMAGE_ICON_SPACING = 0.22d;
+    private static final double FLOATING_DAMAGE_FRONT_OFFSET = 0.35d;
+    private static final double FLOATING_DAMAGE_FAR_DISTANCE = 12.0d;
+    private static final double FLOATING_DAMAGE_FAR_FRONT_OFFSET = 2.0d;
+    private static final double FLOATING_DAMAGE_FAR_Y_OFFSET = 1.2d;
+    private static final Color WHITE_COLOR = new Color((byte) 0xFF, (byte) 0xFF, (byte) 0xFF);
     private static final boolean DEBUG_COMBAT_TEXT = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.combatText", "false"));
     private static final HytaleLogger LOGGER = HytaleLogger.get("SocketReforge.DamageNumber");
@@ -134,6 +160,20 @@ public class DamageNumberEST extends DamageEventSystem {
         }
 
         Float hitAngle = (Float) damage.getIfPresentMetaObject(Damage.HIT_ANGLE);
+        Visible visible = null;
+        if (visibleComponentType != null) {
+            visible = (Visible) commandBuffer.getComponent(targetRef, visibleComponentType);
+            if (visible == null) {
+                visible = store.getComponent(targetRef, visibleComponentType);
+            }
+        } else {
+            debug("[DamageNumberEST] visibleComponentType is null");
+        }
+        String kindId = resolveKind(damage);
+        applyCombatTextVfx(store, targetRef, attackerRef, visible, kindId);
+        if (trySpawnParticleFloatingDamage(store, targetRef, attackerRef, visible, damage.getAmount(), kindId)) {
+            return;
+        }
         UIComponentList uiList = null;
         if (uiComponentListComponentType != null) {
             uiList = (UIComponentList) commandBuffer.getComponent(targetRef, uiComponentListComponentType);
@@ -147,21 +187,11 @@ public class DamageNumberEST extends DamageEventSystem {
         } else {
             debug("[DamageNumberEST] uiComponentListComponentType is null");
         }
-        Visible visible = null;
-        if (visibleComponentType != null) {
-            visible = (Visible) commandBuffer.getComponent(targetRef, visibleComponentType);
-            if (visible == null) {
-                visible = store.getComponent(targetRef, visibleComponentType);
-            }
-        } else {
-            debug("[DamageNumberEST] visibleComponentType is null");
-        }
         EntityViewer[] viewers = resolveViewers(commandBuffer, visible, attackerRef);
         if (viewers.length == 0) {
             debug("[DamageNumberEST] skip no viewers (source=" + source + ")");
             return;
         }
-        String kindId = resolveKind(damage);
         float resolvedAngle = hitAngle == null ? 0f : hitAngle.floatValue();
         if (isDotKind(kindId) || hitAngle == null) {
             resolvedAngle = (ThreadLocalRandom.current().nextFloat() * 360f) - 180f;
@@ -179,6 +209,526 @@ public class DamageNumberEST extends DamageEventSystem {
             }
             queueCombatTextComponentSwap(viewer, targetRef, uiList, kindId);
             viewer.queueUpdate(targetRef, update);
+        }
+    }
+
+    private static void applyCombatTextVfx(Store<EntityStore> store,
+                                           Ref<EntityStore> targetRef,
+                                           Ref<EntityStore> attackerRef,
+                                           Visible visible,
+                                           String kindId) {
+        if (store == null || targetRef == null || kindId == null || kindId.isBlank()) {
+            return;
+        }
+        DamageNumbers.KindStyle style = DamageNumbers.getKindStyle(kindId);
+        if (style == null || style.vfxId() == null || style.vfxId().isBlank()) {
+            return;
+        }
+        try {
+            String vfxId = style.vfxId();
+            ParticleSystem particleSystem = resolveParticleSystem(vfxId);
+            if (particleSystem != null) {
+                spawnCombatTextParticles(store, targetRef, attackerRef, visible, particleSystem.getId());
+                return;
+            }
+            EntityEffect effect = resolveEntityEffect(vfxId);
+            if (effect == null) {
+                return;
+            }
+            EffectControllerComponent controller =
+                    store.ensureAndGetComponent(targetRef, EffectControllerComponent.getComponentType());
+            if (controller == null) {
+                return;
+            }
+            controller.addEffect(targetRef, effect, store);
+        } catch (Throwable ignored) {
+            // VFX is optional; fail silently.
+        }
+    }
+
+    private static ParticleSystem resolveParticleSystem(String systemId) {
+        if (systemId == null || systemId.isBlank()) {
+            return null;
+        }
+        try {
+            var assetMap = ParticleSystem.getAssetMap();
+            if (assetMap == null) {
+                return null;
+            }
+            return assetMap.getAsset(systemId);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static EntityEffect resolveEntityEffect(String effectId) {
+        if (effectId == null || effectId.isBlank()) {
+            return null;
+        }
+        try {
+            var assetMap = EntityEffect.getAssetMap();
+            if (assetMap == null) {
+                return null;
+            }
+            int index = assetMap.getIndex(effectId);
+            if (index < 0) {
+                return null;
+            }
+            return assetMap.getAsset(index);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void spawnCombatTextParticles(Store<EntityStore> store,
+                                                 Ref<EntityStore> targetRef,
+                                                 Ref<EntityStore> attackerRef,
+                                                 Visible visible,
+                                                 String particleSystemId) {
+        if (store == null || particleSystemId == null || particleSystemId.isBlank()) {
+            return;
+        }
+        Vector3d pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, attackerRef);
+        if (pos == null) {
+            return;
+        }
+        List<Ref<EntityStore>> viewers = collectViewerRefsForParticles(store, visible, attackerRef);
+        try {
+            if (viewers == null || viewers.isEmpty()) {
+                ParticleUtil.spawnParticleEffect(particleSystemId, pos, store);
+            } else {
+                ParticleUtil.spawnParticleEffect(particleSystemId, pos, viewers, store);
+            }
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+    }
+
+    private static boolean trySpawnParticleFloatingDamage(Store<EntityStore> store,
+                                                          Ref<EntityStore> targetRef,
+                                                          Ref<EntityStore> attackerRef,
+                                                          Visible visible,
+                                                          float amount,
+                                                          String kindId) {
+        if (store == null || targetRef == null) {
+            return false;
+        }
+        DamageNumbers.KindStyle style = DamageNumbers.getKindStyle(kindId);
+        if (style == null || style.particleFontId() == null || style.particleFontId().isBlank()) {
+            return false;
+        }
+        String rawText = DamageNumbers.formatAmountOnly(amount, kindId);
+        if (rawText == null || rawText.isBlank()) {
+            return false;
+        }
+        String digits = rawText.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return false;
+        }
+        Vector3d base = resolveFloatingDamagePosition(store, targetRef, attackerRef);
+        if (base == null) {
+            return false;
+        }
+        double jitterX = (ThreadLocalRandom.current().nextDouble() * 2.0d - 1.0d) * FLOATING_DAMAGE_SPREAD;
+        double jitterZ = (ThreadLocalRandom.current().nextDouble() * 2.0d - 1.0d) * FLOATING_DAMAGE_SPREAD;
+        Vector3d origin = new Vector3d(base.x + jitterX, base.y, base.z + jitterZ);
+        List<Ref<EntityStore>> viewers = collectViewerRefsForParticles(store, visible, attackerRef);
+
+        boolean hasIcon = style.particleIconId() != null && !style.particleIconId().isBlank();
+        double digitSpan = digits.length() > 1 ? (digits.length() - 1) * FLOATING_DAMAGE_DIGIT_SPACING : 0.0d;
+        double iconGap = hasIcon ? FLOATING_DAMAGE_ICON_SPACING : 0.0d;
+        double groupWidth = digitSpan + iconGap;
+        Color digitColor = resolveParticleColor(style.colorHex());
+
+        if (viewers == null || viewers.isEmpty()) {
+            String backgroundId = style.particleBackgroundId();
+            if (backgroundId != null && !backgroundId.isBlank()) {
+                spawnParticleSystem(store, backgroundId, origin, viewers, null);
+            }
+            double startX = origin.x - (groupWidth / 2.0d) + iconGap;
+            for (int i = 0; i < digits.length(); i++) {
+                char digit = digits.charAt(i);
+                if (digit < '0' || digit > '9') {
+                    continue;
+                }
+                String systemId = style.particleFontId() + "_Digit_" + digit;
+                Vector3d pos = new Vector3d(startX + (i * FLOATING_DAMAGE_DIGIT_SPACING), origin.y, origin.z);
+                spawnParticleSystem(store, systemId, pos, viewers, digitColor);
+            }
+            if (hasIcon) {
+                String iconId = style.particleIconId();
+                Vector3d iconPos = new Vector3d(origin.x - (groupWidth / 2.0d), origin.y, origin.z);
+                spawnParticleSystem(store, iconId, iconPos, viewers, null);
+            }
+            return true;
+        }
+
+        for (Ref<EntityStore> viewerRef : viewers) {
+            if (viewerRef == null || !viewerRef.isValid()) {
+                continue;
+            }
+            Vector3d viewerPos = resolveViewerPosition(store, viewerRef);
+            Vector3d viewerForward = resolveViewerForward(store, viewerRef);
+            Vector3d viewerOrigin = viewerPos == null
+                    ? origin
+                    : resolveViewerOrigin(origin, viewerPos, viewerForward);
+            float scale = 1.0f;
+            List<Ref<EntityStore>> singleViewer = java.util.Collections.singletonList(viewerRef);
+
+            String backgroundId = style.particleBackgroundId();
+            if (backgroundId != null && !backgroundId.isBlank()) {
+                spawnParticleSystem(store, backgroundId, viewerOrigin, singleViewer, null);
+            }
+
+            Vector3d right = computeRightVector(viewerOrigin, viewerPos);
+            Vector3d iconBase = offsetBy(viewerOrigin, right, -groupWidth / 2.0d);
+            Vector3d digitBase = offsetBy(viewerOrigin, right, (-groupWidth / 2.0d) + iconGap);
+            for (int i = 0; i < digits.length(); i++) {
+                char digit = digits.charAt(i);
+                if (digit < '0' || digit > '9') {
+                    continue;
+                }
+                String systemId = style.particleFontId() + "_Digit_" + digit;
+                Vector3d pos = offsetBy(digitBase, right, i * FLOATING_DAMAGE_DIGIT_SPACING);
+                spawnParticleSystemScaled(store, systemId, pos, singleViewer, digitColor, scale);
+            }
+
+            if (hasIcon) {
+                String iconId = style.particleIconId();
+                Vector3d iconPos = iconBase;
+                spawnParticleSystem(store, iconId, iconPos, singleViewer, null);
+            }
+        }
+
+        return true;
+    }
+
+    private static Vector3d resolveFloatingDamagePosition(Store<EntityStore> store,
+                                                          Ref<EntityStore> targetRef,
+                                                          Ref<EntityStore> attackerRef) {
+        Vector3d pos = LoreTargetingUtils.getPosition(store, targetRef);
+        if (pos == null) {
+            pos = LoreTargetingUtils.resolveCenterPosition(store, targetRef, attackerRef);
+        }
+        if (pos == null) {
+            return null;
+        }
+        double height = FLOATING_DAMAGE_DEFAULT_HEIGHT;
+        try {
+            BoundingBox bbox = store.getComponent(targetRef, BoundingBox.getComponentType());
+            if (bbox != null && bbox.getBoundingBox() != null) {
+                var box = bbox.getBoundingBox();
+                if (box != null && box.max != null) {
+                    double candidate = box.max.y;
+                    if (candidate > 0.01d) {
+                        height = candidate;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+        return new Vector3d(pos.x, pos.y + height + FLOATING_DAMAGE_Y_OFFSET, pos.z);
+    }
+
+    private static void spawnParticleSystem(Store<EntityStore> store,
+                                            String systemId,
+                                            Vector3d pos,
+                                            List<Ref<EntityStore>> viewers,
+                                            Color color) {
+        if (store == null || systemId == null || systemId.isBlank() || pos == null) {
+            return;
+        }
+        try {
+            if (color != null && viewers != null && !viewers.isEmpty()) {
+                ParticleUtil.spawnParticleEffect(systemId, pos, 0f, 0f, 0f, 1f, color, viewers, store);
+                return;
+            }
+            if (viewers == null || viewers.isEmpty()) {
+                ParticleUtil.spawnParticleEffect(systemId, pos, store);
+                return;
+            }
+            ParticleUtil.spawnParticleEffect(systemId, pos, viewers, store);
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+    }
+
+    private static void spawnParticleSystemScaled(Store<EntityStore> store,
+                                                  String systemId,
+                                                  Vector3d pos,
+                                                  List<Ref<EntityStore>> viewers,
+                                                  Color color,
+                                                  float scale) {
+        if (store == null || systemId == null || systemId.isBlank() || pos == null) {
+            return;
+        }
+        if (viewers == null || viewers.isEmpty()) {
+            spawnParticleSystem(store, systemId, pos, viewers, color);
+            return;
+        }
+        float safeScale = scale > 0f ? scale : 1f;
+        Color useColor = color != null ? color : WHITE_COLOR;
+        try {
+            ParticleUtil.spawnParticleEffect(systemId, pos, 0f, 0f, 0f, safeScale, useColor, viewers, store);
+        } catch (Throwable ignored) {
+            // best-effort
+        }
+    }
+
+    private static Vector3d resolveViewerPosition(Store<EntityStore> store, Ref<EntityStore> viewerRef) {
+        if (store == null || viewerRef == null || !viewerRef.isValid()) {
+            return null;
+        }
+        try {
+            TransformComponent transform = store.getComponent(viewerRef, TransformComponent.getComponentType());
+            if (transform == null) {
+                return null;
+            }
+            Vector3d pos = transform.getPosition();
+            return pos == null ? null : pos.clone();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Vector3d resolveViewerForward(Store<EntityStore> store, Ref<EntityStore> viewerRef) {
+        if (store == null || viewerRef == null || !viewerRef.isValid()) {
+            return null;
+        }
+        try {
+            TransformComponent transform = store.getComponent(viewerRef, TransformComponent.getComponentType());
+            if (transform == null || transform.getPosition() == null) {
+                return null;
+            }
+            Vector3f rotation = resolveLookRotation(transform);
+            if (rotation == null) {
+                return null;
+            }
+            Transform look = new Transform(transform.getPosition().clone(), rotation);
+            Vector3d direction = look.getDirection();
+            return direction == null ? null : direction.clone();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Vector3d resolveViewerOrigin(Vector3d origin,
+                                                Vector3d viewerPos,
+                                                Vector3d viewerForward) {
+        if (origin == null || viewerPos == null) {
+            return origin;
+        }
+        double distance = distanceBetween(origin, viewerPos);
+        if (distance > FLOATING_DAMAGE_FAR_DISTANCE) {
+            Vector3d forward = viewerForward;
+            if (forward == null) {
+                forward = directionFromTo(viewerPos, origin);
+            }
+            Vector3d horizontalForward = normalizeHorizontal(forward);
+            if (horizontalForward == null) {
+                horizontalForward = new Vector3d(0.0d, 0.0d, 1.0d);
+            }
+            return new Vector3d(
+                    viewerPos.x + (horizontalForward.x * FLOATING_DAMAGE_FAR_FRONT_OFFSET),
+                    viewerPos.y + FLOATING_DAMAGE_FAR_Y_OFFSET,
+                    viewerPos.z + (horizontalForward.z * FLOATING_DAMAGE_FAR_FRONT_OFFSET)
+            );
+        }
+        return offsetTowardViewer(origin, viewerPos);
+    }
+
+    private static Vector3f resolveLookRotation(TransformComponent transform) {
+        if (transform == null) {
+            return null;
+        }
+        ModelTransform sentTransform = transform.getSentTransform();
+        if (sentTransform != null && sentTransform.lookOrientation != null) {
+            return toRotationVector(sentTransform.lookOrientation);
+        }
+        Vector3f rotation = transform.getRotation();
+        return rotation == null ? null : rotation.clone();
+    }
+
+    private static Vector3f toRotationVector(Direction direction) {
+        if (direction == null) {
+            return null;
+        }
+        Vector3f rotation = new Vector3f();
+        rotation.setPitch(direction.pitch);
+        rotation.setYaw(direction.yaw);
+        rotation.setRoll(direction.roll);
+        return rotation;
+    }
+
+    private static Vector3d directionFromTo(Vector3d from, Vector3d to) {
+        if (from == null || to == null) {
+            return null;
+        }
+        return new Vector3d(to.x - from.x, to.y - from.y, to.z - from.z);
+    }
+
+    private static Vector3d normalizeHorizontal(Vector3d direction) {
+        if (direction == null) {
+            return null;
+        }
+        double dx = direction.x;
+        double dz = direction.z;
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len <= 0.0001d) {
+            return null;
+        }
+        return new Vector3d(dx / len, 0.0d, dz / len);
+    }
+
+    private static Vector3d offsetTowardViewer(Vector3d origin, Vector3d viewerPos) {
+        if (origin == null || viewerPos == null) {
+            return origin;
+        }
+        double dx = viewerPos.x - origin.x;
+        double dz = viewerPos.z - origin.z;
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len <= 0.0001d) {
+            return origin;
+        }
+        double nx = dx / len;
+        double nz = dz / len;
+        return new Vector3d(origin.x + (nx * FLOATING_DAMAGE_FRONT_OFFSET), origin.y, origin.z + (nz * FLOATING_DAMAGE_FRONT_OFFSET));
+    }
+
+    private static Vector3d computeRightVector(Vector3d origin, Vector3d viewerPos) {
+        if (origin == null || viewerPos == null) {
+            return new Vector3d(1.0d, 0.0d, 0.0d);
+        }
+        double dx = viewerPos.x - origin.x;
+        double dz = viewerPos.z - origin.z;
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len <= 0.0001d) {
+            return new Vector3d(1.0d, 0.0d, 0.0d);
+        }
+        double nx = dx / len;
+        double nz = dz / len;
+        // Right vector for the viewer's perspective (perpendicular on the horizontal plane).
+        return new Vector3d(nz, 0.0d, -nx);
+    }
+
+    private static Vector3d offsetBy(Vector3d origin, Vector3d dir, double distance) {
+        if (origin == null || dir == null) {
+            return origin;
+        }
+        return new Vector3d(origin.x + (dir.x * distance), origin.y + (dir.y * distance), origin.z + (dir.z * distance));
+    }
+
+    private static double distanceBetween(Vector3d a, Vector3d b) {
+        if (a == null || b == null) {
+            return 0.0d;
+        }
+        double dx = b.x - a.x;
+        double dy = b.y - a.y;
+        double dz = b.z - a.z;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    private static Color resolveParticleColor(String colorHex) {
+        if (colorHex == null || colorHex.isBlank()) {
+            return null;
+        }
+        String hex = colorHex.trim();
+        if (hex.startsWith("#")) {
+            hex = hex.substring(1);
+        }
+        if (hex.length() != 6) {
+            return null;
+        }
+        try {
+            int rgb = Integer.parseInt(hex, 16);
+            byte r = (byte) ((rgb >> 16) & 0xFF);
+            byte g = (byte) ((rgb >> 8) & 0xFF);
+            byte b = (byte) (rgb & 0xFF);
+            return new Color(r, g, b);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private static List<Ref<EntityStore>> collectViewerRefs(Visible visible,
+                                                            Ref<EntityStore> fallbackRef) {
+        List<Ref<EntityStore>> refs = new ArrayList<>();
+        if (visible != null) {
+            addViewerRefs(refs, visible.visibleTo);
+            if (refs.isEmpty()) {
+                addViewerRefs(refs, visible.newlyVisibleTo);
+            }
+            if (refs.isEmpty()) {
+                addViewerRefs(refs, visible.previousVisibleTo);
+            }
+        }
+        if ((refs.isEmpty()) && fallbackRef != null && fallbackRef.isValid()) {
+            refs.add(fallbackRef);
+        }
+        return refs;
+    }
+
+    private static List<Ref<EntityStore>> collectViewerRefsForParticles(Store<EntityStore> store,
+                                                                        Visible visible,
+                                                                        Ref<EntityStore> fallbackRef) {
+        List<Ref<EntityStore>> refs = collectViewerRefs(visible, null);
+        if (!refs.isEmpty()) {
+            return refs;
+        }
+        if (store != null && isPlayerRef(store, fallbackRef)) {
+            refs.add(fallbackRef);
+            return refs;
+        }
+        if (store == null) {
+            return refs;
+        }
+        return collectAllPlayerRefs(store);
+    }
+
+    private static boolean isPlayerRef(Store<EntityStore> store, Ref<EntityStore> ref) {
+        if (store == null || ref == null || !ref.isValid()) {
+            return false;
+        }
+        try {
+            PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
+            return playerRef != null && playerRef.isValid();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static List<Ref<EntityStore>> collectAllPlayerRefs(Store<EntityStore> store) {
+        List<Ref<EntityStore>> refs = new ArrayList<>();
+        if (store == null) {
+            return refs;
+        }
+        ComponentType<EntityStore, PlayerRef> playerType = PlayerRef.getComponentType();
+        if (playerType == null) {
+            return refs;
+        }
+        store.forEachChunk(playerType, (chunk, commandBuffer) -> {
+            int size = chunk.size();
+            for (int i = 0; i < size; i++) {
+                Ref<EntityStore> ref = chunk.getReferenceTo(i);
+                if (ref != null && ref.isValid()) {
+                    refs.add(ref);
+                }
+            }
+        });
+        return refs;
+    }
+
+    private static void addViewerRefs(List<Ref<EntityStore>> refs,
+                                      Map<Ref<EntityStore>, EntityViewer> viewerMap) {
+        if (refs == null || viewerMap == null || viewerMap.isEmpty()) {
+            return;
+        }
+        for (Ref<EntityStore> ref : viewerMap.keySet()) {
+            if (ref == null || !ref.isValid()) {
+                continue;
+            }
+            refs.add(ref);
         }
     }
 
@@ -251,6 +801,9 @@ public class DamageNumberEST extends DamageEventSystem {
             return;
         }
         Visible visible = store.getComponent(targetRef, visibleType);
+        if (trySpawnParticleFloatingDamage(store, targetRef, null, visible, amount, kindId)) {
+            return;
+        }
         UIComponentList uiList = store.getComponent(targetRef, uiType);
         if (visible == null || uiList == null) {
             return;
