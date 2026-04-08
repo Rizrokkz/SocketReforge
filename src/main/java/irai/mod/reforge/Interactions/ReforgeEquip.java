@@ -47,10 +47,8 @@ public class ReforgeEquip extends SimpleInteraction {
     public static final BuilderCodec<ReforgeEquip> CODEC =
             BuilderCodec.builder(ReforgeEquip.class, ReforgeEquip::new, SimpleInteraction.CODEC).build();
 
-    private static final String MATERIAL_ID = "Refinement_Glob";
-    private static final int MATERIAL_COST = 3;
-    private static final int MAX_UPGRADE_LEVEL = 3;
-    private static final double[] BREAK_CHANCES = {
+    private static final int DEFAULT_MAX_UPGRADE_LEVEL = 3;
+    private static final double[] DEFAULT_BREAK_CHANCES = {
             0.010,  // 0 → 1: 10% break chance
             0.050,  // 1 → 2: 15% break chance
             0.075,  // 2 → 3: 20% break chance
@@ -62,7 +60,7 @@ public class ReforgeEquip extends SimpleInteraction {
     private static final long CACHE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
     private static final java.util.Map<String, Long> cacheTimestamps = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static final double[][] REFORGE_WEIGHTS = {
+    private static final double[][] DEFAULT_REFORGE_WEIGHTS = {
             {0.00, 0.65, 0.34, 0.01},   // 0 → 1
             {0.35, 0.45, 0.19, 0.01},   // 1 → 2
             {0.60, 0.30, 0.095, 0.005}, // 2 → 3
@@ -86,6 +84,8 @@ public class ReforgeEquip extends SimpleInteraction {
 
     private SFXConfig sfxConfig;
     private RefinementConfig refinementConfig;
+    private static volatile RefinementConfig staticRefinementConfig;
+    private static volatile int maxUpgradeLevel = DEFAULT_MAX_UPGRADE_LEVEL;
 
     public ReforgeEquip() {
         this.sfxConfig = new SFXConfig();
@@ -97,6 +97,8 @@ public class ReforgeEquip extends SimpleInteraction {
 
     public void setRefinementConfig(RefinementConfig refinementConfig) {
         this.refinementConfig = refinementConfig;
+        staticRefinementConfig = refinementConfig;
+        maxUpgradeLevel = refinementConfig != null ? refinementConfig.getMaxLevel() : DEFAULT_MAX_UPGRADE_LEVEL;
     }
 
     @Override
@@ -136,21 +138,27 @@ public class ReforgeEquip extends SimpleInteraction {
         short slot = context.getHeldItemSlot();
         int currentLevel = getLevelFromItem(heldItem); // Check metadata first, then ID suffix
 
-        if (currentLevel >= MAX_UPGRADE_LEVEL) {
+        int maxLevel = getMaxUpgradeLevel();
+        if (currentLevel >= maxLevel) {
             player.sendMessage(Message.raw((isArmorItem ? "Armor" : "Weapon") + " is already at max level"));
             showDetailedStats(player, heldItem, slot);
             return;
         }
 
-        if (!hasEnoughMaterial(player, MATERIAL_ID, MATERIAL_COST)) {
-            player.sendMessage(Message.raw("Not enough refinement globs (need " + MATERIAL_COST + ")"));
+        RefinementConfig.MaterialTier materialTier = resolveMaterialTier(currentLevel);
+        String materialId = materialTier != null ? materialTier.itemId : "Refinement_Glob";
+        int materialCost = materialTier != null ? materialTier.cost : 3;
+        String materialName = resolveItemName(materialId);
+
+        if (!hasEnoughMaterial(player, materialId, materialCost)) {
+            player.sendMessage(Message.raw("Not enough " + materialName + " (need " + materialCost + ")"));
             return;
         }
 
         sfxConfig.playReforgeStart(player);
 
-        if (!consumeMaterial(player, MATERIAL_ID, MATERIAL_COST)) {
-            player.sendMessage(Message.raw("Failed to consume materials"));
+        if (!consumeMaterial(player, materialId, materialCost)) {
+            player.sendMessage(Message.raw("Failed to consume " + materialName));
             return;
         }
 
@@ -161,7 +169,7 @@ public class ReforgeEquip extends SimpleInteraction {
                     ? refinementConfig.getArmorBreakChance(currentLevel)
                     : refinementConfig.getBreakChance(currentLevel);
         } else {
-            breakChance = BREAK_CHANCES[Math.min(currentLevel, BREAK_CHANCES.length - 1)];
+            breakChance = DEFAULT_BREAK_CHANCES[Math.min(currentLevel, DEFAULT_BREAK_CHANCES.length - 1)];
         }
         if (Math.random() < breakChance) {
             player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
@@ -172,7 +180,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
         // Roll for upgrade outcome
         ReforgeOutcome outcome = rollReforgeOutcome(currentLevel);
-        int newLevel = Math.max(0, Math.min(currentLevel + outcome.levelChange, MAX_UPGRADE_LEVEL));
+        int newLevel = Math.max(0, Math.min(currentLevel + outcome.levelChange, maxLevel));
 
         // Create the upgraded item with new ID
         String baseItemId = getBaseItemId(itemId);
@@ -229,7 +237,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
         Integer levelFromMetadata = item.getFromMetadataOrNull(META_REFINEMENT_LEVEL, Codec.INTEGER);
         if (levelFromMetadata != null) {
-            return Math.max(0, Math.min(levelFromMetadata, 3));
+            return Math.max(0, Math.min(levelFromMetadata, getMaxUpgradeLevel()));
         }
 
         return getLevelFromItemId(item.getItemId());
@@ -254,7 +262,7 @@ public class ReforgeEquip extends SimpleInteraction {
         }
 
         String baseId = getBaseItemId(item.getItemId());
-        int clampedLevel = Math.max(0, Math.min(level, 3));
+        int clampedLevel = Math.max(0, Math.min(level, getMaxUpgradeLevel()));
         ItemStack updated = item.withMetadata(META_REFINEMENT_LEVEL, Codec.INTEGER, clampedLevel);
         if (baseId != null) {
             updated = updated.withMetadata(META_BASE_ITEM_ID, Codec.STRING, baseId);
@@ -277,9 +285,10 @@ public class ReforgeEquip extends SimpleInteraction {
             baseName = item.getItemId();
         }
 
+        boolean isArmorItem = isArmor(item) && !isWeapon(item);
         String resolvedName = baseName;
         if (clampedLevel > 0 && resolvedName != null) {
-            resolvedName = resolvedName + " +" + clampedLevel;
+            resolvedName = applyRefinementToName(resolvedName, clampedLevel, isArmorItem);
         }
 
         if (resolvedName != null) {
@@ -312,13 +321,43 @@ public class ReforgeEquip extends SimpleInteraction {
         String baseName = NameResolver.getBaseDisplayName(item);
         
         // Avoid stacking suffixes like "Sword +1 +2"
-        baseName = baseName.replaceFirst("\\s\\+[123]$", "");
+        baseName = baseName.replaceFirst("\\s\\+\\d+$", "");
         
         // Append refinement level if > 0
         if (level > 0) {
-            return baseName + " +" + level;
+            boolean isArmorItem = isArmor(item) && !isWeapon(item);
+            return applyRefinementToName(baseName, level, isArmorItem);
         }
         return baseName;
+    }
+
+    private static String formatRefinementSuffix(int level) {
+        if (level <= 0) {
+            return "";
+        }
+        RefinementConfig cfg = staticRefinementConfig;
+        if (cfg != null) {
+            return cfg.formatRefinementSuffix(level);
+        }
+        return " +" + level;
+    }
+
+    private static String applyRefinementToName(String baseName, int level) {
+        return applyRefinementToName(baseName, level, false);
+    }
+
+    private static String applyRefinementToName(String baseName, int level, boolean isArmor) {
+        if (baseName == null) {
+            return null;
+        }
+        if (level <= 0) {
+            return baseName;
+        }
+        RefinementConfig cfg = staticRefinementConfig;
+        if (cfg != null) {
+            return cfg.applyRefinementToName(baseName, level, isArmor);
+        }
+        return baseName + " +" + level;
     }
 
     /**
@@ -821,24 +860,30 @@ public class ReforgeEquip extends SimpleInteraction {
      * Gets the upgrade name for a given level (weapon).
      */
     public static String getUpgradeName(int level) {
-        if (level < 0 || level >= UPGRADE_NAMES.length) return "";
-        return UPGRADE_NAMES[level];
+        if (level <= 0) return "";
+        if (level < UPGRADE_NAMES.length) return UPGRADE_NAMES[level];
+        return "Refined";
     }
 
     /**
      * Gets the armor upgrade name for a given level.
      */
     public static String getArmorUpgradeName(int level) {
-        if (level < 0 || level >= ARMOR_UPGRADE_NAMES.length) return "";
-        return ARMOR_UPGRADE_NAMES[level];
+        if (level <= 0) return "";
+        if (level < ARMOR_UPGRADE_NAMES.length) return ARMOR_UPGRADE_NAMES[level];
+        return "Refined";
     }
 
     /**
      * Gets the damage multiplier for a given level.
      */
     public static double getDamageMultiplier(int level) {
+        if (staticRefinementConfig != null) {
+            return staticRefinementConfig.getDamageMultiplier(level);
+        }
         double[] multipliers = {1.0, 1.10, 1.15, 1.25};
-        if (level < 0 || level >= multipliers.length) return 1.0;
+        if (level < 0) return multipliers[0];
+        if (level >= multipliers.length) return multipliers[multipliers.length - 1];
         return multipliers[level];
     }
 
@@ -847,8 +892,12 @@ public class ReforgeEquip extends SimpleInteraction {
      * Defaults: +0%/+8%/+12%/+20% defense.
      */
     public static double getDefenseMultiplier(int level) {
+        if (staticRefinementConfig != null) {
+            return staticRefinementConfig.getDefenseMultiplier(level);
+        }
         double[] multipliers = {1.0, 1.08, 1.12, 1.20};
-        if (level < 0 || level >= multipliers.length) return 1.0;
+        if (level < 0) return multipliers[0];
+        if (level >= multipliers.length) return multipliers[multipliers.length - 1];
         return multipliers[level];
     }
 
@@ -998,16 +1047,17 @@ public class ReforgeEquip extends SimpleInteraction {
         String statLabel    = isArmorItem ? "Defense" : "Damage";
         String typeLabel    = isArmorItem ? "Armor" : "Weapon";
         String color = getColorForLevel(level);
-        String progressBar = createProgressBar(level, 3);
+        int maxLevel = getMaxUpgradeLevel();
+        String progressBar = createProgressBar(level, maxLevel);
 
         player.sendMessage(Message.raw(""));
         player.sendMessage(Message.raw("============================="));
         player.sendMessage(Message.raw("  " + typeLabel + ": " + itemId));
         player.sendMessage(Message.raw("  Upgrade: " + color + upgradeName + " +" + level));
-        player.sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/3)"));
+        player.sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/" + maxLevel + ")"));
         player.sendMessage(Message.raw("  " + statLabel + ": x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
 
-        if (level < 3) {
+        if (level < maxLevel) {
             double nextMultiplier = isArmorItem ? getDefenseMultiplier(level + 1) : getDamageMultiplier(level + 1);
             player.sendMessage(Message.raw("  Next Level: x" + String.format("%.2f", nextMultiplier) + " (" + String.format("%.0f", nextMultiplier * 100) + "%)"));
         } else {
@@ -1032,7 +1082,8 @@ public class ReforgeEquip extends SimpleInteraction {
      * Gets the color code for an upgrade level.
      */
     private static String getColorForLevel(int level) {
-        switch (level) {
+        int clamped = Math.min(level, 3);
+        switch (clamped) {
             case 1: return ""; // Green for +1
             case 2: return ""; // Aqua for +2
             case 3: return ""; // Gold for +3
@@ -1044,7 +1095,8 @@ public class ReforgeEquip extends SimpleInteraction {
      * Gets star decoration for an upgrade level.
      */
     private static String getStarsForLevel(int level) {
-        switch (level) {
+        int clamped = Math.min(level, 3);
+        switch (clamped) {
             case 1: return "*";
             case 2: return "**";
             case 3: return "***";
@@ -1102,9 +1154,9 @@ public class ReforgeEquip extends SimpleInteraction {
         double[] weights;
         if (refinementConfig != null) {
             double[] configWeights = refinementConfig.getReforgeWeights(currentLevel);
-            weights = configWeights != null ? configWeights : REFORGE_WEIGHTS[Math.min(currentLevel, REFORGE_WEIGHTS.length - 1)];
+            weights = configWeights != null ? configWeights : DEFAULT_REFORGE_WEIGHTS[Math.min(currentLevel, DEFAULT_REFORGE_WEIGHTS.length - 1)];
         } else {
-            weights = REFORGE_WEIGHTS[Math.min(currentLevel, REFORGE_WEIGHTS.length - 1)];
+            weights = DEFAULT_REFORGE_WEIGHTS[Math.min(currentLevel, DEFAULT_REFORGE_WEIGHTS.length - 1)];
         }
         double random = Math.random(), cumulative = 0.0;
         cumulative += weights[0];
@@ -1128,6 +1180,26 @@ public class ReforgeEquip extends SimpleInteraction {
         int totalFound = countItemInContainer(player.getInventory().getStorage(), itemId) +
                 countItemInContainer(player.getInventory().getHotbar(), itemId);
         return totalFound >= requiredAmount;
+    }
+
+    private static int getMaxUpgradeLevel() {
+        return Math.max(1, maxUpgradeLevel);
+    }
+
+    private RefinementConfig.MaterialTier resolveMaterialTier(int currentLevel) {
+        if (refinementConfig != null) {
+            return refinementConfig.getMaterialTierForLevel(currentLevel);
+        }
+        return null;
+    }
+
+    private String resolveItemName(String itemId) {
+        if (itemId == null || itemId.isBlank()) return "material";
+        String resolved = NameResolver.resolveItemIdTranslation(itemId, LangLoader.getFallbackLanguage());
+        if (resolved == null || resolved.isBlank()) {
+            resolved = itemId;
+        }
+        return resolved;
     }
 
     private int countItemInContainer(ItemContainer container, String itemId) {
@@ -1170,3 +1242,6 @@ public class ReforgeEquip extends SimpleInteraction {
         DEGRADE, SAME, UPGRADE, JACKPOT
     }
 }
+
+
+

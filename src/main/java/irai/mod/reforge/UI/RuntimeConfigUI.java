@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.Message;
@@ -17,6 +19,7 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Config.RefinementConfig.MaterialTier;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.ReforgePlugin;
 import irai.mod.reforge.Util.LangLoader;
@@ -55,6 +58,7 @@ public final class RuntimeConfigUI {
     private static final int DIVIDER_WIDTH = 792;
     private static final int PICKER_PAGE_SIZE = 7;
     private static final int CONTROL_PAGE_SIZE = 5;
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?[0-9]*\\.?[0-9]+");
 
     private static final double[] DEFAULT_SOCKET_SUCCESS = {0.90, 0.75, 0.55, 0.35};
     private static final double[] DEFAULT_SOCKET_BREAK = {0.05, 0.10, 0.20, 0.35};
@@ -74,7 +78,7 @@ public final class RuntimeConfigUI {
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, ViewState> viewStates = new ConcurrentHashMap<>();
     private static final List<CategorySection> categories = new ArrayList<>();
-    private static final List<NumericControl> controls = new ArrayList<>();
+    private static final List<ControlEntry> controls = new ArrayList<>();
 
     private enum DisplayKind {
         INTEGER,
@@ -134,7 +138,11 @@ public final class RuntimeConfigUI {
         }
     }
 
-    private static final class NumericControl {
+    private interface ControlEntry {
+        String id();
+    }
+
+    private static final class NumericControl implements ControlEntry {
         final String id;
         final String categoryId;
         final String configName;
@@ -181,6 +189,10 @@ public final class RuntimeConfigUI {
             return "value_" + id;
         }
 
+        String inputElementId() {
+            return "input_" + id;
+        }
+
         String minusLargeButtonId() {
             return "btn_" + id + "_minusLarge";
         }
@@ -201,6 +213,10 @@ public final class RuntimeConfigUI {
             return RuntimeConfigUI.formatValue(displayKind, currentValue());
         }
 
+        String formatInputValue() {
+            return RuntimeConfigUI.formatInputValue(displayKind, currentValue());
+        }
+
         String formatValue(double rawValue) {
             return RuntimeConfigUI.formatValue(displayKind, rawValue);
         }
@@ -212,15 +228,77 @@ public final class RuntimeConfigUI {
         String formatLargeStepLabel(boolean positive) {
             return formatStepLabel(displayKind, largeStep, positive);
         }
+
+        @Override
+        public String id() {
+            return id;
+        }
+    }
+
+    @FunctionalInterface
+    private interface TextSupplier {
+        String get();
+    }
+
+    @FunctionalInterface
+    private interface TextHandler {
+        void set(String value);
+    }
+
+    private static final class TextControl implements ControlEntry {
+        final String id;
+        final String categoryId;
+        final String configName;
+        final String label;
+        final String description;
+        final TextSupplier valueSupplier;
+        final TextHandler valueHandler;
+
+        TextControl(
+                String id,
+                String categoryId,
+                String configName,
+                String label,
+                String description,
+                TextSupplier valueSupplier,
+                TextHandler valueHandler) {
+            this.id = id;
+            this.categoryId = categoryId;
+            this.configName = configName;
+            this.label = label;
+            this.description = description;
+            this.valueSupplier = valueSupplier;
+            this.valueHandler = valueHandler;
+        }
+
+        String currentValue() {
+            String value = valueSupplier != null ? valueSupplier.get() : null;
+            return value == null ? "" : value;
+        }
+
+        void applyValue(String value) {
+            if (valueHandler != null) {
+                valueHandler.set(value == null ? "" : value);
+            }
+        }
+
+        String inputElementId() {
+            return "input_" + id;
+        }
+
+        @Override
+        public String id() {
+            return id;
+        }
     }
 
     private static final class ControlGroup {
         final String id;
         final String title;
         final String description;
-        final List<NumericControl> controls;
+        final List<ControlEntry> controls;
 
-        ControlGroup(String id, String title, String description, List<NumericControl> controls) {
+        ControlGroup(String id, String title, String description, List<ControlEntry> controls) {
             this.id = id;
             this.title = title;
             this.description = description;
@@ -259,9 +337,7 @@ public final class RuntimeConfigUI {
     public static void initialize(ReforgePlugin pluginInstance) {
         plugin = pluginInstance;
         hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "RuntimeConfigUI");
-        if (categories.isEmpty()) {
-            registerControls();
-        }
+        registerControls();
     }
 
     public static boolean isAvailable() {
@@ -288,6 +364,7 @@ public final class RuntimeConfigUI {
         }
         PlayerRef playerRef = player.getPlayerRef();
         ViewState state = viewStates.computeIfAbsent(playerRef, RuntimeConfigUI::createDefaultViewState);
+        registerControls();
         openPage(player, state);
     }
 
@@ -309,6 +386,7 @@ public final class RuntimeConfigUI {
             Method openMethod = pageBuilderClass.getMethod("open", Class.forName("com.hypixel.hytale.component.Store"));
 
             Object activating = eventBindingClass.getField("Activating").get(null);
+            Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
 
             String html = loadTemplate();
             CategorySection activeCategory = resolveActiveCategory(state);
@@ -404,15 +482,16 @@ public final class RuntimeConfigUI {
                         });
             }
 
-            for (NumericControl control : visibleControls(activeCategory, activeGroup, finalState)) {
-                if (control.displayKind == DisplayKind.TOGGLE) {
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
-                } else {
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.largeStep, finalPlayer, finalState);
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
-                    registerAdjustmentListener(pageBuilder, addListener, activating, control, control.largeStep, finalPlayer, finalState);
+            for (ControlEntry entry : visibleControls(activeCategory, activeGroup, finalState)) {
+                if (entry instanceof NumericControl control) {
+                    if (control.displayKind == DisplayKind.TOGGLE) {
+                        registerAdjustmentListener(pageBuilder, addListener, activating, control, -control.smallStep, finalPlayer, finalState);
+                        registerAdjustmentListener(pageBuilder, addListener, activating, control, control.smallStep, finalPlayer, finalState);
+                    } else {
+                        registerValueListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
+                    }
+                } else if (entry instanceof TextControl control) {
+                    registerTextListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
                 }
             }
 
@@ -439,6 +518,30 @@ public final class RuntimeConfigUI {
         String buttonId = buttonIdForDelta(control, delta);
         addListener.invoke(pageBuilder, buttonId, activating,
                 (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAdjustment(player, state, control, delta));
+    }
+
+    private static void registerValueListener(
+            Object pageBuilder,
+            Method addListener,
+            Object valueChanged,
+            NumericControl control,
+            Player player,
+            ViewState state) throws Exception {
+        String inputId = control.inputElementId();
+        addListener.invoke(pageBuilder, inputId, valueChanged,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleValueChange(player, state, control, eventObj, ctxObj));
+    }
+
+    private static void registerTextListener(
+            Object pageBuilder,
+            Method addListener,
+            Object valueChanged,
+            TextControl control,
+            Player player,
+            ViewState state) throws Exception {
+        String inputId = control.inputElementId();
+        addListener.invoke(pageBuilder, inputId, valueChanged,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleTextChange(player, state, control, eventObj, ctxObj));
     }
 
     private static void handleReload(Player player, ViewState state) {
@@ -495,6 +598,58 @@ public final class RuntimeConfigUI {
                 state.statusText = t(player, "ui.runtime_config.status_control_unchanged", control.label, control.formatValue(after));
             } else {
                 state.statusText = t(player, "ui.runtime_config.status_control_changed", control.label, control.formatValue(before), control.formatValue(after));
+            }
+        } catch (Exception e) {
+            state.statusText = t(player, "ui.runtime_config.status_control_failed", control.label, sanitizeError(e));
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleValueChange(Player player, ViewState state, NumericControl control, Object eventObj, Object ctxObj) {
+        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
+        if (rawValue == null || rawValue.isBlank()) {
+            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
+        }
+        Double parsed = parseInputValue(control.displayKind, rawValue);
+        if (parsed == null) {
+            state.statusText = t(player, "ui.runtime_config.status_control_invalid", control.label, rawValue == null ? "" : rawValue.trim());
+            requestReopen(player, state);
+            return;
+        }
+        double before = control.currentValue();
+        double delta = computeDelta(control.displayKind, before, parsed);
+        try {
+            control.adjust(delta);
+            plugin.getConfigService().saveAndApply(control.configName);
+            double after = control.currentValue();
+            if (roughlyEqual(before, after)) {
+                state.statusText = t(player, "ui.runtime_config.status_control_unchanged", control.label, control.formatValue(after));
+            } else {
+                state.statusText = t(player, "ui.runtime_config.status_control_changed", control.label, control.formatValue(before), control.formatValue(after));
+            }
+        } catch (Exception e) {
+            state.statusText = t(player, "ui.runtime_config.status_control_failed", control.label, sanitizeError(e));
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleTextChange(Player player, ViewState state, TextControl control, Object eventObj, Object ctxObj) {
+        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
+        if (rawValue == null) {
+            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
+        }
+        if (rawValue == null) {
+            rawValue = "";
+        }
+        String before = control.currentValue();
+        try {
+            control.applyValue(rawValue);
+            plugin.getConfigService().saveAndApply(control.configName);
+            String after = control.currentValue();
+            if (before.equals(after)) {
+                state.statusText = t(player, "ui.runtime_config.status_control_unchanged", control.label, after);
+            } else {
+                state.statusText = t(player, "ui.runtime_config.status_control_changed", control.label, before, after);
             }
         } catch (Exception e) {
             state.statusText = t(player, "ui.runtime_config.status_control_failed", control.label, sanitizeError(e));
@@ -611,15 +766,19 @@ public final class RuntimeConfigUI {
         } else {
             int singleColumnWidth = CONTROL_PANEL_WIDTH - 32;
             for (int i = start; i < end; i++) {
-                NumericControl control = group.controls.get(i);
-                sb.append(buildControlCell(control, singleColumnWidth));
+                ControlEntry entry = group.controls.get(i);
+                if (entry instanceof NumericControl control) {
+                    sb.append(buildControlCell(control, singleColumnWidth));
+                } else if (entry instanceof TextControl control) {
+                    sb.append(buildTextControlCell(control, singleColumnWidth));
+                }
             }
         }
         sb.append("</reorderable-list>");
         return sb.toString();
     }
 
-    private static int computeControlMaxPage(List<NumericControl> controls) {
+    private static int computeControlMaxPage(List<ControlEntry> controls) {
         if (controls == null || controls.isEmpty()) {
             return 0;
         }
@@ -826,8 +985,12 @@ public final class RuntimeConfigUI {
                     .append("</p>");
         }
         int singleColumnWidth = CONTROL_PANEL_WIDTH - 32;
-        for (NumericControl control : group.controls) {
-            sb.append(buildControlCell(control, singleColumnWidth));
+        for (ControlEntry entry : group.controls) {
+            if (entry instanceof NumericControl control) {
+                sb.append(buildControlCell(control, singleColumnWidth));
+            } else if (entry instanceof TextControl control) {
+                sb.append(buildTextControlCell(control, singleColumnWidth));
+            }
         }
         sb.append("</div>");
         return sb.toString();
@@ -851,19 +1014,64 @@ public final class RuntimeConfigUI {
         if (control.displayKind == DisplayKind.TOGGLE) {
             sb.append(buildButton(control.minusButtonId(), control.formatSmallStepLabel(false)));
             sb.append(buildButton(control.plusButtonId(), control.formatSmallStepLabel(true)));
+            sb.append("<p id=\"")
+                    .append(control.valueElementId())
+                    .append("\" style=\"width:")
+                    .append(VALUE_WIDTH)
+                    .append("; text-align:right; background-color:#1b2332; padding:8; border-radius:4;\">")
+                    .append(escapeHtml(control.formatCurrentValue()))
+                    .append("</p>");
         } else {
-            sb.append(buildButton(control.minusLargeButtonId(), control.formatLargeStepLabel(false)));
-            sb.append(buildButton(control.minusButtonId(), control.formatSmallStepLabel(false)));
-            sb.append(buildButton(control.plusButtonId(), control.formatSmallStepLabel(true)));
-            sb.append(buildButton(control.plusLargeButtonId(), control.formatLargeStepLabel(true)));
+            String inputStep = inputStep(control);
+            int inputDecimals = inputDecimals(control);
+            String inputMin = inputMin(control);
+            String inputMax = inputMax(control);
+            sb.append("<input type=\"number\" id=\"")
+                    .append(control.inputElementId())
+                    .append("\" style=\"anchor-width:")
+                    .append(VALUE_WIDTH)
+                    .append("; anchor-height:30; text-align:right; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
+                    .append(escapeHtml(control.formatInputValue()))
+                    .append("\"");
+            sb.append(" step=\"").append(inputStep).append("\" data-hyui-max-decimal-places=\"").append(inputDecimals).append("\"");
+            if (inputMin != null) {
+                sb.append(" min=\"").append(inputMin).append("\" data-hyui-min=\"").append(inputMin).append("\"");
+            }
+            if (inputMax != null) {
+                sb.append(" max=\"").append(inputMax).append("\" data-hyui-max=\"").append(inputMax).append("\"");
+            }
+            sb.append(">");
         }
-        sb.append("<p id=\"")
-                .append(control.valueElementId())
-                .append("\" style=\"width:")
+        sb.append("</div>");
+        sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
+                .append(Math.min(DIVIDER_WIDTH, dividerWidth))
+                .append("; anchor-height: 2;\">");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildTextControlCell(TextControl control, int width) {
+        int dividerWidth = Math.max(60, width - 20);
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"anchor-width:")
+                .append(width)
+                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Top; spacing:2;\">");
+        sb.append("<p><b>").append(escapeHtml(control.label)).append("</b></p>");
+        if (control.description != null && !control.description.isBlank()) {
+            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
+                    .append(escapeHtml(control.description))
+                    .append("</p>");
+        }
+        sb.append("</div>");
+        sb.append("<div style=\"layout-mode:Left; spacing:8;\">");
+        sb.append("<input type=\"text\" id=\"")
+                .append(control.inputElementId())
+                .append("\" style=\"anchor-width:")
                 .append(VALUE_WIDTH)
-                .append("; text-align:right; background-color:#1b2332; padding:8; border-radius:4;\">")
-                .append(escapeHtml(control.formatCurrentValue()))
-                .append("</p>");
+                .append("; anchor-height:30; text-align:left; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
+                .append(escapeHtml(control.currentValue()))
+                .append("\">");
         sb.append("</div>");
         sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
                 .append(Math.min(DIVIDER_WIDTH, dividerWidth))
@@ -937,7 +1145,7 @@ public final class RuntimeConfigUI {
         return category.groups.get(0).id;
     }
 
-    private static List<NumericControl> visibleControls(CategorySection category, ControlGroup group, ViewState state) {
+    private static List<ControlEntry> visibleControls(CategorySection category, ControlGroup group, ViewState state) {
         if (category == null || group == null) {
             return List.of();
         }
@@ -951,6 +1159,8 @@ public final class RuntimeConfigUI {
     }
 
     private static void registerControls() {
+        categories.clear();
+        controls.clear();
         addCategory(buildSocketCategory());
         addCategory(buildRefinementCategory());
         addCategory(buildLootCategory());
@@ -966,7 +1176,7 @@ public final class RuntimeConfigUI {
     private static CategorySection buildSocketCategory() {
         List<ControlGroup> groups = new ArrayList<>();
 
-        List<NumericControl> limits = new ArrayList<>();
+        List<ControlEntry> limits = new ArrayList<>();
         limits.add(intControl(
                 "socket_weapon_max",
                 CATEGORY_SOCKET,
@@ -985,21 +1195,21 @@ public final class RuntimeConfigUI {
                 delta -> socketConfig().setMaxSocketsArmor(clampInt(socketConfig().getMaxSocketsArmor() + (int) Math.round(delta), 1, 8))));
         groups.add(new ControlGroup("limits", "Limits", "Hard caps used by runtime socket logic.", limits));
 
-        List<NumericControl> punchSuccess = new ArrayList<>();
+        List<ControlEntry> punchSuccess = new ArrayList<>();
         punchSuccess.add(chanceArrayControl("socket_success_0", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 1st socket success", "Base success chance when item has 0 sockets.", RuntimeConfigUI::ensureSocketSuccessArray, 0));
         punchSuccess.add(chanceArrayControl("socket_success_1", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 2nd socket success", "Base success chance when item has 1 socket.", RuntimeConfigUI::ensureSocketSuccessArray, 1));
         punchSuccess.add(chanceArrayControl("socket_success_2", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 3rd socket success", "Base success chance when item has 2 sockets.", RuntimeConfigUI::ensureSocketSuccessArray, 2));
         punchSuccess.add(chanceArrayControl("socket_success_3", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 4th socket success", "Base success chance when item has 3 sockets.", RuntimeConfigUI::ensureSocketSuccessArray, 3));
         groups.add(new ControlGroup("punch_success", "Punch Success", "Per-attempt success values by current socket count.", punchSuccess));
 
-        List<NumericControl> punchBreak = new ArrayList<>();
+        List<ControlEntry> punchBreak = new ArrayList<>();
         punchBreak.add(chanceArrayControl("socket_break_0", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 1st socket break", "Break risk when item has 0 sockets.", RuntimeConfigUI::ensureSocketBreakArray, 0));
         punchBreak.add(chanceArrayControl("socket_break_1", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 2nd socket break", "Break risk when item has 1 socket.", RuntimeConfigUI::ensureSocketBreakArray, 1));
         punchBreak.add(chanceArrayControl("socket_break_2", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 3rd socket break", "Break risk when item has 2 sockets.", RuntimeConfigUI::ensureSocketBreakArray, 2));
         punchBreak.add(chanceArrayControl("socket_break_3", CATEGORY_SOCKET, SOCKET_CONFIG_NAME, "Punch 4th socket break", "Break risk when item has 3 sockets.", RuntimeConfigUI::ensureSocketBreakArray, 3));
         groups.add(new ControlGroup("punch_break", "Punch Break", "Per-attempt break risks by current socket count.", punchBreak));
 
-        List<NumericControl> specialRules = new ArrayList<>();
+        List<ControlEntry> specialRules = new ArrayList<>();
         specialRules.add(chanceControl(
                 "socket_remove_success",
                 CATEGORY_SOCKET,
@@ -1037,36 +1247,126 @@ public final class RuntimeConfigUI {
 
     private static CategorySection buildRefinementCategory() {
         List<ControlGroup> groups = new ArrayList<>();
+        RefinementConfig cfg = refinementConfig();
+        int maxLevel = Math.max(1, cfg.getMaxLevel());
 
-        List<NumericControl> weaponMultipliers = new ArrayList<>();
-        weaponMultipliers.add(multiplierArrayControl("refine_damage_0", CATEGORY_REFINEMENT, "Weapon +0 multiplier", "Damage multiplier at refine level 0.", RuntimeConfigUI::ensureDamageMultipliers, REFINEMENT_CONFIG_NAME, 0));
-        weaponMultipliers.add(multiplierArrayControl("refine_damage_1", CATEGORY_REFINEMENT, "Weapon +1 multiplier", "Damage multiplier at refine level 1.", RuntimeConfigUI::ensureDamageMultipliers, REFINEMENT_CONFIG_NAME, 1));
-        weaponMultipliers.add(multiplierArrayControl("refine_damage_2", CATEGORY_REFINEMENT, "Weapon +2 multiplier", "Damage multiplier at refine level 2.", RuntimeConfigUI::ensureDamageMultipliers, REFINEMENT_CONFIG_NAME, 2));
-        weaponMultipliers.add(multiplierArrayControl("refine_damage_3", CATEGORY_REFINEMENT, "Weapon +3 multiplier", "Damage multiplier at refine level 3.", RuntimeConfigUI::ensureDamageMultipliers, REFINEMENT_CONFIG_NAME, 3));
+        List<ControlEntry> limits = new ArrayList<>();
+        limits.add(intControlStep(
+                "refine_max_level",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Max refine level",
+                "Upper refinement cap (affects array sizes + UI controls).",
+                1,
+                5,
+                () -> refinementConfig().getMaxLevel(),
+                delta -> {
+                    int next = clampInt(refinementConfig().getMaxLevel() + (int) Math.round(delta), 1, 100);
+                    refinementConfig().setMaxLevel(next);
+                    refinementConfig().resetMaterialTiersToDefault();
+                    refinementConfig().applyDefaultMultipliersAndWeights();
+                }));
+        groups.add(new ControlGroup("refine_limits", "Refine Limits", "Global refinement caps and tiers.", limits));
+
+        List<ControlEntry> nameFormat = new ArrayList<>();
+        nameFormat.add(toggleControl(
+                "refine_use_prefix",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Use prefix for refine level",
+                "Enabled: level tag appears before item name. Disabled: level tag appears after item name.",
+                () -> refinementConfig().isRefinementLevelUsePrefix(),
+                value -> {
+                    refinementConfig().setRefinementLevelUsePrefix(value);
+                    refinementConfig().applyDefaultRefinementLevelLabels();
+                }));
+        nameFormat.add(textControl(
+                "refine_level_prefix",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Refine level prefix",
+                "Fallback text inserted before the level number (e.g., \" +\", \" [R\").",
+                () -> refinementConfig().getRefinementLevelPrefix(),
+                value -> refinementConfig().setRefinementLevelPrefix(value)));
+        nameFormat.add(textControl(
+                "refine_level_suffix",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Refine level suffix",
+                "Fallback text inserted after the level number (e.g., \"]\").",
+                () -> refinementConfig().getRefinementLevelSuffix(),
+                value -> refinementConfig().setRefinementLevelSuffix(value)));
+        groups.add(new ControlGroup("refine_name_format", "Refine Name Format", "Customize how refine levels are displayed in item names.", nameFormat));
+        List<ControlEntry> weaponLabelControls = buildRefinementLabelControls(false);
+        if (!weaponLabelControls.isEmpty()) {
+            groups.add(new ControlGroup("refine_level_labels_weapon", "Weapon Level Labels", "Set per-level weapon labels. Leave empty to fall back to prefix/suffix + number.", weaponLabelControls));
+        }
+        List<ControlEntry> armorLabelControls = buildRefinementLabelControls(true);
+        if (!armorLabelControls.isEmpty()) {
+            groups.add(new ControlGroup("refine_level_labels_armor", "Armor Level Labels", "Set per-level armor labels. Leave empty to fall back to prefix/suffix + number.", armorLabelControls));
+        }
+        List<ControlEntry> tierControls = buildMaterialTierControls();
+        if (!tierControls.isEmpty()) {
+            groups.add(new ControlGroup("refine_material_tiers", "Refine Material Tiers", "Adjust level thresholds and material costs per tier.", tierControls));
+        }
+
+        List<ControlEntry> weaponMultipliers = new ArrayList<>();
+        for (int level = 0; level <= maxLevel; level++) {
+            weaponMultipliers.add(multiplierArrayControl(
+                    "refine_damage_" + level,
+                    CATEGORY_REFINEMENT,
+                    "Weapon +" + level + " multiplier",
+                    "Damage multiplier at refine level " + level + ".",
+                    RuntimeConfigUI::ensureDamageMultipliers,
+                    REFINEMENT_CONFIG_NAME,
+                    level));
+        }
         groups.add(new ControlGroup("weapon_multipliers", "Weapon Multipliers", "Damage scaling by refinement tier.", weaponMultipliers));
 
-        List<NumericControl> armorMultipliers = new ArrayList<>();
-        armorMultipliers.add(multiplierArrayControl("refine_defense_0", CATEGORY_REFINEMENT, "Armor +0 multiplier", "Defense multiplier at refine level 0.", RuntimeConfigUI::ensureDefenseMultipliers, REFINEMENT_CONFIG_NAME, 0));
-        armorMultipliers.add(multiplierArrayControl("refine_defense_1", CATEGORY_REFINEMENT, "Armor +1 multiplier", "Defense multiplier at refine level 1.", RuntimeConfigUI::ensureDefenseMultipliers, REFINEMENT_CONFIG_NAME, 1));
-        armorMultipliers.add(multiplierArrayControl("refine_defense_2", CATEGORY_REFINEMENT, "Armor +2 multiplier", "Defense multiplier at refine level 2.", RuntimeConfigUI::ensureDefenseMultipliers, REFINEMENT_CONFIG_NAME, 2));
-        armorMultipliers.add(multiplierArrayControl("refine_defense_3", CATEGORY_REFINEMENT, "Armor +3 multiplier", "Defense multiplier at refine level 3.", RuntimeConfigUI::ensureDefenseMultipliers, REFINEMENT_CONFIG_NAME, 3));
+        List<ControlEntry> armorMultipliers = new ArrayList<>();
+        for (int level = 0; level <= maxLevel; level++) {
+            armorMultipliers.add(multiplierArrayControl(
+                    "refine_defense_" + level,
+                    CATEGORY_REFINEMENT,
+                    "Armor +" + level + " multiplier",
+                    "Defense multiplier at refine level " + level + ".",
+                    RuntimeConfigUI::ensureDefenseMultipliers,
+                    REFINEMENT_CONFIG_NAME,
+                    level));
+        }
         groups.add(new ControlGroup("armor_multipliers", "Armor Multipliers", "Defense scaling by refinement tier.", armorMultipliers));
 
-        List<NumericControl> weaponBreak = new ArrayList<>();
-        weaponBreak.add(chanceArrayControl("refine_break_weapon_0", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Weapon 0->1 break", "Break chance while attempting +0 to +1.", RuntimeConfigUI::ensureWeaponBreakArray, 0));
-        weaponBreak.add(chanceArrayControl("refine_break_weapon_1", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Weapon 1->2 break", "Break chance while attempting +1 to +2.", RuntimeConfigUI::ensureWeaponBreakArray, 1));
-        weaponBreak.add(chanceArrayControl("refine_break_weapon_2", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Weapon 2->3 break", "Break chance while attempting +2 to +3.", RuntimeConfigUI::ensureWeaponBreakArray, 2));
+        List<ControlEntry> weaponBreak = new ArrayList<>();
+        for (int level = 0; level < maxLevel; level++) {
+            weaponBreak.add(chanceArrayControl(
+                    "refine_break_weapon_" + level,
+                    CATEGORY_REFINEMENT,
+                    REFINEMENT_CONFIG_NAME,
+                    "Weapon " + level + "->" + (level + 1) + " break",
+                    "Break chance while attempting +" + level + " to +" + (level + 1) + ".",
+                    RuntimeConfigUI::ensureWeaponBreakArray,
+                    level));
+        }
         groups.add(new ControlGroup("weapon_break", "Weapon Break", "Break risks for weapon refinement transitions.", weaponBreak));
 
-        List<NumericControl> armorBreak = new ArrayList<>();
-        armorBreak.add(chanceArrayControl("refine_break_armor_0", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Armor 0->1 break", "Break chance while attempting +0 to +1.", RuntimeConfigUI::ensureArmorBreakArray, 0));
-        armorBreak.add(chanceArrayControl("refine_break_armor_1", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Armor 1->2 break", "Break chance while attempting +1 to +2.", RuntimeConfigUI::ensureArmorBreakArray, 1));
-        armorBreak.add(chanceArrayControl("refine_break_armor_2", CATEGORY_REFINEMENT, REFINEMENT_CONFIG_NAME, "Armor 2->3 break", "Break chance while attempting +2 to +3.", RuntimeConfigUI::ensureArmorBreakArray, 2));
+        List<ControlEntry> armorBreak = new ArrayList<>();
+        for (int level = 0; level < maxLevel; level++) {
+            armorBreak.add(chanceArrayControl(
+                    "refine_break_armor_" + level,
+                    CATEGORY_REFINEMENT,
+                    REFINEMENT_CONFIG_NAME,
+                    "Armor " + level + "->" + (level + 1) + " break",
+                    "Break chance while attempting +" + level + " to +" + (level + 1) + ".",
+                    RuntimeConfigUI::ensureArmorBreakArray,
+                    level));
+        }
         groups.add(new ControlGroup("armor_break", "Armor Break", "Break risks for armor refinement transitions.", armorBreak));
 
-        groups.add(new ControlGroup("weights_0_1", "Outcome Weights 0->1", "Adjust one value and the other outcomes auto-normalize to stay at 100%.", buildWeightControls("refine_weight_0_", 0, "0->1")));
-        groups.add(new ControlGroup("weights_1_2", "Outcome Weights 1->2", "Adjust one value and the other outcomes auto-normalize to stay at 100%.", buildWeightControls("refine_weight_1_", 1, "1->2")));
-        groups.add(new ControlGroup("weights_2_3", "Outcome Weights 2->3", "Adjust one value and the other outcomes auto-normalize to stay at 100%.", buildWeightControls("refine_weight_2_", 2, "2->3")));
+        for (int level = 0; level < maxLevel; level++) {
+            String title = "Outcome Weights L" + level + "->L" + (level + 1);
+            String desc = "Adjust one value and the other outcomes auto-normalize to stay at 100%.";
+            groups.add(new ControlGroup("weights_level_" + level, title, desc, buildWeightControls(level)));
+        }
 
         return new CategorySection(
                 CATEGORY_REFINEMENT,
@@ -1080,7 +1380,7 @@ public final class RuntimeConfigUI {
     private static CategorySection buildLootCategory() {
         List<ControlGroup> groups = new ArrayList<>();
 
-        List<NumericControl> chestRolls = new ArrayList<>();
+        List<ControlEntry> chestRolls = new ArrayList<>();
         chestRolls.add(chanceControl("loot_chest_three", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest 3-socket chance", "Chance for rolled chest loot to land at 3 sockets.", () -> lootConfig().getChestThreeSocketChance(), delta -> lootConfig().setChestThreeSocketChance(clampChance(lootConfig().getChestThreeSocketChance() + delta))));
         chestRolls.add(chanceControl("loot_chest_four", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest 4-socket chance", "Chance for rolled chest loot to land at 4 sockets.", () -> lootConfig().getChestFourSocketChance(), delta -> lootConfig().setChestFourSocketChance(clampChance(lootConfig().getChestFourSocketChance() + delta))));
         chestRolls.add(chanceControl("loot_chest_five", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest 5-socket chance", "Chance for rolled chest loot to land at 5 sockets.", () -> lootConfig().getChestFiveSocketChance(), delta -> lootConfig().setChestFiveSocketChance(clampChance(lootConfig().getChestFiveSocketChance() + delta))));
@@ -1089,7 +1389,7 @@ public final class RuntimeConfigUI {
         chestRolls.add(chanceControl("loot_chest_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest socketed essence chance", "Chance for chest equipment to spawn with filled essences.", () -> lootConfig().getChestSocketedEssenceChance(), delta -> lootConfig().setChestSocketedEssenceChance(clampChance(lootConfig().getChestSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("chest_loot", "Chest Loot", "Socket roll tuning for treasure chests.", chestRolls));
 
-        List<NumericControl> dropRolls = new ArrayList<>();
+        List<ControlEntry> dropRolls = new ArrayList<>();
         dropRolls.add(chanceControl("loot_drop_three", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 3-socket chance", "Chance for NPC drops to land at 3 sockets.", () -> lootConfig().getDropThreeSocketChance(), delta -> lootConfig().setDropThreeSocketChance(clampChance(lootConfig().getDropThreeSocketChance() + delta))));
         dropRolls.add(chanceControl("loot_drop_four", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 4-socket chance", "Chance for NPC drops to land at 4 sockets.", () -> lootConfig().getDropFourSocketChance(), delta -> lootConfig().setDropFourSocketChance(clampChance(lootConfig().getDropFourSocketChance() + delta))));
         dropRolls.add(chanceControl("loot_drop_five", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 5-socket chance", "Chance for NPC drops to land at 5 sockets.", () -> lootConfig().getDropFiveSocketChance(), delta -> lootConfig().setDropFiveSocketChance(clampChance(lootConfig().getDropFiveSocketChance() + delta))));
@@ -1098,18 +1398,18 @@ public final class RuntimeConfigUI {
         dropRolls.add(chanceControl("loot_drop_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop socketed essence chance", "Chance for NPC equipment to spawn with filled essences.", () -> lootConfig().getDropSocketedEssenceChance(), delta -> lootConfig().setDropSocketedEssenceChance(clampChance(lootConfig().getDropSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("npc_drops", "NPC Drops", "Socket roll tuning for NPC and world drops.", dropRolls));
 
-        List<NumericControl> essenceFill = new ArrayList<>();
+        List<ControlEntry> essenceFill = new ArrayList<>();
         essenceFill.add(chanceControl("loot_greater_essence_chance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Greater essence chance", "Chance each filled socket uses a concentrated essence.", () -> lootConfig().getGreaterEssenceChance(), delta -> lootConfig().setGreaterEssenceChance(clampChance(lootConfig().getGreaterEssenceChance() + delta))));
         groups.add(new ControlGroup("essence_fill", "Essence Fill", "Controls for pre-filled socketed essences.", essenceFill));
 
-        List<NumericControl> essenceDrops = new ArrayList<>();
+        List<ControlEntry> essenceDrops = new ArrayList<>();
         essenceDrops.add(chanceControl("loot_crop_water_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence chance", "Chance for farm crops to drop water essence.", () -> lootConfig().getCropWaterEssenceChance(), delta -> lootConfig().setCropWaterEssenceChance(clampChance(lootConfig().getCropWaterEssenceChance() + delta))));
         essenceDrops.add(chanceControl("loot_crop_lightning_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop lightning essence chance", "Chance for stamina crops to drop lightning essence.", () -> lootConfig().getCropLightningEssenceChance(), delta -> lootConfig().setCropLightningEssenceChance(clampChance(lootConfig().getCropLightningEssenceChance() + delta))));
         essenceDrops.add(chanceControl("loot_npc_water_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC water essence chance", "Chance for aquatic NPC drops to include water essence.", () -> lootConfig().getNpcWaterEssenceChance(), delta -> lootConfig().setNpcWaterEssenceChance(clampChance(lootConfig().getNpcWaterEssenceChance() + delta))));
         essenceDrops.add(chanceControl("loot_npc_lightning_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC lightning essence chance", "Chance for flying NPC drops to include lightning essence.", () -> lootConfig().getNpcLightningEssenceChance(), delta -> lootConfig().setNpcLightningEssenceChance(clampChance(lootConfig().getNpcLightningEssenceChance() + delta))));
         groups.add(new ControlGroup("essence_drops", "Essence Drops", "Extra essence injection for crops and NPCs.", essenceDrops));
 
-        List<NumericControl> essenceQuantities = new ArrayList<>();
+        List<ControlEntry> essenceQuantities = new ArrayList<>();
         essenceQuantities.add(intControlStep("loot_crop_water_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence min", "Minimum water essence quantity from crops.", 1, 5, () -> lootConfig().getCropWaterEssenceMinQuantity(), delta -> lootConfig().setCropWaterEssenceMinQuantity(Math.min(clampInt(lootConfig().getCropWaterEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropWaterEssenceMaxQuantity()))));
         essenceQuantities.add(intControlStep("loot_crop_water_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop water essence max", "Maximum water essence quantity from crops.", 1, 5, () -> lootConfig().getCropWaterEssenceMaxQuantity(), delta -> lootConfig().setCropWaterEssenceMaxQuantity(Math.max(clampInt(lootConfig().getCropWaterEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropWaterEssenceMinQuantity()))));
         essenceQuantities.add(intControlStep("loot_crop_lightning_essence_min", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Crop lightning essence min", "Minimum lightning essence quantity from stamina crops.", 1, 5, () -> lootConfig().getCropLightningEssenceMinQuantity(), delta -> lootConfig().setCropLightningEssenceMinQuantity(Math.min(clampInt(lootConfig().getCropLightningEssenceMinQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getCropLightningEssenceMaxQuantity()))));
@@ -1120,12 +1420,12 @@ public final class RuntimeConfigUI {
         essenceQuantities.add(intControlStep("loot_npc_lightning_essence_max", CATEGORY_LOOT, LOOT_CONFIG_NAME, "NPC lightning essence max", "Maximum lightning essence quantity from flying NPCs.", 1, 5, () -> lootConfig().getNpcLightningEssenceMaxQuantity(), delta -> lootConfig().setNpcLightningEssenceMaxQuantity(Math.max(clampInt(lootConfig().getNpcLightningEssenceMaxQuantity() + (int) Math.round(delta), 0, 20), lootConfig().getNpcLightningEssenceMinQuantity()))));
         groups.add(new ControlGroup("essence_quantities", "Essence Quantities", "Min/max quantities for injected essences.", essenceQuantities));
 
-        List<NumericControl> brokenRange = new ArrayList<>();
+        List<ControlEntry> brokenRange = new ArrayList<>();
         brokenRange.add(intControl("loot_min_broken", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Min broken sockets", "Lower clamp after a loot roll resolves.", () -> lootConfig().getMinBrokenSockets(), delta -> lootConfig().setMinBrokenSockets(Math.min(clampInt(lootConfig().getMinBrokenSockets() + (int) Math.round(delta), 1, 8), lootConfig().getMaxBrokenSockets()))));
         brokenRange.add(intControl("loot_max_broken", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Max broken sockets", "Upper clamp after a loot roll resolves.", () -> lootConfig().getMaxBrokenSockets(), delta -> lootConfig().setMaxBrokenSockets(Math.max(clampInt(lootConfig().getMaxBrokenSockets() + (int) Math.round(delta), 1, 8), lootConfig().getMinBrokenSockets()))));
         groups.add(new ControlGroup("broken_socket_range", "Broken Socket Range", "Final min/max clamp used after chest and drop rolls.", brokenRange));
 
-        List<NumericControl> loreControls = new ArrayList<>();
+        List<ControlEntry> loreControls = new ArrayList<>();
         loreControls.add(chanceControl("lore_chest_socket_chance", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket chest chance", "Chance for chest loot to roll lore sockets.", () -> loreConfig().getChestLoreSocketChance(), delta -> loreConfig().setChestLoreSocketChance(clampChance(loreConfig().getChestLoreSocketChance() + delta))));
         loreControls.add(chanceControl("lore_drop_socket_chance", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket drop chance", "Chance for NPC drops to roll lore sockets.", () -> loreConfig().getDropLoreSocketChance(), delta -> loreConfig().setDropLoreSocketChance(clampChance(loreConfig().getDropLoreSocketChance() + delta))));
         loreControls.add(intControl("lore_socket_min", CATEGORY_LOOT, LORE_CONFIG_NAME, "Lore socket min", "Minimum lore sockets on a roll.", () -> loreConfig().getMinLoreSockets(), delta -> {
@@ -1157,13 +1457,86 @@ public final class RuntimeConfigUI {
                 null);
     }
 
-    private static List<NumericControl> buildWeightControls(String idPrefix, int transition, String labelPrefix) {
-        List<NumericControl> weightControls = new ArrayList<>();
-        weightControls.add(weightControl(idPrefix + "degrade", transition, 0, labelPrefix + " degrade", "Chance to drop one level."));
-        weightControls.add(weightControl(idPrefix + "same", transition, 1, labelPrefix + " same", "Chance to stay at the same level."));
-        weightControls.add(weightControl(idPrefix + "upgrade", transition, 2, labelPrefix + " upgrade", "Chance to gain one level."));
-        weightControls.add(weightControl(idPrefix + "jackpot", transition, 3, labelPrefix + " jackpot", "Chance to gain two levels."));
+    private static List<ControlEntry> buildWeightControls(int level) {
+        String labelPrefix = "L" + level;
+        String idPrefix = "refine_weight_" + level + "_";
+        List<ControlEntry> weightControls = new ArrayList<>();
+        weightControls.add(weightControl(idPrefix + "degrade", level, 0, labelPrefix + " degrade", "Chance to drop one level."));
+        weightControls.add(weightControl(idPrefix + "same", level, 1, labelPrefix + " same", "Chance to stay at the same level."));
+        weightControls.add(weightControl(idPrefix + "upgrade", level, 2, labelPrefix + " upgrade", "Chance to gain one level."));
+        weightControls.add(weightControl(idPrefix + "jackpot", level, 3, labelPrefix + " jackpot", "Chance to gain two levels."));
         return weightControls;
+    }
+
+    private static List<ControlEntry> buildMaterialTierControls() {
+        List<ControlEntry> controls = new ArrayList<>();
+        List<MaterialTier> tiers = getMaterialTierSnapshot();
+        if (tiers.isEmpty()) {
+            return controls;
+        }
+        int tierCount = tiers.size();
+        for (int i = 0; i < tierCount; i++) {
+            MaterialTier tier = tiers.get(i);
+            String tierLabel = "Tier " + (i + 1) + " (" + tier.itemId + ")";
+            if (i < tierCount - 1) {
+                int index = i;
+                controls.add(intControlStep(
+                        "refine_tier_max_" + index,
+                        CATEGORY_REFINEMENT,
+                        REFINEMENT_CONFIG_NAME,
+                        tierLabel + " max level",
+                        "Upper level bound for " + tierLabel + ".",
+                        1,
+                        5,
+                        () -> getTierMaxValue(index),
+                        delta -> setTierMaxValue(index, getTierMaxValue(index) + (int) Math.round(delta))));
+            }
+            int costIndex = i;
+            controls.add(intControlStep(
+                    "refine_tier_cost_" + costIndex,
+                    CATEGORY_REFINEMENT,
+                    REFINEMENT_CONFIG_NAME,
+                    tierLabel + " cost",
+                    "Material count consumed per refine attempt.",
+                    1,
+                    5,
+                    () -> getTierCostValue(costIndex),
+                    delta -> setTierCostValue(costIndex, getTierCostValue(costIndex) + (int) Math.round(delta))));
+        }
+        return controls;
+    }
+
+    private static List<ControlEntry> buildRefinementLabelControls(boolean isArmor) {
+        RefinementConfig cfg = refinementConfig();
+        int maxLevel = Math.max(1, cfg.getMaxLevel());
+        List<ControlEntry> controls = new ArrayList<>();
+        boolean usePrefix = cfg.isRefinementLevelUsePrefix();
+        String idPrefix = isArmor ? "refine_label_armor_" : "refine_label_weapon_";
+        for (int level = 1; level <= maxLevel; level++) {
+            int index = level;
+            controls.add(textControl(
+                    idPrefix + level,
+                    CATEGORY_REFINEMENT,
+                    REFINEMENT_CONFIG_NAME,
+                    "Level " + level + " label",
+                    usePrefix
+                            ? "Prefix text for level " + level + " (e.g., \"Sharp \")."
+                            : "Suffix text for level " + level + " (e.g., \" +" + level + "\").",
+                    () -> getRefinementLabelValue(index, isArmor),
+                    value -> refinementConfig().setRefinementLevelLabel(index, value, isArmor)));
+        }
+        return controls;
+    }
+
+    private static String getRefinementLabelValue(int level, boolean isArmor) {
+        String[] labels = isArmor
+                ? refinementConfig().getRefinementLevelLabelsArmor()
+                : refinementConfig().getRefinementLevelLabels();
+        if (labels == null || level < 0 || level >= labels.length) {
+            return "";
+        }
+        String value = labels[level];
+        return value == null ? "" : value;
     }
 
     private static NumericControl intControl(String id, String categoryId, String configName, String label, String description, ValueSupplier supplier, AdjustHandler adjuster) {
@@ -1184,6 +1557,30 @@ public final class RuntimeConfigUI {
 
     private static NumericControl chanceControl(String id, String categoryId, String configName, String label, String description, ValueSupplier supplier, AdjustHandler adjuster) {
         return new NumericControl(id, categoryId, configName, label, description, DisplayKind.PERCENT, 0.01, 0.05, supplier, adjuster);
+    }
+
+    private static NumericControl toggleControl(String id, String categoryId, String configName, String label, String description, java.util.function.BooleanSupplier supplier, java.util.function.Consumer<Boolean> setter) {
+        return new NumericControl(
+                id,
+                categoryId,
+                configName,
+                label,
+                description,
+                DisplayKind.TOGGLE,
+                1,
+                1,
+                () -> supplier.getAsBoolean() ? 1.0 : 0.0,
+                delta -> setter.accept(delta > 0));
+    }
+
+    private static TextControl textControl(String id,
+                                           String categoryId,
+                                           String configName,
+                                           String label,
+                                           String description,
+                                           TextSupplier supplier,
+                                           TextHandler handler) {
+        return new TextControl(id, categoryId, configName, label, description, supplier, handler);
     }
 
     private static NumericControl chanceArrayControl(String id, String categoryId, String configName, String label, String description, ArraySupplier arraySupplier, int index) {
@@ -1214,26 +1611,6 @@ public final class RuntimeConfigUI {
                 delta -> arraySupplier.get()[index] = clamp(arraySupplier.get()[index] + delta, 0.10, 5.0));
     }
 
-    private static NumericControl toggleControl(String id,
-                                                String categoryId,
-                                                String configName,
-                                                String label,
-                                                String description,
-                                                java.util.function.BooleanSupplier supplier,
-                                                java.util.function.Consumer<Boolean> setter) {
-        return new NumericControl(
-                id,
-                categoryId,
-                configName,
-                label,
-                description,
-                DisplayKind.TOGGLE,
-                1,
-                1,
-                () -> supplier.getAsBoolean() ? 1.0 : 0.0,
-                delta -> setter.accept(delta >= 0));
-    }
-
     private static NumericControl weightControl(String id, int transition, int index, String label, String description) {
         return new NumericControl(
                 id,
@@ -1244,8 +1621,8 @@ public final class RuntimeConfigUI {
                 DisplayKind.PERCENT,
                 0.005,
                 0.025,
-                () -> ensureWeightArray(transition)[index],
-                delta -> adjustWeight(transition, index, delta));
+                () -> getWeightValue(transition, index),
+                delta -> adjustWeightByLevel(transition, index, delta));
     }
 
     private static SocketConfig socketConfig() {
@@ -1262,6 +1639,100 @@ public final class RuntimeConfigUI {
 
     private static LoreConfig loreConfig() {
         return plugin.getLoreRuntimeConfig();
+    }
+
+    private static List<MaterialTier> getMaterialTierSnapshot() {
+        List<MaterialTier> tiers = new ArrayList<>(refinementConfig().getMaterialTiers());
+        tiers.sort(java.util.Comparator.comparingInt(t -> t.minLevel));
+        return tiers;
+    }
+
+    private static int getTierMaxValue(int index) {
+        List<MaterialTier> tiers = getMaterialTierSnapshot();
+        if (tiers.isEmpty() || index < 0 || index >= tiers.size()) {
+            return refinementConfig().getMaxLevel();
+        }
+        if (index == tiers.size() - 1) {
+            return refinementConfig().getMaxLevel();
+        }
+        return tiers.get(index).maxLevel;
+    }
+
+    private static int getTierCostValue(int index) {
+        List<MaterialTier> tiers = getMaterialTierSnapshot();
+        if (tiers.isEmpty() || index < 0 || index >= tiers.size()) {
+            return 1;
+        }
+        return tiers.get(index).cost;
+    }
+
+    private static void setTierMaxValue(int index, int newMax) {
+        List<MaterialTier> tiers = getMaterialTierSnapshot();
+        if (tiers.isEmpty() || index < 0 || index >= tiers.size() - 1) {
+            return;
+        }
+        int maxLevel = refinementConfig().getMaxLevel();
+        int tierCount = tiers.size();
+
+        int[] maxes = new int[tierCount];
+        for (int i = 0; i < tierCount; i++) {
+            maxes[i] = i == tierCount - 1 ? maxLevel : tiers.get(i).maxLevel;
+        }
+
+        int minBound = index == 0 ? 0 : maxes[index - 1] + 1;
+        int maxBound = Math.min(maxLevel - (tierCount - index - 2), maxes[index + 1] - 1);
+        if (maxBound < minBound) {
+            maxBound = minBound;
+        }
+        maxes[index] = clampInt(newMax, minBound, maxBound);
+
+        for (int i = index + 1; i < tierCount - 1; i++) {
+            if (maxes[i] <= maxes[i - 1]) {
+                maxes[i] = maxes[i - 1] + 1;
+            }
+        }
+        maxes[tierCount - 1] = maxLevel;
+
+        applyMaterialTierEntries(tiers, maxes);
+    }
+
+    private static void setTierCostValue(int index, int newCost) {
+        List<MaterialTier> tiers = getMaterialTierSnapshot();
+        if (tiers.isEmpty() || index < 0 || index >= tiers.size()) {
+            return;
+        }
+        int tierCount = tiers.size();
+        int maxLevel = refinementConfig().getMaxLevel();
+
+        int[] maxes = new int[tierCount];
+        for (int i = 0; i < tierCount; i++) {
+            maxes[i] = i == tierCount - 1 ? maxLevel : tiers.get(i).maxLevel;
+        }
+
+        List<MaterialTier> updated = new ArrayList<>();
+        for (int i = 0; i < tierCount; i++) {
+            MaterialTier tier = tiers.get(i);
+            int cost = i == index ? Math.max(1, newCost) : tier.cost;
+            updated.add(new MaterialTier(tier.minLevel, tier.maxLevel, tier.itemId, cost));
+        }
+        applyMaterialTierEntries(updated, maxes);
+    }
+
+    private static void applyMaterialTierEntries(List<MaterialTier> tiers, int[] maxes) {
+        if (tiers == null || tiers.isEmpty()) {
+            return;
+        }
+        int tierCount = tiers.size();
+        int maxLevel = refinementConfig().getMaxLevel();
+        String[] entries = new String[tierCount];
+        int min = 0;
+        for (int i = 0; i < tierCount; i++) {
+            MaterialTier tier = tiers.get(i);
+            int max = i == tierCount - 1 ? maxLevel : Math.max(min, maxes[i]);
+            entries[i] = min + "-" + max + "=" + tier.itemId + ":" + Math.max(1, tier.cost);
+            min = max + 1;
+        }
+        refinementConfig().setMaterialTierEntries(entries);
     }
 
     private static NumericControl multiplierControl(String id,
@@ -1307,7 +1778,8 @@ public final class RuntimeConfigUI {
     private static double[] ensureDamageMultipliers() {
         RefinementConfig cfg = refinementConfig();
         double[] current = cfg.getDamageMultipliers();
-        double[] normalized = ensureArray(current, 4, DEFAULT_DAMAGE_MULTIPLIERS);
+        int required = Math.max(1, cfg.getMaxLevel()) + 1;
+        double[] normalized = ensureArray(current, required, DEFAULT_DAMAGE_MULTIPLIERS);
         if (normalized != current) {
             cfg.setDamageMultipliers(normalized);
         }
@@ -1317,7 +1789,8 @@ public final class RuntimeConfigUI {
     private static double[] ensureDefenseMultipliers() {
         RefinementConfig cfg = refinementConfig();
         double[] current = cfg.getDefenseMultipliers();
-        double[] normalized = ensureArray(current, 4, DEFAULT_DEFENSE_MULTIPLIERS);
+        int required = Math.max(1, cfg.getMaxLevel()) + 1;
+        double[] normalized = ensureArray(current, required, DEFAULT_DEFENSE_MULTIPLIERS);
         if (normalized != current) {
             cfg.setDefenseMultipliers(normalized);
         }
@@ -1327,7 +1800,8 @@ public final class RuntimeConfigUI {
     private static double[] ensureWeaponBreakArray() {
         RefinementConfig cfg = refinementConfig();
         double[] current = cfg.getBreakChances();
-        double[] normalized = ensureArray(current, 3, DEFAULT_WEAPON_BREAK);
+        int required = Math.max(1, cfg.getMaxLevel());
+        double[] normalized = ensureArray(current, required, DEFAULT_WEAPON_BREAK);
         if (normalized != current) {
             cfg.setBreakChances(normalized);
         }
@@ -1337,66 +1811,148 @@ public final class RuntimeConfigUI {
     private static double[] ensureArmorBreakArray() {
         RefinementConfig cfg = refinementConfig();
         double[] current = cfg.getArmorBreakChances();
-        double[] normalized = ensureArray(current, 3, DEFAULT_ARMOR_BREAK);
+        int required = Math.max(1, cfg.getMaxLevel());
+        double[] normalized = ensureArray(current, required, DEFAULT_ARMOR_BREAK);
         if (normalized != current) {
             cfg.setArmorBreakChances(normalized);
         }
         return normalized;
     }
 
-    private static double[] ensureWeightArray(int transition) {
-        RefinementConfig cfg = refinementConfig();
-        double[] current = transition == 0 ? cfg.getWeights0to1() : (transition == 1 ? cfg.getWeights1to2() : cfg.getWeights2to3());
-        double[] normalized = ensureArray(current, 4, DEFAULT_WEIGHTS[transition]);
-        if (normalized != current) {
-            setWeightArray(cfg, transition, normalized);
+    private static double getWeightValue(int level, int index) {
+        double[] weights = ensureWeightsByLevelArray();
+        int base = level * 4;
+        int offset = base + index;
+        if (offset < 0 || offset >= weights.length) {
+            return 0.0;
         }
+        return weights[offset];
+    }
+
+    private static double[] ensureWeightsByLevelArray() {
+        RefinementConfig cfg = refinementConfig();
+        int maxLevel = Math.max(1, cfg.getMaxLevel());
+        int required = maxLevel * 4;
+        double[] current = cfg.getWeightsByLevel();
+        if (current != null && current.length >= required) {
+            enforceLastLevelJackpotZero(current);
+            return current;
+        }
+        double[] normalized = new double[required];
+        for (int level = 0; level < maxLevel; level++) {
+            double[] weights = cfg.getReforgeWeights(level);
+            if (weights == null || weights.length < 4) {
+                weights = DEFAULT_WEIGHTS[Math.min(2, level)];
+            }
+            int base = level * 4;
+            for (int i = 0; i < 4; i++) {
+                normalized[base + i] = weights[i];
+            }
+        }
+        enforceLastLevelJackpotZero(normalized);
+        cfg.setWeightsByLevel(normalized);
         return normalized;
     }
 
-    private static void adjustWeight(int transition, int index, double delta) {
-        double[] weights = ensureWeightArray(transition);
-        double target = clamp(weights[index] + delta, 0.0, 1.0);
-        if (weights.length <= 1) {
-            weights[0] = 1.0;
+    private static double[] ensureWeightArray(int transition) {
+        double[] weights = ensureWeightsByLevelArray();
+        int base = transition * 4;
+        if (base + 3 >= weights.length) {
+            return DEFAULT_WEIGHTS[Math.min(2, transition)];
+        }
+        double[] out = new double[4];
+        System.arraycopy(weights, base, out, 0, 4);
+        return out;
+    }
+
+    private static void adjustWeightByLevel(int level, int index, double delta) {
+        RefinementConfig cfg = refinementConfig();
+        double[] weights = ensureWeightsByLevelArray();
+        int base = level * 4;
+        if (base + 3 >= weights.length) {
             return;
         }
-
+        double target = clamp(weights[base + index] + delta, 0.0, 1.0);
         double remainingTarget = Math.max(0.0, 1.0 - target);
         double remainingCurrent = 0.0;
-        for (int i = 0; i < weights.length; i++) {
+        for (int i = 0; i < 4; i++) {
             if (i != index) {
-                remainingCurrent += Math.max(0.0, weights[i]);
+                remainingCurrent += Math.max(0.0, weights[base + i]);
             }
         }
 
-        weights[index] = target;
+        weights[base + index] = target;
         if (remainingCurrent <= 0.0000001) {
-            double even = remainingTarget / (weights.length - 1);
-            for (int i = 0; i < weights.length; i++) {
+            double even = remainingTarget / 3.0;
+            for (int i = 0; i < 4; i++) {
                 if (i != index) {
-                    weights[i] = even;
+                    weights[base + i] = even;
                 }
             }
-            return;
+        } else {
+            double scale = remainingTarget / remainingCurrent;
+            for (int i = 0; i < 4; i++) {
+                if (i != index) {
+                    weights[base + i] = clamp(Math.max(0.0, weights[base + i]) * scale, 0.0, 1.0);
+                }
+            }
         }
 
-        double scale = remainingTarget / remainingCurrent;
-        for (int i = 0; i < weights.length; i++) {
-            if (i != index) {
-                weights[i] = clamp(Math.max(0.0, weights[i]) * scale, 0.0, 1.0);
-            }
+        if (level == 0) {
+            cfg.setWeights0to1(extractWeightsSlice(weights, base));
+        } else if (level == 1) {
+            cfg.setWeights1to2(extractWeightsSlice(weights, base));
+        } else if (level == 2) {
+            cfg.setWeights2to3(extractWeightsSlice(weights, base));
+        }
+        enforceLastLevelJackpotZero(weights);
+    }
+
+    private static void enforceLastLevelJackpotZero(double[] weights) {
+        if (weights == null || weights.length < 4) {
+            return;
+        }
+        int maxLevel = Math.max(1, refinementConfig().getMaxLevel());
+        int lastLevel = Math.max(0, maxLevel - 1);
+        int base = lastLevel * 4;
+        if (base + 3 >= weights.length) {
+            return;
+        }
+        double degrade = Math.max(0.0, weights[base]);
+        double same = Math.max(0.0, weights[base + 1]);
+        double upgrade = Math.max(0.0, weights[base + 2]);
+        double sum = degrade + same + upgrade;
+        if (sum <= 0.0) {
+            degrade = 0.0;
+            same = 1.0;
+            upgrade = 0.0;
+        } else {
+            double scale = 1.0 / sum;
+            degrade *= scale;
+            same *= scale;
+            upgrade *= scale;
+        }
+        weights[base] = degrade;
+        weights[base + 1] = same;
+        weights[base + 2] = upgrade;
+        weights[base + 3] = 0.0;
+
+        RefinementConfig cfg = refinementConfig();
+        if (lastLevel == 0) {
+            cfg.setWeights0to1(extractWeightsSlice(weights, base));
+        } else if (lastLevel == 1) {
+            cfg.setWeights1to2(extractWeightsSlice(weights, base));
+        } else if (lastLevel == 2) {
+            cfg.setWeights2to3(extractWeightsSlice(weights, base));
         }
     }
 
-    private static void setWeightArray(RefinementConfig cfg, int transition, double[] values) {
-        if (transition == 0) {
-            cfg.setWeights0to1(values);
-        } else if (transition == 1) {
-            cfg.setWeights1to2(values);
-        } else {
-            cfg.setWeights2to3(values);
+    private static double[] extractWeightsSlice(double[] weights, int base) {
+        double[] out = new double[4];
+        if (weights != null && base >= 0 && base + 3 < weights.length) {
+            System.arraycopy(weights, base, out, 0, 4);
         }
+        return out;
     }
 
     private static double[] ensureArray(double[] source, int length, double[] defaults) {
@@ -1404,8 +1960,12 @@ public final class RuntimeConfigUI {
             return source;
         }
         double[] normalized = new double[length];
+        double fallback = 0.0;
+        if (defaults != null && defaults.length > 0) {
+            fallback = defaults[defaults.length - 1];
+        }
         for (int i = 0; i < length; i++) {
-            normalized[i] = defaults != null && i < defaults.length ? defaults[i] : 0.0;
+            normalized[i] = defaults != null && i < defaults.length ? defaults[i] : fallback;
         }
         if (source != null) {
             for (int i = 0; i < Math.min(source.length, length); i++) {
@@ -1457,6 +2017,19 @@ public final class RuntimeConfigUI {
                 + " (" + String.format(Locale.ROOT, "%+.1f%%", bonusPercent) + ")";
     }
 
+    private static String formatInputValue(DisplayKind kind, double rawValue) {
+        if (kind == DisplayKind.INTEGER) {
+            return String.valueOf((int) Math.round(rawValue));
+        }
+        if (kind == DisplayKind.PERCENT) {
+            return String.format(Locale.ROOT, "%.2f", rawValue * 100.0);
+        }
+        if (kind == DisplayKind.TOGGLE) {
+            return rawValue >= 0.5 ? "Enabled" : "Disabled";
+        }
+        return String.format(Locale.ROOT, "%.3f", rawValue);
+    }
+
     private static String formatStepLabel(DisplayKind kind, double rawStep, boolean positive) {
         String prefix = positive ? "+" : "-";
         if (kind == DisplayKind.INTEGER) {
@@ -1472,6 +2045,62 @@ public final class RuntimeConfigUI {
         return prefix + String.format(Locale.ROOT, "%.1f%%", percentStep);
     }
 
+    private static String inputStep(NumericControl control) {
+        if (control.displayKind == DisplayKind.INTEGER) {
+            return "1";
+        }
+        if (control.displayKind == DisplayKind.PERCENT) {
+            return "0.01";
+        }
+        if (control.displayKind == DisplayKind.MULTIPLIER) {
+            return "0.001";
+        }
+        return "1";
+    }
+
+    private static int inputDecimals(NumericControl control) {
+        if (control.displayKind == DisplayKind.INTEGER) {
+            return 0;
+        }
+        if (control.displayKind == DisplayKind.PERCENT) {
+            return 2;
+        }
+        if (control.displayKind == DisplayKind.MULTIPLIER) {
+            return 3;
+        }
+        return 0;
+    }
+
+    private static String inputMin(NumericControl control) {
+        if (control.displayKind == DisplayKind.TOGGLE) {
+            return null;
+        }
+        if (control.displayKind == DisplayKind.PERCENT) {
+            return "0";
+        }
+        if (control.displayKind == DisplayKind.MULTIPLIER) {
+            return "0";
+        }
+        if (control.displayKind == DisplayKind.INTEGER) {
+            return "0";
+        }
+        return null;
+    }
+
+    private static String inputMax(NumericControl control) {
+        if (control.displayKind == DisplayKind.PERCENT) {
+            return "100";
+        }
+        return null;
+    }
+
+    private static double computeDelta(DisplayKind kind, double current, double target) {
+        if (kind == DisplayKind.TOGGLE) {
+            return target >= 0.5 ? 1.0 : -1.0;
+        }
+        return target - current;
+    }
+
     private static double clampChance(double value) {
         return clamp(value, 0.0, 1.0);
     }
@@ -1482,6 +2111,67 @@ public final class RuntimeConfigUI {
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static Double parseInputValue(DisplayKind kind, String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (kind == DisplayKind.TOGGLE) {
+            String lower = trimmed.toLowerCase(Locale.ROOT);
+            if ("1".equals(lower) || "true".equals(lower) || "enabled".equals(lower) || "on".equals(lower)) {
+                return 1.0;
+            }
+            if ("0".equals(lower) || "false".equals(lower) || "disabled".equals(lower) || "off".equals(lower)) {
+                return 0.0;
+            }
+            Double numeric = extractFirstNumber(trimmed);
+            if (numeric == null) {
+                return null;
+            }
+            return numeric >= 0.5 ? 1.0 : 0.0;
+        }
+
+        Double numeric = extractFirstNumber(trimmed);
+        if (numeric == null) {
+            return null;
+        }
+        boolean hasPercent = trimmed.contains("%");
+        if (kind == DisplayKind.INTEGER) {
+            return (double) Math.round(numeric);
+        }
+        if (kind == DisplayKind.PERCENT) {
+            if (hasPercent || Math.abs(numeric) > 1.0) {
+                return numeric / 100.0;
+            }
+            return numeric;
+        }
+        if (kind == DisplayKind.MULTIPLIER) {
+            if (hasPercent) {
+                return 1.0 + (numeric / 100.0);
+            }
+            return numeric;
+        }
+        return numeric;
+    }
+
+    private static Double extractFirstNumber(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        Matcher matcher = NUMBER_PATTERN.matcher(raw.replace(',', '.'));
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(matcher.group());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static boolean roughlyEqual(double left, double right) {

@@ -46,7 +46,8 @@ public class SocketManager {
         SOCKET_REINFORCER,   // +20% success chance
         SOCKET_GUARANTOR,    // 100% success for 1st socket
         SOCKET_EXPANDER,     // Increases max sockets by 1
-        SOCKET_DIFFUSER      // Decreases max sockets by 1
+        SOCKET_DIFFUSER,     // Decreases max sockets by 1
+        GHASTLY_ESSENCE      // Special support to punch lore sockets
     }
 
     public static SupportMaterial resolveSupportMaterial(String itemId) {
@@ -60,6 +61,7 @@ public class SocketManager {
             case "socket_guarantor" -> SupportMaterial.SOCKET_GUARANTOR;
             case "socket_expander" -> SupportMaterial.SOCKET_EXPANDER;
             case "socket_diffuser" -> SupportMaterial.SOCKET_DIFFUSER;
+            case "ingredient_ghastly_essence", "ghastly_essence" -> SupportMaterial.GHASTLY_ESSENCE;
             default -> SupportMaterial.NONE;
         };
     }
@@ -169,7 +171,22 @@ public class SocketManager {
 
         String[] encoded = encodeSockets(socketData);
         boolean isWeapon = ReforgeEquip.isWeapon(item);
-        ResonanceSystem.ResonanceResult resonance = evaluateAllowedResonance(item, socketData);
+
+        // Determine resonance based on current socket layout and unlock metadata.
+        ResonanceSystem.ResonanceResult raw = ResonanceSystem.evaluate(item, socketData);
+        String unlockName = getResonanceRecipeName(item);
+        boolean unlockMatches = raw != null && raw.active()
+                && unlockName != null
+                && unlockName.equalsIgnoreCase(raw.name());
+
+        // If sockets no longer match the unlocked resonance, clear the unlock.
+        ItemStack baseItem = item;
+        if (!unlockMatches && unlockName != null && !unlockName.isBlank()) {
+            baseItem = item.withMetadata(MetadataKeys.RESONANCE_RECIPE_NAME, Codec.STRING, "");
+            unlockName = null;
+        }
+
+        ResonanceSystem.ResonanceResult resonance = unlockMatches ? raw : ResonanceSystem.ResonanceResult.NONE;
         String resonanceTooltipEffect = resonance.active()
                 ? ResonanceSystem.buildDetailedEffect(resonance, isWeapon)
                 : "";
@@ -206,7 +223,7 @@ public class SocketManager {
             percentValues.add(String.valueOf(percent));
         }
         
-        return item
+        return baseItem
                 .withMetadata(MetadataKeys.SOCKET_MAX, Codec.INTEGER, socketData.getMaxSockets())
                 .withMetadata(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY, encoded)
                 .withMetadata(MetadataKeys.ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
@@ -344,11 +361,7 @@ public class SocketManager {
             return false;
         }
         String allowed = getResonanceRecipeName(item);
-        if (allowed == null || allowed.isBlank()) {
-            String legacy = getResonanceName(item);
-            return legacy != null && legacy.equalsIgnoreCase(resonanceName.trim());
-        }
-        return allowed.equalsIgnoreCase(resonanceName.trim());
+        return allowed != null && allowed.equalsIgnoreCase(resonanceName.trim());
     }
 
     public static ItemStack withResonanceUnlock(ItemStack item, String resonanceName) {
@@ -371,7 +384,15 @@ public class SocketManager {
     }
 
     public static boolean hasResonance(ItemStack item) {
-        return getResonanceName(item) != null;
+        if (item == null || item.isEmpty()) {
+            return false;
+        }
+        String resonanceName = getResonanceName(item);
+        if (resonanceName == null || resonanceName.isBlank()) {
+            return false;
+        }
+        String recipeName = getResonanceRecipeName(item);
+        return recipeName != null && !recipeName.isBlank();
     }
 
     public static boolean isResonanceLegendary(ItemStack item) {
@@ -567,9 +588,29 @@ public class SocketManager {
      * Mutates socketData on SUCCESS (socket added).
      */
     public static PunchResult punchSocket(SocketData socketData, SupportMaterial support) {
-        if (!socketData.canAddSocket()) return PunchResult.FAIL;
+        PunchResult result = rollPunchResult(socketData, support);
+        if (result == PunchResult.SUCCESS && socketData != null) {
+            socketData.addSocket();
+        }
+        return result;
+    }
 
-        int current = socketData.getCurrentSocketCount();
+    /**
+     * Rolls a punch result without mutating socket data.
+     */
+    public static PunchResult rollPunchResult(SocketData socketData, SupportMaterial support) {
+        if (socketData == null || !socketData.canAddSocket()) {
+            return PunchResult.FAIL;
+        }
+
+        return rollPunchResult(socketData.getCurrentSocketCount(), support);
+    }
+
+    /**
+     * Rolls a punch result using an explicit socket count (useful for lore sockets).
+     */
+    public static PunchResult rollPunchResult(int currentSockets, SupportMaterial support) {
+        int current = Math.max(0, currentSockets);
 
         double successChance = config.getSuccessChance(current);
         double breakChance   = config.getBreakChance(current);
@@ -579,19 +620,16 @@ public class SocketManager {
             case SOCKET_STABILIZER -> breakChance   *= 0.50;
             case SOCKET_REINFORCER -> successChance  = Math.min(1.0, successChance + 0.20);
             case SOCKET_GUARANTOR  -> { if (current == 0) successChance = 1.0; }
-            default -> { /* NONE / SOCKET_EXPANDER has no success modifier */ }
+            default -> { /* NONE / SOCKET_EXPANDER / SOCKET_DIFFUSER / GHASTLY_ESSENCE */ }
         }
 
         float roll = RNG.nextFloat();
 
         if (roll < breakChance) {
-            // Item broke during punch attempt.
             return PunchResult.BREAK;
         }
 
         if (roll < breakChance + successChance) {
-            // Success
-            socketData.addSocket();
             return PunchResult.SUCCESS;
         }
 

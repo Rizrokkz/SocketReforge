@@ -219,17 +219,8 @@ public class EssenceSocketBench extends SimpleInteraction {
             String resonanceName = rawResonance.name();
             boolean alreadyUnlocked = SocketManager.isResonanceUnlocked(equipment, resonanceName);
             if (!alreadyUnlocked) {
-                RecipeSlot recipeSlot = findMatchingRecipe(player, resonanceName);
-                if (recipeSlot != null) {
-                    ItemStack updatedRecipe = ResonantRecipeUtils.decrementUsage(recipeSlot.stack);
-                    if (updatedRecipe != recipeSlot.stack) {
-                        recipeSlot.container.setItemStackForSlot(recipeSlot.slot, updatedRecipe);
-                    }
-                    baseItem = SocketManager.withResonanceUnlock(equipment, resonanceName);
-                    player.sendMessage(Message.raw("Resonance unlocked. 1 recipe usage consumed."));
-                } else {
-                    player.sendMessage(Message.raw("Resonance locked: completed recipe required."));
-                }
+                player.sendMessage(Message.raw(
+                        "Resonance locked: use the Essence Bench with a recipe support item to unlock."));
             } else {
                 baseItem = SocketManager.withResonanceUnlock(equipment, resonanceName);
             }

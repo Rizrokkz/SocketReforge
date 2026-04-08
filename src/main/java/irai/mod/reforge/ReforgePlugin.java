@@ -36,13 +36,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.IChunkSaver;
 import com.hypixel.hytale.server.core.util.Config;
 
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
-import irai.mod.reforge.Commands.LoreApplyCommand;
-import irai.mod.reforge.Commands.LoreSpiritMapCommand;
 import irai.mod.reforge.Commands.LoreAbilityMapCommand;
+import irai.mod.reforge.Commands.LoreApplyCommand;
 import irai.mod.reforge.Commands.LoreFeedCommand;
 import irai.mod.reforge.Commands.LoreSocketCommand;
+import irai.mod.reforge.Commands.LoreSpiritMapCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
 import irai.mod.reforge.Commands.ResonanceListCommand;
 import irai.mod.reforge.Commands.ResonanceRecipeGiveCommand;
@@ -53,11 +55,11 @@ import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
+import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
-import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
@@ -83,6 +85,7 @@ import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.HatchetThrowUse;
+import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
@@ -106,7 +109,7 @@ import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
-import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
+import irai.mod.reforge.Util.NameResolver;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
@@ -185,6 +188,9 @@ public class ReforgePlugin extends JavaPlugin {
                 reforgeEquip.setRefinementConfig(cfg);
             }
             ReforgeBenchUI.setRefinementConfig(cfg);
+            DynamicTooltipUtils.setRefinementConfig(cfg);
+            NameResolver.setRefinementConfig(cfg);
+            EquipmentDamageTooltipMath.setRefinementConfig(cfg);
         });
 
         this.configService.register("SocketConfig", this.socketConfig, cfg -> {
@@ -232,12 +238,15 @@ public class ReforgePlugin extends JavaPlugin {
 
         // Load and apply all registered configs.
         this.configService.loadAll();
+        // Persist any new refinement fields (e.g., material tiers) so they appear in JSON.
+        this.refinementConfig.save().join();
         
         this.getCodecRegistry(Interaction.CODEC).register("ReforgeEquip", ReforgeEquip.class, ReforgeEquip.CODEC);
         
         // Register Bench interactions
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("LoreSocketBench", LoreSocketBench.class, LoreSocketBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
@@ -286,7 +295,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.4");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7");
     }
 
     private void disableBuiltinCombatText() {

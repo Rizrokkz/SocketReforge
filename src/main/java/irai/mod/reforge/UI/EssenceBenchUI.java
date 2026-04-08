@@ -1258,10 +1258,9 @@ public final class EssenceBenchUI {
                         resonanceNotice = t(player, "ui.essence_bench.error_recipe_no_usages");
                     } else {
                         ItemStack updatedSupport = ResonantRecipeUtils.decrementUsage(support.item);
-                        if (updatedSupport != support.item) {
-                            writeStack(player, support, updatedSupport);
-                            consumedRecipe = true;
-                        }
+                        // Always write back; UI snapshot stacks may not reflect inventory mutations.
+                        writeStack(player, support, updatedSupport);
+                        consumedRecipe = true;
                         baseItem = SocketManager.withResonanceUnlock(item, resonanceName);
                     }
                 }

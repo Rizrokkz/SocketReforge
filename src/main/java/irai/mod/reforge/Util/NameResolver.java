@@ -5,6 +5,7 @@ import org.bson.BsonDocument;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
+import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.SocketData;
@@ -24,8 +25,13 @@ public final class NameResolver {
     private static final String BLOOD_PACT_PREFIX = "Blood Pact ";
     private static final String FIRE_WARD_PREFIX = "Infernal ";
     private static final String ICE_WARD_PREFIX = "Glacial ";
+    private static volatile RefinementConfig refinementConfig;
 
     private NameResolver() {} // Prevent instantiation
+
+    public static void setRefinementConfig(RefinementConfig config) {
+        refinementConfig = config;
+    }
 
     /**
      * Gets the actual localized display name for an item.
@@ -67,20 +73,10 @@ public final class NameResolver {
             // 1. "wanmine.items.Weapon_Sword_Gaias_Wrath.name +3" (translation key + level suffix)
             // 2. "wanmine.items.Weapon_Sword_Gaias_Wrath.name" (just translation key, level in separate metadata)
             
-            // Check if it contains a level suffix like " +1", " +2", " +3"
-            int level = 0;
-            String baseKey = metadataName;
-            
-            if (metadataName != null && metadataName.endsWith(" +3")) {
-                level = 3;
-                baseKey = metadataName.substring(0, metadataName.length() - 3).trim();
-            } else if (metadataName != null && metadataName.endsWith(" +2")) {
-                level = 2;
-                baseKey = metadataName.substring(0, metadataName.length() - 3).trim();
-            } else if (metadataName != null && metadataName.endsWith(" +1")) {
-                level = 1;
-                baseKey = metadataName.substring(0, metadataName.length() - 3).trim();
-            } else {
+            // Check if it contains a level suffix like " +1", " +2", " +15"
+            int level = extractLevelSuffix(metadataName);
+            String baseKey = stripLevelSuffix(metadataName);
+            if (level <= 0) {
                 // No level suffix in display name, check separate level metadata
                 level = getLevelFromMetadata(itemStack);
             }
@@ -147,7 +143,8 @@ public final class NameResolver {
             }
 
             if (level > 0) {
-                return applySpecialPrefix(itemStack, localizedName + " +" + level, langCode);
+                boolean isArmor = ReforgeEquip.isArmor(itemStack) && !ReforgeEquip.isWeapon(itemStack);
+                return applySpecialPrefix(itemStack, applyRefinementToName(localizedName, level, isArmor), langCode);
             }
             return applySpecialPrefix(itemStack, localizedName, langCode);
         }
@@ -195,7 +192,203 @@ public final class NameResolver {
      */
     public static String getBaseDisplayName(ItemStack itemStack) {
         String fullName = getDisplayName(itemStack);
-        return fullName.replaceFirst("\\s\\+[123]$", "");
+        return stripLevelSuffix(fullName);
+    }
+
+    private static int extractLevelSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        String trimmed = value.trim();
+        int configured = extractLevelSuffixConfigured(trimmed);
+        if (configured > 0) {
+            return configured;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\s\\+(\\d+)$").matcher(trimmed);
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private static String stripLevelSuffix(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String trimmed = value.trim();
+        String stripped = stripLevelSuffixConfigured(trimmed);
+        if (stripped != null) {
+            return stripped;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\s\\+\\d+$").matcher(trimmed);
+        if (matcher.find()) {
+            return trimmed.substring(0, matcher.start()).trim();
+        }
+        return trimmed;
+    }
+
+    private static int extractLevelSuffixConfigured(String value) {
+        RefinementConfig cfg = refinementConfig;
+        if (cfg == null) {
+            return 0;
+        }
+        int fromLabels = matchLevelLabel(value, cfg);
+        if (fromLabels > 0) {
+            return fromLabels;
+        }
+        String prefix = cfg.getRefinementLevelPrefix();
+        String suffix = cfg.getRefinementLevelSuffix();
+        if ((prefix == null || prefix.isEmpty()) && (suffix == null || suffix.isEmpty())) {
+            return 0;
+        }
+        String pattern = java.util.regex.Pattern.quote(prefix == null ? "" : prefix)
+                + "(\\d+)"
+                + java.util.regex.Pattern.quote(suffix == null ? "" : suffix);
+        java.util.regex.Matcher matcher;
+        if (cfg.isRefinementLevelUsePrefix()) {
+            matcher = java.util.regex.Pattern.compile("^" + pattern).matcher(value);
+        } else {
+            matcher = java.util.regex.Pattern.compile(pattern + "$").matcher(value);
+        }
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private static String stripLevelSuffixConfigured(String value) {
+        RefinementConfig cfg = refinementConfig;
+        if (cfg == null) {
+            return null;
+        }
+        String fromLabels = stripLevelLabel(value, cfg);
+        if (fromLabels != null) {
+            return fromLabels;
+        }
+        String prefix = cfg.getRefinementLevelPrefix();
+        String suffix = cfg.getRefinementLevelSuffix();
+        if ((prefix == null || prefix.isEmpty()) && (suffix == null || suffix.isEmpty())) {
+            return null;
+        }
+        String pattern = java.util.regex.Pattern.quote(prefix == null ? "" : prefix)
+                + "(\\d+)"
+                + java.util.regex.Pattern.quote(suffix == null ? "" : suffix);
+        java.util.regex.Matcher matcher;
+        if (cfg.isRefinementLevelUsePrefix()) {
+            matcher = java.util.regex.Pattern.compile("^" + pattern).matcher(value);
+            if (!matcher.find()) {
+                return null;
+            }
+            return value.substring(matcher.end()).trim();
+        }
+        matcher = java.util.regex.Pattern.compile(pattern + "$").matcher(value);
+        if (!matcher.find()) {
+            return null;
+        }
+        return value.substring(0, matcher.start()).trim();
+    }
+
+    private static String formatRefinementSuffix(int level) {
+        if (level <= 0) {
+            return "";
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.formatRefinementSuffix(level);
+        }
+        return " +" + level;
+    }
+
+    private static int matchLevelLabel(String value, RefinementConfig cfg) {
+        if (value == null || value.isBlank() || cfg == null) {
+            return 0;
+        }
+        boolean usePrefix = cfg.isRefinementLevelUsePrefix();
+        int matchedLevel = 0;
+        int matchedLen = -1;
+        String[][] labelSets = {
+                cfg.getRefinementLevelLabels(),
+                cfg.getRefinementLevelLabelsArmor()
+        };
+        for (String[] labels : labelSets) {
+            if (labels == null || labels.length == 0) {
+                continue;
+            }
+            int max = Math.min(cfg.getMaxLevel(), labels.length - 1);
+            for (int level = 1; level <= max; level++) {
+                String label = labels[level];
+                if (label == null || label.isBlank()) continue;
+                boolean matches = usePrefix ? value.startsWith(label) : value.endsWith(label);
+                if (matches && label.length() > matchedLen) {
+                    matchedLevel = level;
+                    matchedLen = label.length();
+                }
+            }
+        }
+        return matchedLevel;
+    }
+
+    private static String stripLevelLabel(String value, RefinementConfig cfg) {
+        if (value == null || value.isBlank() || cfg == null) {
+            return null;
+        }
+        boolean usePrefix = cfg.isRefinementLevelUsePrefix();
+        int matchedLevel = 0;
+        int matchedLen = -1;
+        String matchedLabel = null;
+        String[][] labelSets = {
+                cfg.getRefinementLevelLabels(),
+                cfg.getRefinementLevelLabelsArmor()
+        };
+        for (String[] labels : labelSets) {
+            if (labels == null || labels.length == 0) {
+                continue;
+            }
+            int max = Math.min(cfg.getMaxLevel(), labels.length - 1);
+            for (int level = 1; level <= max; level++) {
+                String label = labels[level];
+                if (label == null || label.isBlank()) continue;
+                boolean matches = usePrefix ? value.startsWith(label) : value.endsWith(label);
+                if (matches && label.length() > matchedLen) {
+                    matchedLevel = level;
+                    matchedLen = label.length();
+                    matchedLabel = label;
+                }
+            }
+        }
+        if (matchedLevel <= 0 || matchedLabel == null) {
+            return null;
+        }
+        if (usePrefix) {
+            return value.substring(matchedLabel.length()).trim();
+        }
+        return value.substring(0, value.length() - matchedLabel.length()).trim();
+    }
+
+    private static String applyRefinementToName(String baseName, int level) {
+        return applyRefinementToName(baseName, level, false);
+    }
+
+    private static String applyRefinementToName(String baseName, int level, boolean isArmor) {
+        if (baseName == null) {
+            return null;
+        }
+        if (level <= 0) {
+            return baseName;
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.applyRefinementToName(baseName, level, isArmor);
+        }
+        return baseName + " +" + level;
     }
 
     /**
@@ -693,6 +886,9 @@ public final class NameResolver {
             return value;
         }
         String base = value == null ? "" : value;
+        if (!SocketManager.hasResonance(itemStack)) {
+            return base;
+        }
         String resonanceName = SocketManager.getResonanceName(itemStack);
         if (resonanceName == null || resonanceName.isBlank()) {
             return base;

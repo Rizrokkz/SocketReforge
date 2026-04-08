@@ -118,6 +118,10 @@ public final class ResonanceSystem {
         }
 
         private boolean matchesWeaponClass(WeaponClass expected, WeaponClass actual) {
+            if (expected == WeaponClass.GENERIC) {
+                // Generic weapon resonances should apply to any weapon class.
+                return true;
+            }
             if (expected == WeaponClass.BOW) {
                 // Keep existing bow resonances valid for crossbows for backwards compatibility.
                 return actual == WeaponClass.BOW || actual == WeaponClass.CROSSBOW;

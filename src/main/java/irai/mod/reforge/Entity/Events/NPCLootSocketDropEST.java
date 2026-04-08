@@ -46,6 +46,9 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
     private static volatile List<LootInjectionUtils.LootInjectionRule> npcLightningEssenceRules = List.of(
             LootInjectionUtils.rule("Ingredient_Lightning_Essence", 0.05d, 1, 5)
     );
+    private static final List<LootInjectionUtils.LootInjectionRule> npcVoidGhastlyRules = List.of(
+            LootInjectionUtils.rule("Ingredient_Ghastly_Essence", 0.01d, 1, 1)
+    );
     private static volatile int npcWaterEssenceMinQuantity = 1;
     private static volatile int npcWaterEssenceMaxQuantity = 5;
     private static volatile int npcLightningEssenceMinQuantity = 1;
@@ -179,6 +182,9 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
         if (isFlyingRole(role)) {
             LootInjectionUtils.injectByRules(drops, npcLightningEssenceRules);
         }
+        if (isVoidSpawnRole(role)) {
+            LootInjectionUtils.injectByRules(drops, npcVoidGhastlyRules);
+        }
         return drops;
     }
 
@@ -216,6 +222,27 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
                 || matchesFlyingHint(role.getNameTranslationKey())
                 || matchesFlyingHint(role.getDropListId())
                 || matchesFlyingHint(role.getLabel());
+    }
+
+    private static boolean isVoidSpawnRole(Role role) {
+        if (role == null) {
+            return false;
+        }
+        return matchesVoidSpawnHint(role.getRoleName())
+                || matchesVoidSpawnHint(role.getAppearanceName())
+                || matchesVoidSpawnHint(role.getNameTranslationKey())
+                || matchesVoidSpawnHint(role.getDropListId())
+                || matchesVoidSpawnHint(role.getLabel());
+    }
+
+    private static boolean matchesVoidSpawnHint(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        String lower = value.toLowerCase();
+        return lower.contains("spawn_void")
+                || lower.contains("void_spawn")
+                || lower.contains("void spawn");
     }
 
     private static boolean matchesFlyingHint(String value) {

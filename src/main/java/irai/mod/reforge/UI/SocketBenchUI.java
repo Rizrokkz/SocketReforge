@@ -13,6 +13,7 @@ import java.util.Map;
 import org.bson.BsonDocument;
 
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -25,6 +26,10 @@ import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Lore.LoreSocketData;
+import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -371,7 +376,8 @@ public class SocketBenchUI {
                 ? SupportMaterial.NONE
                 : SocketManager.resolveSupportMaterial(selectedSupport.itemId);
         boolean supportOverridesMax = selectedSupportMaterial == SupportMaterial.SOCKET_EXPANDER
-                || selectedSupportMaterial == SupportMaterial.SOCKET_DIFFUSER;
+                || selectedSupportMaterial == SupportMaterial.SOCKET_DIFFUSER
+                || selectedSupportMaterial == SupportMaterial.GHASTLY_ESSENCE;
         boolean socketsMaxed = isSocketsMaxed(selectedEquipment);
         String idleText = LangLoader.getUITranslation(player, "ui.socket_bench.status_idle");
         if (!isProcessing && (idleText.equals(statusText) || "Idle".equals(statusText)) && socketsMaxed && !supportOverridesMax) {
@@ -384,6 +390,7 @@ public class SocketBenchUI {
                 ? LangLoader.getUITranslation(player, "ui.socket_bench.metadata_prompt")
                 : buildMetadataText(player, selectedEquipment.item, selectedEquipment);
         String socketIcons = buildSocketIconsHtml(player, selectedEquipment);
+        String loreSocketSection = buildLoreSocketSection(player, selectedEquipment);
 
         String selectedEquipmentValue = selectedEquipment == null ? "-1" : String.valueOf(snapshot.equipments.indexOf(selectedEquipment));
         String selectedSupportValue = selectedSupport == null ? "-1" : String.valueOf(snapshot.supports.indexOf(selectedSupport));
@@ -399,6 +406,7 @@ public class SocketBenchUI {
                     .replace("{{breakText}}", escapeHtml(defaultStats.breakText))
                     .replace("{{socketsText}}", escapeHtml(defaultStats.socketsText))
                     .replace("{{socketIcons}}", socketIcons)
+                    .replace("{{loreSocketSection}}", loreSocketSection)
                     .replace("{{progressValue}}", String.valueOf(progressValue))
                     .replace("{{statusText}}", escapeHtml(statusText))
                     .replace("{{processDisabledAttr}}", processDisabledAttr)
@@ -422,6 +430,7 @@ public class SocketBenchUI {
                 + "<hr/>"
                 + "<p><b>Socket Preview</b></p>"
                 + "<div id=\"socketIconsRow\">" + socketIcons + "</div>"
+                + (loreSocketSection == null || loreSocketSection.isBlank() ? "" : loreSocketSection)
                 + "<div style=\"layout-mode: Left; spacing: 12;\">"
                 + "<p style=\"flex-weight:1;\">Success: <span id=\"successChanceLabel\">" + defaultStats.successText + "</span></p>"
                 + "<p style=\"flex-weight:1;\">Item Break: <span id=\"breakChanceLabel\">" + defaultStats.breakText + "</span></p>"
@@ -499,7 +508,7 @@ public class SocketBenchUI {
 
     private static String buildSupportOptions(Player player, List<Entry> supports, String selectedKey) {
         StringBuilder sb = new StringBuilder();
-        boolean noneSelected = NONE_SUPPORT_KEY.equals(selectedKey);
+        boolean noneSelected = selectedKey == null || NONE_SUPPORT_KEY.equals(selectedKey);
         boolean hasSelected = !noneSelected && selectedKey != null && findByKey(supports, selectedKey) != null;
         boolean selectNone = supports.isEmpty() || noneSelected;
         sb.append("<option value=\"-1\"").append(selectNone ? " selected" : "").append(">")
@@ -509,7 +518,7 @@ public class SocketBenchUI {
             Entry e = supports.get(i);
             String label = LangLoader.getUITranslation(player, "ui.socket_bench.option_material_label",
                     e.itemId, e.quantity, locationText(player, e), e.slot);
-            boolean isSelected = hasSelected ? selectedKey.equals(keyOf(e)) : (!noneSelected && supports.size() > 0 && i == 0);
+            boolean isSelected = hasSelected && selectedKey.equals(keyOf(e));
             sb.append("<option value=\"").append(i).append("\"")
                     .append(isSelected ? " selected" : "")
                     .append(">")
@@ -550,9 +559,19 @@ public class SocketBenchUI {
 
     private static String buildSocketIconsHtml(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return "<div style=\"layout-mode: Left; spacing: 20;\"><div style=\"flex-weight:1;\"></div><p style=\"color:#AAAAAA;\">"
-                    + escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.prompt_select_equipment"))
-                    + "</p><div style=\"flex-weight:1;\"></div></div>";
+            StringBuilder empty = new StringBuilder();
+            empty.append("<div style=\"layout-mode: Left; spacing: 14;\"><div style=\"flex-weight:1;\"></div>");
+            for (int i = 0; i < 4; i++) {
+                empty.append("<div style=\"anchor-width:110; anchor-height:110; background-color:#00000000; layout-mode:Top;\">")
+                        .append("<div style=\"flex-weight:1;\"></div>")
+                        .append("<div style=\"layout-mode:Left;\"><div style=\"flex-weight:1;\"></div>")
+                        .append("<img src=\"slot_bg.png\" width=\"90\" height=\"90\"/>")
+                        .append("<div style=\"flex-weight:1;\"></div></div>")
+                        .append("<div style=\"flex-weight:1;\"></div>")
+                        .append("</div>");
+            }
+            empty.append("<div style=\"flex-weight:1;\"></div></div>");
+            return empty.toString();
         }
 
         SocketData socketData = SocketManager.getSocketData(equipment.item);
@@ -563,7 +582,6 @@ public class SocketBenchUI {
         int maxSockets = Math.max(0, socketData.getMaxSockets());
         int punchedSockets = socketData.getCurrentSocketCount();
         List<Socket> sockets = socketData.getSockets();
-        String filledIconName = resolveFilledSocketIconName();
         String brokenIconName = resolveBrokenSocketIconName();
 
         StringBuilder sb = new StringBuilder();
@@ -574,31 +592,336 @@ public class SocketBenchUI {
             boolean isBroken = socket != null && socket.isBroken();
             boolean isFilled = socket != null && !socket.isBroken() && !socket.isEmpty();
 
-            String tileStyle = isBroken
-                    ? "padding:10; background-color:#b22222;"
-                    : "padding:10; background-color:#ffffff;";
-
-            // Filled sockets use filled icon.
-            // Broken sockets use broken icon.
-            // Empty sockets use empty icon.
-            String icon = isBroken
+            String backgroundIcon = isBroken
                     ? brokenIconName
-                    : (!isPunched ? "slot_bg.png" : (isFilled ? filledIconName : "socket_empty.png"));
+                    : (!isPunched ? "slot_bg.png" : "socket_empty.png");
+            String overlayIcon = (isPunched && isFilled && !isBroken) ? resolveEssenceIconName(socket) : null;
 
-            sb.append("<div style=\"").append(tileStyle).append("\">")
-                    .append("<img src=\"").append(icon).append("\" width=\"90\" height=\"90\"/>")
+            String tileStyle = "anchor-width:91; anchor-height:91;"
+                    + " background-image:url('" + backgroundIcon + "'); background-size:100% 100%;"
+                    + " background-repeat:no-repeat; layout-mode:Top;";
+            String wrapStyle = "anchor-width:95; anchor-height:95; background-color:" + getSocketColorHex(socket)
+                    + "; layout-mode:Top; padding:2;";
+
+            int overlaySize = 85;
+            sb.append("<div style=\"").append(wrapStyle).append("\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"layout-mode:Left;\"><div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"").append(tileStyle).append("\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"layout-mode:Left;\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append(overlayIcon != null
+                            ? "<img src=\"" + overlayIcon + "\" width=\"" + overlaySize + "\" height=\"" + overlaySize + "\"/>"
+                            : "")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>")
+                    .append("<div style=\"flex-weight:1;\"></div></div>")
+                    .append("<div style=\"flex-weight:1;\"></div>")
                     .append("</div>");
         }
         sb.append("<div style=\"flex-weight:1;\"></div></div>");
         return sb.toString();
     }
 
+    private static String buildLoreSocketIconsHtml(Player player, Entry equipment) {
+        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
+            return "";
+        }
+
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
+        if (data == null || data.getSocketCount() == 0) {
+            return "";
+        }
+
+        String baseIcon = UITemplateUtils.resolveCustomUiAsset("GemSlotEmpty.png", "GemSlotEmpty.png");
+        int tileSize = 70;
+        int wrapSize = 78;
+        int overlaySize = 44;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"layout-mode: Left; spacing: 10;\"><div style=\"flex-weight:1;\"></div>");
+        for (int i = 0; i < data.getSocketCount(); i++) {
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            boolean filled = socket != null && !socket.isEmpty();
+            String colorHex = resolveLoreColorHex(socket);
+            String overlayIcon = filled ? resolveLoreGemOverlayIcon(socket) : null;
+
+            String wrapStyle = "anchor-width:" + wrapSize + "; anchor-height:" + wrapSize + ";"
+                    + " background-color:" + colorHex + "; layout-mode:Top; padding:4; border-radius:6;";
+            String tileStyle = "anchor-width:" + tileSize + "; anchor-height:" + tileSize + ";"
+                    + " background-image:url('" + baseIcon + "'); background-size:100% 100%;"
+                    + " background-repeat:no-repeat; layout-mode:Top;";
+
+            sb.append("<div style=\"").append(wrapStyle).append("\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"layout-mode:Left;\"><div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"").append(tileStyle).append("\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("<div style=\"layout-mode:Left;\">")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append(overlayIcon != null
+                            ? "<img src=\"" + overlayIcon + "\" width=\"" + overlaySize + "\" height=\"" + overlaySize + "\"/>"
+                            : "")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>")
+                    .append("<div style=\"flex-weight:1;\"></div></div>")
+                    .append("<div style=\"flex-weight:1;\"></div>")
+                    .append("</div>");
+        }
+        sb.append("<div style=\"flex-weight:1;\"></div></div>");
+        return sb.toString();
+    }
+
+    private static String buildLoreSocketSection(Player player, Entry equipment) {
+        String icons = buildLoreSocketIconsHtml(player, equipment);
+        if (icons == null || icons.isBlank()) {
+            return "";
+        }
+        return "<p style=\"margin-top:8;\">" + escapeHtml(LangLoader.getUITranslation(player, "ui.socket_bench.lore_socket_preview")) + "</p>"
+                + "<div id=\"loreSocketIconsRow\">" + icons + "</div>";
+    }
+
+    private static String resolveLoreColorHex(LoreSocketData.LoreSocket socket) {
+        if (socket == null) {
+            return "#2b2b3a";
+        }
+        if (socket.isLocked()) {
+            return "#3a3a3a";
+        }
+        String color = socket.getColor();
+        if (color == null || color.isBlank()) {
+            return "#2b2b3a";
+        }
+        String trimmed = color.trim();
+        if (trimmed.startsWith("#")) {
+            return trimmed;
+        }
+        String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("red") || lower.contains("ruby")) return "#FF5555";
+        if (lower.contains("blue") || lower.contains("sapphire")) return "#5599FF";
+        if (lower.contains("green") || lower.contains("emerald")) return "#55FF77";
+        if (lower.contains("purple") || lower.contains("amethyst")) return "#AA55FF";
+        if (lower.contains("yellow") || lower.contains("topaz")) return "#FFFF55";
+        if (lower.contains("orange")) return "#FFAA00";
+        if (lower.contains("black") || lower.contains("onyx")) return "#555555";
+        if (lower.contains("white") || lower.contains("diamond")) return "#FFFFFF";
+        if (lower.contains("cyan") || lower.contains("opal")) return "#55FFFF";
+        return "#2b2b3a";
+    }
+
+    private static String resolveLoreGemOverlayIcon(LoreSocketData.LoreSocket socket) {
+        if (socket == null || socket.isEmpty()) {
+            return null;
+        }
+        String gemItemId = socket.getGemItemId();
+        String byItem = resolveGemIconByItemId(gemItemId);
+        if (byItem != null) {
+            return byItem;
+        }
+        String color = socket.getColor();
+        String byColor = resolveGemIconByColor(color);
+        if (byColor != null) {
+            return byColor;
+        }
+        return UITemplateUtils.resolveCustomUiAsset(
+                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
+                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
+    }
+
+    private static String resolveGemIconByItemId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        String lower = itemId.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("ruby")) return resolveGemIconByColor("red");
+        if (lower.contains("sapphire")) return resolveGemIconByColor("blue");
+        if (lower.contains("emerald")) return resolveGemIconByColor("green");
+        if (lower.contains("diamond")) return resolveGemIconByColor("white");
+        if (lower.contains("topaz")) return resolveGemIconByColor("yellow");
+        if (lower.contains("voidstone") || lower.contains("onyx")) return resolveGemIconByColor("black");
+        if (lower.contains("zephyr") || lower.contains("opal")) return resolveGemIconByColor("cyan");
+        return null;
+    }
+
+    private static String resolveGemIconByColor(String color) {
+        if (color == null || color.isBlank()) {
+            return null;
+        }
+        String lower = color.toLowerCase(java.util.Locale.ROOT);
+        String icon;
+        if (lower.contains("red") || lower.contains("ruby")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Ruby.png";
+        } else if (lower.contains("blue") || lower.contains("sapphire")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Sapphire.png";
+        } else if (lower.contains("green") || lower.contains("emerald")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Emerald.png";
+        } else if (lower.contains("white") || lower.contains("diamond")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Diamond.png";
+        } else if (lower.contains("yellow") || lower.contains("topaz")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Topaz.png";
+        } else if (lower.contains("black") || lower.contains("voidstone") || lower.contains("onyx")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Voidstone.png";
+        } else if (lower.contains("cyan") || lower.contains("opal") || lower.contains("zephyr")) {
+            icon = "Icons/ItemsGenerated/Rock_Gem_Zephyr.png";
+        } else {
+            return null;
+        }
+        return UITemplateUtils.resolveCustomUiAsset(
+                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
+                icon);
+    }
+
     private static String resolveFilledSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_filled.png", "socket_filled.png");
+        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
     }
 
     private static String resolveBrokenSocketIconName() {
         return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
+    }
+
+    private static String getSocketColorHex(Socket socket) {
+        if (socket == null || socket.isEmpty()) {
+            return "#FFFFFF";
+        }
+        if (socket.isBroken()) {
+            return "#B22222";
+        }
+        String essenceId = socket.getEssenceId();
+        if (essenceId == null) {
+            return "#FFFFFF";
+        }
+        try {
+            Essence essence = EssenceRegistry.get().getById(essenceId);
+            if (essence != null) {
+                return switch (essence.getType()) {
+                    case FIRE -> "#FFAA00";
+                    case ICE -> "#55FFFF";
+                    case LIFE -> "#55FF55";
+                    case LIGHTNING -> "#FFFF55";
+                    case VOID -> "#AA55FF";
+                    case WATER -> "#5555FF";
+                };
+            }
+        } catch (Exception ignored) {
+        }
+        String lower = essenceId.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("fire")) return "#FFAA00";
+        if (lower.contains("ice")) return "#55FFFF";
+        if (lower.contains("life")) return "#55FF55";
+        if (lower.contains("lightning")) return "#FFFF55";
+        if (lower.contains("void")) return "#AA55FF";
+        if (lower.contains("water")) return "#5555FF";
+        return "#FFFFFF";
+    }
+
+    private static String resolveEssenceIconName(Socket socket) {
+        if (socket == null || socket.isEmpty()) {
+            return resolveFilledSocketIconName();
+        }
+        String essenceId = socket.getEssenceId();
+        String itemIcon = resolveIconFromEssenceId(essenceId);
+        if (itemIcon != null && !itemIcon.isBlank()) {
+            return itemIcon;
+        }
+        Essence.Type type = null;
+        try {
+            Essence essence = essenceId == null ? null : EssenceRegistry.get().getById(essenceId);
+            if (essence != null) {
+                type = essence.getType();
+            }
+        } catch (Exception ignored) {
+        }
+        if (type == null && essenceId != null) {
+            String lower = essenceId.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("fire")) type = Essence.Type.FIRE;
+            else if (lower.contains("ice")) type = Essence.Type.ICE;
+            else if (lower.contains("life")) type = Essence.Type.LIFE;
+            else if (lower.contains("lightning")) type = Essence.Type.LIGHTNING;
+            else if (lower.contains("void")) type = Essence.Type.VOID;
+            else if (lower.contains("water")) type = Essence.Type.WATER;
+        }
+        if (type == null) {
+            return resolveFilledSocketIconName();
+        }
+        String base = "essence_" + type.name().toLowerCase(java.util.Locale.ROOT);
+        boolean greater = essenceId != null && SocketManager.isGreaterEssenceId(essenceId);
+        if (greater) {
+            return UITemplateUtils.resolveCustomUiAsset(
+                    resolveFilledSocketIconName(),
+                    base + "_concentrated.png",
+                    base + "_greater.png",
+                    base + "_concentrated_icon.png",
+                    base + "_greater_icon.png",
+                    base + ".png");
+        }
+        return UITemplateUtils.resolveCustomUiAsset(
+                resolveFilledSocketIconName(),
+                base + ".png",
+                base + "_icon.png");
+    }
+
+    private static String resolveIconFromEssenceId(String essenceId) {
+        if (essenceId == null || essenceId.isBlank()) {
+            return null;
+        }
+        String itemId = resolveEssenceItemId(essenceId);
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        try {
+            Item item = Item.getAssetMap().getAssetMap().get(itemId);
+            if (item == null || item == Item.UNKNOWN) {
+                return null;
+            }
+            String icon = item.getIcon();
+            if (icon == null || icon.isBlank()) {
+                return null;
+            }
+            if (Item.UNKNOWN_TEXTURE.equals(icon)) {
+                return null;
+            }
+            String uiIcon = resolveUiIconPath(icon);
+            if (uiIcon != null) {
+                return uiIcon;
+            }
+            return icon;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String resolveEssenceItemId(String essenceId) {
+        if (essenceId == null || essenceId.isBlank()) {
+            return null;
+        }
+        String cleaned = essenceId.trim();
+        if (cleaned.startsWith("Essence_")) {
+            cleaned = cleaned.substring("Essence_".length());
+        }
+        boolean greater = SocketManager.isGreaterEssenceId(essenceId);
+        if (greater && cleaned.endsWith("_Concentrated")) {
+            cleaned = cleaned.substring(0, cleaned.length() - "_Concentrated".length());
+        }
+        return "Ingredient_" + cleaned + "_Essence" + (greater ? "_Concentrated" : "");
+    }
+
+    private static String resolveUiIconPath(String iconPath) {
+        if (iconPath == null || iconPath.isBlank()) {
+            return null;
+        }
+        String normalized = iconPath.replace('\\', '/');
+        if (normalized.startsWith("Common/Icons/")) {
+            return normalized.substring("Common/".length());
+        }
+        if (normalized.startsWith("Icons/")) {
+            return normalized;
+        }
+        return null;
     }
 
     private static void updateMetadataAndProgress(
@@ -657,22 +980,55 @@ public class SocketBenchUI {
         }
 
         SupportMaterial selectedSupport = support == null ? SupportMaterial.NONE : SocketManager.resolveSupportMaterial(support.itemId);
+        boolean wantsGhastly = selectedSupport == SupportMaterial.GHASTLY_ESSENCE;
+        int loreCurrent = 0;
+        int loreMax = 0;
+        if (wantsGhastly) {
+            if (!LoreSocketManager.isEquipment(freshEquipment)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_lore_unsupported"), 0);
+            }
+            LoreSocketData loreData = LoreSocketManager.getLoreSocketData(freshEquipment);
+            if (loreData != null) {
+                loreCurrent = Math.max(loreData.getSocketCount(), loreData.getMaxSockets());
+            }
+            var loreConfig = LoreSocketManager.getConfig();
+            loreMax = loreConfig != null ? Math.max(0, loreConfig.getMaxLoreSockets()) : 0;
+            if (loreMax <= 0 || loreCurrent >= loreMax) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_lore_max", loreMax), 100);
+            }
+        }
+
         int currentSockets = socketData.getCurrentSocketCount();
         int maxSockets = socketData.getMaxSockets();
-        int previewMax = maxSockets;
-        int previewCurrent = currentSockets;
-        int baseMax = SocketManager.getConfig() != null
-                ? (ReforgeEquip.isWeapon(freshEquipment) ? SocketManager.getConfig().getMaxSocketsWeapon() : SocketManager.getConfig().getMaxSocketsArmor())
-                : maxSockets;
-        if (selectedSupport == SupportMaterial.SOCKET_EXPANDER) {
-            int cap = baseMax > 0 ? baseMax + 1 : maxSockets + 1;
-            previewMax = maxSockets >= cap ? maxSockets : Math.min(maxSockets + 1, cap);
-        } else if (selectedSupport == SupportMaterial.SOCKET_DIFFUSER) {
-            previewMax = Math.max(1, maxSockets - 1);
-            previewCurrent = Math.min(previewCurrent, previewMax);
+        if (!wantsGhastly) {
+            int previewMax = maxSockets;
+            int previewCurrent = currentSockets;
+            int baseMax = SocketManager.getConfig() != null
+                    ? (ReforgeEquip.isWeapon(freshEquipment) ? SocketManager.getConfig().getMaxSocketsWeapon() : SocketManager.getConfig().getMaxSocketsArmor())
+                    : maxSockets;
+            if (selectedSupport == SupportMaterial.SOCKET_EXPANDER) {
+                int cap = baseMax > 0 ? baseMax + 1 : maxSockets + 1;
+                previewMax = maxSockets >= cap ? maxSockets : Math.min(maxSockets + 1, cap);
+            } else if (selectedSupport == SupportMaterial.SOCKET_DIFFUSER) {
+                previewMax = Math.max(1, maxSockets - 1);
+                previewCurrent = Math.min(previewCurrent, previewMax);
+            }
+            if (previewCurrent >= previewMax && previewMax == maxSockets) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_max_sockets", maxSockets), 100);
+            }
         }
-        if (previewCurrent >= previewMax && previewMax == maxSockets) {
-            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_max_sockets", maxSockets), 100);
+
+        if (wantsGhastly) {
+            if (support == null) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_support_missing"), 0);
+            }
+            ItemStack currentSupport = readCurrentStack(player, support);
+            if (currentSupport == null || currentSupport.isEmpty()
+                    || currentSupport.getItemId() == null
+                    || !currentSupport.getItemId().equalsIgnoreCase(support.itemId)
+                    || currentSupport.getQuantity() < 1) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_support_missing"), 0);
+            }
         }
 
         if (!consumeMaterial(player, puncher, 1)) {
@@ -685,6 +1041,37 @@ public class SocketBenchUI {
         }
 
         SupportMaterial supportMaterial = usedSupport ? SocketManager.resolveSupportMaterial(support.itemId) : SupportMaterial.NONE;
+        if (wantsGhastly && supportMaterial != SupportMaterial.GHASTLY_ESSENCE) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_support_missing"), 0);
+        }
+
+        if (supportMaterial == SupportMaterial.GHASTLY_ESSENCE) {
+            PunchResult loreResult = SocketManager.rollPunchResult(loreCurrent, supportMaterial);
+            switch (loreResult) {
+                case SUCCESS -> {
+                    ItemStack loreUpdated = LoreSocketManager.punchRandomLoreSocket(freshEquipment, null);
+                    if (loreUpdated == null || loreUpdated == freshEquipment) {
+                        return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_lore_max", loreMax), 100);
+                    }
+                    writeUpdatedEquipment(player, equipment, loreUpdated, socketData);
+                    sfxConfig.playSuccess(player);
+                    return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_lore_success"), 100);
+                }
+                case BREAK -> {
+                    sfxConfig.playShatter(player);
+                    return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_broke"), 100);
+                }
+                case FAIL -> {
+                    sfxConfig.playFail(player);
+                    return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"), 100);
+                }
+                default -> {
+                    sfxConfig.playFail(player);
+                    return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"), 100);
+                }
+            }
+        }
+
         boolean supportAdjusted = SocketManager.applySupportSocketLimit(socketData, supportMaterial, ReforgeEquip.isWeapon(freshEquipment));
 
         currentSockets = socketData.getCurrentSocketCount();
@@ -859,6 +1246,21 @@ public class SocketBenchUI {
         }
 
         SupportMaterial supportMaterial = support == null ? SupportMaterial.NONE : SocketManager.resolveSupportMaterial(support.itemId);
+        if (supportMaterial == SupportMaterial.GHASTLY_ESSENCE) {
+            LoreSocketData loreData = LoreSocketManager.getLoreSocketData(equipment.item);
+            int loreCurrent = 0;
+            if (loreData != null) {
+                loreCurrent = Math.max(loreData.getSocketCount(), loreData.getMaxSockets());
+            }
+            var loreConfig = LoreSocketManager.getConfig();
+            int loreMax = loreConfig != null ? Math.max(0, loreConfig.getMaxLoreSockets()) : 0;
+            double success = SocketManager.getConfig() != null ? SocketManager.getConfig().getSuccessChance(loreCurrent) : 0.75;
+            double breakChance = SocketManager.getConfig() != null ? SocketManager.getConfig().getBreakChance(loreCurrent) : 0.10;
+            String successText = String.format(java.util.Locale.ROOT, "%.0f%%", success * 100.0);
+            String breakText = String.format(java.util.Locale.ROOT, "%.0f%%", breakChance * 100.0);
+            String socketsText = loreCurrent + " / " + Math.max(0, loreMax);
+            return new StatPreview(successText, breakText, socketsText);
+        }
         int current = data.getCurrentSocketCount();
         int max = data.getMaxSockets();
         int previewMax = max;

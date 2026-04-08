@@ -7,7 +7,7 @@ import java.util.Locale;
  */
 public final class LoreDebug {
     public static final boolean ENABLED = Boolean.parseBoolean(
-            System.getProperty("socketreforge.debug.loreprocs", "true"));
+            System.getProperty("socketreforge.debug.loreprocs", "false"));
     private static final String PREFIX = "[LoreProc]";
 
     private LoreDebug() {}

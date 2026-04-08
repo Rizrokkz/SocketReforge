@@ -3,20 +3,30 @@
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
             <h2 style="text-align:center;">{{ui.lore_socket.title}}</h2>
             <p style="text-align:center;">{{ui.lore_socket.subtitle}}</p>
+            <div style="layout-mode:Left; spacing:8; anchor-width:900;">
+                <button id="navSocketButton" style="anchor-width:160; height:32;" disabled="true">{{ui.lore_socket.nav_socket}}</button>
+                <button id="navFeedButton" style="anchor-width:160; height:32;">{{ui.lore_socket.nav_feed}}</button>
+            </div>
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
 
-            <div style="layout-mode:center; spacing:16;">
-                <div style="anchor-width:300; layout-mode:Top;">
+            <div style="layout-mode:center; spacing:12;">
+                <div style="anchor-width:280; layout-mode:Top;">
                     <p style="text-align:center;">{{ui.lore_socket.equipment}}</p>
-                    <select id="equipmentDropdown" data-hyui-showlabel="true" style="anchor-width: 300;">
+                    <select id="equipmentDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
                         {{equipmentOptions}}
                     </select>
                 </div>
-                <div style="anchor-width:300; layout-mode:Top;">
+                <div style="anchor-width:280; layout-mode:Top;">
                     <p style="text-align:center;">{{ui.lore_socket.gem}}</p>
-                    <select id="gemDropdown" data-hyui-showlabel="true" style="anchor-width: 300;">
+                    <select id="gemDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
                         {{gemOptions}}
+                    </select>
+                </div>
+                <div style="anchor-width:280; layout-mode:Top;">
+                    <p style="text-align:center;">{{ui.lore_socket.support}}</p>
+                    <select id="supportDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
+                        {{supportOptions}}
                     </select>
                 </div>
             </div>

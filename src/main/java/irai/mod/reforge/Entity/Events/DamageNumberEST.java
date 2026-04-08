@@ -519,22 +519,6 @@ public class DamageNumberEST extends DamageEventSystem {
         if (origin == null || viewerPos == null) {
             return origin;
         }
-        double distance = distanceBetween(origin, viewerPos);
-        if (distance > FLOATING_DAMAGE_FAR_DISTANCE) {
-            Vector3d forward = viewerForward;
-            if (forward == null) {
-                forward = directionFromTo(viewerPos, origin);
-            }
-            Vector3d horizontalForward = normalizeHorizontal(forward);
-            if (horizontalForward == null) {
-                horizontalForward = new Vector3d(0.0d, 0.0d, 1.0d);
-            }
-            return new Vector3d(
-                    viewerPos.x + (horizontalForward.x * FLOATING_DAMAGE_FAR_FRONT_OFFSET),
-                    viewerPos.y + FLOATING_DAMAGE_FAR_Y_OFFSET,
-                    viewerPos.z + (horizontalForward.z * FLOATING_DAMAGE_FAR_FRONT_OFFSET)
-            );
-        }
         return offsetTowardViewer(origin, viewerPos);
     }
 

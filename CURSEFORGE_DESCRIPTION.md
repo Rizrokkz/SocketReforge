@@ -387,6 +387,39 @@
 
 <hr>
 
+<h2>📜 Lore System (Spirits & Lore Sockets)</h2>
+
+<p>The Lore System adds spirit-bound abilities that can proc in combat when your weapon is aligned with the right gem and lore socket colors.</p>
+
+<h3>Core Loop</h3>
+
+<ol>
+  <li><strong>Punch a lore socket:</strong> Use <strong>Ghastly Essence</strong> in the Socket Punch bench to add a lore socket to eligible equipment.</li>
+  <li><strong>Socket a Spirit gem:</strong> Use the Lore Socket bench to place a Spirit gem into that lore socket (the gem defines the socket color).</li>
+  <li><strong>Bind the Spirit:</strong> Defeat an NPC bound to that Spirit while holding the gem-matched weapon — the first eligible kill binds the Spirit and unlocks its proc.</li>
+  <li><strong>Grow the lore:</strong> Lore abilities gain XP each time they proc. Feed <strong>Resonant Essence</strong> at each feed threshold to keep leveling.</li>
+</ol>
+
+<h3>Binding & Proc Rules</h3>
+
+<ul>
+  <li><strong>First kill binds:</strong> Binding only happens on the first eligible kill while the matching gem is socketed.</li>
+  <li><strong>Spirit selection:</strong> If the NPC is a known Spirit, that Spirit binds. Otherwise a Spirit is selected from the configured pool for that gem color.</li>
+  <li><strong>Color gates:</strong> Socket color must match the gem’s color. Use <strong>Resonant Essence</strong> to reroll lore socket colors if needed.</li>
+  <li><strong>Leveling:</strong> Each proc grants XP; leveling and feed costs scale from config.</li>
+</ul>
+
+<h3>Configuration Files</h3>
+
+<ul>
+  <li><strong>LoreConfig.json</strong> — lore socket drop chances, min/max sockets, XP per proc, feed interval/cost, and feed/clear item IDs.</li>
+  <li><strong>LoreMappingConfig.json</strong> — gem color matches (e.g., rock_gem_*), spirit pools per color, core colors, and ability mappings.</li>
+</ul>
+
+<p><em>Tip:</em> Match your lore socket colors to the spirit’s gem alignment to enable its combat procs.</p>
+
+<hr>
+
 <h2>✨ Resonance System</h2>
 
 <p>Unlock <strong>powerful hidden effects</strong> by socketting specific essence combinations! The Resonance System is inspired by runewords — certain essence orders trigger unique bonuses that aren't available from individual essences alone.</p>
@@ -666,12 +699,12 @@
   <tr>
     <td><strong>Lore System</strong></td>
     <td>Spirit gems, lore sockets, and combat abilities tied to wild spirits</td>
-    <td>⚠️ WIP</td>
+    <td>✅ Available</td>
   </tr>
    <tr>
     <td><strong>Gem Socketing</strong></td>
     <td>Craft and upgrade essences</td>
-    <td>✅ WIP</td>
+    <td>✅ Available</td>
   </tr>
 </table>
 

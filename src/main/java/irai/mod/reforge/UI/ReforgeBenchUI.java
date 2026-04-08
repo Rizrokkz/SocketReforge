@@ -48,11 +48,11 @@ public final class ReforgeBenchUI {
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String TEMPLATE_PATH      = "Common/UI/Custom/Pages/ReforgeBench.html";
 
-    private static final String MATERIAL_ID = "Refinement_Glob";
+    private static final String DEFAULT_MATERIAL_ID = "Refinement_Glob";
     private static final String HAMMER_IRON_ID = "Tool_Hammer_Iron";
     private static final String HAMMER_THORIUM_ID = "Tool_Hammer_Thorium";
-    private static final int MATERIAL_COST = 3;
-    private static final int MAX_UPGRADE_LEVEL = 3;
+    private static final int DEFAULT_MATERIAL_COST = 3;
+    private static final int DEFAULT_MAX_UPGRADE_LEVEL = 3;
     private static final double HAMMER_IRON_BREAK_MULTIPLIER = 0.50d;
     private static final double HAMMER_THORIUM_BREAK_MULTIPLIER = 0.30d;
     private static final double HAMMER_IRON_DURABILITY_LOSS_FRACTION = 0.05d;
@@ -67,6 +67,7 @@ public final class ReforgeBenchUI {
 
     private static final SFXConfig sfxConfig = new SFXConfig();
     private static RefinementConfig refinementConfig;
+    private static volatile List<String> refinementMaterialIds = List.of(DEFAULT_MATERIAL_ID);
     private static boolean hyuiAvailable = false;
 
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
@@ -140,6 +141,18 @@ public final class ReforgeBenchUI {
             this.statusText = statusText;
             this.progressValue = progressValue;
             this.processing = processing;
+        }
+    }
+
+    private static final class MaterialRequirement {
+        final String itemId;
+        final int cost;
+        final String displayName;
+
+        MaterialRequirement(String itemId, int cost, String displayName) {
+            this.itemId = itemId;
+            this.cost = cost;
+            this.displayName = displayName;
         }
     }
 
@@ -228,6 +241,16 @@ public final class ReforgeBenchUI {
 
     public static void setRefinementConfig(RefinementConfig config) {
         refinementConfig = config;
+        if (config != null) {
+            List<String> ids = config.getMaterialItemIds();
+            if (ids != null && !ids.isEmpty()) {
+                refinementMaterialIds = ids;
+            } else {
+                refinementMaterialIds = List.of(DEFAULT_MATERIAL_ID);
+            }
+        } else {
+            refinementMaterialIds = List.of(DEFAULT_MATERIAL_ID);
+        }
     }
 
     public static void setSfxConfig(SFXConfig config) {
@@ -291,7 +314,7 @@ public final class ReforgeBenchUI {
             if (ReforgeEquip.isWeapon(stack) || ReforgeEquip.isArmor(stack)) {
                 equipments.add(entry);
             }
-            if (MATERIAL_ID.equalsIgnoreCase(itemId)) {
+            if (isRefinementMaterial(itemId)) {
                 materials.add(entry);
             }
             if (isHammerItem(itemId)) {
@@ -424,14 +447,36 @@ public final class ReforgeBenchUI {
             matKey = "0";
         }
 
+        MaterialRequirement materialRequirement = getMaterialRequirement(player, selectedEquipment);
+        int requiredMaterialCount = materialRequirement != null
+                ? countMaterials(snapshot.materials, materialRequirement.itemId)
+                : 0;
+        Entry requiredMaterialEntry = materialRequirement != null
+                ? findFirstByItemId(snapshot.materials, materialRequirement.itemId)
+                : null;
+        if (materialRequirement != null && requiredMaterialEntry != null
+                && (selectedMaterial == null || !materialMatches(selectedMaterial, materialRequirement.itemId))) {
+            int requiredIndex = findMaterialIndex(snapshot.materials, materialRequirement.itemId);
+            if (requiredIndex >= 0) {
+                selectedMaterial = snapshot.materials.get(requiredIndex);
+                matKey = String.valueOf(requiredIndex);
+            } else {
+                selectedMaterial = requiredMaterialEntry;
+            }
+        }
+        String materialName = materialRequirement != null
+                ? resolveMaterialName(player, materialRequirement.itemId, requiredMaterialEntry)
+                : LangLoader.getUITranslation(player, "ui.reforge.material");
+        int materialCost = materialRequirement != null ? materialRequirement.cost : DEFAULT_MATERIAL_COST;
+
         Preview preview = buildPreview(player, selectedEquipment, selectedSupport);
         if (!processing) {
             if (selectedEquipment == null) {
                 status = LangLoader.getUITranslation(player, "ui.reforge.status_no_equipment");
-            } else if (preview.currentLevel >= MAX_UPGRADE_LEVEL) {
+            } else if (preview.currentLevel >= getMaxUpgradeLevel()) {
                 status = LangLoader.getUITranslation(player, "ui.reforge.status_max_level");
-            } else if (snapshot.materialCount < MATERIAL_COST) {
-                status = LangLoader.getUITranslation(player, "ui.reforge.status_need_material", MATERIAL_COST);
+            } else if (requiredMaterialCount < materialCost) {
+                status = LangLoader.getUITranslation(player, "ui.reforge.status_need_material", materialCost, materialName);
             } else if (LangLoader.getUITranslation(player, "ui.reforge.status_idle").equals(status)) {
                 status = LangLoader.getUITranslation(player, "ui.reforge.status_ready");
             }
@@ -452,7 +497,7 @@ public final class ReforgeBenchUI {
         html = html.replace("{{expectedOutcomeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_outcome")));
         html = html.replace("{{expectedDamageLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_damage")));
         html = html.replace("{{refineProgressLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.refine_progress")));
-        html = html.replace("{{consumesMaterialText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.consumes_material", MATERIAL_COST)));
+        html = html.replace("{{consumesMaterialText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.consumes_material", materialCost, materialName)));
         html = html.replace("{{ironHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.iron_hammer_info")));
         html = html.replace("{{thoriumHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.thorium_hammer_info")));
         html = html.replace("{{refineButtonText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.button_refine")));
@@ -462,7 +507,7 @@ public final class ReforgeBenchUI {
         html = html.replace("{{materialOptions}}", buildOptions(snapshot.materials, LangLoader.getUITranslation(player, "ui.reforge.no_material"), matKey));
         html = html.replace("{{supportOptions}}", buildSupportOptions(player, snapshot.supports, supKey));
         html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(player, selectedSupport)));
-        html = html.replace("{{materialCountText}}", LangLoader.getUITranslation(player, "ui.reforge.material_count", snapshot.materialCount));
+        html = html.replace("{{materialCountText}}", LangLoader.getUITranslation(player, "ui.reforge.material_count", materialName, requiredMaterialCount));
         html = html.replace("{{currentStatsText}}", escapeHtml(preview.currentStats));
         html = html.replace("{{expectedStatsText}}", escapeHtml(preview.expectedStats));
         html = html.replace("{{chanceBreakLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_break")));
@@ -487,16 +532,16 @@ public final class ReforgeBenchUI {
         html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(player, selectedEquipment)));
         html = html.replace("{{progressValue}}", String.valueOf(progress));
         html = html.replace("{{statusText}}", escapeHtml(status));
-        html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, snapshot.materialCount) ? "disabled=\"true\"" : "");
+        html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, requiredMaterialCount, materialCost) ? "disabled=\"true\"" : "");
         return html;
     }
 
-    private static boolean shouldDisable(boolean processing, Entry selectedEquipment, int materialCount) {
+    private static boolean shouldDisable(boolean processing, Entry selectedEquipment, int materialCount, int materialCost) {
         if (processing) return true;
         if (selectedEquipment == null) return true;
         int level = ReforgeEquip.getLevelFromItem(selectedEquipment.item);
-        if (level >= MAX_UPGRADE_LEVEL) return true;
-        return materialCount < MATERIAL_COST;
+        if (level >= getMaxUpgradeLevel()) return true;
+        return materialCount < materialCost;
     }
 
     private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
@@ -552,7 +597,8 @@ public final class ReforgeBenchUI {
         ItemStack item = equipment.item;
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         HammerSupportType hammerSupport = getHammerSupportType(support);
-        int level = Math.max(0, Math.min(MAX_UPGRADE_LEVEL, ReforgeEquip.getLevelFromItem(item)));
+        int maxLevel = getMaxUpgradeLevel();
+        int level = Math.max(0, Math.min(maxLevel, ReforgeEquip.getLevelFromItem(item)));
         String typeLabel = isArmor ? t(player, "ui.reforge.type_armor") : t(player, "ui.reforge.type_weapon");
         String refineName = isArmor ? ReforgeEquip.getArmorUpgradeName(level) : ReforgeEquip.getUpgradeName(level);
         double currentMult = statMultiplierForLevel(level, isArmor);
@@ -564,7 +610,7 @@ public final class ReforgeBenchUI {
                 + t(player, "ui.reforge.preview_current_stat", statLabel, format3(currentMult),
                     formatPercent(currentMult - 1.0));
 
-        if (level >= MAX_UPGRADE_LEVEL) {
+        if (level >= maxLevel) {
             String expectedStats = t(player, "ui.reforge.chance_break") + ": 0%\n"
                     + t(player, "ui.reforge.chance_degrade") + ": 0%\n"
                     + t(player, "ui.reforge.chance_same") + ": 0%\n"
@@ -651,10 +697,15 @@ public final class ReforgeBenchUI {
         if (!isWeapon && !isArmor) return new ProcessResult(t(player, "ui.reforge.error_item_not_refinable"), 0);
 
         int level = ReforgeEquip.getLevelFromItem(current);
-        if (level >= MAX_UPGRADE_LEVEL) return new ProcessResult(t(player, "ui.reforge.error_max_level"), 100);
+        if (level >= getMaxUpgradeLevel()) return new ProcessResult(t(player, "ui.reforge.error_max_level"), 100);
 
-        if (countMaterialGlobally(player) < MATERIAL_COST) {
-            return new ProcessResult(t(player, "ui.reforge.error_need_material", MATERIAL_COST), 0);
+        MaterialRequirement requirement = getMaterialRequirement(player, equipment);
+        String materialId = requirement != null ? requirement.itemId : DEFAULT_MATERIAL_ID;
+        String materialName = requirement != null ? requirement.displayName : LangLoader.getUITranslation(player, "ui.reforge.material");
+        int materialCost = requirement != null ? requirement.cost : DEFAULT_MATERIAL_COST;
+
+        if (countMaterialGlobally(player, materialId) < materialCost) {
+            return new ProcessResult(t(player, "ui.reforge.error_need_material", materialCost, materialName), 0);
         }
 
         HammerSupportType hammerSupport = getHammerSupportType(support);
@@ -666,8 +717,8 @@ public final class ReforgeBenchUI {
             }
         }
 
-        if (!consumeMaterialGlobally(player, MATERIAL_COST)) {
-            return new ProcessResult(t(player, "ui.reforge.error_material_consume"), 0);
+        if (!consumeMaterialGlobally(player, materialId, materialCost)) {
+            return new ProcessResult(t(player, "ui.reforge.error_material_consume", materialName), 0);
         }
 
         double breakChance = effectiveBreakChance(level, isArmor, hammerSupport);
@@ -780,12 +831,93 @@ public final class ReforgeBenchUI {
     }
 
     private static int clampLevel(int level) {
-        return Math.max(0, Math.min(MAX_UPGRADE_LEVEL, level));
+        return Math.max(0, Math.min(getMaxUpgradeLevel(), level));
     }
 
-    private static int countMaterialGlobally(Player player) {
-        return countInContainer(player.getInventory().getStorage(), MATERIAL_ID)
-                + countInContainer(player.getInventory().getHotbar(), MATERIAL_ID);
+    private static int getMaxUpgradeLevel() {
+        return refinementConfig != null ? refinementConfig.getMaxLevel() : DEFAULT_MAX_UPGRADE_LEVEL;
+    }
+
+    private static boolean isRefinementMaterial(String itemId) {
+        if (itemId == null || itemId.isBlank()) return false;
+        for (String id : refinementMaterialIds) {
+            if (id != null && id.equalsIgnoreCase(itemId)) return true;
+        }
+        return false;
+    }
+
+    private static MaterialRequirement getMaterialRequirement(Player player, Entry equipment) {
+        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
+            return null;
+        }
+        int level = ReforgeEquip.getLevelFromItem(equipment.item);
+        RefinementConfig.MaterialTier tier = refinementConfig != null
+                ? refinementConfig.getMaterialTierForLevel(level)
+                : null;
+        String itemId = tier != null && tier.itemId != null && !tier.itemId.isBlank()
+                ? tier.itemId
+                : DEFAULT_MATERIAL_ID;
+        int cost = tier != null ? tier.cost : DEFAULT_MATERIAL_COST;
+        String name = resolveMaterialName(player, itemId, null);
+        return new MaterialRequirement(itemId, cost, name);
+    }
+
+    private static int countMaterials(List<Entry> entries, String itemId) {
+        if (entries == null || entries.isEmpty() || itemId == null) return 0;
+        int total = 0;
+        for (Entry entry : entries) {
+            if (entry == null || entry.itemId == null) continue;
+            if (entry.itemId.equalsIgnoreCase(itemId)) {
+                total += entry.quantity;
+            }
+        }
+        return total;
+    }
+
+    private static Entry findFirstByItemId(List<Entry> entries, String itemId) {
+        if (entries == null || entries.isEmpty() || itemId == null) return null;
+        for (Entry entry : entries) {
+            if (entry != null && entry.itemId != null && entry.itemId.equalsIgnoreCase(itemId)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private static int findMaterialIndex(List<Entry> entries, String itemId) {
+        if (entries == null || entries.isEmpty() || itemId == null) return -1;
+        for (int i = 0; i < entries.size(); i++) {
+            Entry entry = entries.get(i);
+            if (entry != null && entry.itemId != null && entry.itemId.equalsIgnoreCase(itemId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean materialMatches(Entry entry, String itemId) {
+        if (entry == null || entry.itemId == null || itemId == null) return false;
+        return entry.itemId.equalsIgnoreCase(itemId);
+    }
+
+    private static String resolveMaterialName(Player player, String itemId, Entry entry) {
+        if (entry != null && entry.displayName != null && !entry.displayName.isBlank()) {
+            return entry.displayName;
+        }
+        if (itemId == null || itemId.isBlank()) {
+            return LangLoader.getUITranslation(player, "ui.reforge.material");
+        }
+        try {
+            ItemStack stack = new ItemStack(itemId, 1);
+            return UIItemUtils.displayNameOrItemId(stack, player);
+        } catch (Exception ignored) {
+            return itemId;
+        }
+    }
+
+    private static int countMaterialGlobally(Player player, String itemId) {
+        return countInContainer(player.getInventory().getStorage(), itemId)
+                + countInContainer(player.getInventory().getHotbar(), itemId);
     }
 
     private static int countInContainer(ItemContainer container, String itemId) {
@@ -799,10 +931,10 @@ public final class ReforgeBenchUI {
         return count;
     }
 
-    private static boolean consumeMaterialGlobally(Player player, int amount) {
+    private static boolean consumeMaterialGlobally(Player player, String itemId, int amount) {
         int remaining = amount;
-        remaining = consumeFromContainer(player.getInventory().getStorage(), MATERIAL_ID, remaining);
-        if (remaining > 0) remaining = consumeFromContainer(player.getInventory().getHotbar(), MATERIAL_ID, remaining);
+        remaining = consumeFromContainer(player.getInventory().getStorage(), itemId, remaining);
+        if (remaining > 0) remaining = consumeFromContainer(player.getInventory().getHotbar(), itemId, remaining);
         return remaining <= 0;
     }
 

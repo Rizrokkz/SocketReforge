@@ -93,7 +93,7 @@ public class LoreConfig {
     private int feedInterval = 3;
     private int feedBase = 1;
     private int feedMultiplier = 2;
-    private String[] feedItemIds = new String[]{"Ingredient_Resonant_Essence"};
+    private String[] feedItemIds = new String[]{"Ingredient_Resonant_Essence", "Ingredient_Ghastly_Essence"};
     private String[] clearItemIds = new String[]{"Ingredient_Ghastly_Essence"};
 
     public double getChestLoreSocketChance() { return chestLoreSocketChance; }

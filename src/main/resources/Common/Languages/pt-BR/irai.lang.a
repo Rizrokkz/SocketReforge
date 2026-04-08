@@ -42,7 +42,7 @@ ui.essence_bench.process_button = Soquetar Essência
 
 # Traduções da UI do Bancada de Reforjamento
 ui.reforge.title = Bancada de Reforjamento
-ui.reforge.material_count = Globs de Refinamento no inventário: {0}
+ui.reforge.material_count = {0} no inventário: {1}
 ui.reforge.equipment = Equipamento
 ui.reforge.material = Material de Refinamento
 ui.reforge.support = Material de Suporte (Opcional)
@@ -57,14 +57,14 @@ ui.reforge.refine_progress = Progresso de Refinamento
 ui.reforge.status_idle = Ocioso
 ui.reforge.status_no_equipment = Nenhum equipamento reforgável encontrado.
 ui.reforge.status_max_level = Item já está no nível máximo de refinamento.
-ui.reforge.status_need_material = Precisa de {0} Globs de Refinamento.
+ui.reforge.status_need_material = Precisa de {0} {1}.
 ui.reforge.status_ready = Pronto para reforjar
 ui.reforge.button_refine = Reforjar
-ui.reforge.consumes_material = Consome {0} Globs de Refinamento por tentativa.
+ui.reforge.consumes_material = Consome {0} {1} por tentativa.
 ui.reforge.iron_hammer_info = Martelo de Ferro reduz a chance de quebra (5% de durabilidade por uso).
 ui.reforge.thorium_hammer_info = Martelo de Thorium reduz a chance de quebra ainda mais (15% de durabilidade por uso).
 ui.reforge.no_equipment = Nenhum equipamento reforgável encontrado
-ui.reforge.no_material = Nenhum Glob de Refinamento encontrado
+ui.reforge.no_material = Nenhum material de refinamento encontrado
 ui.reforge.support_none = Nenhum
 ui.reforge.support_guard = [Guarda contra Quebra]
 ui.reforge.chance_break = Quebra
@@ -255,9 +255,9 @@ ui.reforge.error_pick_equipment = Selecione um equipamento válido primeiro.
 ui.reforge.error_equipment_changed = Equipamento selecionado mudou; selecione novamente.
 ui.reforge.error_item_not_refinable = Item selecionado não pode ser refinado.
 ui.reforge.error_max_level = Item já está no nível máximo de refinamento.
-ui.reforge.error_need_material = Globs de Refinamento insuficientes (precisa de {0}).
+ui.reforge.error_need_material = {1} insuficiente (precisa de {0}).
 ui.reforge.error_hammer_changed = Pilha do martelo mudou; selecione novamente e tente outra vez.
-ui.reforge.error_material_consume = Falha ao consumir Globs de Refinamento. Tente novamente.
+ui.reforge.error_material_consume = Falha ao consumir {0}. Tente novamente.
 ui.reforge.result_shattered = Item foi destruído durante o refinamento.{0}
 ui.reforge.result_degraded = Refino falhou: degradou +{0} -> +{1}{2}
 ui.reforge.result_same = Refino falhou: permaneceu em +{0}{1}
@@ -555,6 +555,7 @@ ui.runtime_config.status_reset_failed = Falha ao restaurar: {0}
 ui.runtime_config.status_control_unchanged = {0} inalterado ({1}).
 ui.runtime_config.status_control_changed = {0}: {1} -> {2}.
 ui.runtime_config.status_control_failed = Falha ao atualizar {0}: {1}
+ui.runtime_config.status_control_invalid = Valor inválido para {0}: {1}.
 
 # Prefixos de nomes localizados
 name.prefix.blood_pact = Pacto de Sangue

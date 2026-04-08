@@ -139,7 +139,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
                     float baseDamage = damage.getAmount();
                     int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
-                    int clampedLevel = Math.max(0, Math.min(upgradeLevel, 3));
+                    int clampedLevel = clampLevel(upgradeLevel);
                     double refinementMultiplier = getDamageMultiplier(clampedLevel);
                     double socketMultiplier = calculateSocketDamageBonus(weapon);
                     double socketFlat = calculateSocketFlatDamage(weapon);
@@ -209,7 +209,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                         if (level > highestLevel) highestLevel = level;
                     }
                 }
-                int clampedLevel = Math.max(0, Math.min(highestLevel, 3));
+                int clampedLevel = clampLevel(highestLevel);
 
                 float reducedDamage = (float) (damage.getAmount() / avgDefenseMultiplier);
                 damage.setAmount(reducedDamage);
@@ -250,7 +250,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
             String armorId = getItemId(armor);
             if (armorId != null) {
                 int level = ReforgeEquip.getLevelFromItem(armor);
-                int clampedLevel = Math.max(0, Math.min(level, 3));
+                int clampedLevel = clampLevel(level);
                 double multiplier = getDefenseMultiplier(clampedLevel);
                 totalMultiplier += multiplier;
                 count++;
@@ -460,6 +460,11 @@ public class EquipmentRefineEST extends DamageEventSystem {
             if (value != null) return value.getIndex();
         }
         return -1;
+    }
+
+    private int clampLevel(int level) {
+        int max = refinementConfig != null ? refinementConfig.getMaxLevel() : 3;
+        return Math.max(0, Math.min(level, max));
     }
 
     private double getPartsDamageMultiplier(ItemStack weapon) {

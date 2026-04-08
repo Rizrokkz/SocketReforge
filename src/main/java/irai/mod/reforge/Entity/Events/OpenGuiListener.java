@@ -230,18 +230,11 @@ public class OpenGuiListener {
                 continue;
             }
             String resonanceName = SocketManager.getResonanceName(item);
-            SocketData existing = SocketManager.getSocketData(item);
             if (resonanceName == null || resonanceName.isBlank()) {
-                if (existing != null) {
-                    ResonanceSystem.ResonanceResult raw = ResonanceSystem.evaluate(item, existing);
-                    if (raw != null && raw.active()) {
-                        resonanceName = raw.name();
-                    }
-                }
-            }
-            if (resonanceName == null || resonanceName.isBlank()) {
+                // Do not auto-unlock resonances for items that never had one persisted.
                 continue;
             }
+            SocketData existing = SocketManager.getSocketData(item);
             Essence.Type[] pattern = ResonanceSystem.getPatternForRecipeName(resonanceName);
             if (pattern == null || pattern.length == 0) {
                 continue;

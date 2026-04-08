@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.7] - 2026-04-08
+
+### Added
+
+- **Refinement Expansion** - Refinement now supports higher caps beyond +3 with tiered material costs, auto-split tier thresholds, and expanded multipliers/break/weight arrays.
+- **Refinement Materials** - Added refinement material tiers (Refinement Glob, Refinement Glob Plus, Resonant Glob) for early/mid/late refinement bands.
+- **Runtime Config Enhancements** - New runtime controls for max refine level, tier thresholds, per-level weights, and expanded multiplier/break tables.
+- **Refinement Label Controls** - Configurable prefix/suffix labels per level (weapon + armor), with auto-fill defaults.
+
+### Changed
+
+- **Refinement Defaults Sync** - Default reforge weight arrays now mirror the autoconfig tiered weight calculation.
+
+### Fixed
+
+- **Damage Numbers Position** - Reverted floating damage numbers spawning in front of the player; they now render at their original target-based position.
+
+### Notes
+
+- After updating, reconfigure your configs or run `/runtimeconfig` (OP) and reset defaults to populate the new refinement settings.
+
+## [1.3.6] - 2026-04-07
+
+### Added
+
+- **Lore System (Overview)** - Introduces lore sockets and resonance-driven effects that let certain equipment trigger unique procs and visuals when aligned with lore socket colors and support items.
+- **Lore System (Quick Start)** - Configure Spirit ↔ Gem matches in your config. Each lore has abilities that grow by feeding Resonant Essence. To obtain a Spirit, find an NPC bound to a Spirit gem and land the first kill while holding a weapon socketed with that matching gem. This binds the Spirit so its abilities can proc in combat. Lore gains XP per proc and can be fed when it reaches its threshold.
+- **Lore Socket Punching (Ghastly Essence)** - Ghastly Essence can be used as a support in the Socket Punch bench to punch random lore sockets, with success/fail/break roll feedback.
+- **Lore Socket Color Reroll (Resonant Essence)** - Lore Socket bench now supports a Resonant Essence support item to reroll slot colors; Auto consumes 1 per eligible slot.
+- **Lore Socket Preview (Socket Bench)** - Lore socket colors now render inside the Socket Punch bench preview when the selected equipment has lore sockets.
+- **Void Spawn Ghastly Drop** - Spawn_Void NPC roles drop Ghastly Essence at 1% chance.
+
+### Changed
+
+- **Socket Punch Preview** - Essence socket preview now matches the Essence Bench styling (colored frames + overlay icons).
+- **Lore Reroll Targeting** - Reroll skips filled/locked slots; Auto only consumes essence for eligible empty/unlocked slots.
+- **Support Dropdown Defaults** - Support selection defaults to None unless explicitly chosen.
+
+### Fixed
+
+- **Resonance Recipes (Generic Weapons)** - Fixed Merciless and Trinity Edge resonance not activating on generic weapons even with a completed recipe.
+
+---
+
 ## [1.3.5] - 2026-03-29
 
 ### Added

@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
@@ -53,6 +56,8 @@ public final class LoreFeedBenchUI {
     private static boolean hyuiAvailable = false;
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
+    private static final Map<PlayerRef, Boolean> pendingNavToSocket = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     private enum ContainerKind {
         HOTBAR,
@@ -102,11 +107,13 @@ public final class LoreFeedBenchUI {
     private static final class SelectionState {
         final String equipmentKey;
         final String slotKey;
+        final String actionKey;
         final String statusText;
 
-        SelectionState(String equipmentKey, String slotKey, String statusText) {
+        SelectionState(String equipmentKey, String slotKey, String actionKey, String statusText) {
             this.equipmentKey = equipmentKey;
             this.slotKey = slotKey;
+            this.actionKey = actionKey;
             this.statusText = statusText;
         }
     }
@@ -142,14 +149,23 @@ public final class LoreFeedBenchUI {
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();
+        LoreUiState.setActive(playerRef, LoreUiState.Page.FEED);
+        pendingNavToSocket.remove(playerRef);
         closePageIfOpen(playerRef);
         pendingSelections.remove(playerRef);
         player.getWorld().execute(() -> openWithSync(player));
     }
 
     private static void openWithSync(Player player) {
+        if (player == null) {
+            return;
+        }
+        PlayerRef playerRef = player.getPlayerRef();
+        if (!LoreUiState.isActive(playerRef, LoreUiState.Page.FEED)) {
+            return;
+        }
         Snapshot snapshot = collectSnapshot(player);
-        SelectionState selectionState = pendingSelections.remove(player.getPlayerRef());
+        SelectionState selectionState = pendingSelections.remove(playerRef);
         openPage(player, snapshot, selectionState);
     }
 
@@ -279,8 +295,9 @@ public final class LoreFeedBenchUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         String equipmentVal = extractEventValue(eventObj);
                         String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
+                        String actionVal = getContextValue(ctxObj, "actionDropdown", "#actionDropdown.value");
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, slotVal, null));
+                                new SelectionState(equipmentVal, slotVal, actionVal, null));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                     });
 
@@ -288,8 +305,19 @@ public final class LoreFeedBenchUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
                         String slotVal = extractEventValue(eventObj);
+                        String actionVal = getContextValue(ctxObj, "actionDropdown", "#actionDropdown.value");
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, slotVal, null));
+                                new SelectionState(equipmentVal, slotVal, actionVal, null));
+                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            addListener.invoke(pageBuilder, "actionDropdown", valueChanged,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
+                        String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
+                        String actionVal = extractEventValue(eventObj);
+                        pendingSelections.put(finalPlayer.getPlayerRef(),
+                                new SelectionState(equipmentVal, slotVal, actionVal, null));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
                     });
 
@@ -297,12 +325,44 @@ public final class LoreFeedBenchUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
                         String slotVal = getContextValue(ctxObj, "slotDropdown", "#slotDropdown.value");
+                        String actionVal = getContextValue(ctxObj, "actionDropdown", "#actionDropdown.value");
                         Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
 
-                        ProcessResult result = processSelection(finalPlayer, equipment, slotVal);
+                        ProcessResult result = processSelection(finalPlayer, equipment, slotVal, actionVal);
                         pendingSelections.put(finalPlayer.getPlayerRef(),
-                                new SelectionState(equipmentVal, slotVal, result.status));
+                                new SelectionState(equipmentVal, slotVal, actionVal, result.status));
                         finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                    });
+
+            addListener.invoke(pageBuilder, "navSocketButton", activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                        PlayerRef ref = finalPlayer.getPlayerRef();
+                        LoreUiState.setActive(ref, LoreUiState.Page.SOCKET);
+                        pendingNavToSocket.put(ref, Boolean.TRUE);
+                        closePageIfOpen(ref);
+                        // Fallback: if onDismiss doesn't fire, open after a short delay.
+                        scheduler.schedule(() -> {
+                            Boolean pending = pendingNavToSocket.remove(ref);
+                            if (pending == null || !pending) {
+                                return;
+                            }
+                            finalPlayer.getWorld().execute(() -> LoreSocketBenchUI.open(finalPlayer));
+                        }, 100, TimeUnit.MILLISECONDS);
+                    });
+
+            Method onDismiss = pageBuilderClass.getMethod("onDismiss", java.util.function.BiConsumer.class);
+            pageBuilder = onDismiss.invoke(pageBuilder,
+                    (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByPlayer) -> {
+                        PlayerRef ref = finalPlayer.getPlayerRef();
+                        Object current = openPages.get(ref);
+                        if (current != pageObj) {
+                            return;
+                        }
+                        openPages.remove(ref);
+                        Boolean pending = pendingNavToSocket.remove(ref);
+                        if (pending != null && pending) {
+                            LoreSocketBenchUI.open(finalPlayer);
+                        }
                     });
 
             pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
@@ -318,6 +378,7 @@ public final class LoreFeedBenchUI {
     private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
         String equipmentKey = state != null ? state.equipmentKey : null;
         String slotKey = state != null ? state.slotKey : null;
+        String actionKey = state != null ? state.actionKey : null;
         String status = state != null && state.statusText != null
                 ? state.statusText
                 : LangLoader.getUITranslation(player, "ui.lore_feed.status_idle");
@@ -330,11 +391,33 @@ public final class LoreFeedBenchUI {
                         LangLoader.getUITranslation(player, "ui.lore_feed.option_no_equipment"),
                         equipmentKey));
         html = html.replace("{{slotOptions}}", buildSlotOptions(player, selectedEquipment, slotKey));
+        html = html.replace("{{actionOptions}}", buildActionOptions(player, actionKey));
         html = html.replace("{{statusText}}", escapeHtml(status));
         html = html.replace("{{spiritPreview}}", escapeHtml(buildSpiritPreview(player, selectedEquipment, slotKey)));
         html = html.replace("{{progressBars}}", buildProgressBars(player, selectedEquipment));
         html = html.replace("{{processDisabledAttr}}", shouldDisable(selectedEquipment) ? "disabled=\"true\"" : "");
         return LangLoader.replaceUiTokens(player, html);
+    }
+
+    private static String buildActionOptions(Player player, String selectedKey) {
+        String normalized = selectedKey == null ? "" : selectedKey.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            normalized = "feed";
+        }
+        String feedLabel = LangLoader.getUITranslation(player, "ui.lore_feed.action_feed");
+        String clearLabel = LangLoader.getUITranslation(player, "ui.lore_feed.action_clear");
+        StringBuilder sb = new StringBuilder();
+        sb.append("<option value=\"feed\"");
+        if ("feed".equals(normalized)) {
+            sb.append(" selected=\"true\"");
+        }
+        sb.append(">").append(escapeHtml(feedLabel)).append("</option>");
+        sb.append("<option value=\"clear\"");
+        if ("clear".equals(normalized)) {
+            sb.append(" selected=\"true\"");
+        }
+        sb.append(">").append(escapeHtml(clearLabel)).append("</option>");
+        return sb.toString();
     }
 
     private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
@@ -988,7 +1071,7 @@ public final class LoreFeedBenchUI {
         return equipment == null;
     }
 
-    private static ProcessResult processSelection(Player player, Entry equipment, String slotKey) {
+    private static ProcessResult processSelection(Player player, Entry equipment, String slotKey, String actionKey) {
         if (player == null) {
             return new ProcessResult("Player not found.");
         }
@@ -1001,7 +1084,7 @@ public final class LoreFeedBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
         }
 
-        boolean wantsClear = LoreSocketManager.isHoldingClearItem(player);
+        boolean wantsClear = actionKey != null && actionKey.trim().equalsIgnoreCase("clear");
         int slotIndex = resolveSlotIndexForProcess(data, slotKey, wantsClear);
         if (slotIndex < 0 || slotIndex >= data.getSocketCount()) {
             if (hasAnySpirit(data)) {
@@ -1019,7 +1102,7 @@ public final class LoreFeedBenchUI {
         }
         boolean cleared = false;
         if (wantsClear) {
-            if (!LoreSocketManager.tryClearSpirit(player, data, slotIndex)) {
+            if (!LoreSocketManager.tryClearSpirit(player, data, slotIndex, true)) {
                 return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
             }
             cleared = true;

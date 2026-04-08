@@ -1,0 +1,131 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Bench_Gem_Socket.name",
+    "Description": "irai.items.Bench_Gem_Socket.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Bench_Gem_Socket.png",
+  "Categories": [
+    "Furniture.Benches"
+  ],
+  "Recipe": {
+    "TimeSeconds": 3,
+    "Input": [
+      {
+        "ItemId": "Rock_Chalk",
+        "Quantity": 30
+      },
+      {
+        "ResourceTypeId": "Wood_Trunk",
+        "Quantity": 30
+      },
+      {
+        "ItemId": "Ingredient_Resonant_Essence",
+        "Quantity": 3
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Crafting"
+        ],
+        "RequiredTierLevel": 3
+      }
+    ]
+  },
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Benches/Bench_Gem_Socket.blockymodel",
+    "CustomModelTexture": [
+      {
+        "Texture": "Blocks/Benches/Texture_Bench_Lore_Socket.png",
+        "Weight": 1
+      }
+    ],
+    "HitboxType": "Bench_Alchemy",
+    "VariantRotation": "NESW",
+    "Bench": {
+      "Type": "Crafting",
+      "LocalOpenSoundEventId": "SFX_Arcane_Workbench_Open_Local",
+      "LocalCloseSoundEventId": "SFX_Arcane_Workbench_Close_Local",
+      "CompletedSoundEventId": "SFX_Arcane_Workbench_Craft",
+      "Categories": [
+        {
+          "Id": "Arcane_Portals",
+          "Icon": "Icons/CraftingCategories/Arcane/Portal_Device.png",
+          "Name": "server.benchCategories.portals"
+        },
+        {
+          "Id": "Arcane_Misc",
+          "Icon": "Icons/CraftingCategories/Arcane/Bench_Memories.png",
+          "Name": "server.benchCategories.misc"
+        },
+        {
+          "Id": "Arcane_Essence",
+          "Name": "irai.benchCategories.essence",
+          "Icon": "Icons/CraftingCategories/Farming/Essence.png"
+        }
+      ],
+      "Id": "Arcanebench"
+    },
+    "BlockEntity": {
+      "Components": {
+        "BenchBlock": {}
+      }
+    },
+    "State": {
+      "Id": "crafting",
+      "Definitions": {
+        "CraftCompleted": {
+          "CustomModelAnimation": "Blocks/Benches/Alchemy_Crafting.blockyanim",
+          "Looping": true
+        },
+        "CraftCompletedInstant": {
+          "CustomModelAnimation": "Blocks/Benches/Alchemy_Crafting.blockyanim"
+        }
+      }
+    },
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Benches"
+      }
+    },
+    "BlockParticleSetId": "Wood",
+    "ParticleColor": "#6e4a2f",
+    "Support": {
+      "Down": [
+        {
+          "FaceType": "Full"
+        }
+      ]
+    },
+    "BlockSoundSetId": "Stone",
+    "Interactions": {
+      "Use": "LoreSocketBench"
+    }
+  },
+  "PlayerAnimationsId": "Block",
+  "IconProperties": {
+    "Scale": 0.35,
+    "Rotation": [
+      22.5,
+      45.0,
+      22.5
+    ],
+    "Translation": [
+      11.4,
+      -18.6
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Bench"
+    ]
+  },
+  "MaxStack": 1,
+  "ItemLevel": 10,
+  "ItemSoundSetId": "ISS_Blocks_Wood"
+}

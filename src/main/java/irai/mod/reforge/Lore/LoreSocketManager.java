@@ -265,6 +265,51 @@ public final class LoreSocketManager {
         return withLoreSocketData(item, data);
     }
 
+    /**
+     * Adds one lore socket (random color) to the item if possible.
+     * Returns the original item if no changes were applied.
+     */
+    public static ItemStack punchRandomLoreSocket(ItemStack item, Random rng) {
+        if (item == null || item.isEmpty() || !isEquipment(item)) {
+            return item;
+        }
+
+        int maxAllowed = Math.max(0, config.getMaxLoreSockets());
+        if (maxAllowed <= 0) {
+            return item;
+        }
+
+        LoreSocketData data = getLoreSocketData(item);
+        int currentMax = 0;
+        if (data == null) {
+            data = new LoreSocketData(1);
+            data.ensureSocketCount(1);
+        } else {
+            currentMax = Math.max(data.getMaxSockets(), data.getSocketCount());
+        }
+
+        if (currentMax >= maxAllowed) {
+            return item;
+        }
+
+        int newMax = Math.min(currentMax + 1, maxAllowed);
+        data.setMaxSockets(newMax);
+        data.ensureSocketCount(newMax);
+
+        Random random = rng == null ? ThreadLocalRandom.current() : rng;
+        for (int i = 0; i < data.getSocketCount(); i++) {
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            if (socket == null) {
+                continue;
+            }
+            if (socket.getColor() == null || socket.getColor().isBlank()) {
+                socket.setColor(LoreGemRegistry.pickRandomColor(random));
+            }
+        }
+
+        return withLoreSocketData(item, data);
+    }
+
     public static ItemStack syncLoreSocketColors(ItemStack item) {
         LoreSocketData data = getLoreSocketData(item);
         if (data == null) {
@@ -578,6 +623,10 @@ public final class LoreSocketManager {
     }
 
     public static boolean tryClearSpirit(Player player, LoreSocketData data, int slotIndex) {
+        return tryClearSpirit(player, data, slotIndex, false);
+    }
+
+    public static boolean tryClearSpirit(Player player, LoreSocketData data, int slotIndex, boolean allowInventory) {
         if (player == null || data == null) {
             return false;
         }
@@ -589,7 +638,10 @@ public final class LoreSocketManager {
         if (clearIds == null || clearIds.length == 0) {
             return false;
         }
-        if (!consumeFromSelectedHotbar(player, clearIds, 1)) {
+        boolean consumed = allowInventory
+                ? consumeFromInventory(player, clearIds, 1)
+                : consumeFromSelectedHotbar(player, clearIds, 1);
+        if (!consumed) {
             return false;
         }
         clearSocketSpirit(socket);

@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
@@ -75,6 +76,7 @@ public class DynamicTooltipUtils {
     private static final String META_RESONANCE_NAME = "SocketReforge.Resonance.Name";
     private static final String META_RESONANCE_EFFECT = "SocketReforge.Resonance.Effect";
     private static final String META_RESONANCE_QUALITY = "SocketReforge.Resonance.Quality";
+    private static final String META_RESONANCE_RECIPE_NAME = "SocketReforge.Resonance.RecipeName";
     private static final String META_RECIPE_PATTERN = "SocketReforge.Recipe.Pattern";
     private static final String META_RECIPE_TYPE = "SocketReforge.Recipe.Type";
     private static final String META_RECIPE_USAGES = "SocketReforge.Recipe.Usages";
@@ -108,9 +110,9 @@ public class DynamicTooltipUtils {
         public String getColor() { return color; }
         
         public static ReforgeLevel fromLevel(int level) {
-            for (ReforgeLevel rl : values()) {
-                if (rl.level == level) return rl;
-            }
+            if (level >= LEGENDARY.level) return LEGENDARY;
+            if (level >= UNCOMMON.level) return UNCOMMON;
+            if (level >= COMMON.level) return COMMON;
             return COMMON;
         }
     }
@@ -150,6 +152,7 @@ public class DynamicTooltipUtils {
     private static Logger logger = DEFAULT_LOGGER;
     private static boolean debugMode = false;
     private static String loadedClassName = null;
+    private static volatile RefinementConfig refinementConfig;
 
     // ==================== Initialization ====================
     
@@ -163,6 +166,10 @@ public class DynamicTooltipUtils {
      */
     public static void init() {
         initialize();
+    }
+
+    public static void setRefinementConfig(RefinementConfig config) {
+        refinementConfig = config;
     }
     
     private static void initialize() {
@@ -325,7 +332,7 @@ public class DynamicTooltipUtils {
         String statType = isArmor ? "defense" : "damage";
         ReforgeLevel reforgeLevel = ReforgeLevel.fromLevel(level);
         
-        String line = reforgeLevel.getColor() + upgradeName + " +" + level 
+        String line = reforgeLevel.getColor() + formatRefineGradeLabel(upgradeName, level, isArmor)
                 + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
         
         registerTooltip(baseItemId, metadata, line);
@@ -597,9 +604,11 @@ public class DynamicTooltipUtils {
         int part3Tier = extractIntValue(metadata, META_PART3_TIER);
         double partsDamageMultiplier = extractDoubleValue(metadata, META_PARTS_DAMAGE_MULTIPLIER, 1.0);
         String resonanceName = extractStringValue(metadata, META_RESONANCE_NAME);
+        String resonanceRecipeName = extractStringValue(metadata, META_RESONANCE_RECIPE_NAME);
         String resonanceEffect = extractStringValue(metadata, META_RESONANCE_EFFECT);
         String resonanceQuality = extractStringValue(metadata, META_RESONANCE_QUALITY);
-        boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
+        boolean hasResonance = resonanceName != null && !resonanceName.isBlank()
+                && resonanceRecipeName != null && !resonanceRecipeName.isBlank();
         String recipePattern = extractStringValue(metadata, META_RECIPE_PATTERN);
         boolean hasRecipePattern = recipePattern != null && !recipePattern.isBlank();
         String recipeType = extractStringValue(metadata, META_RECIPE_TYPE);
@@ -705,8 +714,6 @@ public class DynamicTooltipUtils {
             displayName = recipeDisplayName;
             shouldOverrideName = true;
         }
-        boolean displayNameHasLevel = displayName != null && extractLevelSuffix(displayName) > 0;
-        
         boolean isArmorItem = isArmorType(baseItemId, itemId);
         String[] socketEntries = extractSocketEntries(metadata);
         SocketData parsedSocketData = buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries);
@@ -746,9 +753,8 @@ public class DynamicTooltipUtils {
                     ? tr(langCode, "tooltip.refine_stat_defense", "defense")
                     : tr(langCode, "tooltip.refine_stat_damage", "damage");
             String refineLabel = tr(langCode, "tooltip.refine_grade", "Refine Grade");
-            String levelSuffix = displayNameHasLevel ? "" : " +" + reforgeLevel;
-            String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + upgradeName
-                    + levelSuffix
+            String gradeLabel = formatRefineGradeLabel(upgradeName, reforgeLevel, isArmorItem);
+            String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + gradeLabel
                     + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
             tooltipLines.add(line);
         }
@@ -1807,7 +1813,8 @@ public class DynamicTooltipUtils {
             return null;
         }
         if (level > 0) {
-            localized = localized + " +" + level;
+            boolean isArmor = isArmorType(baseItemId, itemId);
+            localized = applyRefinementToName(localized, level, isArmor);
         }
         return localized;
     }
@@ -1817,10 +1824,19 @@ public class DynamicTooltipUtils {
             return 0;
         }
         String trimmed = value.trim();
-        if (trimmed.endsWith(" +3")) return 3;
-        if (trimmed.endsWith(" +2")) return 2;
-        if (trimmed.endsWith(" +1")) return 1;
-        return 0;
+        int configured = extractLevelSuffixConfigured(trimmed);
+        if (configured > 0) {
+            return configured;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\s\\+(\\d+)$").matcher(trimmed);
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private static String stripLevelSuffix(String value) {
@@ -1828,10 +1844,198 @@ public class DynamicTooltipUtils {
             return value;
         }
         String trimmed = value.trim();
-        if (trimmed.endsWith(" +3") || trimmed.endsWith(" +2") || trimmed.endsWith(" +1")) {
-            return trimmed.substring(0, trimmed.length() - 3).trim();
+        String stripped = stripLevelSuffixConfigured(trimmed);
+        if (stripped != null) {
+            return stripped;
         }
-        return value;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\s\\+\\d+$").matcher(trimmed);
+        if (matcher.find()) {
+            return trimmed.substring(0, matcher.start()).trim();
+        }
+        return trimmed;
+    }
+
+    private static int extractLevelSuffixConfigured(String value) {
+        RefinementConfig cfg = refinementConfig;
+        if (cfg == null) {
+            return 0;
+        }
+        int fromLabels = matchLevelLabel(value, cfg);
+        if (fromLabels > 0) {
+            return fromLabels;
+        }
+        String prefix = cfg.getRefinementLevelPrefix();
+        String suffix = cfg.getRefinementLevelSuffix();
+        if ((prefix == null || prefix.isEmpty()) && (suffix == null || suffix.isEmpty())) {
+            return 0;
+        }
+        String pattern = java.util.regex.Pattern.quote(prefix == null ? "" : prefix)
+                + "(\\d+)"
+                + java.util.regex.Pattern.quote(suffix == null ? "" : suffix);
+        java.util.regex.Matcher matcher;
+        if (cfg.isRefinementLevelUsePrefix()) {
+            matcher = java.util.regex.Pattern.compile("^" + pattern).matcher(value);
+        } else {
+            matcher = java.util.regex.Pattern.compile(pattern + "$").matcher(value);
+        }
+        if (!matcher.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private static String stripLevelSuffixConfigured(String value) {
+        RefinementConfig cfg = refinementConfig;
+        if (cfg == null) {
+            return null;
+        }
+        String fromLabels = stripLevelLabel(value, cfg);
+        if (fromLabels != null) {
+            return fromLabels;
+        }
+        String prefix = cfg.getRefinementLevelPrefix();
+        String suffix = cfg.getRefinementLevelSuffix();
+        if ((prefix == null || prefix.isEmpty()) && (suffix == null || suffix.isEmpty())) {
+            return null;
+        }
+        String pattern = java.util.regex.Pattern.quote(prefix == null ? "" : prefix)
+                + "(\\d+)"
+                + java.util.regex.Pattern.quote(suffix == null ? "" : suffix);
+        java.util.regex.Matcher matcher;
+        if (cfg.isRefinementLevelUsePrefix()) {
+            matcher = java.util.regex.Pattern.compile("^" + pattern).matcher(value);
+            if (!matcher.find()) {
+                return null;
+            }
+            return value.substring(matcher.end()).trim();
+        }
+        matcher = java.util.regex.Pattern.compile(pattern + "$").matcher(value);
+        if (!matcher.find()) {
+            return null;
+        }
+        return value.substring(0, matcher.start()).trim();
+    }
+
+    private static int matchLevelLabel(String value, RefinementConfig cfg) {
+        if (value == null || value.isBlank() || cfg == null) {
+            return 0;
+        }
+        boolean usePrefix = cfg.isRefinementLevelUsePrefix();
+        int matchedLevel = 0;
+        int matchedLen = -1;
+        String[][] labelSets = {
+                cfg.getRefinementLevelLabels(),
+                cfg.getRefinementLevelLabelsArmor()
+        };
+        for (String[] labels : labelSets) {
+            if (labels == null || labels.length == 0) {
+                continue;
+            }
+            int max = Math.min(cfg.getMaxLevel(), labels.length - 1);
+            for (int level = 1; level <= max; level++) {
+                String label = labels[level];
+                if (label == null || label.isBlank()) continue;
+                boolean matches = usePrefix ? value.startsWith(label) : value.endsWith(label);
+                if (matches && label.length() > matchedLen) {
+                    matchedLevel = level;
+                    matchedLen = label.length();
+                }
+            }
+        }
+        return matchedLevel;
+    }
+
+    private static String stripLevelLabel(String value, RefinementConfig cfg) {
+        if (value == null || value.isBlank() || cfg == null) {
+            return null;
+        }
+        boolean usePrefix = cfg.isRefinementLevelUsePrefix();
+        int matchedLevel = 0;
+        int matchedLen = -1;
+        String matchedLabel = null;
+        String[][] labelSets = {
+                cfg.getRefinementLevelLabels(),
+                cfg.getRefinementLevelLabelsArmor()
+        };
+        for (String[] labels : labelSets) {
+            if (labels == null || labels.length == 0) {
+                continue;
+            }
+            int max = Math.min(cfg.getMaxLevel(), labels.length - 1);
+            for (int level = 1; level <= max; level++) {
+                String label = labels[level];
+                if (label == null || label.isBlank()) continue;
+                boolean matches = usePrefix ? value.startsWith(label) : value.endsWith(label);
+                if (matches && label.length() > matchedLen) {
+                    matchedLevel = level;
+                    matchedLen = label.length();
+                    matchedLabel = label;
+                }
+            }
+        }
+        if (matchedLevel <= 0 || matchedLabel == null) {
+            return null;
+        }
+        if (usePrefix) {
+            return value.substring(matchedLabel.length()).trim();
+        }
+        return value.substring(0, value.length() - matchedLabel.length()).trim();
+    }
+
+    private static String formatRefinementSuffix(int level) {
+        return formatRefinementSuffix(level, false);
+    }
+
+    private static String formatRefinementSuffix(int level, boolean isArmor) {
+        if (level <= 0) {
+            return "";
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.formatRefinementSuffix(level, isArmor);
+        }
+        return " +" + level;
+    }
+
+    private static String formatRefineGradeLabel(String upgradeName, int level, boolean isArmor) {
+        if (level <= 0) {
+            return upgradeName == null ? "" : upgradeName;
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg == null) {
+            return applyRefinementToName(upgradeName, level, isArmor);
+        }
+        if (cfg.isRefinementLevelUsePrefix()) {
+            String prefix = cfg.getRefinementLevelPrefix();
+            String suffix = cfg.getRefinementLevelSuffix();
+            if ((prefix == null || prefix.isEmpty()) && (suffix == null || suffix.isEmpty())) {
+                return " +" + level;
+            }
+            return (prefix == null ? "" : prefix) + level + (suffix == null ? "" : suffix);
+        }
+        return upgradeName == null ? "" : upgradeName;
+    }
+
+    private static String applyRefinementToName(String baseName, int level) {
+        return applyRefinementToName(baseName, level, false);
+    }
+
+    private static String applyRefinementToName(String baseName, int level, boolean isArmor) {
+        if (baseName == null) {
+            return null;
+        }
+        if (level <= 0) {
+            return baseName;
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.applyRefinementToName(baseName, level, isArmor);
+        }
+        return baseName + " +" + level;
     }
 
     private static String tryTranslateItemId(String itemId, String langCode) {
@@ -2049,11 +2253,12 @@ public class DynamicTooltipUtils {
     }
     
     private static String getUpgradeName(int level) {
+        if (level <= 0) return "Ancient";
         switch (level) {
             case 1: return "Sharp";
             case 2: return "Deadly";
             case 3: return "Legendary";
-            default: return "Ancient";
+            default: return "Refined";
         }
     }
 
@@ -2063,11 +2268,12 @@ public class DynamicTooltipUtils {
     }
     
     private static String getArmorUpgradeName(int level) {
+        if (level <= 0) return "Ancient";
         switch (level) {
             case 1: return "Protective";
             case 2: return "Resistant";
             case 3: return "Fortified";
-            default: return "Ancient";
+            default: return "Refined";
         }
     }
 
@@ -2077,6 +2283,9 @@ public class DynamicTooltipUtils {
     }
     
     private static double getDamageMultiplier(int level) {
+        if (refinementConfig != null) {
+            return refinementConfig.getDamageMultiplier(level);
+        }
         switch (level) {
             case 1: return 1.10;
             case 2: return 1.15;
@@ -2086,6 +2295,9 @@ public class DynamicTooltipUtils {
     }
     
     private static double getDefenseMultiplier(int level) {
+        if (refinementConfig != null) {
+            return refinementConfig.getDefenseMultiplier(level);
+        }
         switch (level) {
             case 1: return 1.10;
             case 2: return 1.20;

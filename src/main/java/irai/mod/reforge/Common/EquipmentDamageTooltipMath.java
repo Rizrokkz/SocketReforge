@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Roo
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.DamageEntityInteraction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.combat.DamageCalculator;
 
+import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
@@ -32,8 +33,13 @@ public final class EquipmentDamageTooltipMath {
     private static final int MAX_INTERACTION_VISITS = 512;
     private static final ConcurrentMap<String, Double> BASE_DAMAGE_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<String, Double> CHARGED_DAMAGE_CACHE = new ConcurrentHashMap<>();
+    private static volatile RefinementConfig refinementConfig;
 
     private EquipmentDamageTooltipMath() {}
+
+    public static void setRefinementConfig(RefinementConfig config) {
+        refinementConfig = config;
+    }
 
     public static final class StatSummary {
         private final double baseValue;
@@ -223,8 +229,10 @@ public final class EquipmentDamageTooltipMath {
         }
 
         SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
-        int safeLevel = Math.max(0, Math.min(reforgeLevel, 3));
-        double refinementMultiplier = ReforgeEquip.getDamageMultiplier(safeLevel);
+        int safeLevel = clampLevel(reforgeLevel);
+        double refinementMultiplier = refinementConfig != null
+                ? refinementConfig.getDamageMultiplier(safeLevel)
+                : ReforgeEquip.getDamageMultiplier(safeLevel);
         double[] damageBonus;
         double[] attackSpeedBonus;
 
@@ -275,8 +283,10 @@ public final class EquipmentDamageTooltipMath {
         }
 
         SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
-        int safeLevel = Math.max(0, Math.min(reforgeLevel, 3));
-        double refinementMultiplier = ReforgeEquip.getDefenseMultiplier(safeLevel);
+        int safeLevel = clampLevel(reforgeLevel);
+        double refinementMultiplier = refinementConfig != null
+                ? refinementConfig.getDefenseMultiplier(safeLevel)
+                : ReforgeEquip.getDefenseMultiplier(safeLevel);
         double[] defenseBonus = SocketManager.calculateTieredBonus(safeSocketData, EssenceEffect.StatType.DEFENSE, false);
 
         double flatDefense = defenseBonus[0];
@@ -521,5 +531,10 @@ public final class EquipmentDamageTooltipMath {
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampLevel(int level) {
+        int max = refinementConfig != null ? refinementConfig.getMaxLevel() : 3;
+        return Math.max(0, Math.min(level, max));
     }
 }

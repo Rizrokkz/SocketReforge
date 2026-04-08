@@ -3,6 +3,10 @@
         <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
             <h2 style="text-align:center;">{{ui.lore_feed.title}}</h2>
             <p style="text-align:center;">{{ui.lore_feed.subtitle}}</p>
+            <div style="layout-mode:Left; spacing:8; anchor-width:900;">
+                <button id="navSocketButton" style="anchor-width:160; height:32;">{{ui.lore_feed.nav_socket}}</button>
+                <button id="navFeedButton" style="anchor-width:160; height:32;" disabled="true">{{ui.lore_feed.nav_feed}}</button>
+            </div>
             <hr/>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
 
@@ -19,6 +23,13 @@
             <div style="anchor-width: 900; layout-mode:Center;">
                 <select id="slotDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
                     {{slotOptions}}
+                </select>
+            </div>
+
+            <p style="text-align:center;">{{ui.lore_feed.action}}</p>
+            <div style="anchor-width: 900; layout-mode:Center;">
+                <select id="actionDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
+                    {{actionOptions}}
                 </select>
             </div>
 

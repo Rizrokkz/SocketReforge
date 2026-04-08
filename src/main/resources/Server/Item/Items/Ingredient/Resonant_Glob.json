@@ -1,0 +1,50 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Ingredient_Resonant_Glob.name",
+    "Description": "irai.items.Ingredient_Resonant_Glob.description"
+  },
+  "ItemLevel": 3,
+  "Quality": "Legendary",
+  "QualityIndex": 4,
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Resources/Materials/Ingot.blockymodel",
+  "Texture": "Resources/Materials/Ingot_Textures/Prisma.png",
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Refinement_Glob_Plus",
+        "Quantity": 15
+      },
+      {
+        "ItemId": "Ingredient_Resonant_Essence",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Id": "Arcanebench",
+        "Categories": [
+          "Arcane_Essence"
+        ]
+      }
+    ],
+    "OutputQuantity": 15,
+    "TimeSeconds": 4
+  },
+  "Icon": "Icons/ItemsGenerated/Ingredient_Bar_Prisma.png",
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  },
+  "ItemEntity": {
+    "ParticleSystemId": null
+  },
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "DropOnDeath": true,
+  "MaxStack": 1000,
+  "Scale": 1
+}
