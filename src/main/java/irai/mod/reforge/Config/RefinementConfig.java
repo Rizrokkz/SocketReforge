@@ -1,14 +1,13 @@
 package irai.mod.reforge.Config;
 
-import static com.hypixel.hytale.codec.Codec.BOOLEAN;
-import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
-import static com.hypixel.hytale.codec.Codec.STRING;
-import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static com.hypixel.hytale.codec.Codec.BOOLEAN;
+import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
+import static com.hypixel.hytale.codec.Codec.STRING;
+import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 
@@ -22,7 +21,7 @@ public class RefinementConfig {
     private static final int DEFAULT_MAX_LEVEL = 15;
     private static final String DEFAULT_REFINEMENT_PREFIX = " +";
     private static final String DEFAULT_REFINEMENT_SUFFIX = "";
-    private static final String[] DEFAULT_REFINEMENT_GRADE_LETTERS = {"E", "D", "C", "B", "A", "S"};
+    private static final String[] DEFAULT_REFINEMENT_GRADE_LETTERS = {"[E]", "[D]", "[C]", "[B]", "[A]", "[S]"};
     private static final String[] DEFAULT_WEAPON_PREFIX_LABELS = {
             "",
             "Sharp",

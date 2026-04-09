@@ -15,6 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.bson.BsonDocument;
+import org.bson.BsonValue;
+
 import com.hypixel.hytale.protocol.Packet;
 import com.hypixel.hytale.protocol.packets.interface_.UpdateLanguage;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -39,14 +42,17 @@ public final class LangLoader {
     
     // Pattern to match .lang files (any filename ending with .lang)
     private static final Pattern LANG_FILE_PATTERN = Pattern.compile(".*\\.lang$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JSON_FILE_PATTERN = Pattern.compile(".*\\.json$", Pattern.CASE_INSENSITIVE);
     
     // Cache of loaded translations: language -> (key -> value)
     private static final Map<String, Map<String, String>> translationCache = new ConcurrentHashMap<>();
 
     // Per-player language cache (tracked from UpdateLanguage packets)
     private static final Map<PlayerRef, String> playerLanguageCache = new ConcurrentHashMap<>();
+    private static final Map<java.util.UUID, String> playerUuidLanguageCache = new ConcurrentHashMap<>();
 
     private static final AtomicBoolean languageWatcherRegistered = new AtomicBoolean(false);
+    private static final AtomicBoolean i18nSyncAttempted = new AtomicBoolean(false);
     
     // Default language code
     private static final String DEFAULT_LANG = "en-US";
@@ -59,6 +65,27 @@ public final class LangLoader {
     private static String defaultUILang = UI_LANGUAGE_CONFIGURED
             ? UI_LANGUAGE_PROPERTY_VALUE.trim()
             : "en-US";
+
+    private static final String KYUUBI_CORE_API = "com.kyuubisoft.core.api.CoreAPI";
+    private static final String KYUUBI_LANG_HELPER = "com.kyuubisoft.core.i18n.LanguageSettingsHelper";
+    private static final String KYUUBI_I18N_CONTEXT = "com.kyuubisoft.core.i18n.I18nContext";
+    private static final String KYUUBI_MOD_ID = "irai.mod.reforge";
+    private static final String KYUUBI_MOD_NAME = "Socket Reforge";
+    private static final AtomicBoolean kyuubiAttempted = new AtomicBoolean(false);
+    private static final AtomicBoolean kyuubiRegistered = new AtomicBoolean(false);
+    private static volatile boolean kyuubiMissing = false;
+    private static volatile java.lang.reflect.Method kyuubiIsAvailable;
+    private static volatile java.lang.reflect.Method kyuubiGetInstance;
+    private static volatile java.lang.reflect.Method kyuubiTranslate;
+    private static volatile java.lang.reflect.Method kyuubiGetPlayerLanguage;
+    private static volatile java.lang.reflect.Method kyuubiGetPlayerLanguageMod;
+    private static volatile java.lang.reflect.Method kyuubiI18nRun;
+    private static volatile java.lang.reflect.Method kyuubiI18nRunWithLanguage;
+    private static volatile java.lang.reflect.Method kyuubiRegisterMod;
+    private static volatile java.lang.reflect.Method kyuubiGetPlayerPreferences;
+    private static volatile java.lang.reflect.Method kyuubiSetPlayerModLanguageOverride;
+    private static volatile java.lang.reflect.Method kyuubiPrefsGetModLanguageOverride;
+    private static volatile java.lang.reflect.Method kyuubiPrefsGetLanguageOverride;
 
     // Most recent player language observed (best-effort fallback for contexts without player info)
     private static volatile String lastKnownLanguage = null;
@@ -112,6 +139,12 @@ public final class LangLoader {
         
         // Also try to load from Common/Languages for shared translations
         loadFromDirectory("Common/Languages");
+
+        // Optional integration with KyuubiSoftCore language settings
+        ensureKyuubiSupport();
+
+        // Sync our translations into the core i18n module if available
+        syncTranslationsToI18n();
         
         initialized = true;
         registerLanguageWatcher();
@@ -139,9 +172,10 @@ public final class LangLoader {
             
             // For resources, we need to scan for language subdirectories
             // This is limited in JAR environments, so we'll try common language codes
-            String[] commonLangCodes = {"en-US", "en-GB", "en", "zh-CN", "zh-TW", "ja", "ko", "de", "fr", "es", "pt-BR"};
+            String[] commonLangCodes = {"en-US", "en-GB", "en", "zh-CN", "zh-TW", "ja", "ko", "de", "de-DE", "fr", "es", "pt-BR"};
             for (String langCode : commonLangCodes) {
                 loadLangFiles(directoryPath + "/" + langCode, langCode);
+                loadJsonLangFiles(directoryPath, langCode);
             }
             
         } catch (Exception e) {
@@ -156,12 +190,18 @@ public final class LangLoader {
         if (!Files.exists(langDir) || !Files.isDirectory(langDir)) {
             return;
         }
-        
+
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(langDir)) {
             for (Path langFolder : stream) {
                 if (Files.isDirectory(langFolder)) {
                     String langCode = langFolder.getFileName().toString();
                     loadLangFilesFromPath(langFolder, langCode);
+                } else if (Files.isRegularFile(langFolder)) {
+                    String fileName = langFolder.getFileName().toString();
+                    if (JSON_FILE_PATTERN.matcher(fileName).matches()) {
+                        String langCode = fileName.substring(0, fileName.length() - ".json".length());
+                        loadJsonLangFileFromPath(langFolder, langCode);
+                    }
                 }
             }
         } catch (IOException e) {
@@ -193,6 +233,19 @@ public final class LangLoader {
             // Silently ignore - lang files are optional
         }
     }
+
+    private static void loadJsonLangFiles(String basePath, String langCode) {
+        try {
+            String fileName = langCode + ".json";
+            String fullPath = basePath + "/" + fileName;
+            InputStream stream = LangLoader.class.getClassLoader().getResourceAsStream(fullPath);
+            if (stream != null) {
+                loadJsonLangFile(stream, langCode, fileName);
+            }
+        } catch (Exception e) {
+            // Silently ignore - lang files are optional
+        }
+    }
     
     /**
      * Loads .lang files from a file system path.
@@ -206,6 +259,14 @@ public final class LangLoader {
             }
         } catch (IOException e) {
             // Failed to load lang files
+        }
+    }
+
+    private static void loadJsonLangFileFromPath(Path filePath, String langCode) {
+        try (InputStream is = Files.newInputStream(filePath)) {
+            loadJsonLangFile(is, langCode, filePath.getFileName().toString());
+        } catch (IOException e) {
+            // Failed to read json lang file
         }
     }
     
@@ -244,6 +305,32 @@ public final class LangLoader {
             }
             
         } catch (IOException e) {
+            System.err.println("[LangLoader] Error reading " + fileName + ": " + e.getMessage());
+        }
+    }
+
+    private static void loadJsonLangFile(InputStream stream, String langCode, String fileName) {
+        Map<String, String> translations = translationCache.computeIfAbsent(
+            langCode, k -> new ConcurrentHashMap<>()
+        );
+
+        try {
+            String json = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+            if (json.isBlank()) {
+                return;
+            }
+            BsonDocument doc = BsonDocument.parse(json);
+            for (Map.Entry<String, BsonValue> entry : doc.entrySet()) {
+                BsonValue value = entry.getValue();
+                if (value != null && value.isString()) {
+                    String key = entry.getKey();
+                    String text = value.asString().getValue();
+                    if (key != null && !key.isBlank() && text != null) {
+                        translations.put(key, text);
+                    }
+                }
+            }
+        } catch (Exception e) {
             System.err.println("[LangLoader] Error reading " + fileName + ": " + e.getMessage());
         }
     }
@@ -413,36 +500,86 @@ public final class LangLoader {
      */
     public static String getPlayerLanguage(Object player) {
         if (player instanceof PlayerRef ref) {
+            String refLang = resolveLanguageCode(ref.getLanguage());
+            String kyuubiLang = getKyuubiPlayerLanguage(ref);
+            if (kyuubiLang != null && !kyuubiLang.isBlank()) {
+                String normalizedKyuubi = resolveLanguageCode(kyuubiLang);
+                if (refLang != null && !refLang.isBlank()
+                        && normalizedKyuubi != null && !normalizedKyuubi.isBlank()
+                        && "en-US".equalsIgnoreCase(normalizedKyuubi)
+                        && !refLang.equalsIgnoreCase(normalizedKyuubi)) {
+                    setPlayerLanguage(ref, refLang);
+                    return refLang;
+                }
+                setPlayerLanguage(ref, kyuubiLang);
+                return resolveLanguageCode(kyuubiLang);
+            }
             String cached = playerLanguageCache.get(ref);
             if (cached != null) {
+                String resolved = resolveLanguageCode(cached);
+                if (resolved != null && !resolved.isBlank() && !resolved.equals(cached)) {
+                    playerLanguageCache.put(ref, resolved);
+                    playerUuidLanguageCache.put(ref.getUuid(), resolved);
+                    lastKnownLanguage = resolved;
+                    return resolved;
+                }
                 return cached;
             }
-            String refLang = normalizeLanguageCode(ref.getLanguage());
             if (refLang != null && !refLang.isBlank()) {
-                playerLanguageCache.put(ref, refLang);
-                lastKnownLanguage = refLang;
-                if (!UI_LANGUAGE_CONFIGURED && DEFAULT_LANG.equalsIgnoreCase(defaultUILang)) {
-                    defaultUILang = refLang;
+                String resolved = resolveLanguageCode(refLang);
+                if (resolved == null || resolved.isBlank()) {
+                    resolved = refLang;
                 }
-                return refLang;
+                playerLanguageCache.put(ref, resolved);
+                playerUuidLanguageCache.put(ref.getUuid(), resolved);
+                lastKnownLanguage = resolved;
+                if (!UI_LANGUAGE_CONFIGURED && DEFAULT_LANG.equalsIgnoreCase(defaultUILang)) {
+                    defaultUILang = resolved;
+                }
+                return resolved;
             }
             return defaultUILang;
         }
         if (player instanceof Player ply) {
             PlayerRef ref = ply.getPlayerRef();
             if (ref != null) {
+                String refLang = resolveLanguageCode(ref.getLanguage());
+                String kyuubiLang = getKyuubiPlayerLanguage(ref);
+                if (kyuubiLang != null && !kyuubiLang.isBlank()) {
+                    String normalizedKyuubi = resolveLanguageCode(kyuubiLang);
+                    if (refLang != null && !refLang.isBlank()
+                            && normalizedKyuubi != null && !normalizedKyuubi.isBlank()
+                            && "en-US".equalsIgnoreCase(normalizedKyuubi)
+                            && !refLang.equalsIgnoreCase(normalizedKyuubi)) {
+                        setPlayerLanguage(ref, refLang);
+                        return refLang;
+                    }
+                    setPlayerLanguage(ref, kyuubiLang);
+                    return resolveLanguageCode(kyuubiLang);
+                }
                 String cached = playerLanguageCache.get(ref);
                 if (cached != null) {
+                    String resolved = resolveLanguageCode(cached);
+                    if (resolved != null && !resolved.isBlank() && !resolved.equals(cached)) {
+                        playerLanguageCache.put(ref, resolved);
+                        playerUuidLanguageCache.put(ref.getUuid(), resolved);
+                        lastKnownLanguage = resolved;
+                        return resolved;
+                    }
                     return cached;
                 }
-                String refLang = normalizeLanguageCode(ref.getLanguage());
                 if (refLang != null && !refLang.isBlank()) {
-                    playerLanguageCache.put(ref, refLang);
-                    lastKnownLanguage = refLang;
-                    if (!UI_LANGUAGE_CONFIGURED && DEFAULT_LANG.equalsIgnoreCase(defaultUILang)) {
-                        defaultUILang = refLang;
+                    String resolved = resolveLanguageCode(refLang);
+                    if (resolved == null || resolved.isBlank()) {
+                        resolved = refLang;
                     }
-                    return refLang;
+                    playerLanguageCache.put(ref, resolved);
+                    playerUuidLanguageCache.put(ref.getUuid(), resolved);
+                    lastKnownLanguage = resolved;
+                    if (!UI_LANGUAGE_CONFIGURED && DEFAULT_LANG.equalsIgnoreCase(defaultUILang)) {
+                        defaultUILang = resolved;
+                    }
+                    return resolved;
                 }
             }
             return defaultUILang;
@@ -458,6 +595,18 @@ public final class LangLoader {
      * @return The translated text, or key if not found
      */
     public static String getUITranslation(Object player, String key) {
+        PlayerRef ref = null;
+        if (player instanceof PlayerRef refValue) {
+            ref = refValue;
+        } else if (player instanceof Player ply) {
+            ref = ply.getPlayerRef();
+        }
+
+        String kyuubi = getKyuubiTranslation(ref, key, null);
+        if (kyuubi != null) {
+            return kyuubi;
+        }
+
         String langCode = getPlayerLanguage(player);
         String translation = getTranslation(key, langCode);
         if (translation == null) {
@@ -499,6 +648,12 @@ public final class LangLoader {
      * @return The translated value, or the key if not found
      */
     public static String getTranslationForLanguage(String key, String langCode) {
+        String normalized = normalizeLanguageCode(langCode);
+        String kyuubi = getKyuubiTranslation(null, key, normalized);
+        if (kyuubi != null) {
+            return kyuubi;
+        }
+
         String translation = getTranslation(key, langCode);
         if (translation == null) {
             translation = getTranslation(key, DEFAULT_LANG);
@@ -698,6 +853,7 @@ public final class LangLoader {
     public static synchronized void reload() {
         translationCache.clear();
         initialized = false;
+        i18nSyncAttempted.set(false);
         initialize();
     }
     
@@ -719,6 +875,224 @@ public final class LangLoader {
      */
     public static String[] getLoadedLanguages() {
         return translationCache.keySet().toArray(new String[0]);
+    }
+
+    private static void ensureKyuubiSupport() {
+        if (kyuubiMissing) {
+            return;
+        }
+        if (kyuubiAttempted.compareAndSet(false, true)) {
+            try {
+                Class<?> coreApi = Class.forName(KYUUBI_CORE_API);
+                kyuubiIsAvailable = coreApi.getMethod("isAvailable");
+                kyuubiGetInstance = coreApi.getMethod("getInstance");
+                kyuubiTranslate = coreApi.getMethod("translate", String.class);
+                kyuubiGetPlayerLanguage = coreApi.getMethod("getPlayerLanguage", PlayerRef.class);
+                try {
+                    kyuubiGetPlayerLanguageMod = coreApi.getMethod("getPlayerLanguage", PlayerRef.class, String.class);
+                } catch (NoSuchMethodException ignored) {
+                    kyuubiGetPlayerLanguageMod = null;
+                }
+                try {
+                    kyuubiGetPlayerPreferences = coreApi.getMethod("getPlayerPreferences", java.util.UUID.class);
+                } catch (NoSuchMethodException ignored) {
+                    kyuubiGetPlayerPreferences = null;
+                }
+                try {
+                    kyuubiSetPlayerModLanguageOverride = coreApi.getMethod(
+                            "setPlayerModLanguageOverride",
+                            java.util.UUID.class,
+                            String.class,
+                            String.class,
+                            String.class
+                    );
+                } catch (NoSuchMethodException ignored) {
+                    kyuubiSetPlayerModLanguageOverride = null;
+                }
+                try {
+                    Class<?> helper = Class.forName(KYUUBI_LANG_HELPER);
+                    kyuubiRegisterMod = helper.getMethod("registerMod", String.class, String.class);
+                } catch (Exception ignored) {
+                    kyuubiRegisterMod = null;
+                }
+                try {
+                    Class<?> ctx = Class.forName(KYUUBI_I18N_CONTEXT);
+                    kyuubiI18nRun = ctx.getMethod("run", PlayerRef.class, Runnable.class);
+                    kyuubiI18nRunWithLanguage = ctx.getMethod("runWithLanguage", String.class, Runnable.class);
+                } catch (Exception ignored) {
+                    kyuubiI18nRun = null;
+                    kyuubiI18nRunWithLanguage = null;
+                }
+                try {
+                    Class<?> prefs = Class.forName("com.kyuubisoft.core.i18n.PlayerPreferences");
+                    kyuubiPrefsGetModLanguageOverride = prefs.getMethod("getModLanguageOverride", String.class);
+                    kyuubiPrefsGetLanguageOverride = prefs.getMethod("getLanguageOverride");
+                } catch (Exception ignored) {
+                    kyuubiPrefsGetModLanguageOverride = null;
+                    kyuubiPrefsGetLanguageOverride = null;
+                }
+            } catch (Exception e) {
+                kyuubiMissing = true;
+                return;
+            }
+        }
+
+        if (!isKyuubiAvailable()) {
+            return;
+        }
+        if (kyuubiRegistered.compareAndSet(false, true) && kyuubiRegisterMod != null) {
+            try {
+                kyuubiRegisterMod.invoke(null, KYUUBI_MOD_ID, KYUUBI_MOD_NAME);
+            } catch (Exception ignored) {
+                // Optional integration; ignore failures
+            }
+        }
+    }
+
+    private static boolean isKyuubiAvailable() {
+        if (kyuubiMissing || kyuubiIsAvailable == null) {
+            return false;
+        }
+        try {
+            Object value = kyuubiIsAvailable.invoke(null);
+            return value instanceof Boolean && (Boolean) value;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static String getKyuubiPlayerLanguage(PlayerRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        ensureKyuubiSupport();
+        if (!isKyuubiAvailable() || kyuubiGetPlayerLanguage == null) {
+            return null;
+        }
+        try {
+            if (kyuubiGetPlayerLanguageMod != null) {
+                Object modLang = kyuubiGetPlayerLanguageMod.invoke(null, ref, KYUUBI_MOD_ID);
+                if (modLang instanceof String lang && !lang.isBlank()) {
+                    return lang;
+                }
+            }
+            Object lang = kyuubiGetPlayerLanguage.invoke(null, ref);
+            if (lang instanceof String value && !value.isBlank()) {
+                return value;
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static String getKyuubiTranslation(PlayerRef ref, String key, String langCode) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        ensureKyuubiSupport();
+        if (!isKyuubiAvailable() || kyuubiGetInstance == null || kyuubiTranslate == null) {
+            return null;
+        }
+        try {
+            Object api = kyuubiGetInstance.invoke(null);
+            if (api == null) {
+                return null;
+            }
+            final String[] result = new String[1];
+            Runnable task = () -> {
+                try {
+                    Object value = kyuubiTranslate.invoke(api, key);
+                    if (value instanceof String text && !text.isBlank() && !text.equals(key)) {
+                        result[0] = text;
+                    }
+                } catch (Exception ignored) {
+                    // Optional integration; ignore failures
+                }
+            };
+
+            if (ref != null && kyuubiI18nRun != null) {
+                kyuubiI18nRun.invoke(null, ref, task);
+            } else if (langCode != null && !langCode.isBlank() && kyuubiI18nRunWithLanguage != null) {
+                kyuubiI18nRunWithLanguage.invoke(null, langCode, task);
+            } else {
+                task.run();
+            }
+            return result[0];
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String getKyuubiModLanguageOverride(PlayerRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        ensureKyuubiSupport();
+        if (!isKyuubiAvailable() || kyuubiGetPlayerPreferences == null || kyuubiPrefsGetModLanguageOverride == null) {
+            return null;
+        }
+        try {
+            Object prefs = kyuubiGetPlayerPreferences.invoke(null, ref.getUuid());
+            if (prefs == null) {
+                return null;
+            }
+            Object value = kyuubiPrefsGetModLanguageOverride.invoke(prefs, KYUUBI_MOD_ID);
+            if (value instanceof String lang && !lang.isBlank()) {
+                return lang;
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static String getKyuubiLanguageOverride(java.util.UUID uuid) {
+        if (uuid == null) {
+            return null;
+        }
+        ensureKyuubiSupport();
+        if (!isKyuubiAvailable() || kyuubiGetPlayerPreferences == null || kyuubiPrefsGetLanguageOverride == null) {
+            return null;
+        }
+        try {
+            Object prefs = kyuubiGetPlayerPreferences.invoke(null, uuid);
+            if (prefs == null) {
+                return null;
+            }
+            Object value = kyuubiPrefsGetLanguageOverride.invoke(prefs);
+            if (value instanceof String lang && !lang.isBlank()) {
+                return lang;
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static void ensureKyuubiModLanguage(PlayerRef ref, String desiredLang) {
+        if (ref == null) {
+            return;
+        }
+        ensureKyuubiSupport();
+        if (!isKyuubiAvailable() || kyuubiSetPlayerModLanguageOverride == null) {
+            return;
+        }
+        String existing = getKyuubiModLanguageOverride(ref);
+        if (existing != null && !existing.isBlank()) {
+            if ("auto".equalsIgnoreCase(existing)) {
+                return;
+            }
+            return;
+        }
+        if (desiredLang == null || desiredLang.isBlank()) {
+            return;
+        }
+        try {
+            kyuubiSetPlayerModLanguageOverride.invoke(null, ref.getUuid(), KYUUBI_MOD_ID, desiredLang, "auto");
+        } catch (Exception ignored) {
+            // Optional integration; ignore failures
+        }
     }
 
     private static void registerLanguageWatcher() {
@@ -744,14 +1118,85 @@ public final class LangLoader {
         if (ref == null) {
             return;
         }
-        String normalized = normalizeLanguageCode(langCode);
+        String normalized = resolveLanguageCode(langCode);
         if (normalized == null || normalized.isBlank()) {
             normalized = defaultUILang;
         }
         playerLanguageCache.put(ref, normalized);
+        playerUuidLanguageCache.put(ref.getUuid(), normalized);
         lastKnownLanguage = normalized;
         if (!UI_LANGUAGE_CONFIGURED && DEFAULT_LANG.equalsIgnoreCase(defaultUILang)) {
             defaultUILang = normalized;
+        }
+        ensureKyuubiModLanguage(ref, normalized);
+        syncTranslationsToI18n();
+    }
+
+    public static String getLanguageForUuid(java.util.UUID uuid) {
+        if (uuid == null) {
+            return getFallbackLanguage();
+        }
+        String cached = playerUuidLanguageCache.get(uuid);
+        if (cached != null && !cached.isBlank()) {
+            String resolved = resolveLanguageCode(cached);
+            if (resolved != null && !resolved.isBlank() && !resolved.equals(cached)) {
+                playerUuidLanguageCache.put(uuid, resolved);
+                return resolved;
+            }
+            return cached;
+        }
+        String override = getKyuubiLanguageOverride(uuid);
+        if (override != null && !override.isBlank()) {
+            String normalized = resolveLanguageCode(override);
+            if (normalized != null && !normalized.isBlank()) {
+                playerUuidLanguageCache.put(uuid, normalized);
+                return normalized;
+            }
+        }
+        return getFallbackLanguage();
+    }
+
+    private static void syncTranslationsToI18n() {
+        if (translationCache.isEmpty()) {
+            return;
+        }
+        I18nModule module = I18nModule.get();
+        if (module == null) {
+            return;
+        }
+        if (!i18nSyncAttempted.compareAndSet(false, true)) {
+            // Allow re-entry when reload() clears the flag.
+            return;
+        }
+        try {
+            java.lang.reflect.Field languagesField = I18nModule.class.getDeclaredField("languages");
+            languagesField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Map<String, String>> languages =
+                    (Map<String, Map<String, String>>) languagesField.get(module);
+
+            java.lang.reflect.Field cachedField = I18nModule.class.getDeclaredField("cachedLanguages");
+            cachedField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, Map<String, String>> cached =
+                    (Map<String, Map<String, String>>) cachedField.get(module);
+
+            for (Map.Entry<String, Map<String, String>> entry : translationCache.entrySet()) {
+                String lang = normalizeLanguageCode(entry.getKey());
+                if (lang == null || lang.isBlank()) {
+                    continue;
+                }
+                Map<String, String> target = languages.computeIfAbsent(lang, k -> new ConcurrentHashMap<>());
+                target.putAll(entry.getValue());
+                if (cached != null) {
+                    Map<String, String> cachedMap = cached.get(lang);
+                    if (cachedMap != null) {
+                        cachedMap.putAll(entry.getValue());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Optional integration; ignore failures
         }
     }
 

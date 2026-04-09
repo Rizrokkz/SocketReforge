@@ -96,6 +96,9 @@ public final class NameResolver {
             String localizedName = null;
             if (translationKey != null) {
                 localizedName = resolveTranslationKeyExact(translationKey, langCode);
+                if (isEnglishFallback(localizedName, translationKey, langCode)) {
+                    localizedName = null;
+                }
             }
             if (localizedName == null || localizedName.isBlank()) {
                 localizedName = resolveItemIdTranslationNoFallback(itemId, langCode);
@@ -121,18 +124,17 @@ public final class NameResolver {
                 }
             }
 
-            if ((localizedName == null || localizedName.isBlank()) && metadataLooksCustom) {
-                localizedName = trimmedBase;
-            }
-
             if (localizedName == null || localizedName.isBlank()) {
                 if (translationKey != null) {
-                    localizedName = resolveTranslationKey(translationKey, langCode);
+                    localizedName = resolveTranslationKeyExact(translationKey, langCode);
+                    if (isEnglishFallback(localizedName, translationKey, langCode)) {
+                        localizedName = null;
+                    }
                 }
             }
 
             if (localizedName == null || localizedName.isBlank()) {
-                String fromId = resolveFromItemId(itemId, langCode);
+                String fromId = resolveItemIdTranslationNoFallback(itemId, langCode);
                 if (fromId != null && !fromId.isBlank()) {
                     localizedName = fromId;
                 } else if (!trimmedBase.isBlank()) {
@@ -140,6 +142,10 @@ public final class NameResolver {
                 } else {
                     localizedName = itemId;
                 }
+            }
+
+            if ((localizedName == null || localizedName.isBlank()) && metadataLooksCustom) {
+                localizedName = trimmedBase;
             }
 
             if (level > 0) {
@@ -392,6 +398,14 @@ public final class NameResolver {
     }
 
     /**
+     * Applies refinement formatting using the active config.
+     * Exposed for UI rendering when we want to keep translation keys intact.
+     */
+    public static String applyRefinementFormatting(String baseName, int level, boolean isArmor) {
+        return applyRefinementToName(baseName, level, isArmor);
+    }
+
+    /**
      * Gets the translation key from an item without resolving it.
      *
      * @param itemStack The item to get the translation key for
@@ -438,7 +452,7 @@ public final class NameResolver {
         return LangLoader.resolveTranslation(translationKey, langCode);
     }
 
-    private static String resolveTranslationKeyExact(String translationKey, String langCode) {
+    public static String resolveTranslationKeyExact(String translationKey, String langCode) {
         if (translationKey == null || translationKey.isEmpty()) {
             return null;
         }
@@ -707,6 +721,17 @@ public final class NameResolver {
         }
         String humanized = humanizeToken(fallback);
         return new PartTranslation(humanized, false);
+    }
+
+    private static boolean isEnglishFallback(String translated, String translationKey, String langCode) {
+        if (translated == null || translated.isBlank() || translationKey == null || translationKey.isBlank()) {
+            return false;
+        }
+        if (langCode == null || langCode.isBlank() || "en-US".equalsIgnoreCase(langCode)) {
+            return false;
+        }
+        String english = resolveTranslationKeyExact(translationKey, "en-US");
+        return english != null && !english.isBlank() && translated.equalsIgnoreCase(english);
     }
 
     private static String humanizeToken(String raw) {

@@ -1,7 +1,7 @@
 {
   "Group": "irai.mod.reforge",
   "Name": "Socket Reforge",
-  "Version": "1.3.6",
+  "Version": "1.3.7a",
   "Description": "",
   "Authors": [
     {
@@ -11,7 +11,7 @@
   ],
   "Website": "",
   "Dependencies": {},
-  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*", "au.ellie:HyUI": "*"},
+  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*", "au.ellie:HyUI": "*", "kyuubisoft:core": "*"},
   "LoadBefore": {},
   "DisabledByDefault": false,
   "IncludesAssetPack": true,

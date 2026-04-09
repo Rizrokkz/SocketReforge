@@ -14,6 +14,7 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.LoreConfig;
@@ -40,10 +41,12 @@ public final class RuntimeConfigUI {
     private static final String REFINEMENT_CONFIG_NAME = "RefinementConfig";
     private static final String LOOT_CONFIG_NAME = "LootSocketRollConfig";
     private static final String LORE_CONFIG_NAME = "LoreConfig";
+    private static final String DAMAGE_NUMBER_CONFIG_NAME = "DamageNumberConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
     private static final String CATEGORY_LOOT = "loot";
+    private static final String CATEGORY_DAMAGE_NUMBERS = "damage_numbers";
 
     private static final String DEFAULT_STATUS_KEY = "ui.runtime_config.status_default";
     private static final String DEFAULT_STATUS_FALLBACK =
@@ -586,6 +589,10 @@ public final class RuntimeConfigUI {
             plugin.getConfigService().saveAndApply(LOOT_CONFIG_NAME);
             return;
         }
+        if (CATEGORY_DAMAGE_NUMBERS.equals(categoryId)) {
+            damageNumberConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(DAMAGE_NUMBER_CONFIG_NAME);
+        }
     }
 
     private static void handleAdjustment(Player player, ViewState state, NumericControl control, double delta) {
@@ -1018,7 +1025,7 @@ public final class RuntimeConfigUI {
                     .append(control.valueElementId())
                     .append("\" style=\"width:")
                     .append(VALUE_WIDTH)
-                    .append("; text-align:right; background-color:#1b2332; padding:8; border-radius:4;\">")
+                    .append("; background-color:#1b2332; padding:8; border-radius:4;\">")
                     .append(escapeHtml(control.formatCurrentValue()))
                     .append("</p>");
         } else {
@@ -1026,19 +1033,34 @@ public final class RuntimeConfigUI {
             int inputDecimals = inputDecimals(control);
             String inputMin = inputMin(control);
             String inputMax = inputMax(control);
-            sb.append("<input type=\"number\" id=\"")
+            boolean useNumberInput = control.displayKind == DisplayKind.INTEGER;
+            sb.append("<input type=\"")
+                    .append(useNumberInput ? "number" : "text")
+                    .append("\" id=\"")
                     .append(control.inputElementId())
                     .append("\" style=\"anchor-width:")
                     .append(VALUE_WIDTH)
-                    .append("; anchor-height:30; text-align:right; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
+                    .append("; anchor-height:30; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
                     .append(escapeHtml(control.formatInputValue()))
                     .append("\"");
-            sb.append(" step=\"").append(inputStep).append("\" data-hyui-max-decimal-places=\"").append(inputDecimals).append("\"");
+            if (!useNumberInput) {
+                sb.append(" inputmode=\"decimal\"");
+            }
+            if (useNumberInput) {
+                sb.append(" step=\"").append(inputStep).append("\"");
+            }
+            sb.append(" data-hyui-max-decimal-places=\"").append(inputDecimals).append("\"");
             if (inputMin != null) {
-                sb.append(" min=\"").append(inputMin).append("\" data-hyui-min=\"").append(inputMin).append("\"");
+                if (useNumberInput) {
+                    sb.append(" min=\"").append(inputMin).append("\"");
+                }
+                sb.append(" data-hyui-min=\"").append(inputMin).append("\"");
             }
             if (inputMax != null) {
-                sb.append(" max=\"").append(inputMax).append("\" data-hyui-max=\"").append(inputMax).append("\"");
+                if (useNumberInput) {
+                    sb.append(" max=\"").append(inputMax).append("\"");
+                }
+                sb.append(" data-hyui-max=\"").append(inputMax).append("\"");
             }
             sb.append(">");
         }
@@ -1164,6 +1186,7 @@ public final class RuntimeConfigUI {
         addCategory(buildSocketCategory());
         addCategory(buildRefinementCategory());
         addCategory(buildLootCategory());
+        addCategory(buildDamageNumberCategory());
     }
 
     private static void addCategory(CategorySection category) {
@@ -1457,6 +1480,29 @@ public final class RuntimeConfigUI {
                 null);
     }
 
+    private static CategorySection buildDamageNumberCategory() {
+        List<ControlGroup> groups = new ArrayList<>();
+
+        List<ControlEntry> modeControls = new ArrayList<>();
+        modeControls.add(toggleControl(
+                "damage_numbers_custom",
+                CATEGORY_DAMAGE_NUMBERS,
+                DAMAGE_NUMBER_CONFIG_NAME,
+                "Use custom damage numbers",
+                "Enabled: SocketReforge combat text. Disabled: built-in combat text.",
+                () -> damageNumberConfig().isUseCustomCombatText(),
+                value -> damageNumberConfig().setUseCustomCombatText(value)));
+        groups.add(new ControlGroup("damage_numbers_mode", "Combat Text Mode", "Toggle custom vs built-in combat text rendering.", modeControls));
+
+        return new CategorySection(
+                CATEGORY_DAMAGE_NUMBERS,
+                "toggleDamageNumbersCategory",
+                "Damage Numbers",
+                "Combat text system toggles for SocketReforge damage numbers.",
+                groups,
+                null);
+    }
+
     private static List<ControlEntry> buildWeightControls(int level) {
         String labelPrefix = "L" + level;
         String idPrefix = "refine_weight_" + level + "_";
@@ -1639,6 +1685,10 @@ public final class RuntimeConfigUI {
 
     private static LoreConfig loreConfig() {
         return plugin.getLoreRuntimeConfig();
+    }
+
+    private static DamageNumberConfig damageNumberConfig() {
+        return plugin.getDamageNumberRuntimeConfig();
     }
 
     private static List<MaterialTier> getMaterialTierSnapshot() {
@@ -2145,10 +2195,8 @@ public final class RuntimeConfigUI {
             return (double) Math.round(numeric);
         }
         if (kind == DisplayKind.PERCENT) {
-            if (hasPercent || Math.abs(numeric) > 1.0) {
-                return numeric / 100.0;
-            }
-            return numeric;
+            // Percent inputs are displayed as 0-100 in the UI, so always treat input as percent.
+            return numeric / 100.0;
         }
         if (kind == DisplayKind.MULTIPLIER) {
             if (hasPercent) {

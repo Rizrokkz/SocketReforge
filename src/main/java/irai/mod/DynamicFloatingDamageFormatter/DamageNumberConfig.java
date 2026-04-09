@@ -1,5 +1,6 @@
 package irai.mod.DynamicFloatingDamageFormatter;
 
+import static com.hypixel.hytale.codec.Codec.BOOLEAN;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -27,6 +28,11 @@ public class DamageNumberConfig {
                             new KeyedCodec<>("ALIASES", STRING_ARRAY),
                             (cfg, v) -> cfg.aliasEntries = v,
                             cfg -> cfg.aliasEntries == null ? new String[0] : cfg.aliasEntries
+                    ).add()
+                    .append(
+                            new KeyedCodec<>("USE_CUSTOM_COMBAT_TEXT", BOOLEAN),
+                            (cfg, v) -> cfg.useCustomCombatText = v,
+                            cfg -> cfg.useCustomCombatText
                     ).add()
                     .build();
 
@@ -76,12 +82,24 @@ public class DamageNumberConfig {
             "regen=HEAL"
     };
 
+    private boolean useCustomCombatText = true;
+
     public String[] getDefaultsEntries() { return defaultsEntries; }
     public String[] getKindEntries() { return kindEntries; }
     public String[] getAliasEntries() { return aliasEntries; }
+    public boolean isUseCustomCombatText() { return useCustomCombatText; }
 
     public void setDefaultsEntries(String[] v) { this.defaultsEntries = v; }
     public void setKindEntries(String[] v) { this.kindEntries = v; }
     public void setAliasEntries(String[] v) { this.aliasEntries = v; }
+    public void setUseCustomCombatText(boolean v) { this.useCustomCombatText = v; }
+
+    public void resetToDefaults() {
+        DamageNumberConfig defaults = new DamageNumberConfig();
+        this.defaultsEntries = defaults.defaultsEntries == null ? null : defaults.defaultsEntries.clone();
+        this.kindEntries = defaults.kindEntries == null ? null : defaults.kindEntries.clone();
+        this.aliasEntries = defaults.aliasEntries == null ? null : defaults.aliasEntries.clone();
+        this.useCustomCombatText = defaults.useCustomCombatText;
+    }
 }
 

@@ -6,6 +6,7 @@ import java.util.function.Predicate;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
+import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.LangLoader;
 

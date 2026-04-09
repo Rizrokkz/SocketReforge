@@ -136,6 +136,7 @@ public class DynamicTooltipUtils {
     private static volatile boolean isAvailable = false;
     private static volatile boolean initialized = false;
     private static volatile boolean providerRegistered = false;
+    private static volatile boolean languageResolverRegistered = false;
     private static final Object INITIALIZATION_LOCK = new Object();
     
     // API objects
@@ -198,6 +199,7 @@ public class DynamicTooltipUtils {
                         }
                         
                         logger.info("DynamicTooltipsLib loaded from: " + className);
+                        registerLanguageResolver();
                         break;
                     }
                 } catch (Exception e) {
@@ -1363,7 +1365,7 @@ public class DynamicTooltipUtils {
                                                       SocketData socketData) {
         try {
             Essence.Type type = Essence.Type.valueOf(effectType.toUpperCase(java.util.Locale.ROOT));
-            boolean isArmor = ItemTypeUtils.isArmorItemId(itemId);
+            boolean isArmor = !ItemTypeUtils.isWeaponItemId(itemId) && ItemTypeUtils.isArmorItemId(itemId);
             SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
             return SocketManager.describeEssenceEffect(type, tier, !isArmor, safeSocketData);
         } catch (Exception e) {
@@ -1447,6 +1449,38 @@ public class DynamicTooltipUtils {
             return metadata.substring(quoteStart + 1, quoteEnd);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private static void registerLanguageResolver() {
+        if (!isAvailable || tooltipApi == null || languageResolverRegistered) {
+            return;
+        }
+        try {
+            Class<?> resolverClass = Class.forName("org.herolias.tooltips.api.DynamicTooltipsApi$LanguageResolver");
+            Object resolver = Proxy.newProxyInstance(
+                    resolverClass.getClassLoader(),
+                    new Class<?>[]{resolverClass},
+                    (proxy, method, args) -> {
+                        if ("resolveLanguage".equals(method.getName()) && args != null && args.length > 0) {
+                            if (args[0] instanceof java.util.UUID uuid) {
+                                return LangLoader.getLanguageForUuid(uuid);
+                            }
+                            return LangLoader.getFallbackLanguage();
+                        }
+                        return null;
+                    }
+            );
+            Method setResolver = tooltipApi.getClass().getMethod("setLanguageResolver", resolverClass);
+            setResolver.invoke(tooltipApi, resolver);
+            languageResolverRegistered = true;
+            if (debugMode) {
+                logger.info("Registered DynamicTooltipsLib language resolver");
+            }
+        } catch (Exception e) {
+            if (debugMode) {
+                logger.warn("Failed to register language resolver: " + e.getMessage());
+            }
         }
     }
 
@@ -1781,12 +1815,14 @@ public class DynamicTooltipUtils {
         String localized = null;
         if (metadataNameKey != null && !metadataNameKey.isBlank() && looksLikeTranslationKey(metadataNameKey)) {
             String translated = LangLoader.getTranslationExact(metadataNameKey.trim(), langCode);
-            if (translated != null && !translated.isBlank() && !translated.equals(metadataNameKey)) {
+            if (translated != null && !translated.isBlank() && !translated.equals(metadataNameKey)
+                    && !isEnglishFallback(translated, metadataNameKey, langCode)) {
                 localized = translated;
             }
         } else if (baseName != null && looksLikeTranslationKey(baseName)) {
             String translated = LangLoader.getTranslationExact(baseName.trim(), langCode);
-            if (translated != null && !translated.isBlank() && !translated.equals(baseName)) {
+            if (translated != null && !translated.isBlank() && !translated.equals(baseName)
+                    && !isEnglishFallback(translated, baseName, langCode)) {
                 localized = translated;
             }
         }
@@ -2017,6 +2053,13 @@ public class DynamicTooltipUtils {
             }
             return (prefix == null ? "" : prefix) + level + (suffix == null ? "" : suffix);
         }
+        String label = cfg.getRefinementLevelLabel(level, isArmor);
+        if (label != null) {
+            label = label.trim();
+        }
+        if (label != null && !label.isEmpty()) {
+            return label;
+        }
         return upgradeName == null ? "" : upgradeName;
     }
 
@@ -2062,6 +2105,17 @@ public class DynamicTooltipUtils {
             return true;
         }
         return lower.contains(".items.") || lower.contains(".item.") || lower.contains(".entity.");
+    }
+
+    private static boolean isEnglishFallback(String translated, String translationKey, String langCode) {
+        if (translated == null || translated.isBlank() || translationKey == null || translationKey.isBlank()) {
+            return false;
+        }
+        if (langCode == null || langCode.isBlank() || "en-US".equalsIgnoreCase(langCode)) {
+            return false;
+        }
+        String english = LangLoader.getTranslationExact(translationKey, "en-US");
+        return english != null && !english.isBlank() && translated.equalsIgnoreCase(english);
     }
 
     private static String getPrefixTranslation(String key, String fallback, String langCode) {
@@ -2391,6 +2445,9 @@ public class DynamicTooltipUtils {
     }
 
     private static boolean isArmorType(String baseItemId, String itemId) {
+        if (ItemTypeUtils.isWeaponItemId(baseItemId) || ItemTypeUtils.isWeaponItemId(itemId)) {
+            return false;
+        }
         if (ItemTypeUtils.isArmorItemId(baseItemId)) {
             return true;
         }

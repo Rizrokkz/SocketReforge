@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.7a] - 2026-04-09
+
+### Added
+
+- **German Localization** - Added de-DE localization coverage for UI/tooltips and item-name formatting.
+- **Custom Damage Number Switch** - Custom damage numbers can now be turned off in the `/runtimeconfig` command. 
+
+### Fixed
+
+- **Runtime Config Numeric Inputs** - Fixed decimal input handling (accepts `.`) and prevented `1` from auto-converting to `100`.
+
+---
 ## [1.3.7] - 2026-04-08
 
 ### Added

@@ -1,4 +1,5 @@
 {
+    "USE_CUSTOM_COMBAT_TEXT":  true,
     "DEFAULTS":  [
                      "format={label} {amount}",
                      "rounding=ROUND",

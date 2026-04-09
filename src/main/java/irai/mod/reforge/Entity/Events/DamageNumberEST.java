@@ -43,6 +43,8 @@ import com.hypixel.hytale.server.core.modules.entityui.asset.EntityUIComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.World;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
@@ -65,6 +67,7 @@ public class DamageNumberEST extends DamageEventSystem {
     private static final HytaleLogger LOGGER = HytaleLogger.get("SocketReforge.DamageNumber");
     private static final HytaleLogger ROOT_LOGGER = HytaleLogger.getLogger();
     private static final Level DEBUG_LOG_LEVEL = Level.WARNING;
+    private static volatile boolean customCombatTextEnabled = true;
 
     static {
         try {
@@ -106,6 +109,31 @@ public class DamageNumberEST extends DamageEventSystem {
         }
     }
 
+    public static void setCustomCombatTextEnabled(boolean enabled) {
+        customCombatTextEnabled = enabled;
+    }
+
+    public static boolean isCustomCombatTextEnabled() {
+        return customCombatTextEnabled;
+    }
+
+    public static void resetCombatTextComponentsForAllViewers() {
+        try {
+            Universe universe = Universe.get();
+            if (universe == null) {
+                return;
+            }
+            for (World world : universe.getWorlds().values()) {
+                if (world == null) {
+                    continue;
+                }
+                world.execute(() -> resetCombatTextComponentsInWorld(world));
+            }
+        } catch (Throwable ignored) {
+            // best effort reset
+        }
+    }
+
     @Override
     public SystemGroup<EntityStore> getGroup() {
         return DamageModule.get().getInspectDamageGroup();
@@ -122,6 +150,9 @@ public class DamageNumberEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        if (!customCombatTextEnabled) {
+            return;
+        }
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         if (DEBUG_COMBAT_TEXT) {
             String causeId = "null";
@@ -764,6 +795,9 @@ public class DamageNumberEST extends DamageEventSystem {
                                              Ref<EntityStore> targetRef,
                                              float amount,
                                              String kindId) {
+        if (!customCombatTextEnabled) {
+            return;
+        }
         if (store == null || targetRef == null || amount <= 0f) {
             return;
         }
@@ -1027,5 +1061,72 @@ public class DamageNumberEST extends DamageEventSystem {
         }
         LOGGER.at(DEBUG_LOG_LEVEL).log("%s", message);
         ROOT_LOGGER.at(DEBUG_LOG_LEVEL).log("%s", message);
+    }
+
+    private static void resetCombatTextComponentsInWorld(World world) {
+        if (world == null) {
+            return;
+        }
+        EntityStore entityStore = world.getEntityStore();
+        if (entityStore == null) {
+            return;
+        }
+        Store<EntityStore> store = entityStore.getStore();
+        if (store == null) {
+            return;
+        }
+        ComponentType<EntityStore, Visible> visibleType;
+        ComponentType<EntityStore, UIComponentList> uiType;
+        try {
+            EntityModule entityModule = EntityModule.get();
+            visibleType = entityModule == null ? null : entityModule.getVisibleComponentType();
+        } catch (Throwable ignored) {
+            visibleType = null;
+        }
+        try {
+            EntityUIModule uiModule = EntityUIModule.get();
+            uiType = uiModule == null ? null : uiModule.getUIComponentListType();
+        } catch (Throwable ignored) {
+            uiType = null;
+        }
+        if (visibleType == null || uiType == null) {
+            return;
+        }
+        final ComponentType<EntityStore, Visible> finalVisibleType = visibleType;
+        final ComponentType<EntityStore, UIComponentList> finalUiType = uiType;
+        Query<EntityStore> resetQuery = Query.and(finalVisibleType, finalUiType);
+        store.forEachChunk(resetQuery, (chunk, commandBuffer) -> {
+            int size = chunk.size();
+            for (int i = 0; i < size; i++) {
+                Visible visible = chunk.getComponent(i, finalVisibleType);
+                UIComponentList uiList = chunk.getComponent(i, finalUiType);
+                if (visible == null || uiList == null) {
+                    continue;
+                }
+                int[] baseComponents = uiList.getComponentIds();
+                if (baseComponents == null || baseComponents.length == 0) {
+                    continue;
+                }
+                Ref<EntityStore> targetRef = chunk.getReferenceTo(i);
+                queueComponentsForViewers(targetRef, baseComponents, collectViewers(visible.visibleTo));
+                queueComponentsForViewers(targetRef, baseComponents, collectViewers(visible.newlyVisibleTo));
+                queueComponentsForViewers(targetRef, baseComponents, collectViewers(visible.previousVisibleTo));
+            }
+        });
+    }
+
+    private static void queueComponentsForViewers(Ref<EntityStore> targetRef,
+                                                  int[] componentIds,
+                                                  EntityViewer[] viewers) {
+        if (viewers == null || viewers.length == 0) {
+            return;
+        }
+        UIComponentsUpdate update = new UIComponentsUpdate(componentIds);
+        for (EntityViewer viewer : viewers) {
+            if (viewer == null) {
+                continue;
+            }
+            viewer.queueUpdate(targetRef, update);
+        }
     }
 }

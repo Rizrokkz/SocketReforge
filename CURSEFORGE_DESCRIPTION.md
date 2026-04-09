@@ -1,14 +1,14 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
-<p><strong>Latest update highlights:</strong> Socket Expander/Diffuser support items, spellbooks now count as staffs for resonance, and chest loot can roll expander/diffuser supports. Socket Bench previews now reflect expander/diffuser max changes.</p>
+<p><strong>Latest update highlights:</strong> Refinement expansion to configurable caps (default +15), tiered refinement materials, per-level prefix/suffix labels, and expanded runtime config controls.</p>
 
 <hr>
 
 <h2>⚔️ Weapon & Armor Reforging</h2>
 
 <p>Craft <strong>Reforge Bench</strong> from <strong>Workbench</strong>.</p>
-<p>Take your equipment to a <strong>Reforge Bench</strong> and spend <strong>Refinement Globs</strong> to attempt upgrades up to <strong>+3 levels</strong>. But be careful — every attempt carries risk!</p>
+<p>Take your equipment to a <strong>Reforge Bench</strong> and spend <strong>Refinement Globs</strong> (plus <strong>Refinement Glob Plus</strong> and <strong>Resonant Glob</strong> at higher tiers) to attempt upgrades up to a <strong>configurable cap</strong> (default +15). But be careful — every attempt carries risk!</p>
 <p>Take Iron Ore to Salvage Station to get <strong>15x Refinement Globs</strong>.</p>
 
 <h3>Upgrade Tiers — Weapons</h3>
@@ -71,6 +71,8 @@
   </tr>
 </table>
 
+<p><em>Note:</em> Tables above show the baseline 0–3 tiers. Higher tiers, naming, and caps are fully configurable.</p>
+
 <h3>How It Works</h3>
 
 <p>Each reforge attempt rolls one of <strong>four outcomes</strong>:</p>
@@ -83,7 +85,7 @@
   <li><strong>💥 Shatter</strong> — Weapon is destroyed!</li>
 </ul>
 
-<p>Higher upgrade levels have <strong>harder odds</strong> and <strong>higher break chances</strong>, making +3 Legendary weapons truly rare and valuable.</p>
+<p>Higher upgrade levels have <strong>harder odds</strong> and <strong>higher break chances</strong>, making endgame tiers rare and valuable.</p>
 
 <h3>Reforge Odds — Weapons</h3>
 
@@ -158,6 +160,8 @@
     <td>2%</td>
   </tr>
 </table>
+
+<p><em>Note:</em> Odds tables above cover early tiers; higher-tier weights are configurable.</p>
 
 <p><em>*All rates are fully configurable via JSON config files!*</em></p>
 <p><em>*Refinement support:</em> <strong>Tool_Hammer_Iron</strong> reduces break chance (5% durability per use). <strong>Tool_Hammer_Thorium</strong> reduces break chance further (15% durability per use). Both are consumed at 0 durability.</p>
@@ -565,7 +569,7 @@
 <ul>
   <li><code>/socketpunch</code> — Open Socket Punch bench UI directly</li>
   <li><code>/essence</code> — Open Essence Socket bench UI directly</li>
-  <li><code>/rfadmin refine &lt;0-3&gt;</code> — Set held item refinement level</li>
+  <li><code>/rfadmin refine &lt;0-max&gt;</code> — Set held item refinement level</li>
   <li><code>/rfadmin sockets &lt;current&gt; [max]</code> — Set held item sockets</li>
   <li><code>/rfadmin addmax &lt;amount&gt;</code> — Increase held item max sockets</li>
 </ul>
@@ -578,6 +582,9 @@
 
 <h3>RefinementConfig.json</h3>
 <ul>
+  <li>Maximum refinement level and tier thresholds</li>
+  <li>Tiered refinement materials (glob / glob plus / resonant glob)</li>
+  <li>Per-level prefix/suffix labels (weapon + armor)</li>
   <li>Damage multipliers per weapon upgrade level</li>
   <li>Defense multipliers per armor upgrade level</li>
   <li>Break chances for weapons and armor</li>
@@ -622,7 +629,7 @@
 
 <ul>
   <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
-  <li><strong>3 upgrade tiers</strong> with unique names and star ratings for weapons and armor</li>
+  <li><strong>Scalable upgrade tiers</strong> (default +15) with configurable names/labels</li>
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>
   <li><strong>Greater Essences</strong> — Concentrated higher-tier essence variants</li>

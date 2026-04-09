@@ -147,6 +147,9 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<DamageNumberConfig> damageNumberConfig;
     private final Config<WorldRepairConfig> worldRepairConfig;
     private final ConfigService configService;
+    private boolean customCombatTextEnabled = true;
+    private boolean systemsRegistered = false;
+    private boolean damageNumberSystemRegistered = false;
 
     public ReforgePlugin(@Nonnull JavaPluginInit init) {
         super(init);
@@ -209,7 +212,7 @@ public class ReforgePlugin extends JavaPlugin {
             LoreGemRegistry.initialize(cfg);
             LoreAbilityRegistry.initialize(cfg);
         });
-        this.configService.register("DamageNumberConfig", this.damageNumberConfig, DamageNumbers::applyConfig);
+        this.configService.register("DamageNumberConfig", this.damageNumberConfig, this::applyDamageNumberConfig);
         this.configService.register("WorldRepairConfig", this.worldRepairConfig, cfg -> {});
     }
 
@@ -250,7 +253,12 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
-        this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, OpenGuiListener::openGui);
+        this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> {
+            if (event != null) {
+                LangLoader.getPlayerLanguage(event.getPlayer());
+            }
+            OpenGuiListener.openGui(event);
+        });
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
@@ -278,12 +286,15 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
         this.getCommandRegistry().registerCommand(new ResonanceRecipeGiveCommand("resonancerecipe", "OP: give resonant recipe shards", false));
         this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
-        disableBuiltinCombatText();
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(loreEffectEST);
-        this.getEntityStoreRegistry().registerSystem(damageNumberEST);
+        if (customCombatTextEnabled) {
+            registerDamageNumberSystem();
+        } else {
+            damageNumberSystemRegistered = false;
+        }
         this.getEntityStoreRegistry().registerSystem(loreKillEST);
         this.getEntityStoreRegistry().registerSystem(lorePlayerStateEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
@@ -293,27 +304,120 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
+
+        systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7a");
+    }
+
+    private void applyDamageNumberConfig(DamageNumberConfig cfg) {
+        DamageNumbers.applyConfig(cfg);
+        boolean useCustom = cfg == null || cfg.isUseCustomCombatText();
+        customCombatTextEnabled = useCustom;
+        DamageNumberEST.setCustomCombatTextEnabled(useCustom);
+        if (systemsRegistered) {
+            if (useCustom) {
+                registerDamageNumberSystem();
+            } else {
+                unregisterDamageNumberSystem();
+            }
+        }
+        if (useCustom) {
+            disableBuiltinCombatText();
+        } else {
+            enableBuiltinCombatText();
+            DamageNumberEST.resetCombatTextComponentsForAllViewers();
+        }
     }
 
     private void disableBuiltinCombatText() {
         try {
-            Object proxy = this.getEntityStoreRegistry();
-            java.lang.reflect.Field registryField = proxy.getClass().getDeclaredField("registry");
-            registryField.setAccessible(true);
-            Object registryObj = registryField.get(proxy);
-            if (registryObj instanceof com.hypixel.hytale.component.ComponentRegistry<?> registry) {
-                @SuppressWarnings({"rawtypes", "unchecked"})
-                Class systemClass = Class.forName(
-                        "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems$EntityUIEvents");
+            com.hypixel.hytale.component.ComponentRegistry registry = resolveComponentRegistry();
+            if (registry == null) return;
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Class systemClass = Class.forName(
+                    "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems$EntityUIEvents");
+            if (registry.hasSystemClass(systemClass)) {
                 registry.unregisterSystem(systemClass);
                 System.out.println("[SocketReforge] Disabled built-in combat text system.");
             }
         } catch (Throwable t) {
             System.out.println("[SocketReforge] Unable to disable built-in combat text system: " + t.getMessage());
         }
+    }
+
+    private void enableBuiltinCombatText() {
+        try {
+            com.hypixel.hytale.component.ComponentRegistry registry = resolveComponentRegistry();
+            if (registry == null) return;
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Class systemClass = Class.forName(
+                    "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems$EntityUIEvents");
+            if (!registry.hasSystemClass(systemClass)) {
+                Object system = systemClass.getDeclaredConstructor().newInstance();
+                registerSystemReflective(registry, system);
+                System.out.println("[SocketReforge] Enabled built-in combat text system.");
+            }
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to enable built-in combat text system: " + t.getMessage());
+        }
+    }
+
+    private void registerDamageNumberSystem() {
+        try {
+            Object registry = resolveComponentRegistry();
+            if (registry == null) {
+                return;
+            }
+            if (!hasSystemClassReflective(registry, DamageNumberEST.class)) {
+                registerSystemReflective(registry, damageNumberEST);
+            }
+            damageNumberSystemRegistered = true;
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to register custom combat text system: " + t.getMessage());
+        }
+    }
+
+    private void unregisterDamageNumberSystem() {
+        try {
+            Object registry = resolveComponentRegistry();
+            if (registry == null) {
+                return;
+            }
+            if (hasSystemClassReflective(registry, DamageNumberEST.class)) {
+                unregisterSystemReflective(registry, DamageNumberEST.class);
+            }
+            damageNumberSystemRegistered = false;
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to unregister custom combat text system: " + t.getMessage());
+        }
+    }
+
+    private boolean hasSystemClassReflective(Object registry, Class<?> systemClass) throws Exception {
+        Object result = registry.getClass().getMethod("hasSystemClass", Class.class).invoke(registry, systemClass);
+        return result instanceof Boolean value && value;
+    }
+
+    private void unregisterSystemReflective(Object registry, Class<?> systemClass) throws Exception {
+        registry.getClass().getMethod("unregisterSystem", Class.class).invoke(registry, systemClass);
+    }
+
+    private void registerSystemReflective(Object registry, Object system) throws Exception {
+        Class<?> systemType = com.hypixel.hytale.component.system.ISystem.class;
+        registry.getClass().getMethod("registerSystem", systemType).invoke(registry, system);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private com.hypixel.hytale.component.ComponentRegistry resolveComponentRegistry() throws Exception {
+        Object proxy = this.getEntityStoreRegistry();
+        java.lang.reflect.Field registryField = proxy.getClass().getDeclaredField("registry");
+        registryField.setAccessible(true);
+        Object registryObj = registryField.get(proxy);
+        if (registryObj instanceof com.hypixel.hytale.component.ComponentRegistry registry) {
+            return registry;
+        }
+        return null;
     }
 
     @Override
@@ -378,6 +482,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public LoreConfig getLoreRuntimeConfig() {
         return loreConfig.get();
+    }
+
+    public DamageNumberConfig getDamageNumberRuntimeConfig() {
+        return damageNumberConfig.get();
     }
 
     /**
