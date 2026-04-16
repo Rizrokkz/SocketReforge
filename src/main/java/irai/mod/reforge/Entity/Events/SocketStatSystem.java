@@ -13,6 +13,7 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Socket.EssenceEffect;
+import irai.mod.reforge.compat.EndlessLevelingCritCompat;
 
 /**
  * Tracks balanced defensive armor socket bonuses for each player while equipped.
@@ -52,6 +53,8 @@ public class SocketStatSystem extends EntityTickingSystem<EntityStore> {
             if (uuid != null) {
                 DEFENSIVE_CACHE.put(uuid, new DefensiveBonuses(defense, fireDefense, evasion));
             }
+
+            EndlessLevelingCritCompat.onPlayerTick(player);
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketStatSystem tick error: " + t.getMessage());
             t.printStackTrace();

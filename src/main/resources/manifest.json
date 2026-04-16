@@ -11,7 +11,7 @@
   ],
   "Website": "",
   "Dependencies": {},
-  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*", "au.ellie:HyUI": "*", "kyuubisoft:core": "*"},
+  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*", "au.ellie:HyUI": "*", "kyuubisoft:core": "*", "com.airijko:EndlessLeveling": "*", "MimStar:Loot4Everyone": "*"},
   "LoadBefore": {},
   "DisabledByDefault": false,
   "IncludesAssetPack": true,

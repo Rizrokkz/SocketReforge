@@ -60,6 +60,7 @@ import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
+import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
@@ -110,6 +111,7 @@ import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.compat.EndlessLevelingCritCompat;
 
 public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
@@ -140,6 +142,7 @@ public class ReforgePlugin extends JavaPlugin {
 
     private final Config<SFXConfig> sfxconfig;
     private final Config<RefinementConfig> refinementConfig;
+    private final Config<CrossModConfig> crossModConfig;
     private final Config<SocketConfig> socketConfig;
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
     private final Config<LoreConfig> loreConfig;
@@ -147,6 +150,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<DamageNumberConfig> damageNumberConfig;
     private final Config<WorldRepairConfig> worldRepairConfig;
     private final ConfigService configService;
+    private final boolean crossModConfigExistedOnStartup;
+    private final Boolean legacyEndlessLevelingCritSyncOnStartup;
     private boolean customCombatTextEnabled = true;
     private boolean systemsRegistered = false;
     private boolean damageNumberSystemRegistered = false;
@@ -170,12 +175,15 @@ public class ReforgePlugin extends JavaPlugin {
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
+        this.crossModConfig = this.withConfig("CrossModConfig", CrossModConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
         this.loreConfig = this.withConfig("LoreConfig", LoreConfig.CODEC);
         this.loreMappingConfig = this.withConfig("LoreMappingConfig", LoreMappingConfig.CODEC);
         this.damageNumberConfig = this.withConfig("DamageNumberConfig", DamageNumberConfig.CODEC);
         this.worldRepairConfig = this.withConfig("WorldRepairConfig", WorldRepairConfig.CODEC);
+        this.crossModConfigExistedOnStartup = resolveConfigFile("CrossModConfig").exists();
+        this.legacyEndlessLevelingCritSyncOnStartup = readLegacyEndlessLevelingCritSync(resolveConfigFile("RefinementConfig"));
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -195,6 +203,7 @@ public class ReforgePlugin extends JavaPlugin {
             NameResolver.setRefinementConfig(cfg);
             EquipmentDamageTooltipMath.setRefinementConfig(cfg);
         });
+        this.configService.register("CrossModConfig", this.crossModConfig, cfg -> {});
 
         this.configService.register("SocketConfig", this.socketConfig, cfg -> {
             SocketManager.initialize(cfg);
@@ -241,6 +250,7 @@ public class ReforgePlugin extends JavaPlugin {
 
         // Load and apply all registered configs.
         this.configService.loadAll();
+        migrateLegacyCrossModSettings();
         // Persist any new refinement fields (e.g., material tiers) so they appear in JSON.
         this.refinementConfig.save().join();
         
@@ -423,6 +433,7 @@ public class ReforgePlugin extends JavaPlugin {
     @Override
     protected void start() {
         logDroplistPatchStatus();
+        EndlessLevelingCritCompat.tryRegister();
         autoRegenRegionIfNeeded();
         scheduleChunkRemovalIfNeeded();
         injectHatchetUseInteractions();
@@ -475,9 +486,57 @@ public class ReforgePlugin extends JavaPlugin {
         return refinementConfig.get();
     }
 
+    public CrossModConfig getCrossModRuntimeConfig() {
+        return crossModConfig.get();
+    }
+
 
     public LootSocketRollConfig getLootSocketRollRuntimeConfig() {
         return lootSocketRollConfig.get();
+    }
+
+    private void migrateLegacyCrossModSettings() {
+        try {
+            if (crossModConfigExistedOnStartup) {
+                return;
+            }
+            CrossModConfig crossMod = crossModConfig.get();
+            if (crossMod == null || legacyEndlessLevelingCritSyncOnStartup == null) {
+                return;
+            }
+            if (crossMod.isEndlessLevelingCritSyncEnabled() != legacyEndlessLevelingCritSyncOnStartup.booleanValue()) {
+                crossMod.setEndlessLevelingCritSyncEnabled(legacyEndlessLevelingCritSyncOnStartup.booleanValue());
+                crossModConfig.save().join();
+                System.out.println("[SocketReforge] Migrated EndlessLeveling crit sync toggle into CrossModConfig.");
+            }
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to migrate legacy cross-mod settings: " + t.getMessage());
+        }
+    }
+
+    private File resolveConfigFile(String configName) {
+        if (configName == null || configName.isBlank()) {
+            return new File(".");
+        }
+        return new File(new File("mods", "irai.mod.reforge_Socket Reforge"), configName + ".json");
+    }
+
+    private Boolean readLegacyEndlessLevelingCritSync(File refinementFile) {
+        if (refinementFile == null || !refinementFile.isFile()) {
+            return null;
+        }
+        try {
+            String raw = java.nio.file.Files.readString(refinementFile.toPath());
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("\"ENDLESS_LEVELING_CRIT_SYNC\"\\s*:\\s*(true|false)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(raw);
+            if (matcher.find()) {
+                return Boolean.parseBoolean(matcher.group(1));
+            }
+        } catch (Throwable ignored) {
+            // Best effort migration only.
+        }
+        return null;
     }
 
     public LoreConfig getLoreRuntimeConfig() {

@@ -26,6 +26,7 @@ import com.hypixel.hytale.server.core.universe.world.WorldConfig;
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.ReforgePlugin;
 
 /**
  * Adds a one-time roll for treasure chest equipment to spawn with broken sockets.
@@ -114,6 +115,9 @@ public final class TreasureChestSocketLootListener {
         String chestKey = chestKey(player, x, y, z);
         ROLLED_CHESTS.remove(chestKey);
         LOGGED_SKIPPED_CHESTS.remove(chestKey);
+        String playerChestKey = playerChestKey(player, chestKey);
+        ROLLED_CHESTS.remove(playerChestKey);
+        LOGGED_SKIPPED_CHESTS.remove(playerChestKey);
         if (isMainWorld(player)) {
             clearChestCustomFlag(player, x, y, z);
         }
@@ -143,19 +147,24 @@ public final class TreasureChestSocketLootListener {
 
             if (DEBUG_LOOT){logChestDebug(player, containerBlockWindow, source);}
 
-            if (!isWorldLootContainer(player, containerBlockWindow, source)) {
+            boolean loot4EveryoneChest = isLoot4EveryoneChest(player, containerBlockWindow);
+            if (!isWorldLootContainer(player, containerBlockWindow, source, loot4EveryoneChest)) {
                 continue;
             }
 
             String chestKey = chestKey(player, containerBlockWindow);
-            if (ROLLED_CHESTS.contains(chestKey)) {
-                if (LOGGED_SKIPPED_CHESTS.add(chestKey)) {
-                    log("Chest already rolled: chest=" + chestKey + ", blockId=" + blockId + ", source=" + source);
+            String rollStateKey = resolveRollStateKey(player, chestKey, loot4EveryoneChest);
+            if (ROLLED_CHESTS.contains(rollStateKey)) {
+                if (LOGGED_SKIPPED_CHESTS.add(rollStateKey)) {
+                    log("Chest already rolled: chest=" + chestKey
+                            + ", blockId=" + blockId
+                            + ", source=" + source
+                            + ", perPlayer=" + loot4EveryoneChest);
                 }
                 continue;
             }
 
-            RollResult result = applyLootSocketsToContainer(player, containerBlockWindow);
+            RollResult result = applyLootSocketsToContainer(player, containerBlockWindow, loot4EveryoneChest);
             if (result.changedCount > 0 || result.injectedCount > 0) {
                 // Force this window to rebuild so tooltip packet adapters see updated chest items.
                 refreshChestWindow(player, containerBlockWindow);
@@ -165,18 +174,21 @@ public final class TreasureChestSocketLootListener {
             // This avoids repeatedly scanning empty (not-yet-generated) containers while
             // preventing later player-deposited equipment from being treated as world loot.
             if (result.nonEmptyLootCount > 0) {
-                if (ROLLED_CHESTS.add(chestKey)) {
-                    markChestRolled(player, containerBlockWindow);
+                if (ROLLED_CHESTS.add(rollStateKey)) {
+                    if (!loot4EveryoneChest) {
+                        markChestRolled(player, containerBlockWindow);
+                    }
                     log("Chest rolled: chest=" + chestKey
                             + ", blockId=" + blockId
                             + ", source=" + source
+                            + ", perPlayer=" + loot4EveryoneChest
                             + ", lootSlots=" + result.nonEmptyLootCount
                             + ", eligibleLoot=" + result.eligibleCount
                             + ", socketedLoot=" + result.changedCount
                             + ", injectedLoot=" + result.injectedCount
                             + ", foundLoot=[" + result.foundLoot + "]");
                 }
-                LOGGED_SKIPPED_CHESTS.remove(chestKey);
+                LOGGED_SKIPPED_CHESTS.remove(rollStateKey);
             }
             changed += result.changedCount;
         }
@@ -213,12 +225,14 @@ public final class TreasureChestSocketLootListener {
         }
     }
 
-    private static RollResult applyLootSocketsToContainer(Player player, ContainerBlockWindow window) {
+    private static RollResult applyLootSocketsToContainer(Player player,
+                                                          ContainerBlockWindow window,
+                                                          boolean loot4EveryoneChest) {
         ItemContainer container = window != null ? window.getItemContainer() : null;
         if (container == null) {
             return RollResult.EMPTY;
         }
-        if (shouldSkipPrefilledDroplist(player, window, container)) {
+        if (shouldSkipPrefilledDroplist(player, window, container, loot4EveryoneChest)) {
             return RollResult.EMPTY;
         }
 
@@ -289,8 +303,14 @@ public final class TreasureChestSocketLootListener {
      * If a droplist chest already has items before loot generation, assume player-filled
      * and do not roll. This prevents socketizing player-inserted equipment.
      */
-    private static boolean shouldSkipPrefilledDroplist(Player player, ContainerBlockWindow window, ItemContainer container) {
+    private static boolean shouldSkipPrefilledDroplist(Player player,
+                                                       ContainerBlockWindow window,
+                                                       ItemContainer container,
+                                                       boolean loot4EveryoneChest) {
         if (window == null || container == null) {
+            return false;
+        }
+        if (loot4EveryoneChest) {
             return false;
         }
         ItemContainerBlock containerBlock = resolveContainerBlock(player, window);
@@ -398,9 +418,15 @@ public final class TreasureChestSocketLootListener {
         return lowerId.contains("treasure") || lowerId.contains("chest");
     }
 
-    private static boolean isWorldLootContainer(Player player, ContainerBlockWindow window, String source) {
+    private static boolean isWorldLootContainer(Player player,
+                                                ContainerBlockWindow window,
+                                                String source,
+                                                boolean loot4EveryoneChest) {
         if (player == null || player.getWorld() == null || window == null) {
             return false;
+        }
+        if (loot4EveryoneChest) {
+            return true;
         }
         try {
             String blockId = window.getBlockType() != null ? window.getBlockType().getId() : null;
@@ -483,6 +509,50 @@ public final class TreasureChestSocketLootListener {
             return "unknown|0|0|0";
         }
         return chestKey(player, window.getX(), window.getY(), window.getZ());
+    }
+
+    private static String resolveRollStateKey(Player player, String chestKey, boolean perPlayer) {
+        if (!perPlayer) {
+            return chestKey;
+        }
+        return playerChestKey(player, chestKey);
+    }
+
+    private static String playerChestKey(Player player, String chestKey) {
+        if (chestKey == null || chestKey.isBlank()) {
+            chestKey = "unknown|0|0|0";
+        }
+        if (player == null) {
+            return chestKey + "|player=unknown";
+        }
+        String playerId = "unknown";
+        try {
+            java.util.UUID uuid = player.getUuid();
+            if (uuid != null) {
+                playerId = uuid.toString();
+            }
+        } catch (Throwable ignored) {
+            playerId = "ref@" + Integer.toHexString(System.identityHashCode(player));
+        }
+        return chestKey + "|player=" + playerId;
+    }
+
+    private static boolean isLoot4EveryoneChest(Player player, ContainerBlockWindow window) {
+        if (player == null || window == null) {
+            return false;
+        }
+        if (!isLoot4EveryoneCompatEnabled()) {
+            return false;
+        }
+        return Loot4EveryoneCompat.hasTemplate(player, window.getX(), window.getY(), window.getZ());
+    }
+
+    private static boolean isLoot4EveryoneCompatEnabled() {
+        ReforgePlugin plugin = ReforgePlugin.getInstance();
+        if (plugin == null || plugin.getCrossModRuntimeConfig() == null) {
+            return true;
+        }
+        return plugin.getCrossModRuntimeConfig().isLoot4EveryoneChestCompatEnabled();
     }
 
     private static void logChestDebug(Player player, ContainerBlockWindow window, String source) {
@@ -654,6 +724,62 @@ public final class TreasureChestSocketLootListener {
                 x,
                 y,
                 z);
+    }
+
+    private static final class Loot4EveryoneCompat {
+        private static volatile boolean initialized = false;
+        private static volatile boolean available = false;
+        private static volatile java.lang.reflect.Method getPluginMethod;
+        private static volatile java.lang.reflect.Method getTemplateResourceTypeMethod;
+        private static volatile java.lang.reflect.Method hasTemplateMethod;
+
+        private static synchronized void ensureInitialized() {
+            if (initialized) {
+                return;
+            }
+            try {
+                Class<?> pluginClass = Class.forName("org.mimstar.plugin.Loot4Everyone");
+                Class<?> templateClass = Class.forName("org.mimstar.plugin.resources.LootChestTemplate");
+                getPluginMethod = pluginClass.getMethod("get");
+                getTemplateResourceTypeMethod = pluginClass.getMethod("getlootChestTemplateResourceType");
+                hasTemplateMethod = templateClass.getMethod("hasTemplate", int.class, int.class, int.class);
+                available = true;
+            } catch (Throwable ignored) {
+                available = false;
+            }
+            initialized = true;
+        }
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        private static boolean hasTemplate(Player player, int x, int y, int z) {
+            ensureInitialized();
+            if (!available || player == null || player.getWorld() == null) {
+                return false;
+            }
+            try {
+                Object plugin = getPluginMethod.invoke(null);
+                if (plugin == null) {
+                    return false;
+                }
+                Object resourceType = getTemplateResourceTypeMethod.invoke(plugin);
+                if (!(resourceType instanceof com.hypixel.hytale.component.ResourceType)) {
+                    return false;
+                }
+                World world = player.getWorld();
+                if (world == null || world.getChunkStore() == null || world.getChunkStore().getStore() == null) {
+                    return false;
+                }
+                Object template = world.getChunkStore().getStore()
+                        .getResource((com.hypixel.hytale.component.ResourceType) resourceType);
+                if (template == null) {
+                    return false;
+                }
+                Object result = hasTemplateMethod.invoke(template, x, y, z);
+                return result instanceof Boolean && ((Boolean) result).booleanValue();
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
     }
 
     private static final class RollResult {
