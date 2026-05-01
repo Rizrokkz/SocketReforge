@@ -1,6 +1,7 @@
 package irai.mod.reforge.Entity.Events;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,8 @@ import com.hypixel.hytale.server.core.entity.entities.player.windows.Window;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.MaterialQuantity;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.inventory.container.filter.FilterActionType;
+import com.hypixel.hytale.server.core.inventory.container.filter.SlotFilter;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ItemTypeUtils;
@@ -41,6 +44,7 @@ import irai.mod.reforge.Common.ItemTypeUtils;
 @SuppressWarnings("removal")
 public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
     private static final String SALVAGE_BENCH_ID = "Salvagebench";
+    private static final String REFORGE_BENCH_ID = "Reforgebench";
     private static final String SOCKET_REFORGE_META_PREFIX = "SocketReforge.";
     private static final String LEGACY_RESONANCE_QUALITY_KEY = "qualityIndex";
     private static final long SNAPSHOT_TTL_MS = 10L * 60L * 1000L;
@@ -55,11 +59,13 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
     private static Field processingRecipeIdField;
     private static Field craftingRecipeIdField;
     private static Field craftingRecipePrimaryOutputQuantityField;
+    private static Method processingBenchUpdateRecipeMethod;
     private static boolean loggedBenchReflectionError;
     private static boolean loggedBenchBlockReflectionError;
     private static boolean loggedProcessingBenchReflectionError;
     private static boolean loggedUpdateRecipeReflectionError;
     private static boolean loggedRecipeInjectionReflectionError;
+    private static boolean loggedInputFilterError;
 
     private static final class PendingSnapshot {
         private final ItemStack original;
@@ -120,7 +126,7 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
             }
 
             Bench bench = getBench(processingWindow);
-            if (bench == null || bench.getId() == null || !SALVAGE_BENCH_ID.equalsIgnoreCase(bench.getId())) {
+            if (!isSupportedSalvageBench(bench)) {
                 continue;
             }
 
@@ -130,13 +136,20 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
             if (processingBench != null) {
                 ItemContainer inputContainer = processingBench.getInputContainer();
                 if (inputContainer != null) {
-                    if (tryInjectMetadataBoundRecipe(processingBench, bench, benchBlock, inputContainer)) {
-                        restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
-                        continue;
-                    }
+                    installMetadataTolerantInputFilter(inputContainer, bench);
                     int changed = sanitizeContainer(inputContainer, playerId);
                     if (changed > 0) {
                         forceRecipeRefresh(processingBench, benchBlock);
+                        boolean recipeReady = ensureRecipeAfterSanitize(processingBench, bench, benchBlock, inputContainer);
+                        log("sanitized input changed=" + changed
+                                + " recipeReady=" + recipeReady
+                                + " hasRecipe=" + (processingBench.getRecipe() != null));
+                        restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
+                        continue;
+                    }
+                    if (tryInjectMetadataBoundRecipe(processingBench, bench, benchBlock, inputContainer)) {
+                        restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
+                        continue;
                     }
                     restoreSnapshotsForRemovedInputSlots(player, playerId, inputContainer);
                 } else {
@@ -154,6 +167,14 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         if (!sawSalvageWindow) {
             restorePendingOriginals(player, playerId);
         }
+    }
+
+    private static boolean isSupportedSalvageBench(Bench bench) {
+        if (bench == null || bench.getId() == null) {
+            return false;
+        }
+        return SALVAGE_BENCH_ID.equalsIgnoreCase(bench.getId())
+                || REFORGE_BENCH_ID.equalsIgnoreCase(bench.getId());
     }
 
     private static Bench getBench(ProcessingBenchWindow window) {
@@ -261,6 +282,31 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         return false;
     }
 
+    private static boolean ensureRecipeAfterSanitize(ProcessingBenchBlock processingBench,
+                                                     Bench bench,
+                                                     BenchBlock benchBlock,
+                                                     ItemContainer inputContainer) {
+        if (processingBench == null || bench == null || inputContainer == null) {
+            return false;
+        }
+        if (processingBench.getRecipe() != null) {
+            return true;
+        }
+
+        RecipeSelection selection = selectRecipeIgnoringMetadata(bench, benchBlock, inputContainer);
+        if (selection == null || selection.recipe == null) {
+            return false;
+        }
+
+        try {
+            setProcessingRecipe(processingBench, selection.recipe);
+            return processingBench.getRecipe() != null;
+        } catch (Throwable t) {
+            log("Failed to assign salvage recipe after sanitize: " + t.getMessage());
+            return false;
+        }
+    }
+
     private static RecipeSelection selectRecipeIgnoringMetadata(Bench bench, BenchBlock benchBlock, ItemContainer inputContainer) {
         if (bench == null || inputContainer == null) {
             return null;
@@ -325,7 +371,7 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
                 if (stack.getQuantity() < requiredQty) {
                     continue;
                 }
-                if (!CraftingManager.matches(material, stack)) {
+                if (!matchesIgnoringMetadata(material, stack)) {
                     continue;
                 }
                 foundSlot = slot;
@@ -339,6 +385,28 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         }
 
         return assigned;
+    }
+
+    /**
+     * Salvage compat only needs to identify the base material/item identity and quantity.
+     * The built-in CraftingManager matcher is metadata-strict, which is exactly what breaks
+     * socketed/refined/lore gear at the salvage bench.
+     */
+    private static boolean matchesIgnoringMetadata(MaterialQuantity material, ItemStack stack) {
+        if (material == null || stack == null || stack.isEmpty()) {
+            return false;
+        }
+
+        try {
+            ItemStack probe = stack;
+            BsonDocument metadata = stack.getMetadata();
+            if (metadata != null && !metadata.isEmpty()) {
+                probe = stack.withMetadata((BsonDocument) null);
+            }
+            return CraftingManager.matches(material, probe);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static CraftingRecipe cloneRecipeWithBoundMetadata(RecipeSelection selection, ItemContainer inputContainer) throws Exception {
@@ -422,6 +490,12 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
     }
 
     private static int sanitizeContainer(ItemContainer container, UUID playerId) {
+        return sanitizeContainer(container, playerId, PENDING_ORIGINALS);
+    }
+
+    private static int sanitizeContainer(ItemContainer container,
+                                         UUID playerId,
+                                         Map<UUID, Map<Short, PendingSnapshot>> pendingSnapshots) {
         if (container == null) {
             return 0;
         }
@@ -433,14 +507,91 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
                 continue;
             }
 
-            rememberOriginal(playerId, slot, stack);
+            rememberOriginal(pendingSnapshots, playerId, slot, stack);
             ItemStack sanitized = stripSocketReforgeMetadata(stack);
-            if (!sanitized.equals(stack)) {
+            if (sanitized == null || sanitized.isEmpty()) {
+                continue;
+            }
+
+            // Try an exact replacement first, then a direct set as a fallback.
+            container.replaceItemStackInSlot(slot, stack, sanitized);
+            ItemStack current = container.getItemStack(slot);
+            if (current != null && !current.isEmpty() && current.getMetadata() != null && !current.getMetadata().isEmpty()) {
                 container.setItemStackForSlot(slot, sanitized);
+                current = container.getItemStack(slot);
+            }
+
+            boolean stripped = current != null && !current.isEmpty()
+                    && (current.getMetadata() == null || current.getMetadata().isEmpty());
+            if (stripped) {
                 sanitizedCount++;
+                if (DEBUG_LOG) {
+                    log("sanitize success slot=" + slot
+                            + " item=" + current.getItemId()
+                            + " beforeMeta=" + summarizeMetadata(stack)
+                            + " afterMeta=" + summarizeMetadata(current));
+                }
+            } else {
+                log("sanitize failed slot=" + slot
+                        + " item=" + String.valueOf(stack.getItemId())
+                        + " beforeMeta=" + summarizeMetadata(stack)
+                        + " afterMeta=" + summarizeMetadata(current));
             }
         }
         return sanitizedCount;
+    }
+
+    private static void installMetadataTolerantInputFilter(ItemContainer inputContainer, Bench bench) {
+        if (inputContainer == null || bench == null) {
+            return;
+        }
+        try {
+            for (short slot = 0; slot < inputContainer.getCapacity(); slot++) {
+                inputContainer.setSlotFilter(
+                        FilterActionType.ADD,
+                        slot,
+                        (action, container, targetSlot, stack) -> isValidSalvageCandidate(bench, stack)
+                );
+            }
+        } catch (Throwable t) {
+            if (!loggedInputFilterError) {
+                loggedInputFilterError = true;
+                log("Failed to install salvage input filter: " + t.getMessage());
+            }
+        }
+    }
+
+    private static boolean isValidSalvageCandidate(Bench bench, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        return hasSalvageRecipeForItem(bench, stack);
+    }
+
+    private static boolean hasSalvageRecipeForItem(Bench bench, ItemStack stack) {
+        if (bench == null || stack == null || stack.isEmpty()) {
+            return false;
+        }
+        List<CraftingRecipe> recipes = CraftingPlugin.getBenchRecipes(bench.getType(), bench.getId());
+        if (recipes == null || recipes.isEmpty()) {
+            return false;
+        }
+        for (CraftingRecipe recipe : recipes) {
+            if (recipe == null) {
+                continue;
+            }
+            MaterialQuantity[] inputs = recipe.getInput();
+            if (inputs == null || inputs.length != 1) {
+                continue;
+            }
+            MaterialQuantity input = inputs[0];
+            if (input != null
+                    && stack.getQuantity() >= Math.max(1, input.getQuantity())
+                    && matchesIgnoringMetadata(input, stack)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean shouldSanitizeForSalvage(ItemStack stack) {
@@ -486,21 +637,48 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
         return stack.withMetadata((BsonDocument) null);
     }
 
-    private static void rememberOriginal(UUID playerId, short slot, ItemStack original) {
-        if (playerId == null || original == null) {
+    private static String summarizeMetadata(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return "empty";
+        }
+        BsonDocument metadata = stack.getMetadata();
+        if (metadata == null || metadata.isEmpty()) {
+            return "none";
+        }
+        return "keys=" + metadata.keySet();
+    }
+
+    private static void rememberOriginal(Map<UUID, Map<Short, PendingSnapshot>> pendingSnapshots,
+                                         UUID playerId,
+                                         short slot,
+                                         ItemStack original) {
+        if (pendingSnapshots == null || playerId == null || original == null) {
             return;
         }
-        PENDING_ORIGINALS
+        pendingSnapshots
                 .computeIfAbsent(playerId, ignored -> new HashMap<>())
                 .putIfAbsent(slot, new PendingSnapshot(original, System.currentTimeMillis()));
     }
 
+    private static void rememberOriginal(UUID playerId, short slot, ItemStack original) {
+        if (playerId == null || original == null) {
+            return;
+        }
+        rememberOriginal(PENDING_ORIGINALS, playerId, slot, original);
+    }
+
     private static void restorePendingOriginals(Player player, UUID playerId) {
+        restorePendingOriginals(PENDING_ORIGINALS, player, playerId);
+    }
+
+    private static void restorePendingOriginals(Map<UUID, Map<Short, PendingSnapshot>> pendingSnapshots,
+                                                Player player,
+                                                UUID playerId) {
         if (player == null || playerId == null || player.getInventory() == null) {
             return;
         }
 
-        Map<Short, PendingSnapshot> pending = PENDING_ORIGINALS.get(playerId);
+        Map<Short, PendingSnapshot> pending = pendingSnapshots.get(playerId);
         if (pending == null || pending.isEmpty()) {
             return;
         }
@@ -537,7 +715,7 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
             log("player=" + playerId + " restoredOriginalStacks=" + restored);
         }
         if (pending.isEmpty()) {
-            PENDING_ORIGINALS.remove(playerId);
+            pendingSnapshots.remove(playerId);
         }
     }
 
@@ -630,10 +808,16 @@ public class SalvageMetadataCompatEST extends EntityTickingSystem<EntityStore> {
             return;
         }
         try {
-            state.clearCurrentRecipe();
             if (benchBlock != null) {
-                state.checkForRecipeUpdate(benchBlock);
+                if (processingBenchUpdateRecipeMethod == null) {
+                    processingBenchUpdateRecipeMethod = ProcessingBenchBlock.class.getDeclaredMethod("updateRecipe", BenchBlock.class);
+                    processingBenchUpdateRecipeMethod.setAccessible(true);
+                }
+                processingBenchUpdateRecipeMethod.invoke(state, benchBlock);
+                return;
             }
+
+            state.clearCurrentRecipe();
         } catch (Throwable t) {
             if (!loggedUpdateRecipeReflectionError) {
                 loggedUpdateRecipeReflectionError = true;

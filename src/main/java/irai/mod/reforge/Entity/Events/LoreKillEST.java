@@ -25,6 +25,7 @@ import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
@@ -105,7 +106,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         if (ctx == null || !ctx.isValid()) {
             return;
         }
-        ItemStack weapon = ctx.getItemStack();
+        ItemStack weapon = LoreHeldItemUpdateManager.resolveHeldItem(attacker, ctx);
         if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
             return;
         }
@@ -147,7 +148,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
 
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
-            updateHeldItem(attacker, ctx, updated);
+            LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, ctx, updated);
         }
     }
 
@@ -493,14 +494,4 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         };
     }
 
-    private void updateHeldItem(Player player, PlayerInventoryUtils.HeldItemContext ctx, ItemStack updated) {
-        if (player == null || ctx == null || updated == null) {
-            return;
-        }
-        if (ctx.getContainer() != null && ctx.getSlot() >= 0) {
-            ctx.getContainer().setItemStackForSlot(ctx.getSlot(), updated);
-            return;
-        }
-        PlayerInventoryUtils.setSelectedHotbarItem(player, updated);
-    }
 }

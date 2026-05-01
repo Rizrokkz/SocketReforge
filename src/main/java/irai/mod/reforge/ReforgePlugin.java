@@ -60,6 +60,7 @@ import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
+import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
@@ -140,6 +141,7 @@ public class ReforgePlugin extends JavaPlugin {
 
     private final Config<SFXConfig> sfxconfig;
     private final Config<RefinementConfig> refinementConfig;
+    private final Config<CrossModConfig> crossModConfig;
     private final Config<SocketConfig> socketConfig;
     private final Config<LootSocketRollConfig> lootSocketRollConfig;
     private final Config<LoreConfig> loreConfig;
@@ -170,6 +172,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
+        this.crossModConfig = this.withConfig("CrossModConfig", CrossModConfig.CODEC);
         this.socketConfig = this.withConfig("SocketConfig", SocketConfig.CODEC);
         this.lootSocketRollConfig = this.withConfig("LootSocketRollConfig", LootSocketRollConfig.CODEC);
         this.loreConfig = this.withConfig("LoreConfig", LoreConfig.CODEC);
@@ -195,6 +198,8 @@ public class ReforgePlugin extends JavaPlugin {
             NameResolver.setRefinementConfig(cfg);
             EquipmentDamageTooltipMath.setRefinementConfig(cfg);
         });
+
+        this.configService.register("CrossModConfig", this.crossModConfig, cfg -> {});
 
         this.configService.register("SocketConfig", this.socketConfig, cfg -> {
             SocketManager.initialize(cfg);
@@ -308,7 +313,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7a");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7b");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
@@ -473,6 +478,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public RefinementConfig getRefinementRuntimeConfig() {
         return refinementConfig.get();
+    }
+
+    public CrossModConfig getCrossModRuntimeConfig() {
+        return crossModConfig.get();
     }
 
 

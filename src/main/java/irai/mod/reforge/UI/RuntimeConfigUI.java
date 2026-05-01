@@ -17,6 +17,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.RefinementConfig;
@@ -39,12 +40,14 @@ public final class RuntimeConfigUI {
 
     private static final String SOCKET_CONFIG_NAME = "SocketConfig";
     private static final String REFINEMENT_CONFIG_NAME = "RefinementConfig";
+    private static final String CROSS_MOD_CONFIG_NAME = "CrossModConfig";
     private static final String LOOT_CONFIG_NAME = "LootSocketRollConfig";
     private static final String LORE_CONFIG_NAME = "LoreConfig";
     private static final String DAMAGE_NUMBER_CONFIG_NAME = "DamageNumberConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
+    private static final String CATEGORY_CROSS_MOD = "cross_mod";
     private static final String CATEGORY_LOOT = "loot";
     private static final String CATEGORY_DAMAGE_NUMBERS = "damage_numbers";
 
@@ -582,6 +585,11 @@ public final class RuntimeConfigUI {
         if (CATEGORY_REFINEMENT.equals(categoryId)) {
             refinementConfig().resetToDefaults();
             plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
+            return;
+        }
+        if (CATEGORY_CROSS_MOD.equals(categoryId)) {
+            crossModConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(CROSS_MOD_CONFIG_NAME);
             return;
         }
         if (CATEGORY_LOOT.equals(categoryId)) {
@@ -1185,6 +1193,7 @@ public final class RuntimeConfigUI {
         controls.clear();
         addCategory(buildSocketCategory());
         addCategory(buildRefinementCategory());
+        addCategory(buildCrossModCategory());
         addCategory(buildLootCategory());
         addCategory(buildDamageNumberCategory());
     }
@@ -1396,6 +1405,29 @@ public final class RuntimeConfigUI {
                 "toggleRefinementCategory",
                 "Refinement",
                 "Weapon and armor scaling, break risks, and reforge outcome distributions.",
+                groups,
+                null);
+    }
+
+    private static CategorySection buildCrossModCategory() {
+        List<ControlGroup> groups = new ArrayList<>();
+
+        List<ControlEntry> loot = new ArrayList<>();
+        loot.add(toggleControl(
+                "crossmod_loot4everyone_chest_compat",
+                CATEGORY_CROSS_MOD,
+                CROSS_MOD_CONFIG_NAME,
+                "Loot4Everyone chest compat",
+                "Enables per-player chest detection and roll tracking for Loot4Everyone template chests.",
+                () -> crossModConfig().isLoot4EveryoneChestCompatEnabled(),
+                value -> crossModConfig().setLoot4EveryoneChestCompatEnabled(value)));
+        groups.add(new ControlGroup("crossmod_loot", "Loot", "Loot and container compatibility hooks for supported mods.", loot));
+
+        return new CategorySection(
+                CATEGORY_CROSS_MOD,
+                "toggleCrossModCategory",
+                "Cross-Mod",
+                "Optional integration switches for other mods without mixing them into core refinement or loot tuning.",
                 groups,
                 null);
     }
@@ -1681,6 +1713,10 @@ public final class RuntimeConfigUI {
 
     private static LootSocketRollConfig lootConfig() {
         return plugin.getLootSocketRollRuntimeConfig();
+    }
+
+    private static CrossModConfig crossModConfig() {
+        return plugin.getCrossModRuntimeConfig();
     }
 
     private static LoreConfig loreConfig() {

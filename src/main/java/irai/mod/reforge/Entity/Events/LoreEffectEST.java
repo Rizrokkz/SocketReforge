@@ -25,6 +25,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreDamageUtils;
+import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Lore.LoreTrigger;
@@ -98,7 +99,7 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (ctx == null || !ctx.isValid()) {
             return;
         }
-        ItemStack weapon = ctx.getItemStack();
+        ItemStack weapon = LoreHeldItemUpdateManager.resolveHeldItem(attacker, ctx);
         if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
             return;
         }
@@ -143,7 +144,7 @@ public final class LoreEffectEST extends DamageEventSystem {
 
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
-            updateHeldItem(attacker, ctx, updated);
+            LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, ctx, updated);
         }
     }
 
@@ -164,7 +165,7 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (ctx == null || !ctx.isValid()) {
             return;
         }
-        ItemStack weapon = ctx.getItemStack();
+        ItemStack weapon = LoreHeldItemUpdateManager.resolveHeldItem(defender, ctx);
         if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
             return;
         }
@@ -208,21 +209,8 @@ public final class LoreEffectEST extends DamageEventSystem {
 
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
-            updateHeldItem(defender, ctx, updated);
+            LoreHeldItemUpdateManager.applyOrQueue(store, defenderRef, defender, ctx, updated);
         }
-    }
-
-    private void updateHeldItem(Player player, PlayerInventoryUtils.HeldItemContext ctx, ItemStack updated) {
-        if (player == null || ctx == null || updated == null) {
-            return;
-        }
-        ItemContainer container = ctx.getContainer();
-        short slot = ctx.getSlot();
-        if (container != null && slot >= 0 && slot < container.getCapacity()) {
-            container.setItemStackForSlot(slot, updated);
-            return;
-        }
-        PlayerInventoryUtils.setSelectedHotbarItem(player, updated);
     }
 
     private boolean rollCrit(ItemStack weapon) {

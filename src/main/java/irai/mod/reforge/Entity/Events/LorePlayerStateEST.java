@@ -36,6 +36,7 @@ import com.hypixel.hytale.server.npc.role.Role;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
@@ -131,6 +132,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
                 return;
             }
             PlayerState state = STATES.computeIfAbsent(uuid, key -> new PlayerState());
+            LoreHeldItemUpdateManager.flushPending(store, ref, player);
 
             MovementStatesComponent movementComponent =
                     store.getComponent(ref, MovementStatesComponent.getComponentType());
@@ -169,7 +171,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
             String heldItemId = "";
             int heldQty = 0;
             if (heldCtx != null && heldCtx.isValid()) {
-                ItemStack held = heldCtx.getItemStack();
+                ItemStack held = LoreHeldItemUpdateManager.resolveHeldItem(player, heldCtx);
                 heldItemId = held == null ? "" : safeString(held.getItemId());
                 heldQty = held == null ? 0 : Math.max(0, held.getQuantity());
             }
@@ -216,7 +218,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
 
         PlayerInventoryUtils.HeldItemContext ctx = PlayerInventoryUtils.getHeldItemContext(player);
         if (ctx != null && ctx.isValid()) {
-            ItemStack weapon = ctx.getItemStack();
+            ItemStack weapon = LoreHeldItemUpdateManager.resolveHeldItem(player, ctx);
             if (weapon != null && !weapon.isEmpty() && LoreSocketManager.isEquipment(weapon)) {
                 LoreSocketData data = LoreSocketManager.getLoreSocketData(weapon);
                 if (data != null) {
@@ -225,7 +227,12 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
                     changed |= LoreProcHandler.applyLoreSockets(store, player, playerRef, null,
                             null, data, trigger, true, used, procState);
                     if (changed) {
-                        updateHeldItem(player, ctx, LoreSocketManager.withLoreSocketData(weapon, data));
+                        LoreHeldItemUpdateManager.applyOrQueue(
+                                store,
+                                playerRef,
+                                player,
+                                ctx,
+                                LoreSocketManager.withLoreSocketData(weapon, data));
                     }
                 }
             }
@@ -246,7 +253,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
                     boolean changed = LoreProcHandler.applyLoreProcChain(store, player, playerRef, null, null,
                             entry.data, true, used);
                     if (changed) {
-                        entry.update(player);
+                        entry.update(store, player, playerRef);
                     }
                 }
             }
@@ -391,7 +398,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
 
         PlayerInventoryUtils.HeldItemContext ctx = PlayerInventoryUtils.getHeldItemContext(player);
         if (ctx != null && ctx.isValid()) {
-            ItemStack held = ctx.getItemStack();
+            ItemStack held = LoreHeldItemUpdateManager.resolveHeldItem(player, ctx);
             addPendingGemColorsFromItem(held, colors);
         }
 
@@ -739,19 +746,6 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
         return value == null ? "" : value;
     }
 
-    private static void updateHeldItem(Player player, PlayerInventoryUtils.HeldItemContext ctx, ItemStack updated) {
-        if (player == null || ctx == null || updated == null) {
-            return;
-        }
-        ItemContainer container = ctx.getContainer();
-        short slot = ctx.getSlot();
-        if (container != null && slot >= 0 && slot < container.getCapacity()) {
-            container.setItemStackForSlot(slot, updated);
-            return;
-        }
-        PlayerInventoryUtils.setSelectedHotbarItem(player, updated);
-    }
-
     private static final class ItemEntry {
         private final PlayerInventoryUtils.HeldItemContext heldContext;
         private final ItemContainer armorContainer;
@@ -776,14 +770,19 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
             return new ItemEntry(null, container, slot, data);
         }
 
-        void update(Player player) {
+        void update(Store<EntityStore> store, Player player, Ref<EntityStore> playerRef) {
             if (data == null) {
                 return;
             }
             if (heldContext != null && heldContext.isValid()) {
-                ItemStack current = heldContext.getItemStack();
+                ItemStack current = LoreHeldItemUpdateManager.resolveHeldItem(player, heldContext);
                 if (current != null && !current.isEmpty()) {
-                    updateHeldItem(player, heldContext, LoreSocketManager.withLoreSocketData(current, data));
+                    LoreHeldItemUpdateManager.applyOrQueue(
+                            store,
+                            playerRef,
+                            player,
+                            heldContext,
+                            LoreSocketManager.withLoreSocketData(current, data));
                 }
                 return;
             }

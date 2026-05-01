@@ -1,8 +1,9 @@
 # SocketReforge
 
-A Hytale mod focusing on RPG aspects such as Equipment Refinement and Gem Socketing.
+A Hytale mod focusing on RPG aspects such as Equipment Refinement, Gem Socketing, Essence Systems, and Spirit-based Lore abilities.
 
-**Test Link:** [YouTube](https://www.youtube.com/watch?v=QZYTjpr7mms)
+**Test Link:** [YouTube](https://www.youtube.com/watch?v=QZYTjpr7mms)  
+**Version:** 1.3.7a
 
 ---
 
@@ -14,7 +15,7 @@ A Hytale mod focusing on RPG aspects such as Equipment Refinement and Gem Socket
 4. [Usage Guide](#usage-guide)
 5. [Configuration](#configuration)
 6. [Architecture](#architecture)
-7. [Troubleshooting](#troubleshooting)
+7. [Changelog](#changelog)
 8. [Credits](#credits)
 
 ---
@@ -23,7 +24,7 @@ A Hytale mod focusing on RPG aspects such as Equipment Refinement and Gem Socket
 
 ### Weapon Reforging System
 
-SocketReforge allows players to upgrade their weapons up to **+3 levels** using Iron Bars as reforge material. Each upgrade increases weapon damage through configurable multipliers.
+SocketReforge allows players to upgrade weapons and armor using refinement materials. The system supports levels beyond **+3** with tiered material costs (Refinement Glob, Glob Plus, Resonant Glob).
 
 **Reforge Outcomes:**
 
@@ -31,10 +32,10 @@ Each reforge attempt rolls one of four possible outcomes based on weighted proba
 
 | Outcome | Effect |
 |---------|--------|
-| **Degrade** | Weapon drops one level |
-| **Same** | No change to weapon level |
-| **Upgrade** | Weapon gains one level |
-| **Jackpot** | Weapon gains two levels |
+| **Degrade** | Item drops one level |
+| **Same** | No change to item level |
+| **Upgrade** | Item gains one level |
+| **Jackpot** | Item gains two levels |
 
 **Default Reforge Weights:**
 
@@ -44,7 +45,7 @@ Each reforge attempt rolls one of four possible outcomes based on weighted proba
 | +1 → +2 | 35% | 45% | 19% | 1% |
 | +2 → +3 | 60% | 30% | 9.5% | 0.5% |
 
-**Default Break Chances** (weapon is destroyed):
+**Default Break Chances** (item is destroyed):
 
 | Transition | Break Chance |
 |-----------|-------------|
@@ -54,251 +55,214 @@ Each reforge attempt rolls one of four possible outcomes based on weighted proba
 
 **Default Damage Multipliers:**
 
-| Level | Multiplier | Bonus |
-|-------|-----------|-------|
-| +0 (Base) | x1.00 | — |
-| +1 (Sharp) | x1.10 | +10% |
-| +2 (Deadly) | x1.15 | +15% |
-| +3 (Legendary) | x1.25 | +25% |
+| Level | Name | Multiplier | Bonus |
+|-------|-----------|-----------|-------|
+| +0 | Base | x1.00 | — |
+| +1 | Sharp | x1.10 | +10% |
+| +2 | Deadly | x1.15 | +15% |
+| +3 | Legendary | x1.25 | +25% |
 
-### Gem Socketing
+### Socket System
 
-Add sockets to weapons for gem insertion, enabling players to enhance their weapons with various gem bonuses for additional customization.
+Add sockets to weapons and armor for essence insertion.
 
-### Weapon Stats UI
+- **Socket Punch Bench** - Punch sockets into items
+- **Max Sockets:** 4 (default), with bonus chance for 5th
+- **Support Materials:** Socket Puncher, Stabilizer, Expander, Diffuser
 
-A custom in-game UI panel (`WeaponStatHUD.ui`) displaying:
+**Socket Punching Mechanics:**
 
-- Current weapon name and upgrade level
-- Damage multiplier and progress bar
-- Next level damage preview
-- Reforge outcome probabilities (degrade, break, upgrade, jackpot)
-- Max level weapon stats comparison
+| Current Sockets | Success Chance | Break Chance |
+|-----------------|----------------|--------------|
+| 0 | 90% | 5% |
+| 1 | 75% | 10% |
+| 2 | 55% | 20% |
+| 3 | 35% | 35% |
 
-### Sound Effects System
+### Essence System
 
-Configurable sound effects for every reforge event:
+Socket essences into punched sockets to add powerful effects.
 
-| Event | Default Sound |
-|-------|--------------|
-| Reforge Start | `SFX_Mace_T1_Block_Impact` |
-| Success | `SFX_Weapon_Bench_Craft` |
-| Jackpot | `SFX_Workbench_Upgrade_Complete_Default` |
-| Fail | `SFX_Armour_Bench_Craft` |
-| No Change | `SFX_Workbench_Craft` |
-| Shatter | `SFX_Door_Temple_Light_Open` |
+**Essence Types:**
+
+| Essence | Weapon Effect | Armor Effect |
+|---------|---------------|--------------|
+| **Fire** | +2-12% Damage | +3-15% Fire Defense |
+| **Ice** | +2-5% Slow/Freeze | +2-12% Cold Defense |
+| **Lightning** | +3-15% Attack Speed | +2-8% Crit Chance |
+| **Life** | +2-10% Lifesteal | +10-50 HP |
+| **Void** | +5-25% Crit Damage | +5-25% Evasion |
+| **Water** | +2-10% Evasion | +10-50% Regen |
+
+- **Tier System:** Consecutive essences of same type build tier (max T5)
+- **Greater Essences:** Concentrated variants with enhanced effects
+
+### Resonance System
+
+A runeword-like mechanic that activates powerful effects when specific essence combinations are socketed in exact order.
+
+**Resonance Types:**
+- BURN_ON_CRIT, CHAIN_SLOW, EXECUTE, ARMOR_SHRED, THUNDER_STRIKE
+- MULTISHOT_BARRAGE, CROSSBOW_AUTO_RELOAD, PLUNDERING_BLADE
+- FROST_NOVA_ON_HIT, THORNS_SHOCK, CHEAT_DEATH, HEAL_SURGE, SHOCK_DODGE, AURA_BURN
+
+- **Seeded Resonance:** Uses main world seed to shuffle patterns per server
+- **Resonance Compendium:** Craftable item to compile and combine recipes
+
+### Lore System
+
+Adds lore sockets and spirit abilities that proc based on combat events.
+
+**Lore System Flow:**
+1. Lore sockets roll on loot drops
+2. Lore gems act as empty vessels until first kill
+3. Spirit assigned based on gem color and zone
+4. Spirit levels up via proc triggers
+5. Feed gates every 5 levels require Resonant Essence
+6. At level 100, spirit is absorbed by player
+
+**Spirit Triggers:** ON_HIT, ON_CRIT, ON_SKILL_USE, ON_DAMAGE_TAKEN, ON_BLOCK, ON_DODGE, ON_KILL, ON_NEAR_DEATH, ON_FIRST_KILL, ON_SPRINT, ON_JUMP, ON_SNEAK, ON_HEAL, ON_POTION_USE, ON_LORE_PROC, ON_STATUS_APPLY
+
+### Dynamic Floating Damage Numbers
+
+Custom configurable floating damage text. Can be toggled on/off via runtime config.
 
 ---
 
 ## Installation
 
-1. Copy `irai.mod.reforge_Socket Reforge.jar` to your Hytale server `mods` folder
-2. Start your server — config files (`SFXConfig.json`, `RefinementConfig.json`) are generated automatically
+1. Copy `irai.mod.reforge_SocketReforge.jar` to your Hytale server `mods` folder
+2. Start server — config files are generated automatically
 3. Customize configs as needed and restart
+4. Optionally install HyUI for enhanced UI experiences
+5. After major updates, run `/reforgeconfig` (OP) and reset defaults
+
+### Optional Dependencies
+
+- **HyUI 0.9.0+** - Enhanced UI framework (recommended)
 
 ---
 
 ## Commands
 
+### Player Commands
+
 | Command | Description |
 |---------|-------------|
-| `/patchassets` | Patch weapons from Assets.zip, local folders, and mod JARs |
-| `/weaponstats` | Open the Weapon Stats UI for the currently held weapon |
-| `/checkname` | Check the translation name of the held item |
+| `/toolpartsui` | Open modular tool parts bench UI |
+| `/socketpunch` | Open socket punch bench UI |
+| `/essence` | Open essence socket bench UI |
+| `/loregem` | Open lore gem socketing UI |
+| `/lorefeed` | Open lore feed UI |
 
-### Setting Assets Path
+### Admin Commands
 
-The `/patchassets` command requires the path to your Hytale `Assets.zip`. Configure it using ONE of the following methods:
-
-**Option 1: assets_path.txt**
-
-Create a file called `assets_path.txt` in the server root directory containing the full path:
-
-```
-F:\XboxGames\Hytale\install\release\package\game\latest\Assets.zip
-```
-
-**Option 2: Environment Variable**
-
-Set the `ASSETSPATH` environment variable:
-
-- **Windows:** `set ASSETSPATH=F:\XboxGames\Hytale\install\release\package\game\latest\Assets.zip`
-- **Linux:** `export ASSETSPATH=/path/to/Assets.zip`
-
-**Option 3: No path set**
-
-Only local Assets folder/zip and mod JARs will be scanned.
+| Command | Description |
+|---------|-------------|
+| `/reforgeconfig` | Open runtime config UI (tune all settings live) |
+| `/reforgeadmin` | OP tools for held-item refinement/socket metadata |
+| `/loreabilities` | Dump lore spirit ability map |
+| `/lorecolors` | Dump lore spirit to gem color map |
+| `/loreapply` | OP: apply a lore spirit to held weapon |
+| `/spawnequipchest` | Spawn test chest with equipment-loot |
+| `/spawnequipenemy` | Spawn equipment-eligible enemy NPCs |
+| `/itemmeta` | View or modify item metadata |
+| `/resonancecombos` | List seeded resonance combinations |
+| `/resonancerecipe` | OP: give resonant recipe shards |
+| `/resonanceworldscan` | Scan world containers for resonance |
 
 ---
 
 ## Usage Guide
 
-### How to Reforge Weapons
+### How to Reforge Items
 
-1. **Obtain Iron Bars** — Collect Iron Bars to use as reforge material (1 bar per attempt)
+1. **Obtain Materials** — Collect Iron Bars or Refinement Globs
 2. **Find a Reforge Bench** — Interact with a Reforge Bench block
-3. **Hold Your Weapon** — Equip the weapon you wish to upgrade in your hotbar
-4. **Use the Interaction** — Trigger the reforge interaction to attempt an upgrade
-5. **Assess the Outcome** — The result can be a degrade, no change, upgrade, jackpot, or weapon shatter
+3. **Hold Your Item** — Equip the item you wish to upgrade
+4. **Use the Interaction** — Trigger the reforge interaction
+5. **Assess the Outcome** — Degrade, Same, Upgrade, Jackpot, or Shatter
 
-### Upgrade Level Names
+### How to Socket Items
 
-| Level | Name | Display |
-|-------|------|---------|
-| +0 | *(base)* | No prefix |
-| +1 | Sharp | ★ |
-| +2 | Deadly | ★★ |
-| +3 | Legendary | ★★★ |
+1. **Obtain Socket Puncher** — Craft at Salvage Bench
+2. **Find Socket Punch Bench** — Interact with the bench
+3. **Add Sockets** — Use Socket Puncher to punch sockets
+4. **Obtain Essences** — Collect or craft essences
+5. **Socket Essences** — Use Essence Socket Bench to insert essences
 
-### Weapon ID Convention
+### Lore System Quick Start
 
-Upgrade level is embedded in the weapon item ID:
-
-- `Weapon_Axe_Cobalt` → Base (+0)
-- `Weapon_Axe_Cobalt1` → +1
-- `Weapon_Axe_Cobalt2` → +2
-- `Weapon_Axe_Cobalt3` → +3
-
-### Adding Custom Weapons
-
-To add a custom weapon to the reforge system:
-
-1. Add weapon JSON to your `.jar` mod under `Server/Item/Items/Weapon/`
-2. Include `"Categories": ["Items.Weapons"]` in the JSON
-3. Filename must start with `Weapon_` (e.g., `Weapon_Sword_Custom.json`)
-4. Create level variants: `Weapon_Sword_Custom1.json`, `Weapon_Sword_Custom2.json`, `Weapon_Sword_Custom3.json`
-5. Run `/patchassets` to register them
-
-### Viewing Weapon Stats
-
-Use `/weaponstats` to open the Weapon Stats UI showing:
-
-- Current upgrade level and progress bar
-- Damage multiplier and bonus percentage
-- Next level preview
-- Reforge outcome probabilities
+1. Configure Spirit ↔ Gem matches in your config
+2. Obtain a lore gem and socket it into your weapon
+3. Find an NPC bound to that gem color
+4. Land the first kill while holding the weapon — spirit binds
+5. Spirit procs in combat and gains XP
+6. Feed Resonant Essence at level gates (every 5 levels)
+7. At level 100, spirit absorbs into player
 
 ---
 
 ## Configuration
 
-### RefinementConfig.json
+### Generated Config Files
 
-Controls all refinement rates and multipliers. Generated automatically on first run.
+- `SFXConfig.json` - Sound effects
+- `RefinementConfig.json` - Refinement rates and labels
+- `SocketConfig.json` - Socket punch chances
+- `LootSocketRollConfig.json` - Loot socket chances
+- `LoreConfig.json` - Lore system rules
+- `LoreMappingConfig.json` - Spirit/gem mappings
+- `DamageNumberConfig.json` - Floating damage settings
+- `WorldRepairConfig.json` - World repair settings
 
-```json
-{
-  "DAMAGE_MULTIPLIERS": [1.0, 1.10, 1.15, 1.25],
-  "BREAK_CHANCES": [0.01, 0.05, 0.075],
-  "WEIGHTS_0_TO_1": [0.00, 0.65, 0.34, 0.01],
-  "WEIGHTS_1_TO_2": [0.35, 0.45, 0.19, 0.01],
-  "WEIGHTS_2_TO_3": [0.60, 0.30, 0.095, 0.005]
-}
-```
+### Runtime Config
 
-| Field | Description |
-|-------|-------------|
-| `DAMAGE_MULTIPLIERS` | Damage multiplier per level [+0, +1, +2, +3] |
-| `BREAK_CHANCES` | Weapon shatter chance per transition [0→1, 1→2, 2→3] |
-| `WEIGHTS_X_TO_Y` | Outcome weights [degrade, same, upgrade, jackpot] |
-
-### SFXConfig.json
-
-Controls sound effects and valid reforge bench blocks.
-
-```json
-{
-  "BENCHES": ["Reforgebench"],
-  "SFX_START": "SFX_Mace_T1_Block_Impact",
-  "SFX_SUCCESS": "SFX_Weapon_Bench_Craft",
-  "SFX_JACKPOT": "SFX_Workbench_Upgrade_Complete_Default",
-  "SFX_FAIL": "SFX_Armour_Bench_Craft",
-  "SFX_NO_CHANGE": "SFX_Workbench_Craft",
-  "SFX_SHATTER": "SFX_Door_Temple_Light_Open"
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `BENCHES` | Array of valid reforge bench block IDs |
-| `SFX_*` | Sound event IDs for each reforge outcome |
-
-### Auto-Save
-
-Weapon upgrades are automatically saved every 5 minutes. Data persists across server restarts.
-
-### Weapon Sync
-
-Display names sync every 30 seconds to ensure accuracy across all connected players.
+Use `/reforgeconfig` (OP) to tune settings live:
+- Socket, refinement, and loot settings
+- Damage number toggle
+- All changes save instantly
 
 ---
 
 ## Architecture
 
-### Plugin Structure
+### Package Structure
 
 ```
 irai.mod.reforge
 ├── ReforgePlugin.java              # Main plugin entry point
-├── Commands/
-│   ├── CheckNameCommand.java       # /checkname command
-│   ├── CommandUtils.java           # Shared command utilities
-│   ├── PatchAssetsCommand.java     # /patchassets command
-│   └── WeaponStatsCommand.java     # /weaponstats command
-├── Config/
-│   ├── RefinementConfig.java       # Refinement rates config (codec-based)
-│   └── SFXConfig.java              # Sound effects config (codec-based)
-├── Entity/Events/
-│   ├── ContainerEventListener.java # Inventory sync for upgraded weapons
-│   ├── EquipmentRefineEST.java     # ECS damage multiplier system
-│   └── OpenGuiListener.java        # Player ready event handler
-├── Interactions/
-│   └── ReforgeEquip.java           # Core reforge interaction logic
-├── Systems/
-│   ├── SyncTasks.java              # Periodic weapon display sync
-│   └── WeaponPersistence.java      # Weapon data persistence
-├── UI/
-│   └── WeaponStatsUI.java          # Custom weapon stats UI page
-└── states/
-    └── ReforgeState.java           # Reforge state definitions
+├── Commands/                       # Command handlers
+├── Config/                         # Configuration codecs
+├── Entity/Events/                  # ECS event systems
+├── Interactions/                   # Interaction handlers
+├── Lore/                           # Lore/spirit system
+├── Socket/                         # Socket/essence system
+├── Systems/                        # Background systems
+├── UI/                             # Custom UI pages
+└── Util/                           # Utilities
 ```
 
 ### Key Systems
 
-- **ECS Damage System** (`EquipmentRefineEST`) — Hooks into Hytale's Entity Component System to apply damage multipliers based on weapon upgrade level during combat
-- **Weapon Detection** — Multi-layered check: item ID prefix (`Weapon_`), category (`Items.Weapons`), and weapon structure fields (via reflection). Results cached for 5 minutes
-- **Codec-based Configs** — Uses Hytale's `BuilderCodec` system for type-safe, auto-serialized configuration
-- **ID-based Level Tracking** — Upgrade level is embedded in the weapon item ID suffix, eliminating the need for external persistence
+- **ECS Damage System** — Applies damage/defense multipliers
+- **Codec-based Configs** — Type-safe configuration
+- **Metadata-based Storage** — Item data stored in NBT
+- **Auto-Save** — Data saved every 5 minutes
 
 ---
 
-## Troubleshooting
+## Changelog
 
-### Weapons Not Being Detected
+For full changelog, see [CHANGELOG.md](./CHANGELOG.md).
 
-1. Ensure weapon JSON files are in your mod's JAR under `Server/Item/Items/Weapon/`
-2. Filenames must start with `Weapon_`
-3. Include `"Categories": ["Items.Weapons"]` in the weapon JSON
-4. Run `/patchassets` after adding new weapons
-5. Check that level variants exist (e.g., `Weapon_Name1.json`, `Weapon_Name2.json`, `Weapon_Name3.json`)
+### Recent Changes
 
-### Assets Path Issues
-
-1. Verify `assets_path.txt` exists in the server root directory
-2. Check that the path points to a valid `Assets.zip`
-3. Alternatively, set the `ASSETSPATH` environment variable
-
-### Plugin Not Loading
-
-1. Check server console for error messages
-2. Verify the JAR file is in the correct `mods` folder
-3. Ensure the JAR filename matches the expected pattern: `irai.mod.reforge_Socket Reforge.jar`
-
-### Config Not Loading
-
-1. Delete the existing config JSON files and restart the server to regenerate defaults
-2. Verify JSON syntax is valid
-3. Check server console for `[ReforgePlugin]` error messages
+**v1.3.7a** - German localization, custom damage number toggle, runtime config fixes  
+**v1.3.7** - Refinement expansion beyond +3, tiered materials, configurable labels  
+**v1.3.6** - Lore system, lore socket punching/reroll, Void Spawn drops  
+**v1.3.5** - Custom floating damage numbers  
+**v1.3.4** - Localization support, Socket Expander/Diffuser  
 
 ---
 

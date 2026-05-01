@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "irai.mod.reforge"
-version = "1.3.7a"
+version = "1.3.7b"
 
 repositories {
     mavenCentral()
@@ -29,11 +29,10 @@ tasks.test {
 
 tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    // Output to local build directory first, then copy tasks handle distribution
+    // Build the jar locally by default. Deploy to a live server explicitly
+    // because overwriting a loaded mod jar can invalidate its asset zipfs
+    // while players are joining.
     destinationDirectory.set(file("build/libs"))
-    // Auto-copy to server mods directory for mdevtools auto-reload
-    finalizedBy("copyToServerMods")
-    finalizedBy("copyServerResources")
 }
 
 // Task to copy the built mod to the server mods directory
@@ -52,6 +51,12 @@ tasks.register<Copy>("copyToServerMods") {
 tasks.register<Copy>("copyServerResources") {
     from("src/main/resources/Server")
     into(file("server/Server"))
+}
+
+tasks.register("deployToLocalServer") {
+    group = "distribution"
+    description = "Builds the mod and then copies the jar/resources into the local test server."
+    dependsOn("jar", "copyToServerMods", "copyServerResources")
 }
 
 // Standalone DynamicFloatingDamageFormatter jars

@@ -1,4 +1,4 @@
-﻿# === assetEditor ===
+# === assetEditor ===
 
 assetEditor.messages.unknownItem = Unknown Item "{id}"
 assetEditor.messages.unknownModel = Unknown Model "{id}"

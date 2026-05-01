@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.7b] - 2026-05-02
+
+### Added
+
+- **Cross-Mod Config** - Added `CrossModConfig.json` plus a dedicated `Cross-Mod` Runtime Config category for optional third-party integration switches.
+- **Loot4Everyone Compat Toggle** - Added a runtime toggle for Loot4Everyone chest handling so server owners can enable or disable the compat path without mixing it into core loot settings.
+- **Lore Held Item Update Buffer** - Added `LoreHeldItemUpdateManager` to queue lore metadata updates during active held-item interactions so charge/cast weapons are not interrupted mid-use.
+- **Loot4Everyone Chest Rolling** - Chest loot injection now recognizes Loot4Everyone template chests, uses per-player roll keys, and avoids treating shared compat chests like normal one-roll world containers.
+
+### Fixed
+
+- **Salvage Metadata Compatibility** - Socketed/refined/lore equipment now strips metadata in the salvage input path more reliably, supports `Reforgebench` salvage recipes, and refreshes processing recipes correctly after sanitize.
+- **Lore Proc Item Writes** - Lore XP/state updates no longer replace the held item at unsafe times, preventing certain active interactions from being cancelled by mid-combat metadata writes.
+- **Language File Parsing** - Cleaned duplicate `de-DE` server keys and issues from language files that were causing localization parse/load errors.
+
+---
+
 ## [1.3.7a] - 2026-04-09
 
 ### Added
