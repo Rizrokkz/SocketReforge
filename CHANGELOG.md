@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.7c] - 2026-05-10
+
+### Added
+
+- **Hytalor Bench Compatibility** - Added an optional `com.hypersonicsharkz:Hytalor` dependency path and converted the Arcanist bench extension into a Hytalor patch so `Arcane_Essence` can coexist with other mods that also patch `Bench_Arcane`.
+- **Spanish Localization** - Added `es-ES` localization coverage for Socket Reforge UI strings and item text.
+
+### Fixed
+
+- **Hatchet Secondary Override** - Experimental hatchet throw interactions no longer get injected when their assets are absent, and stale `HatchetThrowUse` secondary/use overrides are now cleaned up before players can hit the missing-interaction crash path.
+
+---
+
 ## [1.3.7b] - 2026-05-02
 
 ### Added

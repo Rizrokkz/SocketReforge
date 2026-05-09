@@ -1,0 +1,18 @@
+{
+  "_BaseAssetPath": "Server/Item/Items/Bench/Bench_Arcane.json",
+  "BlockType": {
+    "Bench": {
+      "Categories": [
+        {
+          "_op": "upsert",
+          "_find": {
+            "Id": "Arcane_Essence"
+          },
+          "Id": "Arcane_Essence",
+          "Name": "irai.benchCategories.essence",
+          "Icon": "Icons/CraftingCategories/Farming/Essence.png"
+        }
+      ]
+    }
+  }
+}

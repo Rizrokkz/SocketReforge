@@ -1,7 +1,7 @@
 {
   "Group": "irai.mod.reforge",
   "Name": "Socket Reforge",
-  "Version": "1.3.7b",
+  "Version": "1.3.7c",
   "Description": "",
   "Authors": [
     {
@@ -15,7 +15,8 @@
   "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*",
                            "au.ellie:HyUI": "*",
                            "kyuubisoft:core": "*",
-                           "MimStar:Loot4Everyone": "*"
+                           "MimStar:Loot4Everyone": "*",
+                           "com.hypersonicsharkz:Hytalor": "*"
                           },
   "LoadBefore": {},
   "DisabledByDefault": false,

@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "irai.mod.reforge"
-version = "1.3.7b"
+version = "1.3.7c"
 
 repositories {
     mavenCentral()
@@ -25,6 +25,10 @@ dependencies {
 
 tasks.test {
     enabled = false
+}
+
+tasks.processResources {
+    exclude("**/*.json.a")
 }
 
 tasks.jar {

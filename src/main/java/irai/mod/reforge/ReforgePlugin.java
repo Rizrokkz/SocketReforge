@@ -21,12 +21,11 @@ import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
-import com.hypixel.hytale.server.core.event.events.player.DrainPlayerFromWorldEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
-import com.hypixel.hytale.server.core.event.events.player.PlayerMouseButtonEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.InteractionConfiguration;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -85,7 +84,6 @@ import irai.mod.reforge.Entity.Events.SocketStatSystem;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
-import irai.mod.reforge.Interactions.HatchetThrowUse;
 import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
@@ -113,6 +111,8 @@ import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
 
 public class ReforgePlugin extends JavaPlugin {
+    private static final String HATCHET_THROW_INTERACTION_ID = "HatchetThrowUse";
+
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
     private final LoreEffectEST loreEffectEST;
@@ -255,7 +255,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("LoreSocketBench", LoreSocketBench.class, LoreSocketBench.CODEC);
-        this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
+        //this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> {
@@ -268,12 +268,12 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, CropEssenceDropUtils::onBreakBlock);
-        this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
-        this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
-        this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
+        //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
+        //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
+        //this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
         this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, TreasureChestSocketLootListener::onPlayerInteract);
         this.getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, TreasureChestSocketLootListener::onTreasureChestOpening);
-        System.out.println("[SocketReforge] Hatchet input listeners registered");
+        System.out.println("[SocketReforge] Hatchet throw experimental feature remains disabled unless its interaction assets are present.");
         this.getCommandRegistry().registerCommand(new ToolPartsCommand("toolpartsui", "Open modular tool parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
@@ -313,7 +313,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7b");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7c");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
@@ -561,6 +561,7 @@ public class ReforgePlugin extends JavaPlugin {
                 return;
             }
 
+            boolean hatchetThrowEnabled = hasInteractionAssets(HATCHET_THROW_INTERACTION_ID);
             int hatchetCount = 0;
             int updatedCount = 0;
             for (Map.Entry<String, Item> entry : assetMap.getAssetMap().entrySet()) {
@@ -569,18 +570,31 @@ public class ReforgePlugin extends JavaPlugin {
                 }
                 hatchetCount++;
                 boolean changed = false;
-                changed |= ensureItemInteraction(entry.getValue(), InteractionType.Secondary, "HatchetThrowUse");
-                changed |= removeItemInteraction(entry.getValue(), InteractionType.Use, "HatchetThrowUse");
+                if (hatchetThrowEnabled) {
+                    changed |= ensureItemInteraction(entry.getValue(), InteractionType.Secondary, HATCHET_THROW_INTERACTION_ID);
+                    changed |= removeItemInteraction(entry.getValue(), InteractionType.Use, HATCHET_THROW_INTERACTION_ID);
+                } else {
+                    changed |= removeItemInteraction(entry.getValue(), InteractionType.Secondary, HATCHET_THROW_INTERACTION_ID);
+                    changed |= removeItemInteraction(entry.getValue(), InteractionType.Use, HATCHET_THROW_INTERACTION_ID);
+                }
                 if (changed) {
                     updatedCount++;
                 }
             }
 
-            System.out.println("[SocketReforge] Hatchet secondary interaction ready for "
-                    + hatchetCount
-                    + " items ("
-                    + updatedCount
-                    + " updated)");
+            if (hatchetThrowEnabled) {
+                System.out.println("[SocketReforge] Hatchet secondary interaction ready for "
+                        + hatchetCount
+                        + " items ("
+                        + updatedCount
+                        + " updated)");
+            } else {
+                System.out.println("[SocketReforge] Hatchet throw interaction disabled; cleaned stale secondary/use overrides on "
+                        + hatchetCount
+                        + " hatchets ("
+                        + updatedCount
+                        + " updated)");
+            }
         } catch (Exception e) {
             System.err.println("[SocketReforge] Failed to inject hatchet interactions: " + e.getMessage());
             e.printStackTrace();
@@ -961,6 +975,21 @@ public class ReforgePlugin extends JavaPlugin {
             return false;
         }
         return itemId != null && itemId.toLowerCase(Locale.ROOT).contains("hatchet");
+    }
+
+    private static boolean hasInteractionAssets(String interactionId) {
+        try {
+            DefaultAssetMap<String, RootInteraction> rootInteractionMap = RootInteraction.getAssetMap();
+            RootInteraction rootInteraction = rootInteractionMap == null ? null : rootInteractionMap.getAsset(interactionId);
+            if (rootInteraction == null) {
+                return false;
+            }
+            DefaultAssetMap<String, Interaction> interactionMap = Interaction.getAssetMap();
+            Interaction interaction = interactionMap == null ? null : interactionMap.getAsset(interactionId);
+            return interaction != null;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static boolean ensureItemInteraction(Item item, InteractionType type, String rootInteractionId)

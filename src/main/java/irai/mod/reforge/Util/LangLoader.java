@@ -172,7 +172,7 @@ public final class LangLoader {
             
             // For resources, we need to scan for language subdirectories
             // This is limited in JAR environments, so we'll try common language codes
-            String[] commonLangCodes = {"en-US", "en-GB", "en", "zh-CN", "zh-TW", "ja", "ko", "de", "de-DE", "fr", "es", "pt-BR"};
+            String[] commonLangCodes = {"en-US", "en-GB", "en", "zh-CN", "zh-TW", "ja", "ko", "de", "de-DE", "fr", "es-ES", "pt-BR"};
             for (String langCode : commonLangCodes) {
                 loadLangFiles(directoryPath + "/" + langCode, langCode);
                 loadJsonLangFiles(directoryPath, langCode);

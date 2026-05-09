@@ -1,7 +1,8 @@
 <h1>Socket Reforge — Weapon & Armor Refinement for Hytale</h1>
 
 <p><strong>Upgrade, enhance, socket, and risk it all.</strong> Socket Reforge brings a deep RPG equipment refinement system to Hytale, letting players upgrade their weapons and armor through a risk-reward reforging mechanic, punch sockets into equipment, and enhance them with powerful essences — all with configurable rates, sound effects, and custom UIs.</p>
-<p><strong>Latest update highlights:</strong> Refinement expansion to configurable caps (default +15), tiered refinement materials, per-level prefix/suffix labels, and expanded runtime config controls.</p>
+<p><strong>Latest update highlights:</strong> Hytalor-based Arcanist Bench compatibility, Spanish localization, and a fix for the unreleased hatchet secondary-click override.</p>
+<p>The Arcanist Bench extension now patches <code>Bench_Arcane</code> through Hytalor instead of replacing the full asset, which helps it coexist with other mods that add their own Arcane bench categories.</p>
 
 <hr>
 
@@ -628,7 +629,7 @@
 <h2>✨ Features at a Glance</h2>
 
 <ul>
-  <li><strong>Risk-reward reforging</strong> with 4 outcomes + shatter for both weapons and armor</li>
+  <li><strong>Risk-reward reforging</strong> with configurable outcomes + shatter for both weapons and armor</li>
   <li><strong>Scalable upgrade tiers</strong> (default +15) with configurable names/labels</li>
   <li><strong>Socket punching system</strong> — add up to 4-5 sockets to weapons and armor</li>
   <li><strong>6 essence types</strong> (Fire, Ice, Lightning, Life, Void, Water) with tier-based effects</li>

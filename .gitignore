@@ -55,3 +55,4 @@ tools/assetkeyvalidator-override/AssetKeyValidatorOverride.jar
 /com/
 /org/
 /tmp_*
+/tmp
