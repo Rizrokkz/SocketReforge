@@ -7,6 +7,14 @@ package irai.mod.reforge.Util;
 public final class MetadataKeys {
     private MetadataKeys() {} // Prevent instantiation
 
+    // Refinement system
+    public static final String REFINEMENT_LEVEL = "SocketReforge.Refinement.Level";
+    public static final String REFINEMENT_BASE_ITEM_ID = "SocketReforge.Refinement.BaseItemId";
+    public static final String REFINEMENT_DISPLAY_NAME = "SocketReforge.Refinement.DisplayName";
+    public static final String REFINEMENT_DISPLAY_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
+    public static final String REFINEMENT_SOFTCORE_BREAKS = "SocketReforge.Refinement.SoftcoreBreaks";
+    public static final String REFINEMENT_SOFTCORE_STAT_MULTIPLIER = "SocketReforge.Refinement.SoftcoreStatMultiplier";
+
     // Socket system
     public static final String SOCKET_MAX = "SocketReforge.Socket.Max";
     public static final String SOCKET_VALUES = "SocketReforge.Socket.Values";

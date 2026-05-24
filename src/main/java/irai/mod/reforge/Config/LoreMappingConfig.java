@@ -2,6 +2,8 @@ package irai.mod.reforge.Config;
 
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 
+import java.util.Arrays;
+
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 
@@ -10,7 +12,7 @@ import com.hypixel.hytale.codec.builder.BuilderCodec;
  * and explicit spirit ability mappings.
  */
 @SuppressWarnings("removal")
-public class LoreMappingConfig {
+public class LoreMappingConfig implements ConfigDefaultInjector {
 
     public static final BuilderCodec<LoreMappingConfig> CODEC = BuilderCodec.<LoreMappingConfig>builder(LoreMappingConfig.class, LoreMappingConfig::new)
             .append(
@@ -108,4 +110,36 @@ public class LoreMappingConfig {
     public void setColorSpiritEntries(String[] v) { this.colorSpiritEntries = v; }
     public void setCoreColorEntries(String[] v) { this.coreColorEntries = v; }
     public void setAbilityEntries(String[] v) { this.abilityEntries = v; }
+
+    @Override
+    public boolean injectMissingDefaults() {
+        LoreMappingConfig defaults = new LoreMappingConfig();
+        boolean changed = false;
+
+        String[] mergedGemColors = ConfigMergeUtils.mergeMissingByKey(gemColorEntries, defaults.gemColorEntries, '=');
+        if (!Arrays.equals(gemColorEntries, mergedGemColors)) {
+            this.gemColorEntries = mergedGemColors;
+            changed = true;
+        }
+
+        String[] mergedColorSpirits = ConfigMergeUtils.mergeMissingByKey(colorSpiritEntries, defaults.colorSpiritEntries, '=');
+        if (!Arrays.equals(colorSpiritEntries, mergedColorSpirits)) {
+            this.colorSpiritEntries = mergedColorSpirits;
+            changed = true;
+        }
+
+        String[] mergedCoreColors = ConfigMergeUtils.mergeUniqueValues(coreColorEntries, defaults.coreColorEntries);
+        if (!Arrays.equals(coreColorEntries, mergedCoreColors)) {
+            this.coreColorEntries = mergedCoreColors;
+            changed = true;
+        }
+
+        String[] mergedAbilities = ConfigMergeUtils.mergeMissingByKey(abilityEntries, defaults.abilityEntries, '=');
+        if (!Arrays.equals(abilityEntries, mergedAbilities)) {
+            this.abilityEntries = mergedAbilities;
+            changed = true;
+        }
+
+        return changed;
+    }
 }

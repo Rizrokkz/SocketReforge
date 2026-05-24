@@ -599,9 +599,12 @@ public final class ReforgeBenchUI {
         HammerSupportType hammerSupport = getHammerSupportType(support);
         int maxLevel = getMaxUpgradeLevel();
         int level = Math.max(0, Math.min(maxLevel, ReforgeEquip.getLevelFromItem(item)));
+        MaterialRequirement requirement = getMaterialRequirement(player, equipment);
+        String materialId = requirement != null ? requirement.itemId : DEFAULT_MATERIAL_ID;
         String typeLabel = isArmor ? t(player, "ui.reforge.type_armor") : t(player, "ui.reforge.type_weapon");
         String refineName = isArmor ? ReforgeEquip.getArmorUpgradeName(level) : ReforgeEquip.getUpgradeName(level);
-        double currentMult = statMultiplierForLevel(level, isArmor);
+        double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(item);
+        double currentMult = statMultiplierForLevel(level, isArmor) * softcoreMultiplier;
         String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
         String refineSuffix = refineName == null || refineName.isBlank() ? "" : " (" + refineName + ")";
 
@@ -639,6 +642,7 @@ public final class ReforgeBenchUI {
         }
 
         double breakChance = effectiveBreakChance(level, isArmor, hammerSupport);
+        double softcoreBreakProtectionChance = ReforgeEquip.getSoftcoreBreakProtectionChance(materialId);
         double[] w = weights(level);
         double survive = Math.max(0.0, 1.0 - breakChance);
 
@@ -646,17 +650,27 @@ public final class ReforgeBenchUI {
         int sameLevel = clampLevel(level);
         int upLevel = clampLevel(level + 1);
         int jackLevel = clampLevel(level + 2);
+        double pSoftBreak = breakChance * softcoreBreakProtectionChance;
 
-        double mDeg = statMultiplierForLevel(degLevel, isArmor);
-        double mSame = statMultiplierForLevel(sameLevel, isArmor);
-        double mUp = statMultiplierForLevel(upLevel, isArmor);
-        double mJack = statMultiplierForLevel(jackLevel, isArmor);
+        double mDeg = statMultiplierForLevel(degLevel, isArmor) * softcoreMultiplier;
+        double mSame = statMultiplierForLevel(sameLevel, isArmor) * softcoreMultiplier;
+        double mUp = statMultiplierForLevel(upLevel, isArmor) * softcoreMultiplier;
+        double mJack = statMultiplierForLevel(jackLevel, isArmor) * softcoreMultiplier;
+        double mSoftBreak = 0.0;
+        if (pSoftBreak > 0.0) {
+            ItemStack softenedPreview = ReforgeEquip.previewSoftcoreBreakPenalty(item);
+            mSoftBreak = ReforgeEquip.getEffectiveRefinementMultiplier(softenedPreview, isArmor);
+        }
 
         double pDeg = survive * w[0];
         double pSame = survive * w[1];
         double pUp = survive * w[2];
         double pJack = survive * w[3];
-        double expectedWithBreak = (pDeg * mDeg) + (pSame * mSame) + (pUp * mUp) + (pJack * mJack);
+        double expectedWithBreak = (pSoftBreak * mSoftBreak)
+                + (pDeg * mDeg)
+                + (pSame * mSame)
+                + (pUp * mUp)
+                + (pJack * mJack);
 
         String expectedStats = t(player, "ui.reforge.chance_break") + ": " + formatPercent(breakChance) + "\n"
                 + t(player, "ui.reforge.chance_degrade") + ": " + formatPercent(pDeg) + "\n"
@@ -733,6 +747,21 @@ public final class ReforgeBenchUI {
             }
         }
         if (Math.random() < breakChance) {
+            if (ReforgeEquip.shouldUseSoftcoreBreakProtection(materialId)) {
+                ItemStack softened = ReforgeEquip.applySoftcoreBreakPenalty(current);
+                writeStack(player, equipment, softened);
+                DynamicTooltipUtils.refreshAllPlayers();
+                sfxConfig.playFail(player);
+                String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
+                return new ProcessResult(
+                        t(player,
+                                "ui.reforge.result_softcore_break",
+                                statLabel,
+                                formatPercent(1.0 - ReforgeEquip.getSoftcoreStatMultiplier(softened)),
+                                ReforgeEquip.getSoftcoreBreakCount(softened),
+                                hammerSuffix),
+                        100);
+            }
             removeEquipment(player, equipment);
             sfxConfig.playShatter(player);
             return new ProcessResult(t(player, "ui.reforge.result_shattered", hammerSuffix), 0);
@@ -1021,6 +1050,13 @@ public final class ReforgeBenchUI {
         StringBuilder sb = new StringBuilder();
         sb.append(t(player, "ui.reforge.metadata_line_name", equipment.displayName)).append("\n");
         sb.append(t(player, "ui.reforge.metadata_line_level", level));
+        if (ReforgeEquip.hasSoftcorePenalty(item)) {
+            sb.append("\n").append(t(player,
+                    "ui.reforge.metadata_softcore_value",
+                    format3(ReforgeEquip.getSoftcoreStatMultiplier(item)),
+                    formatPercent(1.0 - ReforgeEquip.getSoftcoreStatMultiplier(item)),
+                    ReforgeEquip.getSoftcoreBreakCount(item)));
+        }
         return sb.toString();
     }
 
@@ -1062,7 +1098,7 @@ public final class ReforgeBenchUI {
         ItemStack item = equipment.item;
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         int level = ReforgeEquip.getLevelFromItem(item);
-        double currentMult = statMultiplierForLevel(level, isArmor);
+        double currentMult = ReforgeEquip.getEffectiveRefinementMultiplier(item, isArmor);
         String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
         return t(player, "ui.reforge.metadata_current_stat_value", statLabel, format3(currentMult), formatPercent(currentMult - 1.0));
     }
@@ -1079,9 +1115,10 @@ public final class ReforgeBenchUI {
         boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
         int level = ReforgeEquip.getLevelFromItem(item);
         SocketData socketData = SocketManager.getSocketData(item);
+        double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(item);
         if (isArmor) {
             EquipmentDamageTooltipMath.StatSummary summary =
-                    EquipmentDamageTooltipMath.computeArmorDefenseSummary(itemId, level, socketData);
+                    EquipmentDamageTooltipMath.computeArmorDefenseSummary(itemId, level, socketData, softcoreMultiplier);
             if (summary.getBaseValue() <= 0.0) {
                 return t(player, "ui.reforge.metadata_base_defense_na");
             }
@@ -1090,7 +1127,7 @@ public final class ReforgeBenchUI {
                     formatDamageValue(summary.getBuffedValue()));
         }
         EquipmentDamageTooltipMath.StatSummary summary =
-                EquipmentDamageTooltipMath.computeWeaponDamageSummary(itemId, level, socketData, 1.0);
+                EquipmentDamageTooltipMath.computeWeaponDamageSummary(itemId, level, socketData, 1.0, softcoreMultiplier);
         if (summary.getBaseValue() <= 0.0) {
             return t(player, "ui.reforge.metadata_base_damage_na");
         }

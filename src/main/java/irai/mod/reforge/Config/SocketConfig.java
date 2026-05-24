@@ -2,6 +2,9 @@ package irai.mod.reforge.Config;
 
 import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
+
+import java.util.Arrays;
+
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 
@@ -11,7 +14,7 @@ import com.hypixel.hytale.codec.builder.BuilderCodec;
  * Also accepted by SocketPunchUI.setConfig().
  */
 @SuppressWarnings("removal")
-public class SocketConfig {
+public class SocketConfig implements ConfigDefaultInjector {
 
     public static final BuilderCodec<SocketConfig> CODEC = BuilderCodec.<SocketConfig>builder(SocketConfig.class, SocketConfig::new)
             // Max sockets configuration stored as int array [weapon, armor]
@@ -145,5 +148,25 @@ public class SocketConfig {
         this.essenceRemovalDestroyChance = defaults.essenceRemovalDestroyChance;
         this.bonusSocketChance = defaults.bonusSocketChance;
         this.maxReduceChance = defaults.maxReduceChance;
+    }
+
+    @Override
+    public boolean injectMissingDefaults() {
+        SocketConfig defaults = new SocketConfig();
+        boolean changed = false;
+
+        double[] mergedSuccessChances = ConfigMergeUtils.extendDoubleArray(punchSuccessChances, defaults.punchSuccessChances);
+        if (!Arrays.equals(punchSuccessChances, mergedSuccessChances)) {
+            this.punchSuccessChances = mergedSuccessChances;
+            changed = true;
+        }
+
+        double[] mergedBreakChances = ConfigMergeUtils.extendDoubleArray(punchBreakChances, defaults.punchBreakChances);
+        if (!Arrays.equals(punchBreakChances, mergedBreakChances)) {
+            this.punchBreakChances = mergedBreakChances;
+            changed = true;
+        }
+
+        return changed;
     }
 }

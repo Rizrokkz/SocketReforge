@@ -345,16 +345,27 @@ public class DamageNumberEST extends DamageEventSystem {
             return false;
         }
         DamageNumbers.KindStyle style = DamageNumbers.getKindStyle(kindId);
-        if (style == null || style.particleFontId() == null || style.particleFontId().isBlank()) {
+        if (style == null) {
             return false;
         }
-        String rawText = DamageNumbers.formatAmountOnly(amount, kindId);
-        if (rawText == null || rawText.isBlank()) {
+        boolean hasDigitFont = style.particleFontId() != null && !style.particleFontId().isBlank();
+        boolean hasIcon = style.particleIconId() != null && !style.particleIconId().isBlank();
+        if (!hasDigitFont && !hasIcon) {
             return false;
         }
-        String digits = rawText.replaceAll("[^0-9]", "");
-        if (digits.isEmpty()) {
-            return false;
+        String digits = "";
+        if (hasDigitFont) {
+            String rawText = DamageNumbers.formatAmountOnly(amount, kindId);
+            if (rawText == null || rawText.isBlank()) {
+                if (!hasIcon) {
+                    return false;
+                }
+            } else {
+                digits = rawText.replaceAll("[^0-9]", "");
+                if (digits.isEmpty() && !hasIcon) {
+                    return false;
+                }
+            }
         }
         Vector3d base = resolveFloatingDamagePosition(store, targetRef, attackerRef);
         if (base == null) {
@@ -365,9 +376,8 @@ public class DamageNumberEST extends DamageEventSystem {
         Vector3d origin = new Vector3d(base.x + jitterX, base.y, base.z + jitterZ);
         List<Ref<EntityStore>> viewers = collectViewerRefsForParticles(store, visible, attackerRef);
 
-        boolean hasIcon = style.particleIconId() != null && !style.particleIconId().isBlank();
         double digitSpan = digits.length() > 1 ? (digits.length() - 1) * FLOATING_DAMAGE_DIGIT_SPACING : 0.0d;
-        double iconGap = hasIcon ? FLOATING_DAMAGE_ICON_SPACING : 0.0d;
+        double iconGap = hasIcon && !digits.isEmpty() ? FLOATING_DAMAGE_ICON_SPACING : 0.0d;
         double groupWidth = digitSpan + iconGap;
         Color digitColor = resolveParticleColor(style.colorHex());
 
@@ -376,15 +386,17 @@ public class DamageNumberEST extends DamageEventSystem {
             if (backgroundId != null && !backgroundId.isBlank()) {
                 spawnParticleSystem(store, backgroundId, origin, viewers, null);
             }
-            double startX = origin.x - (groupWidth / 2.0d) + iconGap;
-            for (int i = 0; i < digits.length(); i++) {
-                char digit = digits.charAt(i);
-                if (digit < '0' || digit > '9') {
-                    continue;
+            if (hasDigitFont && !digits.isEmpty()) {
+                double startX = origin.x - (groupWidth / 2.0d) + iconGap;
+                for (int i = 0; i < digits.length(); i++) {
+                    char digit = digits.charAt(i);
+                    if (digit < '0' || digit > '9') {
+                        continue;
+                    }
+                    String systemId = style.particleFontId() + "_Digit_" + digit;
+                    Vector3d pos = new Vector3d(startX + (i * FLOATING_DAMAGE_DIGIT_SPACING), origin.y, origin.z);
+                    spawnParticleSystem(store, systemId, pos, viewers, digitColor);
                 }
-                String systemId = style.particleFontId() + "_Digit_" + digit;
-                Vector3d pos = new Vector3d(startX + (i * FLOATING_DAMAGE_DIGIT_SPACING), origin.y, origin.z);
-                spawnParticleSystem(store, systemId, pos, viewers, digitColor);
             }
             if (hasIcon) {
                 String iconId = style.particleIconId();
@@ -414,14 +426,16 @@ public class DamageNumberEST extends DamageEventSystem {
             Vector3d right = computeRightVector(viewerOrigin, viewerPos);
             Vector3d iconBase = offsetBy(viewerOrigin, right, -groupWidth / 2.0d);
             Vector3d digitBase = offsetBy(viewerOrigin, right, (-groupWidth / 2.0d) + iconGap);
-            for (int i = 0; i < digits.length(); i++) {
-                char digit = digits.charAt(i);
-                if (digit < '0' || digit > '9') {
-                    continue;
+            if (hasDigitFont && !digits.isEmpty()) {
+                for (int i = 0; i < digits.length(); i++) {
+                    char digit = digits.charAt(i);
+                    if (digit < '0' || digit > '9') {
+                        continue;
+                    }
+                    String systemId = style.particleFontId() + "_Digit_" + digit;
+                    Vector3d pos = offsetBy(digitBase, right, i * FLOATING_DAMAGE_DIGIT_SPACING);
+                    spawnParticleSystemScaled(store, systemId, pos, singleViewer, digitColor, scale);
                 }
-                String systemId = style.particleFontId() + "_Digit_" + digit;
-                Vector3d pos = offsetBy(digitBase, right, i * FLOATING_DAMAGE_DIGIT_SPACING);
-                spawnParticleSystemScaled(store, systemId, pos, singleViewer, digitColor, scale);
             }
 
             if (hasIcon) {

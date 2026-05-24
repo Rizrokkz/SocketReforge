@@ -235,8 +235,9 @@ public final class LoreDamageUtils {
         SocketData socketData = SocketManager.getSocketData(stack);
         int level = ReforgeEquip.getLevelFromItem(stack);
         double partsMultiplier = resolvePartsDamageMultiplier(stack);
+        double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(stack);
         double refined = EquipmentDamageTooltipMath.computeBuffedWeaponDamage(stack.getItemId(),
-                base, level, socketData, partsMultiplier);
+                base, level, socketData, partsMultiplier, softcoreMultiplier);
         if (refined <= 0.0d) {
             return fallback;
         }
@@ -329,6 +330,25 @@ public final class LoreDamageUtils {
             return 0f;
         }
         return Math.max(0f, health.getMax());
+    }
+
+    public static float resolveCurrentHealth(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+        if (store == null || targetRef == null) {
+            return 0f;
+        }
+        EntityStatMap statMap = store.getComponent(targetRef, EntityStatMap.getComponentType());
+        if (statMap == null) {
+            return 0f;
+        }
+        int healthStatIndex = getHealthStatIndex(statMap);
+        if (healthStatIndex < 0) {
+            return 0f;
+        }
+        EntityStatValue health = statMap.get(healthStatIndex);
+        if (health == null) {
+            return 0f;
+        }
+        return Math.max(0f, health.get());
     }
 
     public static void applyHeal(Store<EntityStore> store, Ref<EntityStore> targetRef, float amount) {

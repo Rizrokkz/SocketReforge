@@ -972,5 +972,8 @@ ui.lore_feed.preview_hits = Golpes
 notification.lore_ready.title = Lore Pronto
 notification.lore_ready.body = {0} esta pronto.
 
+ui.reforge.result_softcore_break = A protecao softcore salvou o item. {0} foi reduzido em {1} apos {2} quebras.{3}
+ui.reforge.metadata_softcore_value = Desgaste: x{0} ({1}, {2} quebras)
+
 
 

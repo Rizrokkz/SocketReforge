@@ -1057,3 +1057,5 @@ irai.items.Ingredient_Resonant_Essence.name = Esencia Resonante
 irai.items.Ingredient_Resonant_Essence.description = Refinada a partir de equipamiento resonante. Se usa para alimentar gemas de lore.
 irai.items.Ingredient_Ghastly_Essence.name = Esencia Fantasmal
 irai.items.Ingredient_Ghastly_Essence.description = Una esencia espectral que purga un espíritu de una gema de lore.
+ui.reforge.result_softcore_break = La proteccion softcore salvo el objeto. {0} se redujo en {1} tras {2} roturas.{3}
+ui.reforge.metadata_softcore_value = Desgaste: x{0} ({1}, {2} roturas)

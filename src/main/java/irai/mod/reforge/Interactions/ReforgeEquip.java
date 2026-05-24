@@ -29,8 +29,9 @@ import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
-import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.LangLoader;
+import irai.mod.reforge.Util.MetadataKeys;
+import irai.mod.reforge.Util.NameResolver;
 
 
 /**
@@ -53,6 +54,9 @@ public class ReforgeEquip extends SimpleInteraction {
             0.050,  // 1 → 2: 15% break chance
             0.075,  // 2 → 3: 20% break chance
     };
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK = 0.08;
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN = 0.01;
+    private static final double DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER = 0.40;
 
     // Static cache for item category/structure checks to avoid repeated reflection
     private static final java.util.Map<String, Boolean> weaponCheckCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -172,6 +176,20 @@ public class ReforgeEquip extends SimpleInteraction {
             breakChance = DEFAULT_BREAK_CHANCES[Math.min(currentLevel, DEFAULT_BREAK_CHANCES.length - 1)];
         }
         if (Math.random() < breakChance) {
+            if (shouldUseSoftcoreBreakProtection(materialId)) {
+                ItemStack softenedItem = applySoftcoreBreakPenalty(heldItem);
+                player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
+                player.getInventory().getHotbar().addItemStackToSlot(slot, softenedItem);
+                DynamicTooltipUtils.refreshAllPlayers();
+                sfxConfig.playFail(player);
+                player.sendMessage(Message.raw("Break protection prevented shatter."));
+                String summary = getSoftcorePenaltySummary(softenedItem, isArmorItem);
+                if (summary != null && !summary.isBlank()) {
+                    player.sendMessage(Message.raw(summary));
+                }
+                showDetailedStats(player, softenedItem, slot);
+                return;
+            }
             player.getInventory().getHotbar().removeItemStackFromSlot(slot, 1, false, false);
             sfxConfig.playShatter(player);
             showItemShatter(player, isArmorItem);
@@ -223,10 +241,12 @@ public class ReforgeEquip extends SimpleInteraction {
         return 0; // Base level (no suffix)
     }
     
-    private static final String META_REFINEMENT_LEVEL = "SocketReforge.Refinement.Level";
-    private static final String META_BASE_ITEM_ID = "SocketReforge.Refinement.BaseItemId";
-    private static final String META_REFINEMENT_NAME = "SocketReforge.Refinement.DisplayName";
-    private static final String META_REFINEMENT_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
+    private static final String META_REFINEMENT_LEVEL = MetadataKeys.REFINEMENT_LEVEL;
+    private static final String META_BASE_ITEM_ID = MetadataKeys.REFINEMENT_BASE_ITEM_ID;
+    private static final String META_REFINEMENT_NAME = MetadataKeys.REFINEMENT_DISPLAY_NAME;
+    private static final String META_REFINEMENT_NAME_KEY = MetadataKeys.REFINEMENT_DISPLAY_NAME_KEY;
+    private static final String META_SOFTCORE_BREAKS = MetadataKeys.REFINEMENT_SOFTCORE_BREAKS;
+    private static final String META_SOFTCORE_STAT_MULTIPLIER = MetadataKeys.REFINEMENT_SOFTCORE_STAT_MULTIPLIER;
     
     /**
      * Gets refinement level from item metadata.
@@ -299,6 +319,113 @@ public class ReforgeEquip extends SimpleInteraction {
         }
         
         return updated;
+    }
+
+    public static boolean isSoftcoreBreakEnabled() {
+        return staticRefinementConfig != null && staticRefinementConfig.isSoftcoreBreakEnabled();
+    }
+
+    public static boolean isMixedBreakModeEnabled() {
+        return staticRefinementConfig != null && staticRefinementConfig.isMixedBreakModeEnabled();
+    }
+
+    public static double getSoftcoreBreakProtectionChance(String materialItemId) {
+        if (staticRefinementConfig == null) {
+            return 0.0;
+        }
+        return staticRefinementConfig.getSoftcoreBreakProtectionChance(materialItemId);
+    }
+
+    public static boolean shouldUseSoftcoreBreakProtection(String materialItemId) {
+        return staticRefinementConfig != null && staticRefinementConfig.shouldUseSoftcoreBreakProtection(materialItemId);
+    }
+
+    public static boolean shouldShatterOnBreak(String materialItemId) {
+        if (staticRefinementConfig == null) {
+            return true;
+        }
+        return staticRefinementConfig.shouldShatterOnBreak(materialItemId);
+    }
+
+    public static int getSoftcoreBreakCount(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return 0;
+        }
+        Integer stored = item.getFromMetadataOrNull(META_SOFTCORE_BREAKS, Codec.INTEGER);
+        return stored == null ? 0 : Math.max(0, stored);
+    }
+
+    public static double getSoftcoreStatMultiplier(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return 1.0;
+        }
+        Double storedMultiplier = item.getFromMetadataOrNull(META_SOFTCORE_STAT_MULTIPLIER, Codec.DOUBLE);
+        if (storedMultiplier != null) {
+            return clampSoftcoreMultiplier(storedMultiplier);
+        }
+        int breakCount = getSoftcoreBreakCount(item);
+        if (breakCount <= 0) {
+            return 1.0;
+        }
+        if (staticRefinementConfig != null) {
+            return staticRefinementConfig.computeSoftcoreStatMultiplier(breakCount);
+        }
+        double fallback = 1.0 - (breakCount * defaultAverageSoftcoreLossPerBreak());
+        return clamp(fallback, DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER, 1.0);
+    }
+
+    public static boolean hasSoftcorePenalty(ItemStack item) {
+        return getSoftcoreBreakCount(item) > 0 || getSoftcoreStatMultiplier(item) < 0.9999;
+    }
+
+    public static ItemStack applySoftcoreBreakPenalty(ItemStack item) {
+        return applySoftcoreBreakPenalty(item, true);
+    }
+
+    public static ItemStack previewSoftcoreBreakPenalty(ItemStack item) {
+        return applySoftcoreBreakPenalty(item, false);
+    }
+
+    private static ItemStack applySoftcoreBreakPenalty(ItemStack item, boolean randomize) {
+        if (item == null || item.isEmpty()) {
+            return item;
+        }
+        int nextBreakCount = getSoftcoreBreakCount(item) + 1;
+        double currentMultiplier = getSoftcoreStatMultiplier(item);
+        double nextMultiplier;
+        if (staticRefinementConfig != null) {
+            nextMultiplier = randomize
+                    ? staticRefinementConfig.reduceSoftcoreStatMultiplier(currentMultiplier)
+                    : staticRefinementConfig.previewSoftcoreStatMultiplier(currentMultiplier);
+        } else {
+            nextMultiplier = clamp(currentMultiplier - defaultAverageSoftcoreLossPerBreak(),
+                    DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER,
+                    1.0);
+        }
+        return item.withMetadata(META_SOFTCORE_BREAKS, Codec.INTEGER, nextBreakCount)
+                .withMetadata(META_SOFTCORE_STAT_MULTIPLIER, Codec.DOUBLE, nextMultiplier);
+    }
+
+    public static double getEffectiveRefinementMultiplier(ItemStack item, boolean isArmor) {
+        int level = getLevelFromItem(item);
+        double refinementMultiplier = isArmor ? getDefenseMultiplier(level) : getDamageMultiplier(level);
+        return refinementMultiplier * getSoftcoreStatMultiplier(item);
+    }
+
+    public static String getSoftcorePenaltySummary(ItemStack item, boolean isArmor) {
+        int breakCount = getSoftcoreBreakCount(item);
+        if (breakCount <= 0) {
+            return null;
+        }
+        double statMultiplier = getSoftcoreStatMultiplier(item);
+        double penaltyPercent = Math.max(0.0, (1.0 - statMultiplier) * 100.0);
+        String statLabel = isArmor ? "defense" : "damage";
+        return String.format(java.util.Locale.ROOT,
+                "Softcore saved the item: -%.0f%% core %s (%d break%s)",
+                penaltyPercent,
+                statLabel,
+                breakCount,
+                breakCount == 1 ? "" : "s");
     }
     
     /**
@@ -902,6 +1029,21 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     // ══════════════════════════════════════════════════════════════════════════════
+    private static double clampSoftcoreMultiplier(double value) {
+        if (staticRefinementConfig != null) {
+            return staticRefinementConfig.clampSoftcoreStatMultiplier(value);
+        }
+        return clamp(value, DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER, 1.0);
+    }
+
+    private static double defaultAverageSoftcoreLossPerBreak() {
+        return (DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN + DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK) * 0.5;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     // Merged from WeaponTooltip - Tooltip and UI Methods
     // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1043,7 +1185,7 @@ public class ReforgeEquip extends SimpleInteraction {
         boolean isArmorItem = isArmor(item);
 
         String upgradeName = isArmorItem ? getArmorUpgradeName(level) : getUpgradeName(level);
-        double multiplier   = isArmorItem ? getDefenseMultiplier(level) : getDamageMultiplier(level);
+        double multiplier   = getEffectiveRefinementMultiplier(item, isArmorItem);
         String statLabel    = isArmorItem ? "Defense" : "Damage";
         String typeLabel    = isArmorItem ? "Armor" : "Weapon";
         String color = getColorForLevel(level);
@@ -1056,9 +1198,14 @@ public class ReforgeEquip extends SimpleInteraction {
         player.sendMessage(Message.raw("  Upgrade: " + color + upgradeName + " +" + level));
         player.sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/" + maxLevel + ")"));
         player.sendMessage(Message.raw("  " + statLabel + ": x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
+        String softcoreSummary = getSoftcorePenaltySummary(item, isArmorItem);
+        if (softcoreSummary != null && !softcoreSummary.isBlank()) {
+            player.sendMessage(Message.raw("  " + softcoreSummary));
+        }
 
         if (level < maxLevel) {
-            double nextMultiplier = isArmorItem ? getDefenseMultiplier(level + 1) : getDamageMultiplier(level + 1);
+            double nextMultiplier = (isArmorItem ? getDefenseMultiplier(level + 1) : getDamageMultiplier(level + 1))
+                    * getSoftcoreStatMultiplier(item);
             player.sendMessage(Message.raw("  Next Level: x" + String.format("%.2f", nextMultiplier) + " (" + String.format("%.0f", nextMultiplier * 100) + "%)"));
         } else {
             player.sendMessage(Message.raw("   MAX LEVEL ACHIEVED   "));

@@ -2,6 +2,9 @@ package irai.mod.reforge.Config;
 
 import static com.hypixel.hytale.codec.Codec.STRING;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
+
+import java.util.Arrays;
+
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.protocol.SoundCategory;
@@ -14,7 +17,7 @@ import com.hypixel.hytale.server.core.universe.world.SoundUtil;
  * Handles sound playback for all reforge events.
  */
 @SuppressWarnings("removal")
-public class SFXConfig {
+public class SFXConfig implements ConfigDefaultInjector {
 
     public static final BuilderCodec<SFXConfig> CODEC = BuilderCodec.<SFXConfig>builder(SFXConfig.class, SFXConfig::new)
             .append(
@@ -138,4 +141,15 @@ public class SFXConfig {
     public void setSFX_SHATTER(String SFX_SHATTER) { this.SFX_SHATTER = SFX_SHATTER; }
     public String[] getBenches() { return Benches; }
     public void setBenches(String[] benches) { Benches = benches; }
+
+    @Override
+    public boolean injectMissingDefaults() {
+        SFXConfig defaults = new SFXConfig();
+        String[] mergedBenches = ConfigMergeUtils.mergeUniqueValues(Benches, defaults.Benches);
+        if (Arrays.equals(Benches, mergedBenches)) {
+            return false;
+        }
+        this.Benches = mergedBenches;
+        return true;
+    }
 }

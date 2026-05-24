@@ -141,6 +141,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
                     int clampedLevel = clampLevel(upgradeLevel);
                     double refinementMultiplier = getDamageMultiplier(clampedLevel);
+                    double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(weapon);
                     double socketMultiplier = calculateSocketDamageBonus(weapon);
                     double socketFlat = calculateSocketFlatDamage(weapon);
                     double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
@@ -149,7 +150,11 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     double critChancePercent = calculateSocketCritChancePercent(weapon);
                     double critDamagePercent = calculateSocketCritDamagePercent(weapon);
 
-                    float newDamage = (float) ((baseDamage * refinementMultiplier * socketMultiplier * partsMultiplier) + socketFlat);
+                    float newDamage = (float) ((baseDamage
+                            * refinementMultiplier
+                            * softcoreMultiplier
+                            * socketMultiplier
+                            * partsMultiplier) + socketFlat);
                     if (attackSpeedPercent > 0.0) {
                         // Runtime fallback: convert attack speed bonus into effective DPS multiplier.
                         newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
@@ -177,6 +182,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                                 + " weapon=" + weapon.getItemId()
                                 + " base=" + baseDamage
                                 + " refineMult=" + refinementMultiplier
+                                + " softcoreMult=" + softcoreMultiplier
                                 + " socketMult=" + socketMultiplier
                                 + " partsMult=" + partsMultiplier
                                 + " socketFlat=" + socketFlat
@@ -251,7 +257,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
             if (armorId != null) {
                 int level = ReforgeEquip.getLevelFromItem(armor);
                 int clampedLevel = clampLevel(level);
-                double multiplier = getDefenseMultiplier(clampedLevel);
+                double multiplier = getDefenseMultiplier(clampedLevel) * ReforgeEquip.getSoftcoreStatMultiplier(armor);
                 totalMultiplier += multiplier;
                 count++;
             }

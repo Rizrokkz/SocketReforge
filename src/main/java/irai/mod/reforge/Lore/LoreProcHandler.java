@@ -5,6 +5,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -58,6 +59,7 @@ import com.hypixel.hytale.server.core.modules.projectile.config.ProjectileConfig
 import com.hypixel.hytale.server.core.modules.projectile.interaction.ProjectileInteraction;
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
+import com.hypixel.hytale.server.npc.role.Role;
 import com.hypixel.hytale.protocol.AnimationSlot;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.InteractionType;
@@ -67,6 +69,7 @@ import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -84,10 +87,17 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_BLOCKED_APPLICATIONS =
+            new ConcurrentHashMap<>();
+    private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_REQUIRED_APPLICATIONS =
+            new ConcurrentHashMap<>();
+    private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_REAPPLY_STAGE =
+            new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BURN_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> POISON_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Integer> POISON_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> DRAIN_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> STUN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BURN_VFX_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> POISON_VFX_UNTIL = new ConcurrentHashMap<>();
     private static final Map<String, ProjectileConfig> STAFF_PROJECTILE_CONFIGS = new ConcurrentHashMap<>();
@@ -134,6 +144,9 @@ public final class LoreProcHandler {
     private static final int FREEZE_MAX_PULSES = 8;
     private static final boolean FORCE_SIGNATURE_RULES = true;
     private static final int HEAL_MAX_PLAYER_CHECKS = 96;
+    private static final double STATUS_BOSS_NEARBY_PLAYER_RADIUS = 12.0d;
+    private static final int STATUS_BOSS_NEARBY_PLAYER_MAX_CHECKS = 96;
+    private static final double STATUS_BOSS_EXTRA_PLAYER_REAPPLY_BONUS = 0.25d;
     private static final long MULTIHIT_HIT_DELAY_MS = 250L;
     private static final int OMNISLASH_BASE_HITS = 2;
     private static final int OMNISLASH_MAX_HITS = 8;
@@ -1528,10 +1541,15 @@ public final class LoreProcHandler {
                 }
             }
             case APPLY_BURN -> {
+                double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "burn");
+                Ref<EntityStore> burnSource = selfRef != null ? selfRef : attackerRef;
+                boolean burnApplied = applyBurnOverTime(store, burnSource, opponentRef, damageAmount, safeFeedTier,
+                        ailmentMultiplier);
+                if (!burnApplied) {
+                    break;
+                }
                 queueBurnVisualEffect(store, opponentRef);
                 spawnHitParticle(store, attackerRef, opponentRef, BURN_HIT_PARTICLE_IDS);
-                Ref<EntityStore> burnSource = selfRef != null ? selfRef : attackerRef;
-                applyBurnOverTime(store, burnSource, opponentRef, damageAmount, safeFeedTier);
                 markFinaleTarget(BURN_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_BURN);
@@ -1539,65 +1557,104 @@ public final class LoreProcHandler {
             }
             case APPLY_FREEZE -> {
                 if (opponentRef != null) {
-                    applyFrozenForDuration(store, opponentRef, resolveStunFreezeDurationMs(value, safeFeedTier));
+                    double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "freeze");
+                    long durationMs = scaleAilmentDuration(resolveStunFreezeDurationMs(value, safeFeedTier), ailmentMultiplier);
+                    if (durationMs > 0L) {
+                        if (!canApplyBossCounterAilment(store, opponentRef, "freeze")) {
+                            break;
+                        }
+                        applyFrozenForDuration(store, opponentRef, durationMs);
+                        onBossCounterAilmentApplied(store, opponentRef, "freeze");
+                    } else {
+                        break;
+                    }
                 }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_FREEZE);
                 }
             }
             case APPLY_SHOCK -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, SHOCK_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "shock", SHOCK_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_SHOCK);
                 }
             }
             case APPLY_BLEED -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLEED_EFFECT_IDS);
+                double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "bleed");
                 Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
-                applyBleedOverTime(store, bleedSource, opponentRef, damageAmount, safeFeedTier);
+                boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, damageAmount, safeFeedTier,
+                        ailmentMultiplier);
+                if (!bleedApplied) {
+                    break;
+                }
+                LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLEED_EFFECT_IDS);
                 markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_BLEED);
                 }
             }
             case APPLY_POISON -> {
+                double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "poison");
+                Ref<EntityStore> poisonSource = selfRef != null ? selfRef : attackerRef;
+                boolean poisonApplied = applyPoisonOverTime(store, poisonSource, opponentRef, damageAmount, safeFeedTier,
+                        ailmentMultiplier);
+                if (!poisonApplied) {
+                    break;
+                }
                 queuePoisonVisualEffect(store, opponentRef);
                 spawnHitParticle(store, attackerRef, opponentRef, POISON_HIT_PARTICLE_IDS);
-                Ref<EntityStore> poisonSource = selfRef != null ? selfRef : attackerRef;
-                applyPoisonOverTime(store, poisonSource, opponentRef, damageAmount, safeFeedTier);
                 markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_POISON);
                 }
             }
             case APPLY_SLOW -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, SLOW_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "slow", SLOW_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_SLOW);
                 }
             }
             case APPLY_WEAKNESS -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, WEAKNESS_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "weakness", WEAKNESS_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_WEAKNESS);
                 }
             }
             case APPLY_BLIND -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLIND_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "blind", BLIND_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_BLIND);
                 }
             }
             case APPLY_ROOT -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, ROOT_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "root", ROOT_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_ROOT);
                 }
             }
             case APPLY_STUN -> {
                 if (opponentRef != null) {
-                    long durationMs = resolveStunFreezeDurationMs(value, safeFeedTier);
-                    LoreVisuals.tryApplyTimedVisualEffectOverride(store, opponentRef, durationMs, STUN_EFFECT_IDS);
+                    double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "stun");
+                    long durationMs = scaleAilmentDuration(resolveStunFreezeDurationMs(value, safeFeedTier), ailmentMultiplier);
+                    if (durationMs > 0L) {
+                        if (!canApplyBossCounterAilment(store, opponentRef, "stun")) {
+                            break;
+                        }
+                        applyStunForDuration(store, opponentRef, durationMs);
+                        onBossCounterAilmentApplied(store, opponentRef, "stun");
+                    } else {
+                        break;
+                    }
                 }
                 if (primaryProc) {
                     spawnStunParticles(store, opponentRef, attackerRef);
@@ -1605,7 +1662,9 @@ public final class LoreProcHandler {
                 }
             }
             case APPLY_FEAR -> {
-                LoreVisuals.tryApplyVisualEffect(store, opponentRef, FEAR_EFFECT_IDS);
+                if (!tryApplyBossCounterVisualStatus(store, opponentRef, "fear", FEAR_EFFECT_IDS)) {
+                    break;
+                }
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_FEAR);
                 }
@@ -1751,7 +1810,15 @@ public final class LoreProcHandler {
             }
             case DRAIN_LIFE -> {
                 Ref<EntityStore> drainSource = selfRef != null ? selfRef : attackerRef;
-                applyDrainOverTime(store, drainSource, opponentRef, damageAmount, safeFeedTier);
+                double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "drain");
+                if (ailmentMultiplier <= 0.0d) {
+                    break;
+                }
+                boolean drainApplied = applyDrainOverTime(store, drainSource, opponentRef, damageAmount, safeFeedTier,
+                        ailmentMultiplier);
+                if (!drainApplied) {
+                    break;
+                }
             }
             case CHARGE_ATTACK -> {
                 applyChargeAttack(store, attackerRef, opponentRef, selfIsAttacker, damage, amount, value, safeFeedTier,
@@ -3258,6 +3325,9 @@ public final class LoreProcHandler {
             return null;
         }
         String raw = effect.name();
+        if (raw.startsWith("APPLY_") && raw.length() > "APPLY_".length()) {
+            raw = raw.substring("APPLY_".length());
+        }
         return toTitleCase(raw.replace('_', ' '));
     }
 
@@ -4795,6 +4865,375 @@ public final class LoreProcHandler {
         return LoreAbility.resolveBlurDurationMs(value, feedTier);
     }
 
+    private static long scaleAilmentDuration(long durationMs, double ailmentMultiplier) {
+        if (durationMs <= 0L || ailmentMultiplier <= 0.0d) {
+            return 0L;
+        }
+        return Math.max(0L, Math.round(durationMs * ailmentMultiplier));
+    }
+
+    private static boolean isNpcAilmentImmune(Store<EntityStore> store,
+                                              Ref<EntityStore> targetRef,
+                                              String ailmentKey) {
+        return resolveNpcAilmentMultiplier(store, targetRef, ailmentKey) <= 0.0d;
+    }
+
+    private static double resolveNpcAilmentMultiplier(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      String ailmentKey) {
+        return 1.0d - resolveNpcAilmentResistance(store, targetRef, ailmentKey);
+    }
+
+    private static void showAilmentImmunityCombatText(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      String ailmentKey) {
+        if (store == null || targetRef == null || ailmentKey == null || ailmentKey.isBlank()) {
+            return;
+        }
+        String kindId = switch (ailmentKey.trim().toLowerCase(Locale.ROOT)) {
+            case "burn" -> "IMMUNE_FIRE";
+            case "bleed" -> "IMMUNE_BLEED";
+            case "poison" -> "IMMUNE_POISON";
+            default -> null;
+        };
+        if (kindId == null) {
+            return;
+        }
+        DamageNumberEST.queueCombatTextDirect(store, targetRef, 1.0f, kindId);
+    }
+
+    private static double resolveNpcAilmentResistance(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      String ailmentKey) {
+        if (store == null || targetRef == null || ailmentKey == null || ailmentKey.isBlank()) {
+            return 0.0d;
+        }
+        if (!isNpcTarget(store, targetRef)) {
+            return 0.0d;
+        }
+        LoreConfig config = LoreSocketManager.getConfig();
+        if (config == null) {
+            return 0.0d;
+        }
+        Set<String> candidateIds = resolveNpcResistanceKeys(store, targetRef);
+        if (candidateIds.isEmpty()) {
+            return config.getNpcStatusResistance("*", ailmentKey);
+        }
+        double resistance = config.getNpcStatusResistance("*", ailmentKey);
+        for (String candidateId : candidateIds) {
+            resistance = Math.max(resistance, config.getNpcStatusResistance(candidateId, ailmentKey));
+        }
+        return Math.max(0.0d, Math.min(1.0d, resistance));
+    }
+
+    private static boolean isNpcTarget(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+        if (store == null || targetRef == null) {
+            return false;
+        }
+        try {
+            return store.getComponent(targetRef, NPCEntity.getComponentType()) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static Set<String> resolveNpcResistanceKeys(Store<EntityStore> store,
+                                                        Ref<EntityStore> targetRef) {
+        Set<String> keys = new LinkedHashSet<>();
+        if (store == null || targetRef == null) {
+            return keys;
+        }
+        try {
+            NPCEntity npc = store.getComponent(targetRef, NPCEntity.getComponentType());
+            if (npc == null) {
+                return keys;
+            }
+            addNpcResistanceKey(keys, npc.getRoleName());
+            addNpcResistanceKey(keys, npc.getNPCTypeId());
+            Role role = npc.getRole();
+            if (role != null) {
+                addNpcResistanceKey(keys, role.getRoleName());
+                addNpcResistanceKey(keys, role.getNameTranslationKey());
+                addNpcResistanceKey(keys, role.getAppearanceName());
+                addNpcResistanceKey(keys, role.getLabel());
+                addNpcResistanceKey(keys, role.getDropListId());
+            }
+        } catch (Throwable ignored) {
+            // Best-effort lookup only.
+        }
+        return keys;
+    }
+
+    private static void addNpcResistanceKey(Set<String> keys, String rawValue) {
+        if (keys == null || rawValue == null) {
+            return;
+        }
+        String trimmed = rawValue.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        keys.add(trimmed);
+    }
+
+    private static boolean isBleedActive(Ref<EntityStore> targetRef) {
+        if (targetRef == null) {
+            return false;
+        }
+        Long until = BLEED_DOT_UNTIL.get(targetRef);
+        return until != null && until > System.currentTimeMillis();
+    }
+
+    private static boolean isTimedStatusActive(Map<Ref<EntityStore>, Long> untilMap, Ref<EntityStore> targetRef) {
+        if (untilMap == null || targetRef == null) {
+            return false;
+        }
+        Long until = untilMap.get(targetRef);
+        return until != null && until > System.currentTimeMillis();
+    }
+
+    private static boolean isBossCounterNpc(Store<EntityStore> store,
+                                            Ref<EntityStore> targetRef,
+                                            String ailmentKey) {
+        if (store == null || targetRef == null) {
+            return false;
+        }
+        LoreConfig config = LoreSocketManager.getConfig();
+        if (config == null || ailmentKey == null || ailmentKey.isBlank()) {
+            return false;
+        }
+        Set<String> candidateIds = resolveNpcResistanceKeys(store, targetRef);
+        for (String candidateId : candidateIds) {
+            if (config.isStatusBossCounterNpc(candidateId, ailmentKey)) {
+                return true;
+            }
+        }
+        return config.isStatusBossCounterNpc("*", ailmentKey);
+    }
+
+    private static Map<Ref<EntityStore>, Integer> getStatusBossCounterMap(
+            Map<String, Map<Ref<EntityStore>, Integer>> state,
+            String ailmentKey) {
+        return state.computeIfAbsent(ailmentKey, ignored -> new ConcurrentHashMap<>());
+    }
+
+    private static boolean canAttemptBossCounterAilment(Store<EntityStore> store,
+                                                        Ref<EntityStore> targetRef,
+                                                        String ailmentKey) {
+        if (!isBossCounterNpc(store, targetRef, ailmentKey)) {
+            return true;
+        }
+        int required = getScaledBossCounterRequiredApplications(store, targetRef, ailmentKey);
+        if (required <= 0) {
+            return true;
+        }
+        int blocked = getStatusBossCounterMap(STATUS_BOSS_BLOCKED_APPLICATIONS, ailmentKey)
+                .getOrDefault(targetRef, 0);
+        return blocked >= required;
+    }
+
+    private static void recordBlockedBossCounterAilment(Store<EntityStore> store,
+                                                        Ref<EntityStore> targetRef,
+                                                        String ailmentKey) {
+        if (!isBossCounterNpc(store, targetRef, ailmentKey)) {
+            return;
+        }
+        getStatusBossCounterMap(STATUS_BOSS_BLOCKED_APPLICATIONS, ailmentKey).merge(targetRef, 1, Integer::sum);
+    }
+
+    private static void onBossCounterAilmentApplied(Store<EntityStore> store,
+                                                    Ref<EntityStore> targetRef,
+                                                    String ailmentKey) {
+        if (!isBossCounterNpc(store, targetRef, ailmentKey)) {
+            return;
+        }
+        LoreConfig config = LoreSocketManager.getConfig();
+        int step = config == null ? 5 : config.getStatusBossReapplyStep(ailmentKey);
+        String pattern = config == null ? "LINEAR" : config.getStatusBossReapplyPattern(ailmentKey);
+        Map<Ref<EntityStore>, Integer> stageMap = getStatusBossCounterMap(STATUS_BOSS_REAPPLY_STAGE, ailmentKey);
+        Map<Ref<EntityStore>, Integer> requiredMap = getStatusBossCounterMap(STATUS_BOSS_REQUIRED_APPLICATIONS, ailmentKey);
+        Map<Ref<EntityStore>, Integer> blockedMap = getStatusBossCounterMap(STATUS_BOSS_BLOCKED_APPLICATIONS, ailmentKey);
+        int stage = stageMap.getOrDefault(targetRef, 0) + 1;
+        int nextRequired = computeBleedBossRequiredApplications(Math.max(1, step), stage, pattern);
+        stageMap.put(targetRef, stage);
+        requiredMap.put(targetRef, nextRequired);
+        blockedMap.put(targetRef, 0);
+    }
+
+    private static boolean canApplyBossCounterAilment(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      String ailmentKey) {
+        if (targetRef == null) {
+            return false;
+        }
+        if (ailmentKey == null || ailmentKey.isBlank()) {
+            return true;
+        }
+        if (!isBossCounterNpc(store, targetRef, ailmentKey)) {
+            return true;
+        }
+        if (isBossCounterAilmentActive(store, targetRef, ailmentKey)) {
+            recordBlockedBossCounterAilment(store, targetRef, ailmentKey);
+            return false;
+        }
+        if (!canAttemptBossCounterAilment(store, targetRef, ailmentKey)) {
+            recordBlockedBossCounterAilment(store, targetRef, ailmentKey);
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isBossCounterAilmentActive(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      String ailmentKey) {
+        if (ailmentKey == null || targetRef == null) {
+            return false;
+        }
+        return switch (ailmentKey) {
+            case "bleed" -> isBleedActive(targetRef);
+            case "burn" -> isTimedStatusActive(BURN_DOT_UNTIL, targetRef);
+            case "poison" -> isTimedStatusActive(POISON_DOT_UNTIL, targetRef);
+            case "freeze" -> isFrozenActive(store, targetRef);
+            case "stun" -> isTimedStatusActive(STUN_UNTIL, targetRef);
+            case "drain" -> isTimedStatusActive(DRAIN_DOT_UNTIL, targetRef);
+            default -> false;
+        };
+    }
+
+    private static int computeBleedBossRequiredApplications(int step, int stage, String pattern) {
+        int normalizedStep = Math.max(1, step);
+        int normalizedStage = Math.max(1, stage);
+        long multiplier = "FIBONACCI".equalsIgnoreCase(pattern)
+                ? fibonacciBleedMultiplier(normalizedStage)
+                : normalizedStage;
+        long required = (long) normalizedStep * multiplier;
+        return required > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) required;
+    }
+
+    private static long fibonacciBleedMultiplier(int stage) {
+        if (stage <= 1) {
+            return 1L;
+        }
+        long previous = 1L;
+        long current = 2L;
+        for (int i = 2; i < stage; i++) {
+            long next = previous + current;
+            if (next < 0L || next > Integer.MAX_VALUE) {
+                return Integer.MAX_VALUE;
+            }
+            previous = current;
+            current = next;
+        }
+        return current;
+    }
+
+    private static int getScaledBossCounterRequiredApplications(Store<EntityStore> store,
+                                                                Ref<EntityStore> targetRef,
+                                                                String ailmentKey) {
+        int baseRequired = getStatusBossCounterMap(STATUS_BOSS_REQUIRED_APPLICATIONS, ailmentKey)
+                .getOrDefault(targetRef, 0);
+        if (baseRequired <= 0) {
+            return 0;
+        }
+        double multiplier = resolveBossCounterNearbyPlayerMultiplier(store, targetRef);
+        long scaledRequired = (long) Math.ceil(baseRequired * multiplier);
+        if (scaledRequired <= 0L) {
+            return 0;
+        }
+        return scaledRequired > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) scaledRequired;
+    }
+
+    private static double resolveBossCounterNearbyPlayerMultiplier(Store<EntityStore> store,
+                                                                   Ref<EntityStore> targetRef) {
+        if (store == null || targetRef == null) {
+            return 1.0d;
+        }
+        double radius = Math.max(0.0d, STATUS_BOSS_NEARBY_PLAYER_RADIUS);
+        if (radius <= 0.0d) {
+            return 1.0d;
+        }
+        double radiusSq = radius * radius;
+        List<Ref<EntityStore>> nearbyPlayers = LoreTargetingUtils.collectNearbyPlayers(
+                store,
+                targetRef,
+                radiusSq,
+                STATUS_BOSS_NEARBY_PLAYER_MAX_CHECKS);
+        int playerCount = nearbyPlayers == null ? 0 : nearbyPlayers.size();
+        int extraPlayers = Math.max(0, playerCount - 1);
+        return 1.0d + (extraPlayers * STATUS_BOSS_EXTRA_PLAYER_REAPPLY_BONUS);
+    }
+
+    private static void clearBossCounterAilmentState(Ref<EntityStore> targetRef, String ailmentKey) {
+        if (targetRef == null) {
+            return;
+        }
+        Map<Ref<EntityStore>, Integer> blockedMap = STATUS_BOSS_BLOCKED_APPLICATIONS.get(ailmentKey);
+        if (blockedMap != null) {
+            blockedMap.remove(targetRef);
+        }
+        Map<Ref<EntityStore>, Integer> requiredMap = STATUS_BOSS_REQUIRED_APPLICATIONS.get(ailmentKey);
+        if (requiredMap != null) {
+            requiredMap.remove(targetRef);
+        }
+        Map<Ref<EntityStore>, Integer> stageMap = STATUS_BOSS_REAPPLY_STAGE.get(ailmentKey);
+        if (stageMap != null) {
+            stageMap.remove(targetRef);
+        }
+    }
+
+    private static void clearBleedState(Ref<EntityStore> targetRef) {
+        if (targetRef == null) {
+            return;
+        }
+        BLEED_DOT_UNTIL.remove(targetRef);
+        clearBossCounterAilmentState(targetRef, "bleed");
+    }
+
+    private static boolean tryApplyBossCounterVisualStatus(Store<EntityStore> store,
+                                                           Ref<EntityStore> targetRef,
+                                                           String ailmentKey,
+                                                           String[] effectIds) {
+        if (store == null || targetRef == null || effectIds == null || effectIds.length == 0) {
+            return false;
+        }
+        if (isNpcAilmentImmune(store, targetRef, ailmentKey)) {
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, ailmentKey)) {
+            return false;
+        }
+        LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
+        onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+        return true;
+    }
+
+    private static void applyStunForDuration(Store<EntityStore> store, Ref<EntityStore> targetRef, long durationMs) {
+        if (store == null || targetRef == null || durationMs <= 0L) {
+            return;
+        }
+        long until = System.currentTimeMillis() + durationMs;
+        STUN_UNTIL.put(targetRef, until);
+        scheduleStunExpiry(targetRef, until, durationMs);
+        LoreVisuals.tryApplyTimedVisualEffectOverride(store, targetRef, durationMs, STUN_EFFECT_IDS);
+    }
+
+    private static void scheduleStunExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
+        if (targetRef == null || delayMs <= 0L) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> expireStun(targetRef, expectedUntil), delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private static void expireStun(Ref<EntityStore> targetRef, long expectedUntil) {
+        if (targetRef == null) {
+            return;
+        }
+        Long current = STUN_UNTIL.get(targetRef);
+        if (current == null || current > expectedUntil) {
+            return;
+        }
+        STUN_UNTIL.remove(targetRef);
+    }
+
     private static void applyFrozenForDuration(Store<EntityStore> store, Ref<EntityStore> targetRef, long durationMs) {
         if (store == null || targetRef == null || durationMs <= 0L) {
             return;
@@ -5106,41 +5545,98 @@ public final class LoreProcHandler {
         }
     }
 
-    private static void applyBleedOverTime(Store<EntityStore> store,
-                                           Ref<EntityStore> sourceRef,
-                                           Ref<EntityStore> targetRef,
-                                           float totalAmount,
-                                           int feedTier) {
-        if (store == null || targetRef == null) {
-            return;
+    private static boolean applyBleedOverTime(Store<EntityStore> store,
+                                              Ref<EntityStore> sourceRef,
+                                              Ref<EntityStore> targetRef,
+                                              float totalAmount,
+                                              int feedTier,
+                                              double ailmentMultiplier) {
+        if (store == null || targetRef == null || ailmentMultiplier <= 0.0d) {
+            if (store != null && targetRef != null && ailmentMultiplier <= 0.0d) {
+                showAilmentImmunityCombatText(store, targetRef, "bleed");
+            }
+            return false;
         }
+        if (!canApplyBossCounterAilment(store, targetRef, "bleed")) {
+            return false;
+        }
+        LoreConfig loreConfig = LoreSocketManager.getConfig();
+        double bleedRampPerTick = loreConfig != null
+                ? loreConfig.getBleedRampPerTick()
+                : BLEED_RAMP_PER_TICK;
+        double bleedTotalCurrentHpPct = loreConfig != null
+                ? loreConfig.getBleedTotalCurrentHpPct()
+                : 0.0005d;
+        double bleedWeaponReferenceBase = loreConfig != null
+                ? loreConfig.getBleedWeaponReferenceBase()
+                : 200.0d;
+        double bleedWeaponScaleMin = loreConfig != null
+                ? loreConfig.getBleedWeaponScaleMin()
+                : 0.75d;
+        double bleedWeaponScaleMax = loreConfig != null
+                ? loreConfig.getBleedWeaponScaleMax()
+                : 1.50d;
+        double bleedWeaponBaseCapPct = loreConfig != null
+                ? loreConfig.getBleedWeaponBaseCapPct()
+                : 0.0d;
         long duration = LoreAbility.scaleDurationMs(BLEED_BASE_DURATION_MS, feedTier);
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
-        float basePerTick = 0f;
-        float maxHealth = LoreDamageUtils.resolveMaxHealth(store, targetRef);
-        if (maxHealth > 0f) {
-            basePerTick = (float) (maxHealth * BLEED_BASE_MAX_HP_PCT);
-            basePerTick = (float) LoreAbility.scaleEffectValue(basePerTick, feedTier);
+
+        float totalBleed = 0f;
+        float currentHealth = LoreDamageUtils.resolveCurrentHealth(store, targetRef);
+        if (currentHealth > 0f && bleedTotalCurrentHpPct > 0.0d) {
+            totalBleed = currentHealth * (float) bleedTotalCurrentHpPct;
+            float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
+            if (weaponBase > 0f) {
+                double weaponScale = Math.sqrt(Math.max(0.0d, weaponBase) / Math.max(1.0d, bleedWeaponReferenceBase));
+                weaponScale = Math.max(bleedWeaponScaleMin, Math.min(bleedWeaponScaleMax, weaponScale));
+                totalBleed *= (float) weaponScale;
+            }
+            totalBleed = (float) LoreAbility.scaleEffectValue(totalBleed, feedTier);
         } else if (totalAmount > 0f) {
-            float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
-            basePerTick = scaledTotal / (float) ticks;
+            totalBleed = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
         }
-        if (basePerTick <= 0f) {
-            return;
+        totalBleed *= (float) ailmentMultiplier;
+        if (totalBleed <= 0f) {
+            return false;
         }
+
+        float weaponCapPerTick = 0f;
+        if (bleedWeaponBaseCapPct > 0.0d) {
+            float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
+            if (weaponBase > 0f) {
+                weaponCapPerTick = (float) LoreAbility.scaleEffectValue(weaponBase * bleedWeaponBaseCapPct, feedTier);
+                weaponCapPerTick *= (float) ailmentMultiplier;
+            }
+        }
+
+        double totalWeight = 0.0d;
+        for (int i = 0; i < ticks; i++) {
+            totalWeight += Math.max(0.0d, 1.0d + (bleedRampPerTick * i));
+        }
+        if (totalWeight <= 0.0d) {
+            return false;
+        }
+
         long now = System.currentTimeMillis();
         long until = now + duration;
-        BLEED_DOT_UNTIL.merge(targetRef, until, Math::max);
+        BLEED_DOT_UNTIL.put(targetRef, until);
         scheduleBleedExpiry(targetRef, until, duration);
+        onBossCounterAilmentApplied(store, targetRef, "bleed");
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * BLEED_DOT_TICK_MS;
-            double ramp = 1.0d + (BLEED_RAMP_PER_TICK * i);
-            float perTick = (float) (basePerTick * ramp);
-            OMNISLASH_SCHEDULER.schedule(() -> queueBleedTick(store, sourceRef, targetRef, perTick, until, feedTier),
+            double weight = Math.max(0.0d, 1.0d + (bleedRampPerTick * i));
+            float perTick = (float) (totalBleed * (weight / totalWeight));
+            if (weaponCapPerTick > 0f) {
+                perTick = Math.min(perTick, weaponCapPerTick);
+            }
+            final float perTickFinal = perTick;
+            OMNISLASH_SCHEDULER.schedule(() -> queueBleedTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
+        return true;
     }
 
     private static void scheduleBleedExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
@@ -5188,6 +5684,7 @@ public final class LoreProcHandler {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
+            clearBleedState(targetRef);
             return;
         }
         Long current = BLEED_DOT_UNTIL.get(targetRef);
@@ -5203,13 +5700,20 @@ public final class LoreProcHandler {
         spawnHitParticle(store, sourceRef, targetRef, BLEED_PARTICLE_IDS);
     }
 
-    private static void applyBurnOverTime(Store<EntityStore> store,
-                                          Ref<EntityStore> sourceRef,
-                                          Ref<EntityStore> targetRef,
-                                          float totalAmount,
-                                          int feedTier) {
-        if (store == null || targetRef == null || totalAmount <= 0f) {
-            return;
+    private static boolean applyBurnOverTime(Store<EntityStore> store,
+                                             Ref<EntityStore> sourceRef,
+                                             Ref<EntityStore> targetRef,
+                                             float totalAmount,
+                                             int feedTier,
+                                             double ailmentMultiplier) {
+        if (store == null || targetRef == null || totalAmount <= 0f || ailmentMultiplier <= 0.0d) {
+            if (store != null && targetRef != null && ailmentMultiplier <= 0.0d) {
+                showAilmentImmunityCombatText(store, targetRef, "burn");
+            }
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, "burn")) {
+            return false;
         }
         long duration = LoreAbility.scaleDurationMs(BURN_BASE_DURATION_MS, feedTier);
         int ticks = (int) Math.ceil((double) duration / (double) BURN_DOT_TICK_MS);
@@ -5217,7 +5721,7 @@ public final class LoreProcHandler {
         float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {
-            return;
+            return false;
         }
         float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
         if (weaponBase > 0f) {
@@ -5227,17 +5731,23 @@ public final class LoreProcHandler {
                 perTick = Math.max(perTick, minPerTick);
             }
         }
+        perTick *= (float) ailmentMultiplier;
+        if (perTick <= 0f) {
+            return false;
+        }
         final float perTickFinal = perTick;
         long now = System.currentTimeMillis();
         long until = now + duration;
         BURN_DOT_UNTIL.put(targetRef, until);
         scheduleBurnExpiry(targetRef, until, duration);
+        onBossCounterAilmentApplied(store, targetRef, "burn");
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * BURN_DOT_TICK_MS;
             OMNISLASH_SCHEDULER.schedule(() -> queueBurnTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
+        return true;
     }
 
     private static void scheduleBurnExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
@@ -5285,6 +5795,8 @@ public final class LoreProcHandler {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
+            BURN_DOT_UNTIL.remove(targetRef);
+            clearBossCounterAilmentState(targetRef, "burn");
             return;
         }
         Long current = BURN_DOT_UNTIL.get(targetRef);
@@ -5298,13 +5810,20 @@ public final class LoreProcHandler {
                 irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN, feedTier);
     }
 
-    private static void applyPoisonOverTime(Store<EntityStore> store,
-                                            Ref<EntityStore> sourceRef,
-                                            Ref<EntityStore> targetRef,
-                                            float totalAmount,
-                                            int feedTier) {
-        if (store == null || targetRef == null || totalAmount <= 0f) {
-            return;
+    private static boolean applyPoisonOverTime(Store<EntityStore> store,
+                                               Ref<EntityStore> sourceRef,
+                                               Ref<EntityStore> targetRef,
+                                               float totalAmount,
+                                               int feedTier,
+                                               double ailmentMultiplier) {
+        if (store == null || targetRef == null || totalAmount <= 0f || ailmentMultiplier <= 0.0d) {
+            if (store != null && targetRef != null && ailmentMultiplier <= 0.0d) {
+                showAilmentImmunityCombatText(store, targetRef, "poison");
+            }
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, "poison")) {
+            return false;
         }
         long baseDuration = LoreAbility.scaleDurationMs(POISON_BASE_DURATION_MS, feedTier);
         int currentStacks = POISON_DOT_STACKS.getOrDefault(targetRef, 0);
@@ -5316,7 +5835,7 @@ public final class LoreProcHandler {
         float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {
-            return;
+            return false;
         }
         perTick *= stackCount;
         float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
@@ -5327,18 +5846,24 @@ public final class LoreProcHandler {
                 perTick = Math.max(perTick, minPerTick);
             }
         }
+        perTick *= (float) ailmentMultiplier;
+        if (perTick <= 0f) {
+            return false;
+        }
         final float perTickFinal = perTick;
         long now = System.currentTimeMillis();
         long until = now + totalDuration;
         POISON_DOT_UNTIL.put(targetRef, until);
         POISON_DOT_STACKS.put(targetRef, stackCount);
         schedulePoisonExpiry(targetRef, until, totalDuration);
+        onBossCounterAilmentApplied(store, targetRef, "poison");
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * POISON_DOT_TICK_MS;
             OMNISLASH_SCHEDULER.schedule(() -> queuePoisonTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
+        return true;
     }
 
     private static void schedulePoisonExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
@@ -5387,6 +5912,9 @@ public final class LoreProcHandler {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
+            POISON_DOT_UNTIL.remove(targetRef);
+            POISON_DOT_STACKS.remove(targetRef);
+            clearBossCounterAilmentState(targetRef, "poison");
             return;
         }
         Long current = POISON_DOT_UNTIL.get(targetRef);
@@ -5402,37 +5930,45 @@ public final class LoreProcHandler {
                 irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.POISON);
     }
 
-    private static void applyDrainOverTime(Store<EntityStore> store,
-                                           Ref<EntityStore> sourceRef,
-                                           Ref<EntityStore> targetRef,
-                                           float totalAmount,
-                                           int feedTier) {
-        if (store == null || targetRef == null || totalAmount <= 0f) {
-            return;
+    private static boolean applyDrainOverTime(Store<EntityStore> store,
+                                              Ref<EntityStore> sourceRef,
+                                              Ref<EntityStore> targetRef,
+                                              float totalAmount,
+                                              int feedTier,
+                                              double ailmentMultiplier) {
+        if (store == null || targetRef == null || totalAmount <= 0f || ailmentMultiplier <= 0.0d) {
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, "drain")) {
+            return false;
         }
         long now = System.currentTimeMillis();
         Long existing = DRAIN_DOT_UNTIL.get(targetRef);
         if (existing != null && existing > now) {
-            return;
+            return false;
         }
         long duration = LoreAbility.scaleDurationMs(DRAIN_BASE_DURATION_MS, feedTier);
         int ticks = (int) Math.ceil((double) duration / (double) DRAIN_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
         float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
         float perTick = scaledTotal / (float) ticks;
+        perTick *= (float) ailmentMultiplier;
         if (perTick <= 0f) {
-            return;
+            return false;
         }
+        final float perTickFinal = perTick;
         long until = now + duration;
         DRAIN_DOT_UNTIL.put(targetRef, until);
         scheduleDrainExpiry(store, targetRef, until, duration);
         queueDrainVisualEffect(store, targetRef, duration);
+        onBossCounterAilmentApplied(store, targetRef, "drain");
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * DRAIN_DOT_TICK_MS;
-            OMNISLASH_SCHEDULER.schedule(() -> queueDrainTick(store, sourceRef, targetRef, perTick, until, feedTier),
+            OMNISLASH_SCHEDULER.schedule(() -> queueDrainTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
         }
+        return true;
     }
 
     private static void scheduleDrainExpiry(Store<EntityStore> store,
@@ -5619,6 +6155,8 @@ public final class LoreProcHandler {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
+            DRAIN_DOT_UNTIL.remove(targetRef);
+            clearBossCounterAilmentState(targetRef, "drain");
             return;
         }
         Long current = DRAIN_DOT_UNTIL.get(targetRef);
@@ -5714,6 +6252,9 @@ public final class LoreProcHandler {
 
         int applied = 0;
         boolean isBleed = statusEffectIds == BLEED_EFFECT_IDS;
+        boolean isBurn = statusEffectIds == BURN_EFFECT_IDS;
+        boolean isPoison = statusEffectIds == POISON_EFFECT_IDS;
+        String ailmentKey = resolveAilmentKeyForEffectIds(statusEffectIds);
         for (Ref<EntityStore> target : targets) {
             if (target == null || (attackerRef != null && attackerRef.equals(target))) {
                 continue;
@@ -5722,20 +6263,38 @@ public final class LoreProcHandler {
                 continue;
             }
             LoreDamageUtils.applyLoreDamage(store, attackerRef, target, perTarget, baseResult.skipRefine, feedTier);
-            if (statusEffectIds != null && statusEffectIds.length > 0) {
-                if (stackStatus) {
-                    applyEffectStacks(store, target, statusEffectIds, stackCount);
-                } else {
-                    applyStatusVisualEffect(store, target, statusEffectIds);
-                }
-                if (isBleed) {
-                    int bleedStacks = stackStatus ? stackCount : 1;
-                    for (int i = 0; i < bleedStacks; i++) {
-                        applyBleedOverTime(store, attackerRef, target, fallbackAmount, feedTier);
+            double ailmentMultiplier = ailmentKey == null ? 1.0d : resolveNpcAilmentMultiplier(store, target, ailmentKey);
+            boolean canApplyStatus = statusEffectIds != null && statusEffectIds.length > 0;
+            if (canApplyStatus && isBleed) {
+                int bleedStacks = stackStatus ? stackCount : 1;
+                boolean bleedApplied = false;
+                for (int i = 0; i < bleedStacks; i++) {
+                    if (applyBleedOverTime(store, attackerRef, target, fallbackAmount, feedTier, ailmentMultiplier)) {
+                        bleedApplied = true;
                     }
                 }
+                canApplyStatus = bleedApplied;
+                if (canApplyStatus) {
+                    LoreVisuals.tryApplyVisualEffect(store, target, BLEED_EFFECT_IDS);
+                }
+            } else if (canApplyStatus && isBurn) {
+                canApplyStatus = applyBurnOverTime(store, attackerRef, target, fallbackAmount, feedTier, ailmentMultiplier);
+                if (canApplyStatus) {
+                    queueBurnVisualEffect(store, target);
+                }
+            } else if (canApplyStatus && isPoison) {
+                canApplyStatus = applyPoisonOverTime(store, attackerRef, target, fallbackAmount, feedTier, ailmentMultiplier);
+                if (canApplyStatus) {
+                    queuePoisonVisualEffect(store, target);
+                }
+            } else if (canApplyStatus) {
+                if (stackStatus) {
+                    canApplyStatus = applyEffectStacks(store, target, statusEffectIds, stackCount);
+                } else {
+                    canApplyStatus = applyStatusVisualEffect(store, target, statusEffectIds);
+                }
             }
-            if (markTargets) {
+            if (markTargets && canApplyStatus) {
                 if (statusEffectIds == POISON_EFFECT_IDS) {
                     markFinaleTarget(CAUSTIC_FINALE_MARKS, playerId, spiritId, target, store, fallbackAmount, feedTier);
                 } else if (statusEffectIds == BLEED_EFFECT_IDS) {
@@ -5750,39 +6309,104 @@ public final class LoreProcHandler {
         }
     }
 
-    private static void applyEffectStacks(Store<EntityStore> store,
-                                          Ref<EntityStore> targetRef,
-                                          String[] effectIds,
-                                          int stacks) {
+    private static boolean applyEffectStacks(Store<EntityStore> store,
+                                             Ref<EntityStore> targetRef,
+                                             String[] effectIds,
+                                             int stacks) {
         if (store == null || targetRef == null || effectIds == null || effectIds.length == 0 || stacks <= 0) {
-            return;
+            return false;
+        }
+        String ailmentKey = resolveAilmentKeyForEffectIds(effectIds);
+        if (ailmentKey != null && isNpcAilmentImmune(store, targetRef, ailmentKey)) {
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, ailmentKey)) {
+            return false;
         }
         if (effectIds == BURN_EFFECT_IDS) {
             queueBurnVisualEffect(store, targetRef);
-            return;
+            onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+            return true;
         }
         if (effectIds == POISON_EFFECT_IDS) {
             queuePoisonVisualEffect(store, targetRef);
-            return;
+            onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+            return true;
         }
         int count = Math.max(1, stacks);
         for (int i = 0; i < count; i++) {
             LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
         }
+        onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+        return true;
     }
 
-    private static void applyStatusVisualEffect(Store<EntityStore> store,
-                                                Ref<EntityStore> targetRef,
-                                                String[] effectIds) {
+    private static boolean applyStatusVisualEffect(Store<EntityStore> store,
+                                                   Ref<EntityStore> targetRef,
+                                                   String[] effectIds) {
+        if (store == null || targetRef == null || effectIds == null || effectIds.length == 0) {
+            return false;
+        }
+        String ailmentKey = resolveAilmentKeyForEffectIds(effectIds);
+        if (ailmentKey != null && isNpcAilmentImmune(store, targetRef, ailmentKey)) {
+            return false;
+        }
+        if (!canApplyBossCounterAilment(store, targetRef, ailmentKey)) {
+            return false;
+        }
         if (effectIds == BURN_EFFECT_IDS) {
             queueBurnVisualEffect(store, targetRef);
-            return;
+            onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+            return true;
         }
         if (effectIds == POISON_EFFECT_IDS) {
             queuePoisonVisualEffect(store, targetRef);
-            return;
+            onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+            return true;
         }
         LoreVisuals.tryApplyVisualEffect(store, targetRef, effectIds);
+        onBossCounterAilmentApplied(store, targetRef, ailmentKey);
+        return true;
+    }
+
+    private static String resolveAilmentKeyForEffectIds(String[] effectIds) {
+        if (effectIds == null || effectIds.length == 0) {
+            return null;
+        }
+        if (effectIds == BURN_EFFECT_IDS) {
+            return "burn";
+        }
+        if (effectIds == BLEED_EFFECT_IDS) {
+            return "bleed";
+        }
+        if (effectIds == POISON_EFFECT_IDS) {
+            return "poison";
+        }
+        if (effectIds == SHOCK_EFFECT_IDS) {
+            return "shock";
+        }
+        if (effectIds == SLOW_EFFECT_IDS) {
+            return "slow";
+        }
+        if (effectIds == WEAKNESS_EFFECT_IDS) {
+            return "weakness";
+        }
+        if (effectIds == BLIND_EFFECT_IDS) {
+            return "blind";
+        }
+        if (effectIds == ROOT_EFFECT_IDS) {
+            return "root";
+        }
+        if (effectIds == STUN_EFFECT_IDS) {
+            return "stun";
+        }
+        if (effectIds == FEAR_EFFECT_IDS) {
+            return "fear";
+        }
+        if (effectIds == DRAIN_EFFECT_IDS) {
+            return "drain";
+        }
+        return null;
     }
 
     private static void markFinaleTarget(Map<String, Map<Ref<EntityStore>, FinaleMark>> markMap,

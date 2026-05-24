@@ -1394,6 +1394,52 @@ public final class RuntimeConfigUI {
         }
         groups.add(new ControlGroup("armor_break", "Armor Break", "Break risks for armor refinement transitions.", armorBreak));
 
+        List<ControlEntry> softcoreControls = new ArrayList<>();
+        softcoreControls.add(toggleControl(
+                "refine_softcore_enabled",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Softcore break protection",
+                "When enabled, all refinement breaks preserve the item and apply permanent core stat loss instead of shattering it. Turning this on disables mixed mode.",
+                () -> refinementConfig().isSoftcoreBreakEnabled(),
+                value -> refinementConfig().setSoftcoreBreakEnabled(value)));
+        softcoreControls.add(toggleControl(
+                "refine_mixed_break_mode",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Mixed break mode",
+                "Non-resonant refinement materials always use softcore break protection. Resonant Glob break rolls use a separate softcore-save chance, with the remaining chance becoming a true shatter. Turning this on disables full softcore mode.",
+                () -> refinementConfig().isMixedBreakModeEnabled(),
+                value -> refinementConfig().setMixedBreakModeEnabled(value)));
+        softcoreControls.add(chanceControl(
+                "refine_softcore_loss_per_break",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Softcore max loss per break",
+                "Each saved break rolls a permanent core damage/defense loss between 1% and this value.",
+                () -> refinementConfig().getSoftcoreStatLossPerBreak(),
+                delta -> refinementConfig().setSoftcoreStatLossPerBreak(
+                        clampChance(refinementConfig().getSoftcoreStatLossPerBreak() + delta))));
+        softcoreControls.add(chanceControl(
+                "refine_softcore_min_multiplier",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Softcore minimum stat floor",
+                "Lowest remaining core damage/defense multiplier softcore protection can reduce an item to.",
+                () -> refinementConfig().getSoftcoreMinStatMultiplier(),
+                delta -> refinementConfig().setSoftcoreMinStatMultiplier(
+                        clampChance(refinementConfig().getSoftcoreMinStatMultiplier() + delta))));
+        softcoreControls.add(chanceControl(
+                "refine_mixed_resonant_softcore_chance",
+                CATEGORY_REFINEMENT,
+                REFINEMENT_CONFIG_NAME,
+                "Mixed resonant softcore chance",
+                "When mixed mode is enabled, this is the chance that a Resonant Glob break is converted into softcore stat wear instead of a true shatter.",
+                () -> refinementConfig().getMixedResonantSoftcoreChance(),
+                delta -> refinementConfig().setMixedResonantSoftcoreChance(
+                        clampChance(refinementConfig().getMixedResonantSoftcoreChance() + delta))));
+        groups.add(new ControlGroup("softcore_breaks", "Break Protection Modes", "Choose between full softcore protection or mixed protection. If both are off, classic shatter behavior is used.", softcoreControls));
+
         for (int level = 0; level < maxLevel; level++) {
             String title = "Outcome Weights L" + level + "->L" + (level + 1);
             String desc = "Adjust one value and the other outcomes auto-normalize to stay at 100%.";

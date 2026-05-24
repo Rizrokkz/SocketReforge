@@ -51,6 +51,9 @@ public class DynamicTooltipUtils {
     private static final String COLOR_RED = "<color is=\"#ff0000\">";
     private static final String COLOR_YELLOW = "<color is=\"#FFFF55\">";
     private static final String COLOR_ORANGE = "<color is=\"#FFAA00\">";
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK = 0.08;
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN = 0.01;
+    private static final double DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER = 0.40;
     
     // Dark gray for empty sockets
     private static final String COLOR_DARK_GRAY = "<color is=\"#555555\">";
@@ -605,6 +608,12 @@ public class DynamicTooltipUtils {
         int part2Tier = extractIntValue(metadata, META_PART2_TIER);
         int part3Tier = extractIntValue(metadata, META_PART3_TIER);
         double partsDamageMultiplier = extractDoubleValue(metadata, META_PARTS_DAMAGE_MULTIPLIER, 1.0);
+        int softcoreBreakCount = extractIntValue(metadata, MetadataKeys.REFINEMENT_SOFTCORE_BREAKS);
+        double softcoreStatMultiplier = extractDoubleValue(
+                metadata,
+                MetadataKeys.REFINEMENT_SOFTCORE_STAT_MULTIPLIER,
+                resolveSoftcoreStatMultiplierFromBreaks(softcoreBreakCount));
+        softcoreStatMultiplier = clampSoftcoreStatMultiplier(softcoreStatMultiplier);
         String resonanceName = extractStringValue(metadata, META_RESONANCE_NAME);
         String resonanceRecipeName = extractStringValue(metadata, META_RESONANCE_RECIPE_NAME);
         String resonanceEffect = extractStringValue(metadata, META_RESONANCE_EFFECT);
@@ -623,11 +632,12 @@ public class DynamicTooltipUtils {
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         boolean isRecipeItem = "Resonant_Recipe".equalsIgnoreCase(effectiveItemId);
+        boolean hasSoftcorePenalty = softcoreBreakCount > 0 || softcoreStatMultiplier < 0.9999;
         
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
                 && !hasResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
-                && !hasRecipeName && !isEquipmentItem) {
+                && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty) {
             return null;
         }
         
@@ -719,7 +729,7 @@ public class DynamicTooltipUtils {
         boolean isArmorItem = isArmorType(baseItemId, itemId);
         String[] socketEntries = extractSocketEntries(metadata);
         SocketData parsedSocketData = buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries);
-        boolean hasRefineOrSocketedEssence = reforgeLevel > 0 || hasSocketedEssence(socketEntries);
+        boolean hasRefineOrSocketedEssence = reforgeLevel > 0 || hasSocketedEssence(socketEntries) || hasSoftcorePenalty;
 
         String damageLabel = tr(langCode, "tooltip.damage_label", "Damage");
         if (isEquipmentItem && !isArmorItem) {
@@ -727,7 +737,8 @@ public class DynamicTooltipUtils {
                     effectiveItemId,
                     reforgeLevel,
                     parsedSocketData,
-                    partsDamageMultiplier
+                    partsDamageMultiplier,
+                    softcoreStatMultiplier
             );
             if (hasRefineOrSocketedEssence) {
                 tooltipLines.add(
@@ -759,6 +770,21 @@ public class DynamicTooltipUtils {
             String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + gradeLabel
                     + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
             tooltipLines.add(line);
+        }
+
+        if (hasSoftcorePenalty) {
+            double penaltyPercent = Math.max(0.0, (1.0 - softcoreStatMultiplier) * 100.0);
+            String statType = isArmorItem
+                    ? tr(langCode, "tooltip.refine_stat_defense", "defense")
+                    : tr(langCode, "tooltip.refine_stat_damage", "damage");
+            String softcoreLine = tr(
+                    langCode,
+                    "tooltip.softcore_wear",
+                    "Softcore Wear: -{0}% {1} ({2} breaks)",
+                    String.format(java.util.Locale.ROOT, "%.0f", penaltyPercent),
+                    statType,
+                    softcoreBreakCount);
+            tooltipLines.add(COLOR_YELLOW + softcoreLine + COLOR_WHITE);
         }
         
         // Add socket line if present
@@ -862,6 +888,10 @@ public class DynamicTooltipUtils {
                     }
                     int safeLevel = Math.max(1, level);
                     tooltipLines.add(COLOR_GRAY + ability.describeEffectOnly(langCode, safeLevel, feedTier));
+                    String procDetails = ability.describeProcDetails(langCode, feedTier);
+                    if (procDetails != null && !procDetails.isBlank()) {
+                        tooltipLines.add(COLOR_GRAY + procDetails);
+                    }
                 }
             }
             if (unawakenedCount > 0) {
@@ -2180,6 +2210,27 @@ public class DynamicTooltipUtils {
             return 0;
         }
         return 0;
+    }
+
+    private static double resolveSoftcoreStatMultiplierFromBreaks(int breakCount) {
+        if (breakCount <= 0) {
+            return 1.0;
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.computeSoftcoreStatMultiplier(breakCount);
+        }
+        double averageLoss = (DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN + DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK) * 0.5;
+        double multiplier = 1.0 - (breakCount * averageLoss);
+        return Math.max(DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER, Math.min(1.0, multiplier));
+    }
+
+    private static double clampSoftcoreStatMultiplier(double value) {
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null) {
+            return cfg.clampSoftcoreStatMultiplier(value);
+        }
+        return Math.max(DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER, Math.min(1.0, value));
     }
 
     private static double extractDoubleValue(String metadata, String searchKey, double defaultValue) {

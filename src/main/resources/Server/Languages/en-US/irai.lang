@@ -280,6 +280,7 @@ ui.reforge.error_need_material = Not enough {1} (need {0}).
 ui.reforge.error_hammer_changed = Selected hammer stack changed; reselect and try again.
 ui.reforge.error_material_consume = Failed to consume {0}. Retry.
 ui.reforge.result_shattered = Item shattered during refinement.{0}
+ui.reforge.result_softcore_break = Softcore protection saved the item. {0} reduced by {1} after {2} break(s).{3}
 ui.reforge.result_degraded = Refine failed: degraded +{0} -> +{1}{2}
 ui.reforge.result_same = Refine failed: remained at +{0}{1}
 ui.reforge.result_success = Refine success: +{0} -> +{1}{2}
@@ -320,13 +321,14 @@ ui.reforge.support_durability_value = Support durability: {0}% ({1}/{2})
 ui.reforge.metadata_no_equipment = No equipment selected.
 ui.reforge.metadata_line_name = Name: {0}
 ui.reforge.metadata_line_level = Refinement Level: +{0}
+ui.reforge.metadata_softcore_value = Wear: x{0} ({1}, {2} breaks)
 ui.reforge.metadata_current_stat_none = Current Stat: -
 ui.reforge.metadata_current_stat_value = Current {0}: x{1} ({2})
 ui.reforge.metadata_base_stat_none = Base Stat: -
 ui.reforge.metadata_base_defense_na = Base Defense: N/A
 ui.reforge.metadata_base_damage_na = Base Damage: N/A
 ui.reforge.metadata_base_defense_value = Base Defense: {0} -> {1}
-ui.reforge.metadata_base_damage_value = Base Damage: {0} -> {1}
+ui.reforge.metadata_base_damage_value = {0} -> {1}
 
 # Socket Bench UI
 ui.socket_bench.title = Socket Punch Bench

@@ -313,7 +313,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.7c");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.8");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {

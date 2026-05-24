@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.8] - 2026-05-XX
+
+### Added
+
+- **Softcore and Mixed Refinement Breaks** - Added optional softcore break protection for refinement plus a mixed mode. Softcore converts every break into permanent configurable core damage/defense loss, now rolling from 1% up to the configured max per saved break, while mixed mode gives non-resonant attempts guaranteed softcore protection and lets `Resonant Glob` break rolls split between softcore wear and true shatter through a runtime-configurable chance, with tooltip/bench feedback.
+- **Lore Status Counter Rules** - Added shared lore status counter support so burn, poison, bleed, freeze, stun, drain, and matching visual statuses can all use NPC counter logic instead of relying on bleed-only handling. New config uses `LORE_STATUS_COUNTER_NPC_IDS` plus per-status `LORE_STATUS_REAPPLY_RULES`.
+- **Status Reapply Crowd Scaling** - NPC lore status reapply counters now scale by `+25%` per extra nearby player around the target, and that multiplier is applied on top of each status reapply rule so both linear and Fibonacci growth patterns scale with group size.
+
+### Changed
+
+- **Detailed Lore Status Tooltips** - Lore socket tooltips now show richer proc information for status abilities, including damage or duration details where applicable, plus a dedicated chance/cooldown/trigger line.
+
+### Fixed
+
+- **Held Ranged Weapon Refreshes** - Lore XP/state updates are now buffered while the same weapon remains actively held, preventing guns, bows, crossbows, staffs, and similar ranged weapons from losing auto-fire flow or loaded ammo state when a lore proc grants XP.
+
+---
+
 ## [1.3.7c] - 2026-05-10
 
 ### Added

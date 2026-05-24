@@ -2,6 +2,7 @@ package irai.mod.reforge.Lore;
 
 import java.util.Locale;
 
+import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Util.LangLoader;
 
 /**
@@ -28,6 +29,10 @@ public final class LoreAbility {
     public static final long BASE_AREA_HEAL_TICK_MS = 1000L;
     public static final long BASE_BERSERK_DURATION_MS = 3000L;
     public static final long BASE_BLUR_DURATION_MS = 2500L;
+    public static final long BASE_BLEED_DURATION_MS = 3000L;
+    public static final long BASE_BURN_DURATION_MS = 3000L;
+    public static final long BASE_POISON_DURATION_MS = 5000L;
+    public static final long BASE_DRAIN_DURATION_MS = 3000L;
     private static final double STUN_DEFAULT_SECONDS = 1.5d;
     private static final double STUN_MIN_SECONDS = 0.6d;
     private static final double STUN_MAX_SECONDS = 4.0d;
@@ -221,6 +226,14 @@ public final class LoreAbility {
         if (abilityName != null && !abilityName.isBlank()) {
             effect = abilityName + ": " + effect;
         }
+        String procDetails = describeProcDetails(langCode, feedTier);
+        if (procDetails == null || procDetails.isBlank()) {
+            return effect;
+        }
+        return effect + " (" + procDetails + ")";
+    }
+
+    public String describeProcDetails(String langCode, int feedTier) {
         String chance = formatPercent(scaleProcChance(procChance, feedTier) * 100.0);
         String cooldown = formatSeconds(scaleCooldownMs(cooldownMs, feedTier));
         String procTemplate = LangLoader.getTranslationForLanguage(
@@ -238,7 +251,7 @@ public final class LoreAbility {
             triggerLabel = "Trigger";
         }
         String triggerText = describeTrigger(langCode);
-        return effect + " (" + proc + ", " + triggerLabel + ": " + triggerText + ")";
+        return proc + ", " + triggerLabel + ": " + triggerText;
     }
 
     public String describeEffectOnly(String langCode, int level, int feedTier) {
@@ -357,12 +370,18 @@ public final class LoreAbility {
             case APPLY_BURN -> {
                 key = "tooltip.lore.effect.burn";
                 fallback = "Burns target";
-                return formatEffect(langCode, key, fallback, formatted);
+                String effect = formatEffect(langCode, key, fallback, formatted);
+                long durationMs = scaleDurationMs(BASE_BURN_DURATION_MS, safeFeedTier);
+                double scaledTotal = scaleEffectValue(value, safeFeedTier);
+                return effect + " (" + formatDamageSuffix(langCode, formatValue(scaledTotal) + "+ total") + ", "
+                        + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_FREEZE -> {
                 key = "tooltip.lore.effect.freeze";
                 fallback = "Freezes target";
-                return formatEffect(langCode, key, fallback, formatted);
+                String effect = formatEffect(langCode, key, fallback, formatted);
+                long durationMs = resolveStunFreezeDurationMs(value, safeFeedTier);
+                return effect + " (" + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_SHOCK -> {
                 key = "tooltip.lore.effect.shock";
@@ -372,12 +391,19 @@ public final class LoreAbility {
             case APPLY_BLEED -> {
                 key = "tooltip.lore.effect.bleed";
                 fallback = "Bleeds target";
-                return formatEffect(langCode, key, fallback, formatted);
+                String effect = formatEffect(langCode, key, fallback, formatted);
+                long durationMs = scaleDurationMs(BASE_BLEED_DURATION_MS, safeFeedTier);
+                return effect + " (" + formatDamageSuffix(langCode, describeBleedDamage(safeFeedTier)) + ", "
+                        + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_POISON -> {
                 key = "tooltip.lore.effect.poison";
                 fallback = "Poisons target";
-                return formatEffect(langCode, key, fallback, formatted);
+                String effect = formatEffect(langCode, key, fallback, formatted);
+                long durationMs = scaleDurationMs(BASE_POISON_DURATION_MS, safeFeedTier);
+                double scaledTotal = scaleEffectValue(value, safeFeedTier);
+                return effect + " (" + formatDamageSuffix(langCode, formatValue(scaledTotal) + "+ per stack") + ", "
+                        + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_SLOW -> {
                 key = "tooltip.lore.effect.slow";
@@ -540,7 +566,7 @@ public final class LoreAbility {
                 key = "tooltip.lore.effect.drain_life";
                 fallback = "Drains {0} HP over time";
                 String effect = formatEffect(langCode, key, fallback, formatted);
-                long durationMs = LoreAbility.scaleDurationMs(3000L, safeFeedTier);
+                long durationMs = LoreAbility.scaleDurationMs(BASE_DRAIN_DURATION_MS, safeFeedTier);
                 return effect + " (" + formatDurationSuffix(langCode, durationMs) + ")";
             }
             default -> {
@@ -565,12 +591,34 @@ public final class LoreAbility {
         return label + ": " + formatValue(radius) + "m";
     }
 
+    private String formatDamageSuffix(String langCode, String damageText) {
+        String label = LangLoader.getTranslationForLanguage("tooltip.damage_label", langCode);
+        if (label == null || label.isBlank() || label.equals("tooltip.damage_label")) {
+            label = "Damage";
+        }
+        return label + ": " + damageText;
+    }
+
     private String formatDurationSuffix(String langCode, long durationMs) {
         String label = LangLoader.getTranslationForLanguage("tooltip.lore.duration_label", langCode);
         if (label == null || label.isBlank() || label.equals("tooltip.lore.duration_label")) {
             label = "Duration";
         }
         return label + ": " + formatSeconds(durationMs) + "s";
+    }
+
+    private String describeBleedDamage(int feedTier) {
+        LoreConfig config = LoreSocketManager.getConfig();
+        double currentHpPct = config != null ? config.getBleedTotalCurrentHpPct() : 0.0005d;
+        double weaponScaleMin = config != null ? config.getBleedWeaponScaleMin() : 0.75d;
+        double weaponScaleMax = config != null ? config.getBleedWeaponScaleMax() : 1.50d;
+        double minPct = scaleEffectValue(currentHpPct * weaponScaleMin * 100.0d, feedTier);
+        double maxPct = scaleEffectValue(currentHpPct * weaponScaleMax * 100.0d, feedTier);
+        String hpSuffix = " current HP";
+        if (Math.abs(minPct - maxPct) < 0.0001d) {
+            return formatPercent(minPct) + "%" + hpSuffix;
+        }
+        return formatPercent(minPct) + "%-" + formatPercent(maxPct) + "%" + hpSuffix;
     }
 
     private static String formatValue(double value) {

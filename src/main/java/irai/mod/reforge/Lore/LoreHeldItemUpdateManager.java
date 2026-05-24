@@ -18,8 +18,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 
 /**
- * Buffers lore metadata updates while a held-item interaction is active so
- * charge/cast weapons do not get cancelled by mid-use item replacements.
+ * Buffers lore metadata updates for held items so we do not replace the live
+ * in-hand stack while the player is actively using it. Replacing the held
+ * stack can reset ranged weapon state such as auto-fire chains or loaded ammo.
  */
 public final class LoreHeldItemUpdateManager {
     private static final Map<UUID, PendingHeldItemUpdate> PENDING = new ConcurrentHashMap<>();
@@ -64,17 +65,11 @@ public final class LoreHeldItemUpdateManager {
             return;
         }
 
-        if (hasBlockingActiveInteraction(store, playerRef)) {
-            PENDING.put(playerId, new PendingHeldItemUpdate(
-                    ctx.getSectionId(),
-                    ctx.getSlot(),
-                    safeItemId(ctx.getItemStack()),
-                    copyData(data)));
-            return;
-        }
-
-        PENDING.remove(playerId);
-        applyImmediately(player, ctx, updated);
+        PENDING.put(playerId, new PendingHeldItemUpdate(
+                ctx.getSectionId(),
+                ctx.getSlot(),
+                safeItemId(ctx.getItemStack()),
+                copyData(data)));
     }
 
     public static void flushPending(Store<EntityStore> store,
@@ -97,11 +92,9 @@ public final class LoreHeldItemUpdateManager {
 
         PlayerInventoryUtils.HeldItemContext currentCtx = PlayerInventoryUtils.getHeldItemContext(player);
         if (matches(pending, currentCtx)) {
-            ItemStack merged = mergeLoreMetadata(currentCtx.getItemStack(), pending.data);
-            if (merged != null && !merged.isEmpty()) {
-                applyImmediately(player, currentCtx, merged);
-            }
-            PENDING.remove(playerId);
+            // Keep the metadata buffered while this exact item is still in hand.
+            // Writing the stack back into the active slot can reset internal
+            // ranged-weapon state even when the lore change is only XP.
             return;
         }
 

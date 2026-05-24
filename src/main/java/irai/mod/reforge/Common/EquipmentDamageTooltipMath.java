@@ -65,9 +65,16 @@ public final class EquipmentDamageTooltipMath {
     public static StatSummary computeWeaponDamageSummary(String itemId,
                                                          int reforgeLevel,
                                                          SocketData socketData,
-                                                         double partsDamageMultiplier) {
+                                                         double partsDamageMultiplier,
+                                                         double softcoreStatMultiplier) {
         double base = getAverageBaseDamageFromInteractionVars(itemId);
-        double buffed = computeBuffedWeaponDamage(itemId, base, reforgeLevel, socketData, partsDamageMultiplier);
+        double buffed = computeBuffedWeaponDamage(
+                itemId,
+                base,
+                reforgeLevel,
+                socketData,
+                partsDamageMultiplier,
+                softcoreStatMultiplier);
         return new StatSummary(base, buffed);
     }
 
@@ -76,9 +83,10 @@ public final class EquipmentDamageTooltipMath {
      */
     public static StatSummary computeArmorDefenseSummary(String itemId,
                                                          int reforgeLevel,
-                                                         SocketData socketData) {
+                                                         SocketData socketData,
+                                                         double softcoreStatMultiplier) {
         double base = getBaseArmorDefense(itemId);
-        double buffed = computeBuffedArmorDefense(base, reforgeLevel, socketData);
+        double buffed = computeBuffedArmorDefense(base, reforgeLevel, socketData, softcoreStatMultiplier);
         return new StatSummary(base, buffed);
     }
 
@@ -223,13 +231,15 @@ public final class EquipmentDamageTooltipMath {
                                                    double baseDamage,
                                                    int reforgeLevel,
                                                    SocketData socketData,
-                                                   double partsDamageMultiplier) {
+                                                   double partsDamageMultiplier,
+                                                   double softcoreStatMultiplier) {
         if (baseDamage <= 0.0) {
             return 0.0;
         }
 
         SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
         int safeLevel = clampLevel(reforgeLevel);
+        double clampedSoftcoreMultiplier = clamp(softcoreStatMultiplier, 0.0, 1.0);
         double refinementMultiplier = refinementConfig != null
                 ? refinementConfig.getDamageMultiplier(safeLevel)
                 : ReforgeEquip.getDamageMultiplier(safeLevel);
@@ -251,7 +261,11 @@ public final class EquipmentDamageTooltipMath {
         double attackSpeedMultiplier = 1.0 + (attackSpeedBonus[1] / 100.0);
         double clampedPartsMultiplier = clamp(partsDamageMultiplier, 0.5, 2.0);
 
-        double result = (baseDamage * refinementMultiplier * socketPercentMultiplier * clampedPartsMultiplier) + socketFlat;
+        double result = (baseDamage
+                * refinementMultiplier
+                * clampedSoftcoreMultiplier
+                * socketPercentMultiplier
+                * clampedPartsMultiplier) + socketFlat;
         result *= attackSpeedMultiplier;
         return Math.max(0.0, result);
     }
@@ -277,13 +291,15 @@ public final class EquipmentDamageTooltipMath {
      */
     public static double computeBuffedArmorDefense(double baseDefense,
                                                    int reforgeLevel,
-                                                   SocketData socketData) {
+                                                   SocketData socketData,
+                                                   double softcoreStatMultiplier) {
         if (baseDefense <= 0.0) {
             return 0.0;
         }
 
         SocketData safeSocketData = socketData != null ? socketData : new SocketData(0);
         int safeLevel = clampLevel(reforgeLevel);
+        double clampedSoftcoreMultiplier = clamp(softcoreStatMultiplier, 0.0, 1.0);
         double refinementMultiplier = refinementConfig != null
                 ? refinementConfig.getDefenseMultiplier(safeLevel)
                 : ReforgeEquip.getDefenseMultiplier(safeLevel);
@@ -292,7 +308,7 @@ public final class EquipmentDamageTooltipMath {
         double flatDefense = defenseBonus[0];
         double percentMultiplier = 1.0 + (defenseBonus[1] / 100.0);
 
-        double result = (baseDefense * refinementMultiplier * percentMultiplier) + flatDefense;
+        double result = (baseDefense * refinementMultiplier * clampedSoftcoreMultiplier * percentMultiplier) + flatDefense;
         return Math.max(0.0, result);
     }
 

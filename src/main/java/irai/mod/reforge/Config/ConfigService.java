@@ -92,6 +92,11 @@ public final class ConfigService {
             throw new IllegalStateException("Config '" + entry.name + "' returned null.");
         }
 
+        if (loaded instanceof ConfigDefaultInjector injector && injector.injectMissingDefaults()) {
+            entry.config.save().join();
+            logger.info("[" + pluginTag + "] Injected missing defaults into config '" + entry.name + "'.");
+        }
+
         if (entry.onLoad != null) {
             entry.onLoad.accept(loaded);
         }

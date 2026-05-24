@@ -2,15 +2,21 @@ package irai.mod.DynamicFloatingDamageFormatter;
 
 import static com.hypixel.hytale.codec.Codec.BOOLEAN;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
+
+import java.util.Arrays;
+
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
+
+import irai.mod.reforge.Config.ConfigDefaultInjector;
+import irai.mod.reforge.Config.ConfigMergeUtils;
 
 /**
  * Configuration for the floating damage number library.
  * Loaded from resources/Server/Config/DamageNumberConfig.json via ReforgePlugin.
  */
 @SuppressWarnings("removal")
-public class DamageNumberConfig {
+public class DamageNumberConfig implements ConfigDefaultInjector {
 
     public static final BuilderCodec<DamageNumberConfig> CODEC =
             BuilderCodec.<DamageNumberConfig>builder(DamageNumberConfig.class, DamageNumberConfig::new)
@@ -55,6 +61,9 @@ public class DamageNumberConfig {
             "BURN|label=|color=#FFAA00|ui=SocketReforge_CombatText_Burn|uiAlt=SocketReforge_CombatText_Burn_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Fire",
             "BLEED|label=|color=#AA55FF|ui=SocketReforge_CombatText_Bleed|uiAlt=SocketReforge_CombatText_Bleed_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Bleed",
             "POISON|label=|color=#008700|ui=SocketReforge_CombatText_Poison|uiAlt=SocketReforge_CombatText_Poison_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Poison",
+            "IMMUNE_FIRE|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Fire|min=0|labelByDefault=false",
+            "IMMUNE_BLEED|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Bleed|min=0|labelByDefault=false",
+            "IMMUNE_POISON|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Poison|min=0|labelByDefault=false",
             "SHOCK|label=|color=#FFFF55|ui=SocketReforge_CombatText_Shock|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Shock",
             "WATER|label=|color=#5555FF|ui=SocketReforge_CombatText_Water|particleFont=FloatingDamage",
             "VOID|label=|color=#8000FF|ui=SocketReforge_CombatText_Void|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Void",
@@ -93,6 +102,32 @@ public class DamageNumberConfig {
     public void setKindEntries(String[] v) { this.kindEntries = v; }
     public void setAliasEntries(String[] v) { this.aliasEntries = v; }
     public void setUseCustomCombatText(boolean v) { this.useCustomCombatText = v; }
+
+    @Override
+    public boolean injectMissingDefaults() {
+        DamageNumberConfig defaults = new DamageNumberConfig();
+        boolean changed = false;
+
+        String[] mergedDefaults = ConfigMergeUtils.mergeMissingByKey(defaultsEntries, defaults.defaultsEntries, '=');
+        if (!Arrays.equals(defaultsEntries, mergedDefaults)) {
+            this.defaultsEntries = mergedDefaults;
+            changed = true;
+        }
+
+        String[] mergedKinds = ConfigMergeUtils.mergeMissingByKey(kindEntries, defaults.kindEntries, '|');
+        if (!Arrays.equals(kindEntries, mergedKinds)) {
+            this.kindEntries = mergedKinds;
+            changed = true;
+        }
+
+        String[] mergedAliases = ConfigMergeUtils.mergeMissingByKey(aliasEntries, defaults.aliasEntries, '=');
+        if (!Arrays.equals(aliasEntries, mergedAliases)) {
+            this.aliasEntries = mergedAliases;
+            changed = true;
+        }
+
+        return changed;
+    }
 
     public void resetToDefaults() {
         DamageNumberConfig defaults = new DamageNumberConfig();

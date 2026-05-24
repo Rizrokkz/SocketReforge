@@ -1,10 +1,12 @@
 package irai.mod.reforge.Config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static com.hypixel.hytale.codec.Codec.BOOLEAN;
+import static com.hypixel.hytale.codec.Codec.DOUBLE;
 import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
 import static com.hypixel.hytale.codec.Codec.STRING;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
@@ -17,7 +19,7 @@ import com.hypixel.hytale.codec.builder.BuilderCodec;
  * for both weapons and armor.
  */
 @SuppressWarnings("removal")
-public class RefinementConfig {
+public class RefinementConfig implements ConfigDefaultInjector {
     private static final int DEFAULT_MAX_LEVEL = 15;
     private static final String DEFAULT_REFINEMENT_PREFIX = " +";
     private static final String DEFAULT_REFINEMENT_SUFFIX = "";
@@ -62,6 +64,14 @@ public class RefinementConfig {
     private static final double[] DEFAULT_WEIGHTS_0_TO_1 = {0.00, 0.65, 0.34, 0.01};
     private static final double[] DEFAULT_WEIGHTS_1_TO_2 = {0.35, 0.45, 0.19, 0.01};
     private static final double[] DEFAULT_WEIGHTS_2_TO_3 = {0.60, 0.30, 0.095, 0.005};
+    private static final boolean DEFAULT_SOFTCORE_BREAK_ENABLED = false;
+    private static final boolean DEFAULT_MIXED_BREAK_MODE_ENABLED = false;
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK = 0.08;
+    private static final double DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER = 0.40;
+    private static final double DEFAULT_MIXED_RESONANT_SOFTCORE_CHANCE = 0.25;
+    private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN = 0.01;
+    private static final String RESONANT_GLOB_ITEM_ID = "Resonant_Glob";
+    private static final String LEGACY_RESONANT_GLOB_ITEM_ID = "Ingredient_Resonant_Glob";
 
     public static final BuilderCodec<RefinementConfig> CODEC = BuilderCodec.<RefinementConfig>builder(RefinementConfig.class, RefinementConfig::new)
             .append(
@@ -127,6 +137,31 @@ public class RefinementConfig {
                     (config, chances) -> config.armorBreakChances = chances,
                     RefinementConfig::getArmorBreakChances
             ).add()
+            .append(
+                    new KeyedCodec<>("SOFTCORE_BREAK_ENABLED", BOOLEAN),
+                    (config, value) -> config.setSoftcoreBreakEnabled(value),
+                    RefinementConfig::isSoftcoreBreakEnabled
+            ).add()
+            .append(
+                    new KeyedCodec<>("MIXED_BREAK_MODE_ENABLED", BOOLEAN),
+                    (config, value) -> config.setMixedBreakModeEnabled(value),
+                    RefinementConfig::isMixedBreakModeEnabled
+            ).add()
+            .append(
+                    new KeyedCodec<>("SOFTCORE_STAT_LOSS_PER_BREAK", DOUBLE),
+                    (config, value) -> config.setSoftcoreStatLossPerBreak(value),
+                    RefinementConfig::getSoftcoreStatLossPerBreak
+            ).add()
+            .append(
+                    new KeyedCodec<>("SOFTCORE_MIN_STAT_MULTIPLIER", DOUBLE),
+                    (config, value) -> config.setSoftcoreMinStatMultiplier(value),
+                    RefinementConfig::getSoftcoreMinStatMultiplier
+            ).add()
+            .append(
+                    new KeyedCodec<>("MIXED_RESONANT_SOFTCORE_CHANCE", DOUBLE),
+                    (config, value) -> config.setMixedResonantSoftcoreChance(value),
+                    RefinementConfig::getMixedResonantSoftcoreChance
+            ).add()
             // Reforge weights for 0->1 transition (degrade, same, upgrade, jackpot)
             .append(
                     new KeyedCodec<>("WEIGHTS_0_TO_1", DOUBLE_ARRAY),
@@ -183,6 +218,13 @@ public class RefinementConfig {
     // Break chances per upgrade transition for armor (0->1, 1->2, 2->3)
     public double[] armorBreakChances = buildDefaultBreakChances(maxLevel, 0.01, 0.05, 0.13, 0.22);
 
+    // Softcore break handling
+    public boolean softcoreBreakEnabled = DEFAULT_SOFTCORE_BREAK_ENABLED;
+    public boolean mixedBreakModeEnabled = DEFAULT_MIXED_BREAK_MODE_ENABLED;
+    public double softcoreStatLossPerBreak = DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK;
+    public double softcoreMinStatMultiplier = DEFAULT_SOFTCORE_MIN_STAT_MULTIPLIER;
+    public double mixedResonantSoftcoreChance = DEFAULT_MIXED_RESONANT_SOFTCORE_CHANCE;
+
     // ── Shared Reforge Weights ────────────────────────────────────────────────
 
     // Reforge weights for 0->1 transition: [degrade, same, upgrade, jackpot]
@@ -209,6 +251,19 @@ public class RefinementConfig {
     public double[] getDefenseMultipliers() { return defenseMultipliers; }
     public double[] getBreakChances()       { return breakChances; }
     public double[] getArmorBreakChances()  { return armorBreakChances; }
+    public boolean isSoftcoreBreakEnabled() { return softcoreBreakEnabled; }
+    public boolean isMixedBreakModeEnabled() { return mixedBreakModeEnabled; }
+    public double getSoftcoreStatLossPerBreak() { return clamp(softcoreStatLossPerBreak, 0.0, 1.0); }
+    public double getSoftcoreMinStatMultiplier() { return clamp(softcoreMinStatMultiplier, 0.0, 1.0); }
+    public double getMixedResonantSoftcoreChance() { return clamp(mixedResonantSoftcoreChance, 0.0, 1.0); }
+    public double getSoftcoreStatLossPerBreakMin() {
+        return Math.min(DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN, getSoftcoreStatLossPerBreak());
+    }
+    public double getSoftcoreStatLossPerBreakAverage() {
+        double min = getSoftcoreStatLossPerBreakMin();
+        double max = getSoftcoreStatLossPerBreak();
+        return (min + max) * 0.5;
+    }
     public double[] getWeights0to1()        { return weights0to1; }
     public double[] getWeights1to2()        { return weights1to2; }
     public double[] getWeights2to3()        { return weights2to3; }
@@ -252,6 +307,21 @@ public class RefinementConfig {
     public void setDefenseMultipliers(double[] values)  { this.defenseMultipliers = values; }
     public void setBreakChances(double[] values)        { this.breakChances = values; }
     public void setArmorBreakChances(double[] values)   { this.armorBreakChances = values; }
+    public void setSoftcoreBreakEnabled(boolean value)  {
+        this.softcoreBreakEnabled = value;
+        if (value) {
+            this.mixedBreakModeEnabled = false;
+        }
+    }
+    public void setMixedBreakModeEnabled(boolean value) {
+        this.mixedBreakModeEnabled = value;
+        if (value) {
+            this.softcoreBreakEnabled = false;
+        }
+    }
+    public void setSoftcoreStatLossPerBreak(double value) { this.softcoreStatLossPerBreak = clamp(value, 0.0, 1.0); }
+    public void setSoftcoreMinStatMultiplier(double value) { this.softcoreMinStatMultiplier = clamp(value, 0.0, 1.0); }
+    public void setMixedResonantSoftcoreChance(double value) { this.mixedResonantSoftcoreChance = clamp(value, 0.0, 1.0); }
     public void setWeights0to1(double[] values)         { this.weights0to1 = values; }
     public void setWeights1to2(double[] values)         { this.weights1to2 = values; }
     public void setWeights2to3(double[] values)         { this.weights2to3 = values; }
@@ -385,6 +455,11 @@ public class RefinementConfig {
         this.defenseMultipliers = defaults.defenseMultipliers == null ? null : defaults.defenseMultipliers.clone();
         this.breakChances = defaults.breakChances == null ? null : defaults.breakChances.clone();
         this.armorBreakChances = defaults.armorBreakChances == null ? null : defaults.armorBreakChances.clone();
+        this.softcoreBreakEnabled = defaults.softcoreBreakEnabled;
+        this.mixedBreakModeEnabled = defaults.mixedBreakModeEnabled;
+        this.softcoreStatLossPerBreak = defaults.softcoreStatLossPerBreak;
+        this.softcoreMinStatMultiplier = defaults.softcoreMinStatMultiplier;
+        this.mixedResonantSoftcoreChance = defaults.mixedResonantSoftcoreChance;
         this.weights0to1 = defaults.weights0to1 == null ? null : defaults.weights0to1.clone();
         this.weights1to2 = defaults.weights1to2 == null ? null : defaults.weights1to2.clone();
         this.weights2to3 = defaults.weights2to3 == null ? null : defaults.weights2to3.clone();
@@ -400,6 +475,33 @@ public class RefinementConfig {
     }
 
     // ── Helper Methods ────────────────────────────────────────────────────────
+
+    @Override
+    public boolean injectMissingDefaults() {
+        int safeMaxLevel = getMaxLevel();
+        double[] originalDamageMultipliers = damageMultipliers == null ? null : damageMultipliers.clone();
+        double[] originalDefenseMultipliers = defenseMultipliers == null ? null : defenseMultipliers.clone();
+        double[] originalBreakChances = breakChances == null ? null : breakChances.clone();
+        double[] originalArmorBreakChances = armorBreakChances == null ? null : armorBreakChances.clone();
+        double[] originalWeightsByLevel = weightsByLevel == null ? null : weightsByLevel.clone();
+        String[] originalRefinementLabels = refinementLevelLabels == null ? null : refinementLevelLabels.clone();
+        String[] originalArmorLabels = refinementLevelLabelsArmor == null ? null : refinementLevelLabelsArmor.clone();
+        String[] originalMaterialTierEntries = materialTierEntries == null ? null : materialTierEntries.clone();
+
+        setMaxLevel(safeMaxLevel);
+        if (materialTierEntries == null || materialTierEntries.length == 0) {
+            setMaterialTierEntries(materialTierEntries);
+        }
+
+        return !Arrays.equals(originalDamageMultipliers, damageMultipliers)
+                || !Arrays.equals(originalDefenseMultipliers, defenseMultipliers)
+                || !Arrays.equals(originalBreakChances, breakChances)
+                || !Arrays.equals(originalArmorBreakChances, armorBreakChances)
+                || !Arrays.equals(originalWeightsByLevel, weightsByLevel)
+                || !Arrays.equals(originalRefinementLabels, refinementLevelLabels)
+                || !Arrays.equals(originalArmorLabels, refinementLevelLabelsArmor)
+                || !Arrays.equals(originalMaterialTierEntries, materialTierEntries);
+    }
 
     /**
      * Gets the damage multiplier for a given weapon upgrade level.
@@ -435,6 +537,74 @@ public class RefinementConfig {
      */
     public double getArmorBreakChance(int currentLevel) {
         return sample(armorBreakChances, currentLevel, 0.0);
+    }
+
+    public double computeSoftcoreStatMultiplier(int breakCount) {
+        if (breakCount <= 0) {
+            return 1.0;
+        }
+        double multiplier = 1.0 - (getSoftcoreStatLossPerBreakAverage() * breakCount);
+        return clamp(multiplier, getSoftcoreMinStatMultiplier(), 1.0);
+    }
+
+    public double clampSoftcoreStatMultiplier(double value) {
+        return clamp(value, getSoftcoreMinStatMultiplier(), 1.0);
+    }
+
+    public double reduceSoftcoreStatMultiplier(double currentMultiplier) {
+        return reduceSoftcoreStatMultiplier(currentMultiplier, true);
+    }
+
+    public double previewSoftcoreStatMultiplier(double currentMultiplier) {
+        return reduceSoftcoreStatMultiplier(currentMultiplier, false);
+    }
+
+    public double rollSoftcoreStatLossPerBreak() {
+        double min = getSoftcoreStatLossPerBreakMin();
+        double max = getSoftcoreStatLossPerBreak();
+        if (max <= min) {
+            return max;
+        }
+        return min + (Math.random() * (max - min));
+    }
+
+    private double reduceSoftcoreStatMultiplier(double currentMultiplier, boolean randomize) {
+        double safeCurrent = clamp(currentMultiplier, getSoftcoreMinStatMultiplier(), 1.0);
+        double loss = randomize ? rollSoftcoreStatLossPerBreak() : getSoftcoreStatLossPerBreakAverage();
+        return clamp(safeCurrent - loss, getSoftcoreMinStatMultiplier(), 1.0);
+    }
+
+    public double getSoftcoreBreakProtectionChance(String materialItemId) {
+        if (isSoftcoreBreakEnabled()) {
+            return 1.0;
+        }
+        if (isMixedBreakModeEnabled()) {
+            return isResonantBreakMaterial(materialItemId) ? getMixedResonantSoftcoreChance() : 1.0;
+        }
+        return 0.0;
+    }
+
+    public boolean shouldUseSoftcoreBreakProtection(String materialItemId) {
+        double chance = getSoftcoreBreakProtectionChance(materialItemId);
+        if (chance <= 0.0) {
+            return false;
+        }
+        if (chance >= 1.0) {
+            return true;
+        }
+        return Math.random() < chance;
+    }
+
+    public boolean shouldShatterOnBreak(String materialItemId) {
+        return getSoftcoreBreakProtectionChance(materialItemId) < 1.0;
+    }
+
+    public static boolean isResonantBreakMaterial(String materialItemId) {
+        if (materialItemId == null || materialItemId.isBlank()) {
+            return false;
+        }
+        return RESONANT_GLOB_ITEM_ID.equalsIgnoreCase(materialItemId)
+                || LEGACY_RESONANT_GLOB_ITEM_ID.equalsIgnoreCase(materialItemId);
     }
 
     /**
@@ -853,6 +1023,10 @@ public class RefinementConfig {
 
     private static double lerp(double a, double b, double t) {
         return a + (b - a) * Math.max(0.0, Math.min(1.0, t));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static void enforceNoJackpot(double[] weights, int base) {
