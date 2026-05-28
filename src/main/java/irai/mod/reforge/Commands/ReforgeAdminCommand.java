@@ -18,6 +18,7 @@ import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.ReforgePlugin;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.NameResolver;
@@ -92,8 +93,9 @@ public class ReforgeAdminCommand extends CommandBase {
     }
 
     private void setRefinementLevel(CommandContext context, Player player, ItemStack heldItem, int level) {
-        if (level < 0 || level > 3) {
-            context.sendMessage(Message.raw("Invalid refinement level. Use 0..3."));
+        int maxLevel = ReforgePlugin.getInstance().getRefinementRuntimeConfig().getMaxLevel();
+        if (level < 0 || level > maxLevel) {
+            context.sendMessage(Message.raw("Invalid refinement level. Use 0.." + maxLevel + "."));
             return;
         }
 
@@ -174,7 +176,8 @@ public class ReforgeAdminCommand extends CommandBase {
     }
 
     private void sendUsage(CommandContext context) {
-        context.sendMessage(Message.raw("Usage: /reforgeadmin refine <0-3>"));
+        int maxLevel = ReforgePlugin.getInstance().getRefinementRuntimeConfig().getMaxLevel();
+        context.sendMessage(Message.raw("Usage: /reforgeadmin refine <0-" + maxLevel + ">"));
         context.sendMessage(Message.raw("Usage: /reforgeadmin sockets <current> [max]"));
         context.sendMessage(Message.raw("Usage: /reforgeadmin addmax <amount>"));
     }

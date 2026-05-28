@@ -177,7 +177,7 @@ public final class RecipeCombineUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.recipe_combine.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.recipe_combine.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -192,7 +192,7 @@ public final class RecipeCombineUI {
     public static void openFromCompendium(Player player, short compendiumSlot) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.recipe_combine.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.recipe_combine.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();

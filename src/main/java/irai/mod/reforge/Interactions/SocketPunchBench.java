@@ -88,7 +88,7 @@ public class SocketPunchBench extends SimpleInteraction {
         // This interaction works with the held item
         ItemStack heldItem = context.getHeldItem();
         if (heldItem == null || heldItem.isEmpty()) {
-            player.sendMessage(Message.raw("Hold an equipment item to punch sockets"));
+            player.getPlayerRef().sendMessage(Message.raw("Hold an equipment item to punch sockets"));
             return;
         }
 
@@ -104,7 +104,7 @@ public class SocketPunchBench extends SimpleInteraction {
         boolean isArmor = ReforgeEquip.isArmor(equipment);
         
         if (!isWeapon && !isArmor) {
-            player.sendMessage(Message.raw("This item cannot have sockets"));
+            player.getPlayerRef().sendMessage(Message.raw("This item cannot have sockets"));
             return;
         }
 
@@ -116,8 +116,8 @@ public class SocketPunchBench extends SimpleInteraction {
         
         // Check for main material in inventory
         if (!hasEnoughMaterial(player, MAIN_MATERIAL_ID, MAIN_MATERIAL_COST)) {
-            player.sendMessage(Message.raw("Not enough Socket Punchers (need " + MAIN_MATERIAL_COST + ")"));
-            player.sendMessage(Message.raw("Craft Socket Punchers at a workbench"));
+            player.getPlayerRef().sendMessage(Message.raw("Not enough Socket Punchers (need " + MAIN_MATERIAL_COST + ")"));
+            player.getPlayerRef().sendMessage(Message.raw("Craft Socket Punchers at a workbench"));
             return;
         }
 
@@ -142,7 +142,7 @@ public class SocketPunchBench extends SimpleInteraction {
             previewCurrent = Math.min(previewCurrent, previewMax);
         }
         if (previewCurrent >= previewMax && previewMax == maxSockets) {
-            player.sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
+            player.getPlayerRef().sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
             return;
         }
 
@@ -166,20 +166,20 @@ public class SocketPunchBench extends SimpleInteraction {
         }
 
         // Show chances to player
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("Equipment: " + equipment.getItemId()));
-        player.sendMessage(Message.raw("Current Sockets: " + currentSockets + "/" + maxSockets));
-        player.sendMessage(Message.raw("Success Chance: " + String.format("%.0f%%", finalSuccessChance * 100)));
-        player.sendMessage(Message.raw("Break Chance: " + String.format("%.0f%%", finalBreakChance * 100)));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("Equipment: " + equipment.getItemId()));
+        player.getPlayerRef().sendMessage(Message.raw("Current Sockets: " + currentSockets + "/" + maxSockets));
+        player.getPlayerRef().sendMessage(Message.raw("Success Chance: " + String.format("%.0f%%", finalSuccessChance * 100)));
+        player.getPlayerRef().sendMessage(Message.raw("Break Chance: " + String.format("%.0f%%", finalBreakChance * 100)));
         if (hasSupport) {
-            player.sendMessage(Message.raw("Support Material: " + supportItemId));
+            player.getPlayerRef().sendMessage(Message.raw("Support Material: " + supportItemId));
         } else {
-            player.sendMessage(Message.raw("Tip: Add a Socket support material for improved effects"));
+            player.getPlayerRef().sendMessage(Message.raw("Tip: Add a Socket support material for improved effects"));
         }
 
         // Consume main material
         if (!consumeMaterial(player, MAIN_MATERIAL_ID, MAIN_MATERIAL_COST)) {
-            player.sendMessage(Message.raw("Failed to consume materials"));
+            player.getPlayerRef().sendMessage(Message.raw("Failed to consume materials"));
             return;
         }
         
@@ -198,9 +198,9 @@ public class SocketPunchBench extends SimpleInteraction {
                 player.getInventory().getHotbar().setItemStackForSlot(adjustedSlot, updatedItem);
                 socketData.registerTooltips(updatedItem, updatedItem.getItemId(), isWeapon);
                 DynamicTooltipUtils.refreshAllPlayers();
-                player.sendMessage(Message.raw("Support material applied. Max sockets updated to " + maxSockets + "."));
+                player.getPlayerRef().sendMessage(Message.raw("Support material applied. Max sockets updated to " + maxSockets + "."));
             } else {
-                player.sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
+                player.getPlayerRef().sendMessage(Message.raw("This item has the maximum number of sockets (" + maxSockets + ")"));
             }
             return;
         }
@@ -234,16 +234,16 @@ public class SocketPunchBench extends SimpleInteraction {
                 socketData.registerTooltips(updatedItem, updatedItem.getItemId(), isWeapon);
                 DynamicTooltipUtils.refreshAllPlayers();
                 //SFXConfig.playSuccess(player);
-                player.sendMessage(Message.raw(""));
-                player.sendMessage(Message.raw("-----------------------------"));
-                player.sendMessage(Message.raw("       SOCKET PUNCHED!       "));
+                player.getPlayerRef().sendMessage(Message.raw(""));
+                player.getPlayerRef().sendMessage(Message.raw("-----------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("       SOCKET PUNCHED!       "));
                 if (bonusSocket) {
-                    player.sendMessage(Message.raw("   BONUS: 5th socket added!  "));
+                    player.getPlayerRef().sendMessage(Message.raw("   BONUS: 5th socket added!  "));
                 } else {
-                    player.sendMessage(Message.raw("      New socket added!      "));
+                    player.getPlayerRef().sendMessage(Message.raw("      New socket added!      "));
                 }
-                player.sendMessage(Message.raw("   Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
-                player.sendMessage(Message.raw("-----------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("   Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
+                player.getPlayerRef().sendMessage(Message.raw("-----------------------------"));
                 break;
                 
             case BREAK:
@@ -267,22 +267,22 @@ public class SocketPunchBench extends SimpleInteraction {
                 DynamicTooltipUtils.refreshAllPlayers();
                 
                 int brokenCount = (int) socketData.getSockets().stream().filter(Socket::isBroken).count();
-                player.sendMessage(Message.raw(""));
-                player.sendMessage(Message.raw("---------------------------------"));
-                player.sendMessage(Message.raw("  Socket punched but was broken  "));
+                player.getPlayerRef().sendMessage(Message.raw(""));
+                player.getPlayerRef().sendMessage(Message.raw("---------------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("  Socket punched but was broken  "));
                 if (maxReduced) {
-                    player.sendMessage(Message.raw("  Max Sockets reduced to " + socketData.getMaxSockets() + "  "));
+                    player.getPlayerRef().sendMessage(Message.raw("  Max Sockets reduced to " + socketData.getMaxSockets() + "  "));
                 }
-                player.sendMessage(Message.raw("  Broken: " + brokenCount + " | Total: " + socketData.getCurrentSocketCount() + "  "));
-                player.sendMessage(Message.raw("---------------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("  Broken: " + brokenCount + " | Total: " + socketData.getCurrentSocketCount() + "  "));
+                player.getPlayerRef().sendMessage(Message.raw("---------------------------------"));
                 break;
                 
             case FAIL:
                 sfxConfig.playFail(player);
-                player.sendMessage(Message.raw(""));
-                player.sendMessage(Message.raw("---------------------------------"));
-                player.sendMessage(Message.raw("     Socket Punching Failed!     "));
-                player.sendMessage(Message.raw("---------------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw(""));
+                player.getPlayerRef().sendMessage(Message.raw("---------------------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("     Socket Punching Failed!     "));
+                player.getPlayerRef().sendMessage(Message.raw("---------------------------------"));
                 if (supportAdjusted) {
                     short failSlot = context.getHeldItemSlot();
                     ItemStack failItem = SocketManager.withSocketData(equipment, socketData);

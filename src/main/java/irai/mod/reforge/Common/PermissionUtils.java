@@ -39,9 +39,9 @@ public final class PermissionUtils {
         }
 
         try {
-            return player.hasPermission(HytalePermissions.fromCommand("op.add"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.remove"))
-                    || player.hasPermission(HytalePermissions.fromCommand("op.self"));
+            return player.getPlayerRef().hasPermission(HytalePermissions.fromCommand("op.add"))
+                    || player.getPlayerRef().hasPermission(HytalePermissions.fromCommand("op.remove"))
+                    || player.getPlayerRef().hasPermission(HytalePermissions.fromCommand("op.self"));
         } catch (Exception ignored) {
             return false;
         }

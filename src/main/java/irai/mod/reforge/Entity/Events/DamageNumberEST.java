@@ -17,8 +17,8 @@ import com.hypixel.hytale.component.SystemGroup;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.math.vector.Transform;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.math.vector.Rotation3f;
+import org.joml.Vector3d;
 import com.hypixel.hytale.protocol.Color;
 import com.hypixel.hytale.protocol.CombatTextUpdate;
 import com.hypixel.hytale.protocol.Direction;
@@ -531,7 +531,7 @@ public class DamageNumberEST extends DamageEventSystem {
                 return null;
             }
             Vector3d pos = transform.getPosition();
-            return pos == null ? null : pos.clone();
+            return pos == null ? null : new Vector3d(pos);
         } catch (Throwable ignored) {
             return null;
         }
@@ -546,13 +546,13 @@ public class DamageNumberEST extends DamageEventSystem {
             if (transform == null || transform.getPosition() == null) {
                 return null;
             }
-            Vector3f rotation = resolveLookRotation(transform);
+            Rotation3f rotation = resolveLookRotation(transform);
             if (rotation == null) {
                 return null;
             }
-            Transform look = new Transform(transform.getPosition().clone(), rotation);
+            Transform look = new Transform(new Vector3d(transform.getPosition()), rotation);
             Vector3d direction = look.getDirection();
-            return direction == null ? null : direction.clone();
+            return direction == null ? null : new Vector3d(direction);
         } catch (Throwable ignored) {
             return null;
         }
@@ -567,7 +567,7 @@ public class DamageNumberEST extends DamageEventSystem {
         return offsetTowardViewer(origin, viewerPos);
     }
 
-    private static Vector3f resolveLookRotation(TransformComponent transform) {
+    private static Rotation3f resolveLookRotation(TransformComponent transform) {
         if (transform == null) {
             return null;
         }
@@ -575,15 +575,15 @@ public class DamageNumberEST extends DamageEventSystem {
         if (sentTransform != null && sentTransform.lookOrientation != null) {
             return toRotationVector(sentTransform.lookOrientation);
         }
-        Vector3f rotation = transform.getRotation();
+        Rotation3f rotation = transform.getRotation();
         return rotation == null ? null : rotation.clone();
     }
 
-    private static Vector3f toRotationVector(Direction direction) {
+    private static Rotation3f toRotationVector(Direction direction) {
         if (direction == null) {
             return null;
         }
-        Vector3f rotation = new Vector3f();
+        Rotation3f rotation = new Rotation3f();
         rotation.setPitch(direction.pitch);
         rotation.setYaw(direction.yaw);
         rotation.setRoll(direction.roll);

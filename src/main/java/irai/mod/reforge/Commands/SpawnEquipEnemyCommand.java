@@ -13,8 +13,8 @@ import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.math.vector.Rotation3f;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.OptionalArg;
@@ -101,12 +101,6 @@ public class SpawnEquipEnemyCommand extends CommandBase {
             return;
         }
 
-        TransformComponent transform = player.getTransformComponent();
-        if (transform == null || transform.getPosition() == null) {
-            context.sendMessage(Message.raw("Unable to read your position."));
-            return;
-        }
-
         List<String> roleTemplates = collectRoleTemplates(npcPlugin);
         if (roleTemplates.isEmpty()) {
             context.sendMessage(Message.raw("No spawnable NPC role templates were found."));
@@ -121,8 +115,16 @@ public class SpawnEquipEnemyCommand extends CommandBase {
             return;
         }
 
-        Vector3d playerPos = transform.getPosition().clone();
-        Vector3f playerRot = transform.getRotation() != null ? transform.getRotation().clone() : new Vector3f(0f, 0f, 0f);
+        TransformComponent transform = player.getReference() == null
+                ? null
+                : store.getComponent(player.getReference(), TransformComponent.getComponentType());
+        if (transform == null || transform.getPosition() == null) {
+            context.sendMessage(Message.raw("Unable to read your position."));
+            return;
+        }
+
+        Vector3d playerPos = new Vector3d(transform.getPosition());
+        Rotation3f playerRot = transform.getRotation() != null ? transform.getRotation().clone() : new Rotation3f(0f, 0f, 0f);
 
         int spawned = 0;
         List<String> spawnedDetails = new ArrayList<>();
@@ -150,7 +152,7 @@ public class SpawnEquipEnemyCommand extends CommandBase {
                                                    NPCPlugin npcPlugin,
                                                    List<String> roleTemplates,
                                                    Vector3d position,
-                                                   Vector3f rotation) {
+                                                   Rotation3f rotation) {
         if (store == null || npcPlugin == null || roleTemplates == null || roleTemplates.isEmpty() || position == null || rotation == null) {
             return null;
         }
@@ -169,7 +171,7 @@ public class SpawnEquipEnemyCommand extends CommandBase {
 
             Pair<Ref<EntityStore>, com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter> pair;
             try {
-                pair = npcPlugin.spawnNPC(store, roleName, null, position.clone(), rotation.clone());
+                pair = npcPlugin.spawnNPC(store, roleName, null, new Vector3d(position), rotation.clone());
             } catch (Throwable ignored) {
                 continue;
             }
@@ -259,8 +261,8 @@ public class SpawnEquipEnemyCommand extends CommandBase {
         return roles;
     }
 
-    private static Vector3d getSpawnPositionInFront(Vector3d playerPos, Vector3f playerRot, int index, int total) {
-        double yawRad = Math.toRadians(playerRot.getYaw());
+    private static Vector3d getSpawnPositionInFront(Vector3d playerPos, Rotation3f playerRot, int index, int total) {
+        double yawRad = Math.toRadians(playerRot.yaw());
         int forwardX = (int) Math.round(-Math.sin(yawRad));
         int forwardZ = (int) Math.round(Math.cos(yawRad));
         if (forwardX == 0 && forwardZ == 0) {
@@ -269,9 +271,9 @@ public class SpawnEquipEnemyCommand extends CommandBase {
         int sideX = -forwardZ;
         int sideZ = forwardX;
 
-        int baseX = (int) Math.floor(playerPos.getX()) + (forwardX * FRONT_DISTANCE_BLOCKS);
-        int baseY = (int) Math.floor(playerPos.getY());
-        int baseZ = (int) Math.floor(playerPos.getZ()) + (forwardZ * FRONT_DISTANCE_BLOCKS);
+        int baseX = (int) Math.floor(playerPos.x) + (forwardX * FRONT_DISTANCE_BLOCKS);
+        int baseY = (int) Math.floor(playerPos.y);
+        int baseZ = (int) Math.floor(playerPos.z) + (forwardZ * FRONT_DISTANCE_BLOCKS);
 
         double centerOffset = (index - ((total - 1) / 2.0d)) * LANE_SPACING_BLOCKS;
         int x = baseX + (int) Math.round(sideX * centerOffset);

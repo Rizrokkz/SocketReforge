@@ -22,8 +22,8 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.math.vector.Transform;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.math.vector.Rotation3f;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
 import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.AnimationUtils;
@@ -2409,7 +2409,7 @@ public final class LoreProcHandler {
         if (pos == null) {
             return;
         }
-        Vector3d spawnPos = pos.clone();
+        Vector3d spawnPos = new Vector3d(pos);
         spawnPos.add(0.0d, 0.6d, 0.0d);
         LoreVisuals.spawnScaledParticle(store, particleId, spawnPos, 1.15f);
     }
@@ -4108,14 +4108,14 @@ public final class LoreProcHandler {
         if (pos == null) {
             return;
         }
-        Vector3d spawnPos = pos.clone();
+        Vector3d spawnPos = new Vector3d(pos);
         spawnPos.add(0.0d, 1.0d, 0.0d);
         try {
             LoreVisuals.spawnScaledParticle(store, particleId, spawnPos, 1.0f);
             LoreDebug.logKv("trail.spawn",
                     "id", particleId,
                     "pos", String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)",
-                            spawnPos.getX(), spawnPos.getY(), spawnPos.getZ()));
+                            spawnPos.x, spawnPos.y, spawnPos.z));
         } catch (Throwable ignored) {
             try {
                 ParticleUtil.spawnParticleEffect(particleId, spawnPos, store);
@@ -4293,13 +4293,13 @@ public final class LoreProcHandler {
         if (transform == null || transform.getPosition() == null) {
             return;
         }
-        Vector3d basePos = transform.getPosition().clone();
-        Vector3f rotation = resolveLookRotation(transform);
+        Vector3d basePos = new Vector3d(transform.getPosition());
+        Rotation3f rotation = resolveLookRotation(transform);
         if (rotation == null) {
-            rotation = new Vector3f(0f, 0f, 0f);
+            rotation = new Rotation3f(0f, 0f, 0f);
         }
         try {
-            Vector3d offset = config.getCalculatedOffset(rotation.getYaw(), rotation.getPitch());
+            Vector3d offset = config.getCalculatedOffset(rotation.yaw(), rotation.pitch());
             if (offset != null) {
                 basePos.add(offset);
             }
@@ -4309,7 +4309,7 @@ public final class LoreProcHandler {
 
         Vector3d direction = null;
         try {
-            Transform look = new Transform(basePos.clone(), rotation);
+            Transform look = new Transform(new Vector3d(basePos), rotation);
             direction = look.getDirection();
         } catch (Throwable ignored) {
             // best-effort
@@ -4326,7 +4326,7 @@ public final class LoreProcHandler {
         if (speed <= 0.01d) {
             speed = STAFF_PROJECTILE_FALLBACK_SPEED;
         }
-        Vector3d velocity = direction.clone().scale(speed);
+        Vector3d velocity = new Vector3d(direction).mul(speed);
 
         try {
             ProjectileModule module = ProjectileModule.get();
@@ -4564,7 +4564,7 @@ public final class LoreProcHandler {
         return fields;
     }
 
-    private static Vector3f resolveLookRotation(TransformComponent transform) {
+    private static Rotation3f resolveLookRotation(TransformComponent transform) {
         if (transform == null) {
             return null;
         }
@@ -4572,15 +4572,15 @@ public final class LoreProcHandler {
         if (sentTransform != null && sentTransform.lookOrientation != null) {
             return toRotationVector(sentTransform.lookOrientation);
         }
-        Vector3f rotation = transform.getRotation();
+        Rotation3f rotation = transform.getRotation();
         return rotation == null ? null : rotation.clone();
     }
 
-    private static Vector3f toRotationVector(Direction direction) {
+    private static Rotation3f toRotationVector(Direction direction) {
         if (direction == null) {
             return null;
         }
-        Vector3f rotation = new Vector3f();
+        Rotation3f rotation = new Rotation3f();
         rotation.setPitch(direction.pitch);
         rotation.setYaw(direction.yaw);
         rotation.setRoll(direction.roll);
@@ -4619,19 +4619,19 @@ public final class LoreProcHandler {
         if (targetPos == null) {
             return;
         }
-        Vector3d dest = targetPos.clone();
+        Vector3d dest = new Vector3d(targetPos);
         Vector3d attackerPos = attackerTransform.getPosition();
         if (attackerPos != null) {
-            Vector3d offset = attackerPos.clone().subtract(targetPos);
+            Vector3d offset = new Vector3d(attackerPos).sub(targetPos);
             if (offset.length() < 0.01d) {
-                offset.assign(1.0d, 0.0d, 0.0d);
+                offset.set(1.0d, 0.0d, 0.0d);
             }
-            offset.normalize().scale(0.6d);
+            offset.normalize().mul(0.6d);
             dest.add(offset);
         }
-        Vector3f rotation = attackerTransform.getRotation() != null
+        Rotation3f rotation = attackerTransform.getRotation() != null
                 ? attackerTransform.getRotation().clone()
-                : new Vector3f(0f, 0f, 0f);
+                : new Rotation3f(0f, 0f, 0f);
         queueTeleport(store, attackerRef, dest, rotation);
     }
 
@@ -4655,8 +4655,8 @@ public final class LoreProcHandler {
         if (attackerPos == null || targetPos == null) {
             return;
         }
-        Vector3d direction = targetPos.clone().subtract(attackerPos);
-        direction.assign(direction.getX(), 0.0d, direction.getZ());
+        Vector3d direction = new Vector3d(targetPos).sub(attackerPos);
+        direction.set(direction.x, 0.0d, direction.z);
         double dist = direction.length();
         if (dist < 0.05d) {
             return;
@@ -4675,7 +4675,7 @@ public final class LoreProcHandler {
     private static void queueTeleport(Store<EntityStore> store,
                                       Ref<EntityStore> attackerRef,
                                       Vector3d dest,
-                                      Vector3f rotation) {
+                                      Rotation3f rotation) {
         if (store == null || attackerRef == null || dest == null || rotation == null) {
             return;
         }
@@ -4687,7 +4687,7 @@ public final class LoreProcHandler {
     private static void applyTeleportInternal(Store<EntityStore> store,
                                               Ref<EntityStore> attackerRef,
                                               Vector3d dest,
-                                              Vector3f rotation) {
+                                              Rotation3f rotation) {
         if (store == null || attackerRef == null || dest == null || rotation == null) {
             return;
         }
@@ -4714,7 +4714,7 @@ public final class LoreProcHandler {
         if (store == null || attackerRef == null || direction == null || force <= 0.0d) {
             return;
         }
-        Vector3d applied = direction.clone().normalize().scale(force);
+        Vector3d applied = new Vector3d(direction).normalize().mul(force);
         if (!LoreWorldTasks.queue(store, () -> applyLungeForceInternal(store, attackerRef, applied))) {
             applyLungeForceInternal(store, attackerRef, applied);
         }
@@ -4740,7 +4740,7 @@ public final class LoreProcHandler {
                                               Store<EntityStore> store,
                                               String roleName,
                                               Vector3d position,
-                                              Vector3f rotation,
+                                              Rotation3f rotation,
                                               UUID ownerId) {
         if (npcPlugin == null || store == null || position == null || rotation == null) {
             return null;
@@ -4750,7 +4750,7 @@ public final class LoreProcHandler {
         }
         try {
             Pair<Ref<EntityStore>, INonPlayerCharacter> pair =
-                    npcPlugin.spawnNPC(store, roleName, null, position.clone(), rotation.clone());
+                    npcPlugin.spawnNPC(store, roleName, null, new Vector3d(position), rotation.clone());
             if (pair == null || pair.first() == null) {
                 return null;
             }
@@ -4770,7 +4770,7 @@ public final class LoreProcHandler {
         double offsetX = Math.cos(angle) * radius;
         double offsetZ = Math.sin(angle) * radius;
         double lift = (attempt % 2 == 0) ? 0.1d : 0.25d;
-        return new Vector3d(base.getX() + offsetX, base.getY() + lift, base.getZ() + offsetZ);
+        return new Vector3d(base.x + offsetX, base.y + lift, base.z + offsetZ);
     }
 
     private static String resolveWolfRoleName(String spiritId) {
@@ -5489,10 +5489,10 @@ public final class LoreProcHandler {
             cleanupSummonKey(key, summons);
             return;
         }
-        Vector3d basePos = transform.getPosition().clone();
-        Vector3f rotation = transform.getRotation() != null
+        Vector3d basePos = new Vector3d(transform.getPosition());
+        Rotation3f rotation = transform.getRotation() != null
                 ? transform.getRotation().clone()
-                : new Vector3f(0f, 0f, 0f);
+                : new Rotation3f(0f, 0f, 0f);
 
         String primaryRole = resolveWolfRoleName(spiritId);
         String fallbackRole = "Wolf_Black";

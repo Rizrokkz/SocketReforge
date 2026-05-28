@@ -7,21 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.8] - 2026-05-XX
+## [1.3.8 - Update 5] - 2026-05-27
 
 ### Added
 
-- **Softcore and Mixed Refinement Breaks** - Added optional softcore break protection for refinement plus a mixed mode. Softcore converts every break into permanent configurable core damage/defense loss, now rolling from 1% up to the configured max per saved break, while mixed mode gives non-resonant attempts guaranteed softcore protection and lets `Resonant Glob` break rolls split between softcore wear and true shatter through a runtime-configurable chance, with tooltip/bench feedback.
-- **Lore Status Counter Rules** - Added shared lore status counter support so burn, poison, bleed, freeze, stun, drain, and matching visual statuses can all use NPC counter logic instead of relying on bleed-only handling. New config uses `LORE_STATUS_COUNTER_NPC_IDS` plus per-status `LORE_STATUS_REAPPLY_RULES`.
-- **Status Reapply Crowd Scaling** - NPC lore status reapply counters now scale by `+25%` per extra nearby player around the target, and that multiplier is applied on top of each status reapply rule so both linear and Fibonacci growth patterns scale with group size.
+- **Refinement Break Modes** - Added configurable softcore and mixed break-handling options for refinement, including related bench and tooltip feedback.
+- **Lore Status Controls and Resistances** - Added broader counter and reapply support for lore-based status effects, including group-scaling behavior for shared targets. Configs available in `LoreConfig.json` and edit `LORE_STATUS_REAPPLY_RULES`,`LORE_NPC_STATUS_RESISTANCES` and `LORE_STATUS_COUNTER_NPC_IDS` for your specified mob resistances for balancing purposes.
+- **Standalone Arcane Bench Compatibility** - Added a built-in runtime patch path so Socket Reforge can extend the Arcane bench without relying on an external patch plugin.
 
 ### Changed
 
-- **Detailed Lore Status Tooltips** - Lore socket tooltips now show richer proc information for status abilities, including damage or duration details where applicable, plus a dedicated chance/cooldown/trigger line.
+- **Lore Status Presentation** - Lore socket tooltips now show clearer proc details for status-focused effects.
+- **Runtime Compatibility Cleanup** - General compatibility and maintenance adjustments were made across commands, interactions, loot helpers, and UI/runtime flows for newer server builds.
+- **Cross-Mod Bench Handling** - Arcane bench category injection now works against the live loaded bench state for better compatibility with modded setups.
 
 ### Fixed
 
-- **Held Ranged Weapon Refreshes** - Lore XP/state updates are now buffered while the same weapon remains actively held, preventing guns, bows, crossbows, staffs, and similar ranged weapons from losing auto-fire flow or loaded ammo state when a lore proc grants XP.
+- **Held Item State Stability** - Reduced cases where active weapons or interaction items could lose state during lore-driven metadata updates.
+- **Refinement Admin Limits** - Fixed `/reforgeadmin refine` to use configured refinement caps instead of a fixed limit.
+- **Update 5 Bench Regression** - Fixed Arcane bench and Amalgamy compatibility issues introduced by newer server updates.
 
 ---
 
@@ -29,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Hytalor Bench Compatibility** - Added an optional `com.hypersonicsharkz:Hytalor` dependency path and converted the Arcanist bench extension into a Hytalor patch so `Arcane_Essence` can coexist with other mods that also patch `Bench_Arcane`.
+- **Arcane Bench Compatibility** - Added a compatibility path for extending the Arcanist bench without replacing the full asset, improving coexistence with other mods that also add Arcane bench categories.
 - **Spanish Localization** - Added `es-ES` localization coverage for Socket Reforge UI strings and item text.
 
 ### Fixed

@@ -10,7 +10,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.spatial.SpatialResource;
 import com.hypixel.hytale.component.spatial.SpatialStructure;
-import com.hypixel.hytale.math.vector.Vector3d;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.AllLegacyLivingEntityTypesQuery;
 import com.hypixel.hytale.server.core.modules.entity.component.NPCMarkerComponent;
@@ -245,7 +245,7 @@ public final class LoreTargetingUtils {
                 return null;
             }
             Vector3d pos = transform.getPosition();
-            return pos == null ? null : pos.clone();
+            return pos == null ? null : new Vector3d(pos);
         } catch (Throwable ignored) {
             return null;
         }
@@ -264,9 +264,9 @@ public final class LoreTargetingUtils {
     }
 
     public static double distanceSquared(Vector3d a, Vector3d b) {
-        double dx = a.getX() - b.getX();
-        double dy = a.getY() - b.getY();
-        double dz = a.getZ() - b.getZ();
+        double dx = a.x - b.x;
+        double dy = a.y - b.y;
+        double dz = a.z - b.z;
         return (dx * dx) + (dy * dy) + (dz * dz);
     }
 
@@ -274,7 +274,7 @@ public final class LoreTargetingUtils {
         if (pos == null) {
             return "null";
         }
-        return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", pos.getX(), pos.getY(), pos.getZ());
+        return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
     }
 
     public static String resolveDebugEntityLabel(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -284,7 +284,7 @@ public final class LoreTargetingUtils {
         try {
             Player player = store.getComponent(ref, Player.getComponentType());
             if (player != null) {
-                String name = player.getDisplayName();
+                String name = player.getPlayerRef() == null ? null : player.getPlayerRef().getUsername();
                 if (name == null || name.isBlank()) {
                     return "Player:" + String.valueOf(player.getPlayerRef());
                 }

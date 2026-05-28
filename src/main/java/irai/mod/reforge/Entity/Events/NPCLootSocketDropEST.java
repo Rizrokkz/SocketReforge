@@ -13,8 +13,8 @@ import com.hypixel.hytale.component.dependency.Dependency;
 import com.hypixel.hytale.component.dependency.Order;
 import com.hypixel.hytale.component.dependency.SystemDependency;
 import com.hypixel.hytale.component.query.Query;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.math.vector.Rotation3f;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.asset.type.gameplay.DeathConfig;
 import com.hypixel.hytale.server.core.inventory.Inventory;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -140,8 +140,8 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
             return;
         }
 
-        Vector3d dropPosition = transform.getPosition().clone().add(0.0d, 1.0d, 0.0d);
-        Vector3f dropRotation = headRotation.getRotation().clone();
+        Vector3d dropPosition = new Vector3d(transform.getPosition()).add(0.0d, 1.0d, 0.0d);
+        Rotation3f dropRotation = headRotation.getRotation().clone();
         var holders = ItemComponent.generateItemDrops(store, drops, dropPosition, dropRotation);
         if (holders != null && holders.length > 0) {
             commandBuffer.addEntities(holders, AddReason.SPAWN);

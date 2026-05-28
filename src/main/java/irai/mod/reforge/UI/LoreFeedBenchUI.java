@@ -145,7 +145,7 @@ public final class LoreFeedBenchUI {
             return;
         }
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_feed.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_feed.hyui_missing")));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();

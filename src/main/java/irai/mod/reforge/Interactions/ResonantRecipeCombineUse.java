@@ -53,7 +53,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
         String recipePattern = ResonantRecipeUtils.getRecipePattern(held);
         if ((recipeName == null || recipeName.isBlank())
                 && (recipePattern == null || recipePattern.isBlank())) {
-            player.sendMessage(Message.raw("This recipe shard is blank."));
+            player.getPlayerRef().sendMessage(Message.raw("This recipe shard is blank."));
             return;
         }
         if (irai.mod.reforge.UI.RecipeCombineUI.isAvailable()) {
@@ -68,7 +68,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
     private void combineRecipes(Player player, ItemStack held, short heldSlot) {
         String recipeName = ResonantRecipeUtils.getRecipeName(held);
         if (recipeName == null || recipeName.isBlank()) {
-            player.sendMessage(Message.raw("This recipe shard is blank."));
+            player.getPlayerRef().sendMessage(Message.raw("This recipe shard is blank."));
             return;
         }
 
@@ -85,7 +85,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
             }
             String usages = ResonantRecipeUtils.getRecipeUsages(held);
             String usageText = usages != null && !usages.isBlank() ? " Usages: " + usages + "." : "";
-            player.sendMessage(Message.raw("This recipe is already complete." + usageText));
+            player.getPlayerRef().sendMessage(Message.raw("This recipe is already complete." + usageText));
             return;
         }
 
@@ -98,7 +98,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
         collectMatches(matches, storage, normalized);
 
         if (matches.size() <= 1) {
-            player.sendMessage(Message.raw("No other \"" + recipeName + "\" recipe shards to combine."));
+            player.getPlayerRef().sendMessage(Message.raw("No other \"" + recipeName + "\" recipe shards to combine."));
             return;
         }
 
@@ -117,7 +117,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
 
         List<RecipeSlot> selected = ResonantRecipeUtils.selectBestMergeCandidates(basePattern, candidates);
         if (selected.isEmpty()) {
-            player.sendMessage(Message.raw("No other \"" + recipeName + "\" shards reveal new slots to combine."));
+            player.getPlayerRef().sendMessage(Message.raw("No other \"" + recipeName + "\" shards reveal new slots to combine."));
             return;
         }
 
@@ -152,7 +152,7 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
         }
         int gained = Math.max(0, afterStats.revealedSlots() - beforeStats.revealedSlots());
         String gainLabel = gained > 0 ? " (+" + gained + " new)" : "";
-        player.sendMessage(Message.raw("Combined " + removed + " shard(s). " + progress + gainLabel + "."));
+        player.getPlayerRef().sendMessage(Message.raw("Combined " + removed + " shard(s). " + progress + gainLabel + "."));
     }
 
     private void collectMatches(List<RecipeSlot> matches, ItemContainer container, String normalizedRecipeName) {

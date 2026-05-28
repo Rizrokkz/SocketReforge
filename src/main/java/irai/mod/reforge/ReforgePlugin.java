@@ -109,6 +109,7 @@ import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
+import irai.mod.reforge.Util.RuntimeBenchPatchHost;
 
 public class ReforgePlugin extends JavaPlugin {
     private static final String HATCHET_THROW_INTERACTION_ID = "HatchetThrowUse";
@@ -427,6 +428,7 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void start() {
+        RuntimeBenchPatchHost.applyEmbeddedBenchPatches(this);
         logDroplistPatchStatus();
         autoRegenRegionIfNeeded();
         scheduleChunkRemovalIfNeeded();

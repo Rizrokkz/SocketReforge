@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
@@ -23,6 +24,7 @@ public class ItemMetaCommand extends CommandBase {
 
     public ItemMetaCommand(@NonNullDecl String name, @NonNullDecl String description, boolean requiresConfirmation) {
         super(name, description, requiresConfirmation);
+        this.requirePermission(HytalePermissions.fromCommand("op.add"));
     }
 
     @Override

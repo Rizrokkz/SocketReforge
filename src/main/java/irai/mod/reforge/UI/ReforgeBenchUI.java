@@ -267,7 +267,7 @@ public final class ReforgeBenchUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>HyUI not installed - " + LangLoader.getUITranslation(player, "ui.reforge.title") + " disabled."));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>HyUI not installed - " + LangLoader.getUITranslation(player, "ui.reforge.title") + " disabled."));
             return;
         }
         PlayerRef ref = player.getPlayerRef();

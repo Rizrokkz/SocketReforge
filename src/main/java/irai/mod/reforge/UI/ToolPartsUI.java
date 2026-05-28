@@ -112,7 +112,7 @@ public final class ToolPartsUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -123,7 +123,7 @@ public final class ToolPartsUI {
     private static void openWithSync(Player player) {
         Snapshot snap = snapshot(player);
         if (snap.equipments.isEmpty()) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.error_no_tools")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.tool_parts.error_no_tools")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();

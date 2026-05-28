@@ -5,7 +5,7 @@ import com.hypixel.hytale.component.ResourceType;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.spatial.SpatialData;
 import com.hypixel.hytale.component.spatial.SpatialResource;
-import com.hypixel.hytale.math.vector.Vector3d;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -62,9 +62,9 @@ public final class WorldDroplistRepairUtils {
                 continue;
             }
 
-            int x = (int) Math.floor(position.getX());
-            int y = (int) Math.floor(position.getY());
-            int z = (int) Math.floor(position.getZ());
+            int x = (int) Math.floor(position.x);
+            int y = (int) Math.floor(position.y);
+            int z = (int) Math.floor(position.z);
 
             ItemContainerBlock containerBlock = BlockModule.getComponent(
                     blockModule.getItemContainerBlockComponentType(),

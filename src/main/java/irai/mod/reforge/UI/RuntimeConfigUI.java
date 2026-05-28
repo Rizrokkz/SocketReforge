@@ -355,7 +355,7 @@ public final class RuntimeConfigUI {
             return;
         }
         if (!isAvailable()) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + t(player, "ui.runtime_config.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + t(player, "ui.runtime_config.hyui_missing")));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();

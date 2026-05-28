@@ -381,7 +381,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         try {
             Player targetPlayer = store.getComponent(targetRef, Player.getComponentType());
             if (targetPlayer != null) {
-                String display = targetPlayer.getDisplayName();
+                String display = targetPlayer.getPlayerRef() == null ? null : targetPlayer.getPlayerRef().getUsername();
                 if (display != null && !display.isBlank()) {
                     return display;
                 }

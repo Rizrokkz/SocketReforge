@@ -13,6 +13,9 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
  * Shared helpers for reading and updating player inventory state.
  */
 public final class PlayerInventoryUtils {
+    public static final int HOTBAR_SECTION_ID = -1;
+    public static final int TOOLS_SECTION_ID = -8;
+
     public static final class HeldItemContext {
         private final int sectionId;
         private final short slot;
@@ -127,7 +130,7 @@ public final class PlayerInventoryUtils {
                 short slot = inventory.getActiveToolsSlot();
                 ItemStack stack = readContainerItem(tools, slot);
                 if (stack != null && !stack.isEmpty()) {
-                    return new HeldItemContext(Inventory.TOOLS_SECTION_ID, slot, tools, stack);
+                    return new HeldItemContext(TOOLS_SECTION_ID, slot, tools, stack);
                 }
             }
         } catch (Exception ignored) {
@@ -139,7 +142,7 @@ public final class PlayerInventoryUtils {
             short slot = inventory.getActiveHotbarSlot();
             ItemStack stack = readContainerItem(hotbar, slot);
             if (stack != null && !stack.isEmpty()) {
-                return new HeldItemContext(Inventory.HOTBAR_SECTION_ID, slot, hotbar, stack);
+                return new HeldItemContext(HOTBAR_SECTION_ID, slot, hotbar, stack);
             }
         } catch (Exception ignored) {
             // Fall through to generic in-hand lookup.

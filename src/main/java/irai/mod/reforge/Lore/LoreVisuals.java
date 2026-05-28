@@ -20,7 +20,7 @@ import com.hypixel.hytale.component.spatial.SpatialResource;
 import com.hypixel.hytale.component.spatial.SpatialStructure;
 import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.hypixel.hytale.protocol.SoundCategory;
-import com.hypixel.hytale.math.vector.Vector3d;
+import org.joml.Vector3d;
 
 /**
  * Visual helper utilities for lore procs (particles, effects, sounds).
@@ -416,7 +416,7 @@ public final class LoreVisuals {
         if (pos == null) {
             return;
         }
-        Vector3d spawnPos = pos.clone();
+        Vector3d spawnPos = new Vector3d(pos);
         spawnPos.add(0.0d, 0.9d, 0.0d);
         try {
             spawnScaledParticle(store, particleId, spawnPos, scale);
@@ -455,9 +455,9 @@ public final class LoreVisuals {
             }
             ParticleUtil.spawnParticleEffect(
                     particleId,
-                    pos.getX(),
-                    pos.getY(),
-                    pos.getZ(),
+                    pos.x,
+                    pos.y,
+                    pos.z,
                     0f,
                     0f,
                     0f,
@@ -654,6 +654,6 @@ public final class LoreVisuals {
         if (pos == null) {
             return "(0.00, 0.00, 0.00)";
         }
-        return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", pos.getX(), pos.getY(), pos.getZ());
+        return String.format(Locale.ROOT, "(%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
     }
 }

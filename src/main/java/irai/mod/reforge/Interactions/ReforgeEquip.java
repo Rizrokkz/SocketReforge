@@ -134,7 +134,7 @@ public class ReforgeEquip extends SimpleInteraction {
         boolean isArmorItem  = !isWeaponItem && isArmor(heldItem);
 
         if (!isWeaponItem && !isArmorItem) {
-            player.sendMessage(Message.raw("This item cannot be reforged"));
+            player.getPlayerRef().sendMessage(Message.raw("This item cannot be reforged"));
             return;
         }
 
@@ -144,7 +144,7 @@ public class ReforgeEquip extends SimpleInteraction {
 
         int maxLevel = getMaxUpgradeLevel();
         if (currentLevel >= maxLevel) {
-            player.sendMessage(Message.raw((isArmorItem ? "Armor" : "Weapon") + " is already at max level"));
+            player.getPlayerRef().sendMessage(Message.raw((isArmorItem ? "Armor" : "Weapon") + " is already at max level"));
             showDetailedStats(player, heldItem, slot);
             return;
         }
@@ -155,14 +155,14 @@ public class ReforgeEquip extends SimpleInteraction {
         String materialName = resolveItemName(materialId);
 
         if (!hasEnoughMaterial(player, materialId, materialCost)) {
-            player.sendMessage(Message.raw("Not enough " + materialName + " (need " + materialCost + ")"));
+            player.getPlayerRef().sendMessage(Message.raw("Not enough " + materialName + " (need " + materialCost + ")"));
             return;
         }
 
         sfxConfig.playReforgeStart(player);
 
         if (!consumeMaterial(player, materialId, materialCost)) {
-            player.sendMessage(Message.raw("Failed to consume " + materialName));
+            player.getPlayerRef().sendMessage(Message.raw("Failed to consume " + materialName));
             return;
         }
 
@@ -182,10 +182,10 @@ public class ReforgeEquip extends SimpleInteraction {
                 player.getInventory().getHotbar().addItemStackToSlot(slot, softenedItem);
                 DynamicTooltipUtils.refreshAllPlayers();
                 sfxConfig.playFail(player);
-                player.sendMessage(Message.raw("Break protection prevented shatter."));
+                player.getPlayerRef().sendMessage(Message.raw("Break protection prevented shatter."));
                 String summary = getSoftcorePenaltySummary(softenedItem, isArmorItem);
                 if (summary != null && !summary.isBlank()) {
-                    player.sendMessage(Message.raw(summary));
+                    player.getPlayerRef().sendMessage(Message.raw(summary));
                 }
                 showDetailedStats(player, softenedItem, slot);
                 return;
@@ -206,7 +206,7 @@ public class ReforgeEquip extends SimpleInteraction {
         // Try to create the upgraded item
         ItemStack upgradedItem = createUpgradedItem(heldItem, baseItemId, newLevel);
         if (upgradedItem == null) {
-            player.sendMessage(Message.raw("Failed to upgrade " + (isArmorItem ? "armor" : "weapon")));
+            player.getPlayerRef().sendMessage(Message.raw("Failed to upgrade " + (isArmorItem ? "armor" : "weapon")));
             return;
         }
 
@@ -593,9 +593,9 @@ public class ReforgeEquip extends SimpleInteraction {
                 showUpgradeFailure(player, oldLevel, newLevel, isArmor);
                 break;
             case SAME:
-                player.sendMessage(Message.raw("--------------------"));
-                player.sendMessage(Message.raw("   Refine Failed    "));
-                player.sendMessage(Message.raw("--------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("--------------------"));
+                player.getPlayerRef().sendMessage(Message.raw("   Refine Failed    "));
+                player.getPlayerRef().sendMessage(Message.raw("--------------------"));
                 showCompactTooltip(player, item, slot);
                 break;
             case UPGRADE:
@@ -603,7 +603,7 @@ public class ReforgeEquip extends SimpleInteraction {
                 showDetailedStats(player, item, slot);
                 break;
             case JACKPOT:
-                player.sendMessage(Message.raw("**** JACKPOT! ****"));
+                player.getPlayerRef().sendMessage(Message.raw("**** JACKPOT! ****"));
                 showDetailedStats(player, item, slot);
                 break;
         }
@@ -1054,10 +1054,10 @@ public class ReforgeEquip extends SimpleInteraction {
         int level = getWeaponLevel(player, weapon, slot);
 
         if (level == 0) {
-            player.sendMessage(Message.raw(""));
-            player.sendMessage(Message.raw("[Upgradeable Weapon]"));
-            player.sendMessage(Message.raw("Take to a Reforgebench to upgrade!"));
-            player.sendMessage(Message.raw(""));
+            player.getPlayerRef().sendMessage(Message.raw(""));
+            player.getPlayerRef().sendMessage(Message.raw("[Upgradeable Weapon]"));
+            player.getPlayerRef().sendMessage(Message.raw("Take to a Reforgebench to upgrade!"));
+            player.getPlayerRef().sendMessage(Message.raw(""));
         } else {
             showUpgradedWeaponTooltip(player, level);
         }
@@ -1072,14 +1072,14 @@ public class ReforgeEquip extends SimpleInteraction {
         String color = getColorForLevel(level);
         String stars = getStarsForLevel(level);
 
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw(color + "============================="));
-        player.sendMessage(Message.raw(color + "|  " + stars + " " + upgradeName.toUpperCase() + " WEAPON " + stars + "  |"));
-        player.sendMessage(Message.raw(color + "============================="));
-        player.sendMessage(Message.raw(color + "| Upgrade Level: " + color + "+" + level + "        " + color + "|"));
-        player.sendMessage(Message.raw(color + "| Damage Bonus: +" + String.format("%.0f", (multiplier - 1.0) * 100) + "%       " + color + "|"));
-        player.sendMessage(Message.raw(color + "============================="));
-        player.sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(color + "============================="));
+        player.getPlayerRef().sendMessage(Message.raw(color + "|  " + stars + " " + upgradeName.toUpperCase() + " WEAPON " + stars + "  |"));
+        player.getPlayerRef().sendMessage(Message.raw(color + "============================="));
+        player.getPlayerRef().sendMessage(Message.raw(color + "| Upgrade Level: " + color + "+" + level + "        " + color + "|"));
+        player.getPlayerRef().sendMessage(Message.raw(color + "| Damage Bonus: +" + String.format("%.0f", (multiplier - 1.0) * 100) + "%       " + color + "|"));
+        player.getPlayerRef().sendMessage(Message.raw(color + "============================="));
+        player.getPlayerRef().sendMessage(Message.raw(""));
     }
 
     /**
@@ -1099,13 +1099,13 @@ public class ReforgeEquip extends SimpleInteraction {
             double multiplier = getDefenseMultiplier(level);
             String tooltip = color + "🛡 " + upgradeName + " +" + level + " (+" +
                              String.format("%.0f", (multiplier - 1.0) * 100) + "% defense)";
-            player.sendMessage(Message.raw(tooltip));
+            player.getPlayerRef().sendMessage(Message.raw(tooltip));
         } else {
             String upgradeName = getUpgradeName(level);
             double multiplier = getDamageMultiplier(level);
             String tooltip = color + "⚔ " + upgradeName + " +" + level + " (+" +
                              String.format("%.0f", (multiplier - 1.0) * 100) + "% damage)";
-            player.sendMessage(Message.raw(tooltip));
+            player.getPlayerRef().sendMessage(Message.raw(tooltip));
         }
     }
 
@@ -1117,12 +1117,12 @@ public class ReforgeEquip extends SimpleInteraction {
         String color = getColorForLevel(newLevel);
         String label = isArmor ? "ARMOR UPGRADED!" : "WEAPON UPGRADED!";
 
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw(color + "        " + label + "        "));
-        player.sendMessage(Message.raw("      +" + oldLevel + "   ->  " + color + "+" + newLevel));
-        player.sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
+        player.getPlayerRef().sendMessage(Message.raw(color + "        " + label + "        "));
+        player.getPlayerRef().sendMessage(Message.raw("      +" + oldLevel + "   ->  " + color + "+" + newLevel));
+        player.getPlayerRef().sendMessage(Message.raw(color + "++++++++++++++++++++++++++++++++"));
+        player.getPlayerRef().sendMessage(Message.raw(""));
     }
 
     /**
@@ -1138,12 +1138,12 @@ public class ReforgeEquip extends SimpleInteraction {
      */
     public static void showUpgradeFailure(Player player, int oldLevel, int newLevel, boolean isArmor) {
         String label = isArmor ? "ARMOR DEGRADED!" : "WEAPON DEGRADED!";
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw("     " + label + "           "));
-        player.sendMessage(Message.raw("    +" + oldLevel + " ->   +" + newLevel));
-        player.sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
-        player.sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
+        player.getPlayerRef().sendMessage(Message.raw("     " + label + "           "));
+        player.getPlayerRef().sendMessage(Message.raw("    +" + oldLevel + " ->   +" + newLevel));
+        player.getPlayerRef().sendMessage(Message.raw("++++++++++++++++++++++++++++++++"));
+        player.getPlayerRef().sendMessage(Message.raw(""));
     }
 
     /**
@@ -1160,12 +1160,12 @@ public class ReforgeEquip extends SimpleInteraction {
     public static void showItemShatter(Player player, boolean isArmor) {
         String label = isArmor ? "ARMOR SHATTERED!" : "WEAPON SHATTERED!";
         String detail = isArmor ? "The armor broke into pieces..." : "The weapon broke into pieces...";
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
-        player.sendMessage(Message.raw("      " + label + "  "));
-        player.sendMessage(Message.raw("    " + detail));
-        player.sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
-        player.sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
+        player.getPlayerRef().sendMessage(Message.raw("      " + label + "  "));
+        player.getPlayerRef().sendMessage(Message.raw("    " + detail));
+        player.getPlayerRef().sendMessage(Message.raw("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"));
+        player.getPlayerRef().sendMessage(Message.raw(""));
     }
 
     /**
@@ -1192,27 +1192,27 @@ public class ReforgeEquip extends SimpleInteraction {
         int maxLevel = getMaxUpgradeLevel();
         String progressBar = createProgressBar(level, maxLevel);
 
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("============================="));
-        player.sendMessage(Message.raw("  " + typeLabel + ": " + itemId));
-        player.sendMessage(Message.raw("  Upgrade: " + color + upgradeName + " +" + level));
-        player.sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/" + maxLevel + ")"));
-        player.sendMessage(Message.raw("  " + statLabel + ": x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("============================="));
+        player.getPlayerRef().sendMessage(Message.raw("  " + typeLabel + ": " + itemId));
+        player.getPlayerRef().sendMessage(Message.raw("  Upgrade: " + color + upgradeName + " +" + level));
+        player.getPlayerRef().sendMessage(Message.raw("  Progress: " + progressBar + " (" + level + "/" + maxLevel + ")"));
+        player.getPlayerRef().sendMessage(Message.raw("  " + statLabel + ": x" + String.format("%.2f", multiplier) + " (" + String.format("%.0f", multiplier * 100) + "%)"));
         String softcoreSummary = getSoftcorePenaltySummary(item, isArmorItem);
         if (softcoreSummary != null && !softcoreSummary.isBlank()) {
-            player.sendMessage(Message.raw("  " + softcoreSummary));
+            player.getPlayerRef().sendMessage(Message.raw("  " + softcoreSummary));
         }
 
         if (level < maxLevel) {
             double nextMultiplier = (isArmorItem ? getDefenseMultiplier(level + 1) : getDamageMultiplier(level + 1))
                     * getSoftcoreStatMultiplier(item);
-            player.sendMessage(Message.raw("  Next Level: x" + String.format("%.2f", nextMultiplier) + " (" + String.format("%.0f", nextMultiplier * 100) + "%)"));
+            player.getPlayerRef().sendMessage(Message.raw("  Next Level: x" + String.format("%.2f", nextMultiplier) + " (" + String.format("%.0f", nextMultiplier * 100) + "%)"));
         } else {
-            player.sendMessage(Message.raw("   MAX LEVEL ACHIEVED   "));
+            player.getPlayerRef().sendMessage(Message.raw("   MAX LEVEL ACHIEVED   "));
         }
 
-        player.sendMessage(Message.raw("=============================="));
-        player.sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("=============================="));
+        player.getPlayerRef().sendMessage(Message.raw(""));
     }
 
     /**

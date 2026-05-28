@@ -112,7 +112,7 @@ public class EssenceSocketBench extends SimpleInteraction {
         // This interaction works with the held item and inventory essences
         ItemStack heldItem = context.getHeldItem();
         if (heldItem == null || heldItem.isEmpty()) {
-            player.sendMessage(Message.raw("Hold an equipment item to socket essences"));
+            player.getPlayerRef().sendMessage(Message.raw("Hold an equipment item to socket essences"));
             return;
         }
 
@@ -129,7 +129,7 @@ public class EssenceSocketBench extends SimpleInteraction {
         boolean isArmor = ReforgeEquip.isArmor(equipment);
         
         if (!isWeapon && !isArmor) {
-            player.sendMessage(Message.raw("This item cannot have sockets"));
+            player.getPlayerRef().sendMessage(Message.raw("This item cannot have sockets"));
             return;
         }
 
@@ -141,22 +141,22 @@ public class EssenceSocketBench extends SimpleInteraction {
         
         // Check if item has punched sockets (sockets list not empty)
         if (socketData.getSockets().isEmpty()) {
-            player.sendMessage(Message.raw("This item has no sockets. Use Socket Punch Bench to add sockets first."));
+            player.getPlayerRef().sendMessage(Message.raw("This item has no sockets. Use Socket Punch Bench to add sockets first."));
             return;
         }
         
         // Check if there are any sockets available
         if (socketData.getMaxSockets() == 0) {
-            player.sendMessage(Message.raw("This item has no sockets. Use Socket Punch Bench first."));
+            player.getPlayerRef().sendMessage(Message.raw("This item has no sockets. Use Socket Punch Bench first."));
             return;
         }
         
         // Check if there are any empty sockets (not broken)
         if (!socketData.hasEmptySocket()) {
-            player.sendMessage(Message.raw("All sockets are filled!"));
+            player.getPlayerRef().sendMessage(Message.raw("All sockets are filled!"));
             // Show broken socket info if any
             if (socketData.hasBrokenSocket()) {
-                player.sendMessage(Message.raw("Use Ingredient_Voidheart to repair broken sockets"));
+                player.getPlayerRef().sendMessage(Message.raw("Use Ingredient_Voidheart to repair broken sockets"));
             }
             return;
         }
@@ -176,8 +176,8 @@ public class EssenceSocketBench extends SimpleInteraction {
         String foundEssenceItemId = findOneEssenceInInventory(player);
         
         if (foundEssenceItemId == null) {
-            player.sendMessage(Message.raw("No essences found in inventory!"));
-            player.sendMessage(Message.raw("Add an essence (Fire, Ice, Life, Lightning, Void, Water) to your inventory"));
+            player.getPlayerRef().sendMessage(Message.raw("No essences found in inventory!"));
+            player.getPlayerRef().sendMessage(Message.raw("Add an essence (Fire, Ice, Life, Lightning, Void, Water) to your inventory"));
             return;
         }
 
@@ -188,22 +188,22 @@ public class EssenceSocketBench extends SimpleInteraction {
         String essenceType = SocketManager.resolveEssenceTypeFromItemId(foundEssenceItemId);
         String essenceId = SocketManager.resolveEssenceIdFromItemId(foundEssenceItemId);
         if (essenceType == null || essenceId == null) {
-            player.sendMessage(Message.raw("Invalid essence selected: " + foundEssenceItemId));
+            player.getPlayerRef().sendMessage(Message.raw("Invalid essence selected: " + foundEssenceItemId));
             return;
         }
         
         // Debug: show what we're looking for
-        player.sendMessage(Message.raw("Looking for: " + essenceId));
+        player.getPlayerRef().sendMessage(Message.raw("Looking for: " + essenceId));
         
         // Check if essence type exists in registry
         if (!EssenceRegistry.get().exists(essenceId)) {
-            player.sendMessage(Message.raw("Essence type not found in registry: " + essenceId));
+            player.getPlayerRef().sendMessage(Message.raw("Essence type not found in registry: " + essenceId));
             return;
         }
         
         // Try to socket the essence
         if (!SocketManager.socketEssence(socketData, essenceId)) {
-            player.sendMessage(Message.raw("Could not socket the essence. Try again."));
+            player.getPlayerRef().sendMessage(Message.raw("Could not socket the essence. Try again."));
             return;
         }
         
@@ -219,7 +219,7 @@ public class EssenceSocketBench extends SimpleInteraction {
             String resonanceName = rawResonance.name();
             boolean alreadyUnlocked = SocketManager.isResonanceUnlocked(equipment, resonanceName);
             if (!alreadyUnlocked) {
-                player.sendMessage(Message.raw(
+                player.getPlayerRef().sendMessage(Message.raw(
                         "Resonance locked: use the Essence Bench with a recipe support item to unlock."));
             } else {
                 baseItem = SocketManager.withResonanceUnlock(equipment, resonanceName);
@@ -238,16 +238,16 @@ public class EssenceSocketBench extends SimpleInteraction {
         sfxConfig.playSuccess(player);
         
         // Display results
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("============================="));
-        player.sendMessage(Message.raw("    ESSENCE SOCKETED!        "));
-        player.sendMessage(Message.raw("  1 essence added!          "));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("============================="));
+        player.getPlayerRef().sendMessage(Message.raw("    ESSENCE SOCKETED!        "));
+        player.getPlayerRef().sendMessage(Message.raw("  1 essence added!          "));
         
         // Display tiered effects
         displayTieredEffects(player, updatedItem, socketData, isWeapon);
         
-        player.sendMessage(Message.raw("  Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
-        player.sendMessage(Message.raw("============================="));
+        player.getPlayerRef().sendMessage(Message.raw("  Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
+        player.getPlayerRef().sendMessage(Message.raw("============================="));
     }
     
     /**
@@ -352,12 +352,12 @@ public class EssenceSocketBench extends SimpleInteraction {
         sfxConfig.playSuccess(player);
         
         // Display results
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("============================="));
-        player.sendMessage(Message.raw("   SOCKET REPAIRED!         "));
-        player.sendMessage(Message.raw("  +1 socket restored!       "));
-        player.sendMessage(Message.raw("  Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
-        player.sendMessage(Message.raw("============================="));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("============================="));
+        player.getPlayerRef().sendMessage(Message.raw("   SOCKET REPAIRED!         "));
+        player.getPlayerRef().sendMessage(Message.raw("  +1 socket restored!       "));
+        player.getPlayerRef().sendMessage(Message.raw("  Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets() + "    "));
+        player.getPlayerRef().sendMessage(Message.raw("============================="));
     }
     
     /**
@@ -432,9 +432,9 @@ public class EssenceSocketBench extends SimpleInteraction {
      * Displays the current socket status of the equipment.
      */
     private void displaySocketStatus(Player player, SocketData socketData) {
-        player.sendMessage(Message.raw(""));
-        player.sendMessage(Message.raw("=== ESSENCE SOCKETING ==="));
-        player.sendMessage(Message.raw("Current Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets()));
+        player.getPlayerRef().sendMessage(Message.raw(""));
+        player.getPlayerRef().sendMessage(Message.raw("=== ESSENCE SOCKETING ==="));
+        player.getPlayerRef().sendMessage(Message.raw("Current Sockets: " + socketData.getCurrentSocketCount() + "/" + socketData.getMaxSockets()));
         
         if (socketData.getCurrentSocketCount() > 0) {
             StringBuilder socketInfo = new StringBuilder("Filled: ");
@@ -456,7 +456,7 @@ public class EssenceSocketBench extends SimpleInteraction {
                 }
                 first = false;
             }
-            player.sendMessage(Message.raw(socketInfo.toString()));
+            player.getPlayerRef().sendMessage(Message.raw(socketInfo.toString()));
         }
     }
 
@@ -468,11 +468,11 @@ public class EssenceSocketBench extends SimpleInteraction {
         Map<String, Integer> tierMap = getTierMapFromSocketData(socketData);
         
         if (!tierMap.isEmpty()) {
-            player.sendMessage(Message.raw("Active Effects:"));
+            player.getPlayerRef().sendMessage(Message.raw("Active Effects:"));
             for (Map.Entry<String, Integer> entry : tierMap.entrySet()) {
                 String essenceType = entry.getKey();
                 int tier = entry.getValue();
-                player.sendMessage(Message.raw("  " + essenceType + " T" + tier + " (" + getEffectDescription(itemWithMetadata, essenceType, tier, isWeapon) + ")"));
+                player.getPlayerRef().sendMessage(Message.raw("  " + essenceType + " T" + tier + " (" + getEffectDescription(itemWithMetadata, essenceType, tier, isWeapon) + ")"));
             }
         }
     }

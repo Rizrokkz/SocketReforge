@@ -19,9 +19,9 @@ import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Transform;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
-import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.math.vector.Rotation3f;
+import org.joml.Vector3d;
+import org.joml.Vector3i;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.ModelTransform;
@@ -237,7 +237,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
     }
 
     private boolean startFlight(Player player, PlayerInventoryUtils.HeldItemContext heldContext, ItemStack held) {
-        TransformComponent transform = player.getTransformComponent();
+        TransformComponent transform = resolveTransform(player);
         if (transform == null || transform.getPosition() == null) {
             return false;
         }
@@ -254,9 +254,9 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             direction.normalize();
         }
 
-        Vector3d start = transform.getPosition().clone()
+        Vector3d start = new Vector3d(transform.getPosition())
                 .add(0.0d, ORIGIN_HEIGHT_OFFSET, 0.0d)
-                .addScaled(direction, ORIGIN_FORWARD_OFFSET);
+                .add(new Vector3d(direction).mul(ORIGIN_FORWARD_OFFSET));
 
         int sectionId = heldContext == null ? -1 : heldContext.getSectionId();
         short slot = heldContext == null ? (short) -1 : heldContext.getSlot();
@@ -348,15 +348,15 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         }
         ensureVisualEntity(commandBuffer, thrownItem, state);
 
-        TransformComponent transform = player.getTransformComponent();
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
         if (transform == null || transform.getPosition() == null) {
             cancelFlight(playerRef, player, state, commandBuffer, "tick",
                     "flight cancelled because player transform is unavailable");
             return;
         }
 
-        Vector3d previous = state.position.clone();
-        Vector3d next = state.position.clone();
+        Vector3d previous = new Vector3d(state.position);
+        Vector3d next = new Vector3d(state.position);
         if (advanceReturningFlight(playerRef, player, state, commandBuffer, transform, next, time)) {
             return;
         }
@@ -364,7 +364,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             advanceOutboundFlight(state, next, time);
         }
 
-        state.position.assign(next);
+        state.position.set(next);
         processSegment(playerRef, player, store, commandBuffer, state, previous, next);
         syncVisualEntity(commandBuffer, state, previous, time);
     }
@@ -379,17 +379,17 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         if (!state.returning) {
             return false;
         }
-        Vector3d target = transform.getPosition().clone().add(0.0d, ORIGIN_HEIGHT_OFFSET, 0.0d);
-        Vector3d toTarget = target.clone().subtract(state.position);
+        Vector3d target = new Vector3d(transform.getPosition()).add(0.0d, ORIGIN_HEIGHT_OFFSET, 0.0d);
+        Vector3d toTarget = new Vector3d(target).sub(state.position);
         double distance = toTarget.length();
         if (distance <= CATCH_DISTANCE) {
             completeReturn(playerRef, player, state, commandBuffer);
             return true;
         }
         if (distance > MIN_DIRECTION_LENGTH) {
-            toTarget.normalize().scale(state.recallSpeed * time);
+            toTarget.normalize().mul(state.recallSpeed * time);
             if (toTarget.length() > distance) {
-                toTarget.setLength(distance);
+                toTarget.normalize().mul(distance);
             }
             next.add(toTarget);
         }
@@ -398,7 +398,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
 
     private void advanceOutboundFlight(FlightState state, Vector3d next, float time) {
         double movement = state.outboundSpeed * time;
-        next.addScaled(state.direction, movement);
+        next.add(new Vector3d(state.direction).mul(movement));
         state.distanceTravelled += movement;
         if (state.distanceTravelled >= state.maxRange) {
             debug("tick", "flight reached max range, switching to recall");
@@ -438,7 +438,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return;
         }
 
-        Vector3d delta = end.clone().subtract(start);
+        Vector3d delta = new Vector3d(end).sub(start);
         double distance = delta.length();
         if (distance <= MIN_DIRECTION_LENGTH) {
             return;
@@ -454,10 +454,10 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         boolean encounteredWood = false;
         for (int i = 1; i <= steps; i++) {
             double t = (double) i / (double) steps;
-            Vector3d sample = Vector3d.lerp(start, end, t);
-            int blockX = (int) Math.floor(sample.getX());
-            int blockY = (int) Math.floor(sample.getY());
-            int blockZ = (int) Math.floor(sample.getZ());
+            Vector3d sample = new Vector3d(start).lerp(end, t);
+            int blockX = (int) Math.floor(sample.x);
+            int blockY = (int) Math.floor(sample.y);
+            int blockZ = (int) Math.floor(sample.z);
             long blockKey = packBlockKey(blockX, blockY, blockZ);
             if (!visitedBlocks.add(blockKey)) {
                 continue;
@@ -636,15 +636,15 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return new Vector3d();
         }
         if (steps <= 1 || hitStep <= 1) {
-            return start.clone();
+            return new Vector3d(start);
         }
 
         double previousT = (double) (hitStep - 1) / (double) steps;
-        Vector3d surfacePoint = Vector3d.lerp(start, end, previousT);
-        Vector3d direction = end.clone().subtract(start);
+        Vector3d surfacePoint = new Vector3d(start).lerp(end, previousT);
+        Vector3d direction = new Vector3d(end).sub(start);
         if (direction.length() > MIN_DIRECTION_LENGTH) {
-            direction.normalize().scale(0.08d);
-            surfacePoint.subtract(direction);
+            direction.normalize().mul(0.08d);
+            surfacePoint.sub(direction);
         }
         return surfacePoint;
     }
@@ -722,7 +722,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         Holder<EntityStore> holder = ItemComponent.generateItemDrop(
                 commandBuffer,
                 visualStack,
-                state.position.clone(),
+                new Vector3d(state.position),
                 createVisualRotation(state.visualDirection, state.visualSpinDegrees, state.returning),
                 0.0f,
                 0.0f,
@@ -766,9 +766,9 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         }
 
         if (previousPosition != null) {
-            Vector3d movement = state.position.clone().subtract(previousPosition);
+            Vector3d movement = new Vector3d(state.position).sub(previousPosition);
             if (movement.length() > MIN_DIRECTION_LENGTH) {
-                state.visualDirection.assign(movement).normalize();
+                state.visualDirection.set(movement).normalize();
             }
             float spinSpeed = state.returning
                     ? VISUAL_RECALL_SPIN_DEGREES_PER_SECOND
@@ -785,8 +785,8 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return;
         }
         if (visualTransform != null) {
-            visualTransform.teleportPosition(state.position.clone());
-            Vector3f rotation = createVisualRotation(state.visualDirection, state.visualSpinDegrees, state.returning);
+            visualTransform.teleportPosition(new Vector3d(state.position));
+            Rotation3f rotation = createVisualRotation(state.visualDirection, state.visualSpinDegrees, state.returning);
             if (rotation != null) {
                 visualTransform.teleportRotation(rotation);
             }
@@ -860,7 +860,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
     }
 
     private void returnHatchetFromImpact(FlightState state, Vector3d position) {
-        state.position.assign(position);
+        state.position.set(position);
         state.returning = true;
         state.forceRecall = true;
     }
@@ -957,17 +957,26 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return null;
         }
 
-        Vector3f rotation = resolveLookRotation(transform);
+        Rotation3f rotation = resolveLookRotation(transform);
         if (rotation == null) {
             return null;
         }
 
-        Transform look = new Transform(transform.getPosition().clone(), rotation);
+        Transform look = new Transform(new Vector3d(transform.getPosition()), rotation);
         Vector3d direction = look.getDirection();
-        return direction == null ? null : direction.clone();
+        return direction == null ? null : new Vector3d(direction);
     }
 
-    private static Vector3f resolveLookRotation(TransformComponent transform) {
+    private static TransformComponent resolveTransform(Player player) {
+        if (player == null || player.getWorld() == null || player.getReference() == null
+                || player.getWorld().getEntityStore() == null) {
+            return null;
+        }
+        Store<EntityStore> store = player.getWorld().getEntityStore().getStore();
+        return store == null ? null : store.getComponent(player.getReference(), TransformComponent.getComponentType());
+    }
+
+    private static Rotation3f resolveLookRotation(TransformComponent transform) {
         if (transform == null) {
             return null;
         }
@@ -977,29 +986,29 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return toRotationVector(sentTransform.lookOrientation);
         }
 
-        Vector3f rotation = transform.getRotation();
+        Rotation3f rotation = transform.getRotation();
         return rotation == null ? null : rotation.clone();
     }
 
-    private static Vector3f toRotationVector(Direction direction) {
+    private static Rotation3f toRotationVector(Direction direction) {
         if (direction == null) {
             return null;
         }
 
-        Vector3f rotation = new Vector3f();
+        Rotation3f rotation = new Rotation3f();
         rotation.setPitch(direction.pitch);
         rotation.setYaw(direction.yaw);
         rotation.setRoll(direction.roll);
         return rotation;
     }
 
-    private static Vector3f createVisualRotation(Vector3d direction, float spinDegrees, boolean returning) {
+    private static Rotation3f createVisualRotation(Vector3d direction, float spinDegrees, boolean returning) {
         if (direction == null || direction.length() <= MIN_DIRECTION_LENGTH) {
             return null;
         }
-        Vector3d horizontalDirection = new Vector3d(direction.getX(), 0.0d, direction.getZ());
+        Vector3d horizontalDirection = new Vector3d(direction.x, 0.0d, direction.z);
         if (horizontalDirection.length() <= MIN_DIRECTION_LENGTH) {
-            horizontalDirection.assign(0.0d, 0.0d, 1.0d);
+            horizontalDirection.set(0.0d, 0.0d, 1.0d);
         } else {
             horizontalDirection.normalize();
         }
@@ -1007,12 +1016,12 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             horizontalDirection.negate();
         }
 
-        Vector3f horizontalLook = Vector3f.lookAt(horizontalDirection);
+        Rotation3f horizontalLook = Rotation3f.lookAt(horizontalDirection);
         if (horizontalLook == null) {
             return null;
         }
-        Vector3f rotation = new Vector3f();
-        rotation.setYaw(horizontalLook.getYaw());
+        Rotation3f rotation = new Rotation3f();
+        rotation.setYaw(horizontalLook.yaw());
         rotation.setPitch(VISUAL_MODEL_TILT_DEGREES);
         rotation.setRoll(returning ? spinDegrees : -spinDegrees);
         return rotation;
@@ -1195,7 +1204,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         if (vector == null) {
             return "null";
         }
-        return String.format(Locale.ROOT, "%.2f,%.2f,%.2f", vector.getX(), vector.getY(), vector.getZ());
+        return String.format(Locale.ROOT, "%.2f,%.2f,%.2f", vector.x, vector.y, vector.z);
     }
 
     private static float wrapDegrees(float value) {
@@ -1207,10 +1216,10 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
         if (inventory == null) {
             return null;
         }
-        if (sectionId == Inventory.TOOLS_SECTION_ID) {
+        if (sectionId == PlayerInventoryUtils.TOOLS_SECTION_ID) {
             return inventory.getTools();
         }
-        if (sectionId == Inventory.HOTBAR_SECTION_ID) {
+        if (sectionId == PlayerInventoryUtils.HOTBAR_SECTION_ID) {
             return inventory.getHotbar();
         }
         return null;
@@ -1303,7 +1312,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             this.maxWoodHits = maxWoodHits;
             this.durabilitySaveChance = Math.max(0.0d, Math.min(1.0d, durabilitySaveChance));
             this.breakPowerMultiplier = Math.max(0.0d, breakPowerMultiplier);
-            this.visualDirection = direction.clone();
+            this.visualDirection = new Vector3d(direction);
         }
 
         private boolean matchesSelection(PlayerInventoryUtils.HeldItemContext context) {

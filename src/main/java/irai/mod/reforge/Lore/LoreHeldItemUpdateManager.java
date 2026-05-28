@@ -283,10 +283,10 @@ public final class LoreHeldItemUpdateManager {
         }
         Inventory inventory = player.getInventory();
         try {
-            if (sectionId == Inventory.HOTBAR_SECTION_ID) {
+            if (sectionId == PlayerInventoryUtils.HOTBAR_SECTION_ID) {
                 return inventory.getHotbar();
             }
-            if (sectionId == Inventory.TOOLS_SECTION_ID) {
+            if (sectionId == PlayerInventoryUtils.TOOLS_SECTION_ID) {
                 return inventory.getTools();
             }
         } catch (Throwable ignored) {

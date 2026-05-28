@@ -43,7 +43,7 @@ public class ContainerEventListener {
         }
 
         if (syncedCount > 0 && false) { // Set to true for debug
-            player.sendMessage(com.hypixel.hytale.server.core.Message.raw(
+            player.getPlayerRef().sendMessage(com.hypixel.hytale.server.core.Message.raw(
                     "Synced " + syncedCount + " upgraded items"
             ));
         }
@@ -94,7 +94,7 @@ public class ContainerEventListener {
         int level = ReforgeEquip.getUpgradeLevel(player, item, slot);
 
         if (level > 0 && false) { // Set to true for debug
-            player.sendMessage(com.hypixel.hytale.server.core.Message.raw(
+            player.getPlayerRef().sendMessage(com.hypixel.hytale.server.core.Message.raw(
                     "Dropped upgraded item: +" + level
             ));
         }

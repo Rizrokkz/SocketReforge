@@ -132,7 +132,7 @@ public final class ResonantCompendiumUI {
             return;
         }
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();
@@ -148,7 +148,7 @@ public final class ResonantCompendiumUI {
         CompendiumContext context = resolveCompendium(player);
         if (context == null) {
             closePageIfOpen(ref);
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.error_hold")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.compendium.error_hold")));
             return;
         }
         Snapshot snapshot = collectSnapshot(context.compendium);
@@ -244,7 +244,7 @@ public final class ResonantCompendiumUI {
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         CompendiumContext context = resolveCompendium(finalPlayer);
                         if (context == null) {
-                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.compendium.error_hold")));
+                            finalPlayer.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.compendium.error_hold")));
                             return;
                         }
                         if (RecipeCombineUI.isAvailable()) {
@@ -264,7 +264,7 @@ public final class ResonantCompendiumUI {
                                 });
                             }, 100, TimeUnit.MILLISECONDS);
                         } else {
-                            finalPlayer.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.recipe_combine.hyui_missing")));
+                            finalPlayer.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(finalPlayer, "ui.recipe_combine.hyui_missing")));
                         }
                     });
 

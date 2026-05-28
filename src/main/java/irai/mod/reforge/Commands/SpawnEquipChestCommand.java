@@ -13,8 +13,9 @@ import javax.annotation.Nonnull;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 import com.hypixel.hytale.math.util.ChunkUtil;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.component.Store;
+import org.joml.Vector3d;
+import org.joml.Vector3i;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.item.config.ItemDropList;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -29,6 +30,7 @@ import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBloc
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.item.ItemModule;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -93,7 +95,12 @@ public class SpawnEquipChestCommand extends CommandBase {
             return;
         }
 
-        TransformComponent transform = player.getTransformComponent();
+        Store<EntityStore> store = player.getWorld().getEntityStore() != null
+                ? player.getWorld().getEntityStore().getStore()
+                : null;
+        TransformComponent transform = store == null || player.getReference() == null
+                ? null
+                : store.getComponentConcurrent(player.getReference(), TransformComponent.getComponentType());
         if (transform == null || transform.getPosition() == null) {
             context.sendMessage(Message.raw("Unable to read your position."));
             return;
@@ -192,7 +199,7 @@ public class SpawnEquipChestCommand extends CommandBase {
 
     private static Vector3i getPlacementPositionInFront(TransformComponent transform, int distance) {
         Vector3d position = transform.getPosition();
-        float yaw = transform.getRotation() != null ? transform.getRotation().getYaw() : 0f;
+        float yaw = transform.getRotation() != null ? transform.getRotation().yaw() : 0f;
         double yawRadians = Math.toRadians(yaw);
 
         int stepX = (int) Math.round(-Math.sin(yawRadians));
@@ -201,9 +208,9 @@ public class SpawnEquipChestCommand extends CommandBase {
             stepZ = 1;
         }
 
-        int x = (int) Math.floor(position.getX()) + (stepX * distance);
-        int y = (int) Math.floor(position.getY());
-        int z = (int) Math.floor(position.getZ()) + (stepZ * distance);
+        int x = (int) Math.floor(position.x) + (stepX * distance);
+        int y = (int) Math.floor(position.y);
+        int z = (int) Math.floor(position.z) + (stepZ * distance);
         return new Vector3i(x, y, z);
     }
 

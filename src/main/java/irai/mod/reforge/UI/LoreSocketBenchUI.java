@@ -119,7 +119,7 @@ public final class LoreSocketBenchUI {
             return;
         }
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_socket.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_socket.hyui_missing")));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();

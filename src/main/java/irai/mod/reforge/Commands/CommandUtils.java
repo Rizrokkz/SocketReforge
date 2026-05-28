@@ -3,11 +3,15 @@ package irai.mod.reforge.Commands;
 import javax.annotation.Nonnull;
 
 import com.google.gson.JsonObject;
+import com.hypixel.hytale.component.Holder;
+import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.CommandSender;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ItemTypeUtils;
 import irai.mod.reforge.Common.PermissionUtils;
@@ -30,6 +34,16 @@ public class CommandUtils {
         CommandSender sender = context.sender();
         if (sender instanceof Player) {
             return (Player) sender;
+        }
+        if (sender instanceof PlayerRef playerRef) {
+            Holder<EntityStore> holder = playerRef.getHolder();
+            if (holder != null) {
+                return holder.getComponent(Player.getComponentType());
+            }
+            Ref<EntityStore> ref = playerRef.getReference();
+            if (ref != null && ref.getStore() != null) {
+                return ref.getStore().getComponentConcurrent(ref, Player.getComponentType());
+            }
         }
         return null;
     }

@@ -182,7 +182,7 @@ public final class EssenceBenchUI {
     public static void open(Player player) {
         if (player == null) return;
         if (!hyuiAvailable) {
-            player.sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.essence_bench.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.essence_bench.hyui_missing")));
             return;
         }
         PlayerRef ref = player.getPlayerRef();

@@ -15,7 +15,7 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
-import com.hypixel.hytale.math.vector.Vector3d;
+import org.joml.Vector3d;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.protocol.MovementStates;
 import com.hypixel.hytale.server.core.Message;
@@ -285,9 +285,9 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
             return;
         }
 
-        double px = playerPos.getX();
-        double py = playerPos.getY();
-        double pz = playerPos.getZ();
+        double px = playerPos.x;
+        double py = playerPos.y;
+        double pz = playerPos.z;
         if (state.hasLastProximityPos) {
             double dx = px - state.lastProximityX;
             double dy = py - state.lastProximityY;
@@ -440,9 +440,9 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
     }
 
     private static double distanceSquared(double px, double py, double pz, Vector3d pos) {
-        double dx = pos.getX() - px;
-        double dy = pos.getY() - py;
-        double dz = pos.getZ() - pz;
+        double dx = pos.x - px;
+        double dy = pos.y - py;
+        double dz = pos.z - pz;
         return (dx * dx) + (dy * dy) + (dz * dz);
     }
 
@@ -473,7 +473,7 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
         if (message == null || message.isBlank() || message.equals(PROXIMITY_MESSAGE_KEY)) {
             message = "You sense a compatible spirit nearby.";
         }
-        player.sendMessage(Message.raw(message));
+        player.getPlayerRef().sendMessage(Message.raw(message));
     }
 
     private static EntityEffect resolveHighlightEffect() {
