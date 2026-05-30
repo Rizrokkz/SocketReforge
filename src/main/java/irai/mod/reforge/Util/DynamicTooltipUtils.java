@@ -9,6 +9,23 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.bson.BsonDocument;
+import org.bson.BsonValue;
+
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.item.config.metadata.ItemDisplayMetadata;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.Universe;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ItemTypeUtils;
 import irai.mod.reforge.Config.RefinementConfig;
@@ -24,8 +41,7 @@ import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
 
 /**
- * Utility class for interacting with DynamicTooltipsLib.
- * Uses Provider-based approach for per-item metadata tooltips.
+ * Utility class for native item tooltip metadata.
  */
 public class DynamicTooltipUtils {
 
@@ -33,6 +49,9 @@ public class DynamicTooltipUtils {
     
     private static final String MOD_PREFIX = "[SocketReforge]";
     private static final String PROVIDER_ID = "irai:SocketReforge";
+    private static final String NATIVE_TOOLTIP_STATE_KEY = "SocketReforgeNativeTooltip";
+    private static final String STATE_BASE_DESCRIPTION = "BaseDescription";
+    private static final String STATE_LAST_DESCRIPTION = "LastDescription";
     
     // Possible class names for DynamicTooltipsLib
     private static final String[] LIB_CLASS_NAMES = {
@@ -41,7 +60,7 @@ public class DynamicTooltipUtils {
         "org.herolias.tooltips.api.DynamicTooltipsApi"
     };
     
-    // Tooltip color constants - DynamicTooltipsLib format
+    // Tooltip color constants - Hytale message markup format
     private static final String COLOR_CYAN = "<color is=\"#55FFFF\">";
     private static final String COLOR_WHITE = "<color is=\"#FFFFFF\">";
     private static final String COLOR_GREEN = "<color is=\"#55FF55\">";
@@ -60,12 +79,12 @@ public class DynamicTooltipUtils {
     
     // ASCII socket symbols - always work in any font
     private static final String SOCKET_FILLED = "[o]";
-    private static final String SOCKET_GREATER = "[0]";
+    private static final String SOCKET_GREATER = "[§]";
     private static final String SOCKET_EMPTY = "[ ]";
-    private static final String SOCKET_LOCKED = "[x]";
-    private static final String LORE_SOCKET_FILLED = "{o}";
+    private static final String SOCKET_LOCKED = "[ø]";
+    private static final String LORE_SOCKET_FILLED = "{¤}";
     private static final String LORE_SOCKET_EMPTY = "{ }";
-    private static final String LORE_SOCKET_LOCKED = "{x}";
+    private static final String LORE_SOCKET_LOCKED = "{ø}";
 
     // Parts metadata keys
     private static final String META_PARTS_PROFILE_TYPE = "SocketReforge.Parts.ProfileType";
@@ -213,8 +232,8 @@ public class DynamicTooltipUtils {
             }
             
             if (!isAvailable) {
-                logger.warn("DynamicTooltipsLib not found - tooltip features disabled");
-                logger.warn("To enable tooltips, install DynamicTooltipsLib in server/mods/");
+                isAvailable = true;
+                logger.info("DynamicTooltipsLib not found - using native item display tooltips");
             }
             
             initialized = true;
@@ -245,10 +264,7 @@ public class DynamicTooltipUtils {
      * @return status message
      */
     public static String getStatusMessage() {
-        if (isAvailable) {
-            return "";
-        }
-        return "<color=#FF5555>DynamicTooltipsLib not installed - tooltips disabled. Install it in server/mods/ for item tooltips.";
+        return "";
     }
     
     public static String getLoadedClassName() {
@@ -581,13 +597,24 @@ public class DynamicTooltipUtils {
             }
         }
     }
+
+    private static final class TooltipPayload {
+        private final String displayName;
+        private final boolean shouldOverrideName;
+        private final List<String> lines;
+
+        private TooltipPayload(String displayName, boolean shouldOverrideName, List<String> lines) {
+            this.displayName = displayName;
+            this.shouldOverrideName = shouldOverrideName;
+            this.lines = lines;
+        }
+    }
     
     /**
-     * Get TooltipData for an item using reflection
+     * Build native tooltip payload for an item from its serialized metadata.
      */
-    private static Object getTooltipDataForItem(String itemId, String metadata, String locale) {
+    private static TooltipPayload buildTooltipPayload(String itemId, String metadata, String locale) {
         String langCode = resolveLangCode(locale);
-        String rawItemId = itemId;
         String normalizedItemId = normalizeItemId(itemId);
         if (normalizedItemId != null && !normalizedItemId.isBlank()) {
             itemId = normalizedItemId;
@@ -768,7 +795,7 @@ public class DynamicTooltipUtils {
             String refineLabel = tr(langCode, "tooltip.refine_grade", "Refine Grade");
             String gradeLabel = formatRefineGradeLabel(upgradeName, reforgeLevel, isArmorItem);
             String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + gradeLabel
-                    + " (" + COLOR_GREEN + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
+                     + COLOR_GREEN + " (" + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
             tooltipLines.add(line);
         }
 
@@ -974,6 +1001,18 @@ public class DynamicTooltipUtils {
         if (tooltipLines.isEmpty()) {
             return null;
         }
+
+        return new TooltipPayload(displayName, shouldOverrideName, tooltipLines);
+    }
+
+    /**
+     * Get TooltipData for legacy DynamicTooltipsLib integrations using reflection.
+     */
+    private static Object getTooltipDataForItem(String itemId, String metadata, String locale) {
+        TooltipPayload payload = buildTooltipPayload(itemId, metadata, locale);
+        if (payload == null) {
+            return null;
+        }
         
         try {
             // Try to create TooltipData using builder pattern
@@ -997,15 +1036,15 @@ public class DynamicTooltipUtils {
             Object builder = builderMethod.invoke(null);
             
             // Set hashInput - required for caching - use the metadata as-is
-            String hashInput = (rawItemId != null ? rawItemId : itemId) + ":" + (metadata != null ? metadata.hashCode() : "none");
+            String hashInput = (itemId != null ? itemId : "") + ":" + (metadata != null ? metadata.hashCode() : "none");
             Method hashInputMethod = builder.getClass().getMethod("hashInput", String.class);
             hashInputMethod.invoke(builder, hashInput);
             
             // Set name override only when we should override the client-localized name
-            if (shouldOverrideName && displayName != null && !displayName.isEmpty()) {
+            if (payload.shouldOverrideName && payload.displayName != null && !payload.displayName.isEmpty()) {
                 try {
                     Method nameOverrideMethod = builder.getClass().getMethod("nameOverride", String.class);
-                    nameOverrideMethod.invoke(builder, displayName);
+                    nameOverrideMethod.invoke(builder, payload.displayName);
                 } catch (NoSuchMethodException e) {
                     // Name override not available
                 }
@@ -1013,7 +1052,7 @@ public class DynamicTooltipUtils {
             
             // Add all tooltip lines
             Method addLineMethod = builder.getClass().getMethod("addLine", String.class);
-            for (String tooltipLine : tooltipLines) {
+            for (String tooltipLine : payload.lines) {
                 addLineMethod.invoke(builder, tooltipLine);
             }
             
@@ -1022,7 +1061,7 @@ public class DynamicTooltipUtils {
             Object result = buildMethod.invoke(builder);
             
             if (debugMode) {
-                logger.info("[TOOLTIP] Created tooltip for " + itemId + " with " + tooltipLines.size() + " lines");
+                logger.info("[TOOLTIP] Created tooltip for " + itemId + " with " + payload.lines.size() + " lines");
             }
             
             return result;
@@ -2471,28 +2510,614 @@ public class DynamicTooltipUtils {
     }
     
     /**
-     * Triggers DynamicTooltipsLib to refresh tooltips for all connected players.
+     * Refreshes native tooltip metadata for all connected players.
      */
     public static void refreshAllPlayers() {
-        if (!isAvailable || tooltipApi == null) {
+        Universe universe = Universe.get();
+        if (universe == null) {
             return;
         }
 
-        try {
-            if (refreshAllPlayersMethod == null) {
-                refreshAllPlayersMethod = tooltipApi.getClass().getMethod("refreshAllPlayers");
+        for (PlayerRef playerRef : universe.getPlayers()) {
+            refreshPlayer(playerRef);
+        }
+    }
+
+    public static ItemStack applyNativeTooltip(ItemStack item) {
+        return applyNativeTooltip(item, null);
+    }
+
+    public static ItemStack applyNativeTooltip(ItemStack item, String locale) {
+        if (ItemStack.isEmpty(item)) {
+            return item;
+        }
+
+        String metadata = item.getMetadata() == null ? null : item.getMetadata().toJson();
+        TooltipPayload payload = buildTooltipPayload(item.getItemId(), metadata, locale);
+        BsonDocument state = item.getFromMetadataOrNull(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT);
+        ItemDisplayMetadata display = item.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
+        Message currentName = display == null ? null : display.getName();
+        Message currentDescription = display == null ? null : display.getDescription();
+
+        if (payload == null) {
+            if (state == null) {
+                return item;
             }
-            refreshAllPlayersMethod.setAccessible(true);
-            refreshAllPlayersMethod.invoke(tooltipApi);
-        } catch (NoSuchMethodException e) {
-            if (debugMode) {
-                logger.warn("refreshAllPlayers method not found in loaded tooltip API");
-            }
-        } catch (Exception e) {
-            if (debugMode) {
-                logger.warn("Failed to refresh tooltips: " + e.getMessage());
+            Message baseDescription = cleanBaseDescription(decodeStateMessage(state, STATE_BASE_DESCRIPTION));
+            return writeDisplay(item, currentName, baseDescription)
+                    .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT, null);
+        }
+
+        Message lastDescription = decodeStateMessage(state, STATE_LAST_DESCRIPTION);
+        Message baseDescription = decodeStateMessage(state, STATE_BASE_DESCRIPTION);
+        if (state == null || !messagesEqual(currentDescription, lastDescription)) {
+            if (isGeneratedOrCorruptedDescription(currentDescription)) {
+                baseDescription = cleanBaseDescription(baseDescription);
+            } else {
+                baseDescription = currentDescription;
             }
         }
+        baseDescription = cleanBaseDescription(baseDescription);
+
+        Message name = currentName;
+        if (payload.shouldOverrideName && payload.displayName != null && !payload.displayName.isBlank()) {
+            name = Message.raw(payload.displayName);
+        }
+
+        Message tooltipBlock = buildNativeTooltipBlock(payload.lines);
+        Message fullDescription = composeDescription(baseDescription, tooltipBlock);
+        return writeDisplay(item, name, fullDescription)
+                .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
+                        encodeState(baseDescription, fullDescription));
+    }
+
+    private static void refreshPlayer(PlayerRef playerRef) {
+        if (playerRef == null) {
+            return;
+        }
+        Ref<EntityStore> ref = playerRef.getReference();
+        if (ref == null || !ref.isValid()) {
+            return;
+        }
+        Store<EntityStore> store = ref.getStore();
+        World world = store.getExternalData().getWorld();
+        Runnable refresh = () -> {
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (player != null) {
+                refreshInventory(player.getInventory(), LangLoader.getPlayerLanguage(player));
+            }
+        };
+        if (world != null && world.isAlive() && !world.isInThread()) {
+            world.execute(refresh);
+        } else {
+            refresh.run();
+        }
+    }
+
+    public static void refreshPlayerTooltips(PlayerRef playerRef) {
+        refreshPlayer(playerRef);
+    }
+
+    private static void refreshInventory(Inventory inventory, String locale) {
+        if (inventory == null) {
+            return;
+        }
+        refreshContainerTooltips(inventory.getHotbar(), locale);
+        refreshContainerTooltips(inventory.getStorage(), locale);
+        refreshContainerTooltips(inventory.getBackpack(), locale);
+        refreshContainerTooltips(inventory.getArmor(), locale);
+        refreshContainerTooltips(inventory.getUtility(), locale);
+        refreshContainerTooltips(inventory.getTools(), locale);
+    }
+
+    public static int refreshContainerTooltips(ItemContainer container) {
+        return refreshContainerTooltips(container, null);
+    }
+
+    public static int refreshContainerTooltips(ItemContainer container, String locale) {
+        if (container == null) {
+            return 0;
+        }
+        int updatedCount = 0;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            ItemStack item = container.getItemStack(slot);
+            if (ItemStack.isEmpty(item)) {
+                continue;
+            }
+            ItemStack updated = applyNativeTooltip(item, locale);
+            if (!updated.isEquivalentType(item)) {
+                container.setItemStackForSlot(slot, updated, false);
+                updatedCount++;
+            }
+        }
+        return updatedCount;
+    }
+
+    private static Message buildNativeTooltipBlock(List<String> lines) {
+        Message block = Message.empty();
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) {
+                block.insert(Message.raw("\n"));
+            }
+            block.insert(parseTooltipLine(lines.get(i)));
+        }
+        return block;
+    }
+
+    private static Message composeDescription(Message baseDescription, Message tooltipBlock) {
+        if (isMessageEmpty(baseDescription)) {
+            return tooltipBlock;
+        }
+        Message description = Message.empty();
+        description.insert(baseDescription);
+        description.insert(Message.raw("\n\n"));
+        description.insert(tooltipBlock);
+        return description;
+    }
+
+    private static ItemStack writeDisplay(ItemStack item, Message name, Message description) {
+        if (isMessageEmpty(name) && isMessageEmpty(description)) {
+            return item.withMetadata(ItemDisplayMetadata.KEYED_CODEC, null);
+        }
+        return item.withMetadata(
+                ItemDisplayMetadata.KEYED_CODEC,
+                new ItemDisplayMetadata(name, isMessageEmpty(description) ? null : description));
+    }
+
+    private static Message cleanBaseDescription(Message baseDescription) {
+        if (isMessageEmpty(baseDescription)) {
+            return null;
+        }
+
+        String text = flattenMessageText(baseDescription);
+        if (text == null || text.isBlank()) {
+            return baseDescription;
+        }
+        if (!containsStaleSocketReforgeTooltip(text) && !containsOrphanTooltipRemnant(text)) {
+            return baseDescription;
+        }
+
+        String[] lines = text.split("\\R", -1);
+        StringBuilder cleaned = new StringBuilder();
+        boolean strippingSocketBlock = false;
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (isForeignTooltipHeader(trimmed)) {
+                strippingSocketBlock = false;
+                appendCleanedLine(cleaned, line);
+                continue;
+            }
+            if (isSocketReforgeGeneratedStart(trimmed)) {
+                strippingSocketBlock = true;
+                continue;
+            }
+            if (isOrphanTooltipRemnantLine(trimmed)) {
+                continue;
+            }
+            if (strippingSocketBlock) {
+                if (trimmed.isEmpty()) {
+                    strippingSocketBlock = false;
+                }
+                continue;
+            }
+            appendCleanedLine(cleaned, line);
+        }
+
+        String cleanedText = trimBlankLines(cleaned.toString());
+        if (cleanedText.isBlank()) {
+            return null;
+        }
+        return Message.raw(cleanedText);
+    }
+
+    private static boolean containsStaleSocketReforgeTooltip(String text) {
+        if (text == null) {
+            return false;
+        }
+        if (text.contains("<color") || text.contains("</color>")) {
+            return true;
+        }
+        String[] lines = text.split("\\R", -1);
+        for (String line : lines) {
+            if (isSocketReforgeGeneratedStart(line.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsOrphanTooltipRemnant(String text) {
+        if (text == null) {
+            return false;
+        }
+        String[] lines = text.split("\\R", -1);
+        for (String line : lines) {
+            if (isOrphanTooltipRemnantLine(line.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isGeneratedOrCorruptedDescription(Message description) {
+        if (isMessageEmpty(description)) {
+            return false;
+        }
+        String text = flattenMessageText(description);
+        return containsStaleSocketReforgeTooltip(text) || containsOrphanTooltipRemnant(text);
+    }
+
+    private static boolean isForeignTooltipHeader(String line) {
+        return "Enchantments:".equals(line);
+    }
+
+    private static boolean isSocketReforgeGeneratedStart(String line) {
+        if (line == null || line.isEmpty()) {
+            return false;
+        }
+        if (line.contains("<color") || line.contains("</color>")) {
+            return true;
+        }
+        return line.startsWith("Damage:")
+                || line.startsWith("Damage :")
+                || line.startsWith("Refine Grade:")
+                || line.startsWith("Softcore Wear:")
+                || line.startsWith("Sockets:")
+                || line.startsWith("Lore Sockets:")
+                || line.startsWith("Lore:")
+                || line.startsWith("Resonance:")
+                || line.startsWith("Quality:")
+                || line.startsWith("Type:")
+                || line.startsWith("Recipe:")
+                || line.startsWith("Recipe :")
+                || line.startsWith("Usages:")
+                || startsWithLocalizedTooltipLabel(line)
+                || startsWithSoftcoreWearLine(line)
+                || startsWithEssenceTier(line);
+    }
+
+    private static boolean startsWithLocalizedTooltipLabel(String line) {
+        return startsWithLocalizedTooltipLabel(line, "tooltip.damage_label", "Damage")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.refine_grade", "Refine Grade")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.sockets_label", "Sockets")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.lore_sockets_label", "Lore Sockets")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.lore_label", "Lore")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.resonance_label", "Resonance")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.quality_label", "Quality")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.type_label", "Type")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.recipe_label", "Recipe")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.usages_label", "Usages")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.parts_label", "Parts");
+    }
+
+    private static boolean startsWithLocalizedTooltipLabel(String line, String key, String fallback) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (startsWithTooltipLabel(line, fallback)) {
+            return true;
+        }
+        String fallbackLanguage = LangLoader.getFallbackLanguage();
+        if (startsWithTooltipLabel(line, tr(fallbackLanguage, key, fallback))) {
+            return true;
+        }
+        for (String langCode : LangLoader.getLoadedLanguages()) {
+            if (startsWithTooltipLabel(line, tr(langCode, key, fallback))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithTooltipLabel(String line, String label) {
+        if (line == null || label == null || label.isBlank()) {
+            return false;
+        }
+        String trimmedLabel = label.trim();
+        return line.equals(trimmedLabel)
+                || line.startsWith(trimmedLabel + ":")
+                || line.startsWith(trimmedLabel + " :");
+    }
+
+    private static boolean startsWithSoftcoreWearLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (line.startsWith("Softcore Wear:")) {
+            return true;
+        }
+        String fallbackLanguage = LangLoader.getFallbackLanguage();
+        if (startsWithSoftcoreWearLine(line, fallbackLanguage)) {
+            return true;
+        }
+        for (String langCode : LangLoader.getLoadedLanguages()) {
+            if (startsWithSoftcoreWearLine(line, langCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithSoftcoreWearLine(String line, String langCode) {
+        String template = tr(langCode, "tooltip.softcore_wear", "Softcore Wear: -{0}% {1} ({2} breaks)");
+        int colonIndex = template == null ? -1 : template.indexOf(':');
+        if (colonIndex < 0) {
+            return false;
+        }
+        return startsWithTooltipLabel(line, template.substring(0, colonIndex));
+    }
+
+    private static boolean isOrphanTooltipRemnant(String line) {
+        return "• |".equals(line)
+                || "•".equals(line)
+                || "|".equals(line);
+    }
+
+    private static boolean isOrphanTooltipRemnantLine(String line) {
+        if (line == null) {
+            return false;
+        }
+        String compact = line.trim()
+                .replace("\u00A0", "")
+                .replace(" ", "")
+                .replace("\t", "");
+        return isOrphanTooltipRemnant(line)
+                || "|".equals(compact)
+                || "I".equals(compact)
+                || "•".equals(compact)
+                || "•|".equals(compact)
+                || "•I".equals(compact)
+                || "â€¢".equals(compact)
+                || "â€¢|".equals(compact)
+                || "â€¢I".equals(compact);
+    }
+
+    private static boolean startsWithEssenceTier(String line) {
+        for (Essence.Type type : Essence.Type.values()) {
+            String prefix = localizeEssenceType(type, "en-US") + " T";
+            if (line.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void appendCleanedLine(StringBuilder cleaned, String line) {
+        if (cleaned.length() > 0) {
+            cleaned.append('\n');
+        }
+        cleaned.append(line);
+    }
+
+    private static String trimBlankLines(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        String[] lines = text.split("\\R", -1);
+        int start = 0;
+        int end = lines.length;
+        while (start < end && lines[start].isBlank()) {
+            start++;
+        }
+        while (end > start && lines[end - 1].isBlank()) {
+            end--;
+        }
+        StringBuilder trimmed = new StringBuilder();
+        for (int i = start; i < end; i++) {
+            if (trimmed.length() > 0) {
+                trimmed.append('\n');
+            }
+            trimmed.append(lines[i]);
+        }
+        return trimmed.toString();
+    }
+
+    private static String flattenMessageText(Message message) {
+        if (message == null) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        appendMessageText(text, message);
+        return text.toString();
+    }
+
+    private static void appendMessageText(StringBuilder text, Message message) {
+        if (message == null) {
+            return;
+        }
+        String rawText = message.getRawText();
+        if (rawText != null) {
+            text.append(rawText);
+        }
+        for (Message child : message.getChildren()) {
+            appendMessageText(text, child);
+        }
+    }
+
+    private static Message parseTooltipLine(String line) {
+        if (line == null || line.isEmpty()) {
+            return Message.empty();
+        }
+
+        Message message = Message.empty();
+        List<TooltipTextStyle> styleStack = new ArrayList<>();
+        TooltipTextStyle currentStyle = TooltipTextStyle.DEFAULT;
+        int index = 0;
+
+        while (index < line.length()) {
+            int nextTag = line.indexOf("<", index);
+
+            if (nextTag < 0) {
+                appendRawSegment(message, line.substring(index), currentStyle);
+                break;
+            }
+
+            int tagEnd = line.indexOf(">", nextTag);
+            if (tagEnd < 0) {
+                appendRawSegment(message, line.substring(index), currentStyle);
+                break;
+            }
+
+            String tag = line.substring(nextTag, tagEnd + 1);
+            TooltipTextStyle nextStyle = null;
+            boolean validTag = true;
+            boolean closingTag = tag.startsWith("</");
+
+            if ("<i>".equals(tag)) {
+                nextStyle = currentStyle.withItalic(true);
+            } else if ("<b>".equals(tag)) {
+                nextStyle = currentStyle.withBold(true);
+            } else if (tag.startsWith("<color")) {
+                String color = extractLegacyTagAttribute(tag, "is");
+                if (color == null || color.isBlank()) {
+                    validTag = false;
+                } else {
+                    nextStyle = currentStyle.withColor(color);
+                }
+            } else if ("</i>".equals(tag) || "</b>".equals(tag) || "</color>".equals(tag)) {
+                nextStyle = styleStack.isEmpty() ? TooltipTextStyle.DEFAULT : styleStack.remove(styleStack.size() - 1);
+            } else {
+                validTag = false;
+            }
+
+            if (!validTag) {
+                index = nextTag + 1;
+                continue;
+            }
+
+            appendRawSegment(message, line.substring(index, nextTag), currentStyle);
+            if (nextStyle != null) {
+                if (!closingTag) {
+                    styleStack.add(currentStyle);
+                }
+                currentStyle = nextStyle;
+            }
+            index = tagEnd + 1;
+        }
+
+        return message;
+    }
+
+    private static void appendRawSegment(Message message, String text, TooltipTextStyle style) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        Message segment = Message.raw(text);
+        style.apply(segment);
+        message.insert(segment);
+    }
+
+    private static String extractLegacyTagAttribute(String tag, String attribute) {
+        if (tag == null) {
+            return null;
+        }
+        String needle = attribute + "=";
+        int attrIndex = tag.indexOf(needle);
+        if (attrIndex < 0) {
+            return null;
+        }
+        int valueStart = attrIndex + needle.length();
+        if (valueStart >= tag.length()) {
+            return null;
+        }
+        char quote = tag.charAt(valueStart);
+        if (quote == '"' || quote == '\'') {
+            int valueEnd = tag.indexOf(quote, valueStart + 1);
+            return valueEnd > valueStart ? tag.substring(valueStart + 1, valueEnd) : null;
+        }
+        int valueEnd = valueStart;
+        while (valueEnd < tag.length() && tag.charAt(valueEnd) != ' ' && tag.charAt(valueEnd) != '>') {
+            valueEnd++;
+        }
+        return valueEnd > valueStart ? tag.substring(valueStart, valueEnd) : null;
+    }
+
+    private record TooltipTextStyle(boolean italic, boolean bold, String color) {
+        private static final TooltipTextStyle DEFAULT = new TooltipTextStyle(false, false, null);
+
+        private TooltipTextStyle withItalic(boolean italic) {
+            return new TooltipTextStyle(italic, bold, color);
+        }
+
+        private TooltipTextStyle withBold(boolean bold) {
+            return new TooltipTextStyle(italic, bold, color);
+        }
+
+        private TooltipTextStyle withColor(String color) {
+            return new TooltipTextStyle(italic, bold, color);
+        }
+
+        private void apply(Message message) {
+            if (italic) {
+                message.italic(true);
+            }
+            if (bold) {
+                message.bold(true);
+            }
+            if (color != null && !color.isBlank()) {
+                message.color(color);
+            }
+        }
+    }
+
+    private static BsonDocument encodeState(Message baseDescription, Message lastDescription) {
+        BsonDocument state = new BsonDocument();
+        BsonValue base = encodeMessage(baseDescription);
+        if (base != null) {
+            state.put(STATE_BASE_DESCRIPTION, base);
+        }
+        BsonValue last = encodeMessage(lastDescription);
+        if (last != null) {
+            state.put(STATE_LAST_DESCRIPTION, last);
+        }
+        return state;
+    }
+
+    private static Message decodeStateMessage(BsonDocument state, String key) {
+        if (state == null || key == null) {
+            return null;
+        }
+        BsonValue value = state.get(key);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        try {
+            return Message.CODEC.decode(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static BsonValue encodeMessage(Message message) {
+        if (isMessageEmpty(message)) {
+            return null;
+        }
+        try {
+            return Message.CODEC.encode(message);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean messagesEqual(Message left, Message right) {
+        if (isMessageEmpty(left) && isMessageEmpty(right)) {
+            return true;
+        }
+        BsonValue encodedLeft = encodeMessage(left);
+        BsonValue encodedRight = encodeMessage(right);
+        return encodedLeft != null && encodedLeft.equals(encodedRight);
+    }
+
+    private static boolean isMessageEmpty(Message message) {
+        if (message == null) {
+            return true;
+        }
+        String rawText = message.getRawText();
+        String messageId = message.getMessageId();
+        return (rawText == null || rawText.isEmpty())
+                && (messageId == null || messageId.isEmpty())
+                && message.getChildren().isEmpty();
     }
 
     private static boolean isArmorType(String baseItemId, String itemId) {
@@ -2631,4 +3256,3 @@ public class DynamicTooltipUtils {
         return sb.toString();
     }
 }
-

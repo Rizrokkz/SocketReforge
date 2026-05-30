@@ -169,9 +169,7 @@ public class ReforgeEquip extends SimpleInteraction {
         // Check for item break chance - use config if available, otherwise use defaults
         double breakChance;
         if (refinementConfig != null) {
-            breakChance = isArmorItem
-                    ? refinementConfig.getArmorBreakChance(currentLevel)
-                    : refinementConfig.getBreakChance(currentLevel);
+            breakChance = refinementConfig.getAdjustedBreakChance(currentLevel, isArmorItem, materialId);
         } else {
             breakChance = DEFAULT_BREAK_CHANCES[Math.min(currentLevel, DEFAULT_BREAK_CHANCES.length - 1)];
         }
@@ -197,7 +195,7 @@ public class ReforgeEquip extends SimpleInteraction {
         }
 
         // Roll for upgrade outcome
-        ReforgeOutcome outcome = rollReforgeOutcome(currentLevel);
+        ReforgeOutcome outcome = rollReforgeOutcome(currentLevel, materialId);
         int newLevel = Math.max(0, Math.min(currentLevel + outcome.levelChange, maxLevel));
 
         // Create the upgraded item with new ID
@@ -1297,10 +1295,14 @@ public class ReforgeEquip extends SimpleInteraction {
     // ══════════════════════════════════════════════════════════════════════════════
 
     private ReforgeOutcome rollReforgeOutcome(int currentLevel) {
+        return rollReforgeOutcome(currentLevel, null);
+    }
+
+    private ReforgeOutcome rollReforgeOutcome(int currentLevel, String materialId) {
         // Use config if available, otherwise use defaults
         double[] weights;
         if (refinementConfig != null) {
-            double[] configWeights = refinementConfig.getReforgeWeights(currentLevel);
+            double[] configWeights = refinementConfig.getAdjustedReforgeWeights(currentLevel, materialId);
             weights = configWeights != null ? configWeights : DEFAULT_REFORGE_WEIGHTS[Math.min(currentLevel, DEFAULT_REFORGE_WEIGHTS.length - 1)];
         } else {
             weights = DEFAULT_REFORGE_WEIGHTS[Math.min(currentLevel, DEFAULT_REFORGE_WEIGHTS.length - 1)];

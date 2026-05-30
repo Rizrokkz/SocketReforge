@@ -686,9 +686,137 @@ public class RefinementConfig implements ConfigDefaultInjector {
         return tiers.isEmpty() ? null : tiers.get(0);
     }
 
+    public MaterialTier getMaterialTierForItem(String itemId) {
+        int index = getMaterialTierIndexForItem(itemId);
+        List<MaterialTier> tiers = getMaterialTiers();
+        return index < 0 || index >= tiers.size() ? null : tiers.get(index);
+    }
+
+    public int getMaterialTierIndexForLevel(int level) {
+        int safe = Math.max(0, level);
+        List<MaterialTier> tiers = getMaterialTiers();
+        for (int i = 0; i < tiers.size(); i++) {
+            if (tiers.get(i).matches(safe)) {
+                return i;
+            }
+        }
+        return tiers.isEmpty() ? -1 : 0;
+    }
+
+    public int getMaterialTierIndexForItem(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return -1;
+        }
+        List<MaterialTier> tiers = getMaterialTiers();
+        for (int i = 0; i < tiers.size(); i++) {
+            MaterialTier tier = tiers.get(i);
+            if (tier.itemId != null && tier.itemId.equalsIgnoreCase(itemId)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public int getMaterialTierDelta(int currentLevel, String materialItemId) {
+        int requiredIndex = getMaterialTierIndexForLevel(currentLevel);
+        int usedIndex = getMaterialTierIndexForItem(materialItemId);
+        if (requiredIndex < 0 || usedIndex < 0) {
+            return 0;
+        }
+        return usedIndex - requiredIndex;
+    }
+
+    public double getAdjustedBreakChance(int currentLevel, boolean isArmor, String materialItemId) {
+        double base = isArmor ? getArmorBreakChance(currentLevel) : getBreakChance(currentLevel);
+        int delta = getMaterialTierDelta(currentLevel, materialItemId);
+        if (delta > 0) {
+            return clamp(base * Math.pow(0.75, delta), 0.0, 1.0);
+        }
+        if (delta < 0) {
+            return clamp(base * Math.pow(1.25, -delta), 0.0, 0.95);
+        }
+        return clamp(base, 0.0, 1.0);
+    }
+
+    public double[] getAdjustedReforgeWeights(int currentLevel, String materialItemId) {
+        double[] weights = getReforgeWeights(currentLevel);
+        if (weights == null || weights.length < 4) {
+            return weights;
+        }
+        int delta = getMaterialTierDelta(currentLevel, materialItemId);
+        if (delta == 0) {
+            return weights;
+        }
+        double[] adjusted = weights.clone();
+        normalizeWeights(adjusted);
+        int steps = Math.min(3, Math.abs(delta));
+        for (int i = 0; i < steps; i++) {
+            if (delta > 0) {
+                boostSuccessWeights(adjusted, currentLevel);
+            } else {
+                reduceSuccessWeights(adjusted);
+            }
+        }
+        if (currentLevel + 2 > getMaxLevel()) {
+            enforceNoJackpot(adjusted, 0);
+        }
+        normalizeWeights(adjusted);
+        return adjusted;
+    }
+
     private void invalidateMaterialCache() {
         materialTierCache = null;
         materialIdCache = null;
+    }
+
+    private void boostSuccessWeights(double[] weights, int currentLevel) {
+        moveFailureWeight(weights, 2, 0.055);
+        if (currentLevel + 2 <= getMaxLevel()) {
+            moveFailureWeight(weights, 3, 0.035);
+        }
+    }
+
+    private static void reduceSuccessWeights(double[] weights) {
+        double upgradeLoss = Math.min(weights[2] * 0.30, 0.10);
+        weights[2] -= upgradeLoss;
+        weights[0] += upgradeLoss * 0.70;
+        weights[1] += upgradeLoss * 0.30;
+
+        double jackpotLoss = Math.min(weights[3] * 0.40, 0.05);
+        weights[3] -= jackpotLoss;
+        weights[0] += jackpotLoss * 0.70;
+        weights[1] += jackpotLoss * 0.30;
+    }
+
+    private static void moveFailureWeight(double[] weights, int targetIndex, double amount) {
+        double remaining = Math.max(0.0, amount);
+        double fromDegrade = Math.min(weights[0], remaining);
+        weights[0] -= fromDegrade;
+        remaining -= fromDegrade;
+        double fromSame = Math.min(weights[1], remaining);
+        weights[1] -= fromSame;
+        weights[targetIndex] += fromDegrade + fromSame;
+    }
+
+    private static void normalizeWeights(double[] weights) {
+        if (weights == null || weights.length < 4) {
+            return;
+        }
+        double sum = 0.0;
+        for (int i = 0; i < 4; i++) {
+            weights[i] = Math.max(0.0, weights[i]);
+            sum += weights[i];
+        }
+        if (sum <= 0.0) {
+            weights[0] = 0.0;
+            weights[1] = 1.0;
+            weights[2] = 0.0;
+            weights[3] = 0.0;
+            return;
+        }
+        for (int i = 0; i < 4; i++) {
+            weights[i] /= sum;
+        }
     }
 
     private static double sample(double[] values, int index, double fallback) {

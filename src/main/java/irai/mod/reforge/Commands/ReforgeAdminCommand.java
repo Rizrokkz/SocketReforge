@@ -21,6 +21,7 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.ReforgePlugin;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 
 /**
@@ -173,6 +174,7 @@ public class ReforgeAdminCommand extends CommandBase {
 
     private void setHeldItem(Player player, ItemStack itemStack) {
         PlayerInventoryUtils.setSelectedHotbarItem(player, itemStack);
+        DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
     }
 
     private void sendUsage(CommandContext context) {

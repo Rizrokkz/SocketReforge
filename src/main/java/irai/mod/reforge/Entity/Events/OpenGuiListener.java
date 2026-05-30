@@ -55,7 +55,7 @@ public class OpenGuiListener {
         if (playerRef == null) {
             return;
         }
-        // Scan player inventory and register tooltips for items with reforge/socket metadata
+        // Scan player inventory and refresh native tooltips for items with reforge/socket metadata
         scanAndRegisterTooltips(player);
     }
     
@@ -63,50 +63,27 @@ public class OpenGuiListener {
      * Scans player's inventory and registers tooltips for items with reforge/socket metadata
      */
     private static void scanAndRegisterTooltips(Player player) {
-        boolean tooltipsAvailable = DynamicTooltipUtils.isAvailable();
-
-        // Ensure the dynamic metadata provider is registered when tooltips are available.
-        if (tooltipsAvailable) {
-            DynamicTooltipUtils.ensureProviderRegistered();
-        }
-        
-        int registeredCount = 0;
         int migratedCount = 0;
         
         // Scan hotbar
         ItemContainer hotbar = player.getInventory().getHotbar();
         migratedCount += migrateResonantRecipes(hotbar);
         migratedCount += migrateResonantEquipment(hotbar);
-        if (tooltipsAvailable) {
-            registeredCount += scanContainer(hotbar);
-        }
         
         // Scan storage inventory
         ItemContainer storage = player.getInventory().getStorage();
         migratedCount += migrateResonantRecipes(storage);
         migratedCount += migrateResonantEquipment(storage);
-        if (tooltipsAvailable) {
-            registeredCount += scanContainer(storage);
-        }
 
         // Scan equipped armor so join-time tooltip cache is rebuilt even when
         // the player has no reforge/socket items in hotbar/storage.
         ItemContainer armor = player.getInventory().getArmor();
         migratedCount += migrateResonantEquipment(armor);
-        if (tooltipsAvailable) {
-            registeredCount += scanContainer(armor);
-        }
         
-        // Always refresh after player join so dynamic metadata tooltips are rebuilt,
-        // even if there were no pre-cached tooltip lines this session.
-        if (tooltipsAvailable && (registeredCount > 0 || migratedCount > 0)) {
-            System.out.println("[SocketReforge] Registered tooltips for " + registeredCount + " items on player join; refreshing shortly...");
-        } else if (tooltipsAvailable) {
-            System.out.println("[SocketReforge] Player join tooltip refresh queued (provider-only path).");
+        if (migratedCount > 0) {
+            System.out.println("[SocketReforge] Migrated " + migratedCount + " tooltip-bearing items on player join; refreshing shortly...");
         }
-        if (tooltipsAvailable) {
-            scheduleRefresh(1200, TimeUnit.MILLISECONDS);
-        }
+        scheduleRefresh(1200, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -118,12 +95,10 @@ public class OpenGuiListener {
         }
 
         int migrated = migrateResonantItemsInContainer(container);
-        if (DynamicTooltipUtils.isAvailable()) {
-            int registeredCount = scanContainer(container);
-            if (registeredCount > 0 || migrated > 0) {
-                // Short delay helps ensure update-window packets are already in flight.
-                scheduleRefresh(300, TimeUnit.MILLISECONDS);
-            }
+        int tooltipUpdated = DynamicTooltipUtils.refreshContainerTooltips(container);
+        if (tooltipUpdated > 0 || migrated > 0) {
+            // Short delay helps ensure update-window packets are already in flight.
+            scheduleRefresh(300, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -150,46 +125,6 @@ public class OpenGuiListener {
         }, delay, unit);
     }
     
-    /**
-     * Scans an item container and registers tooltips for items with metadata
-     */
-    private static int scanContainer(ItemContainer container) {
-        if (container == null) {
-            return 0;
-        }
-        
-        int count = 0;
-        short capacity = container.getCapacity();
-        
-        for (short slot = 0; slot < capacity; slot++) {
-            ItemStack item = container.getItemStack(slot);
-            
-            if (item == null || item.isEmpty()) {
-                continue;
-            }
-            
-            boolean hasRelevantMetadata = false;
-
-            // Check for reforge level
-            int reforgeLevel = ReforgeEquip.getLevelFromItem(item);
-            if (reforgeLevel > 0) {
-                hasRelevantMetadata = true;
-            }
-
-            // Check for socket data
-            SocketData socketData = SocketManager.getSocketData(item);
-            if (socketData != null && socketData.getCurrentSocketCount() > 0) {
-                hasRelevantMetadata = true;
-            }
-
-            if (hasRelevantMetadata) {
-                count++;
-            }
-        }
-        
-        return count;
-    }
-
     private static int migrateResonantRecipes(ItemContainer container) {
         if (container == null) {
             return 0;

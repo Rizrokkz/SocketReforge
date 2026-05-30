@@ -1122,6 +1122,7 @@ public final class LangLoader {
         if (normalized == null || normalized.isBlank()) {
             normalized = defaultUILang;
         }
+        String previous = playerLanguageCache.get(ref);
         playerLanguageCache.put(ref, normalized);
         playerUuidLanguageCache.put(ref.getUuid(), normalized);
         lastKnownLanguage = normalized;
@@ -1130,6 +1131,9 @@ public final class LangLoader {
         }
         ensureKyuubiModLanguage(ref, normalized);
         syncTranslationsToI18n();
+        if (previous != null && !previous.equalsIgnoreCase(normalized)) {
+            DynamicTooltipUtils.refreshPlayerTooltips(ref);
+        }
     }
 
     public static String getLanguageForUuid(java.util.UUID uuid) {

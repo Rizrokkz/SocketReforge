@@ -12,11 +12,9 @@
   "Website": "",
   "ServerVersion": ">=0.5.0 <0.6.0",
   "Dependencies": {},
-  "OptionalDependencies": {"org.herolias:DynamicTooltipsLib": "*",
-                           "au.ellie:HyUI": "*",
+  "OptionalDependencies": {"au.ellie:HyUI": "*",
                            "kyuubisoft:core": "*",
-                           "MimStar:Loot4Everyone": "*",
-                           "com.hypersonicsharkz:Hytalor": "*"
+                           "MimStar:Loot4Everyone": "*"
                           },
   "LoadBefore": {},
   "DisabledByDefault": false,

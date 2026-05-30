@@ -22,6 +22,7 @@ import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.ResonanceSystem;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 
 /**
@@ -114,6 +115,7 @@ public class ResonanceRecipeGiveCommand extends CommandBase {
         }
 
         if (added > 0) {
+            DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
             String modeLabel = mode == Mode.RANDOM ? "random" : mode.name().toLowerCase(java.util.Locale.ROOT);
             context.sendMessage(Message.raw("Gave " + added + " Resonant Recipe(s) (" + sockets
                     + "-socket, " + modeLabel + "). Complete: " + complete + ", Partial: " + partial + "."));
