@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.8b - Update 5] - 2026-05-xx
 
-### Changed
+### Unofficial Patch Changelogs
 
-- **Tooltips** - Socket Reforge no longer depends on DynamicTooltipsLib to show `weaponstats`. Instead, it uses Hytale's native name and description customization.
+- **Tooltips** - Socket Reforge `no longer depends on DynamicTooltipsLib` to show `weaponstats`. Instead, it uses Hytale's native name and description customization.
 
-- **Flexible Refinement Odds** - Players can now use different tier materials on refinement. `Higher-tier material on lower refinements: lower break chance, higher success, more +2 jackpot chance. Lower-tier material on higher refinements: higher break chance, lower upgrade/jackpot chance. Same-tier material: unchanged odds`.
+- **Flexible Refinement Odds** - Players can now use different tier materials on refinement. 
+-**`Higher-tier material on lower refinements: lower break chance, higher success, more +2 jackpot chance.`**
+-**`Lower-tier material on higher refinements: higher break chance, lower upgrade/jackpot chance.`**
+-**` Same-tier material: unchanged odds`.**
 
 
 ---
