@@ -1256,10 +1256,9 @@ public final class EssenceBenchUI {
                     ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(support.item);
                     if (!usage.hasRemaining()) {
                         resonanceNotice = t(player, "ui.essence_bench.error_recipe_no_usages");
+                    } else if (!consumeRecipeSupportUsage(player, support)) {
+                        resonanceNotice = t(player, "ui.essence_bench.error_recipe_no_usages");
                     } else {
-                        ItemStack updatedSupport = ResonantRecipeUtils.decrementUsage(support.item);
-                        // Always write back; UI snapshot stacks may not reflect inventory mutations.
-                        writeStack(player, support, updatedSupport);
                         consumedRecipe = true;
                         baseItem = SocketManager.withResonanceUnlock(item, resonanceName);
                     }
@@ -1483,6 +1482,31 @@ public final class EssenceBenchUI {
     private static boolean consumeMaterial(Player player, Entry entry, int amount) {
         if (entry == null || amount <= 0) return false;
         return UIInventoryUtils.consumeItem(player, entry.kind == ContainerKind.HOTBAR, entry.slot, entry.itemId, amount);
+    }
+
+    private static boolean consumeRecipeSupportUsage(Player player, Entry support) {
+        if (player == null || support == null || !isRecipeSupport(support)) {
+            return false;
+        }
+        ItemStack current = UIInventoryUtils.readItem(player, support.kind == ContainerKind.HOTBAR, support.slot);
+        if (!ResonantRecipeUtils.isResonantRecipeItem(current)) {
+            return false;
+        }
+        String expectedName = ResonantRecipeUtils.normalizeRecipeName(ResonantRecipeUtils.getRecipeName(support.item));
+        String currentName = ResonantRecipeUtils.normalizeRecipeName(ResonantRecipeUtils.getRecipeName(current));
+        if (!expectedName.equals(currentName)) {
+            return false;
+        }
+        ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(current);
+        if (!usage.hasRemaining()) {
+            return false;
+        }
+        if (usage.remaining() <= 1) {
+            return UIInventoryUtils.removeItem(player, support.kind == ContainerKind.HOTBAR, support.slot, 1);
+        }
+        ItemStack updatedSupport = ResonantRecipeUtils.decrementUsage(current);
+        writeStack(player, support, DynamicTooltipUtils.applyNativeTooltip(updatedSupport, LangLoader.getPlayerLanguage(player)));
+        return true;
     }
 
     private static int refundEssences(Player player, Map<String, Integer> refundCounts) {

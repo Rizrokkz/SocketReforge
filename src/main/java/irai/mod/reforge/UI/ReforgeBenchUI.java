@@ -57,6 +57,8 @@ public final class ReforgeBenchUI {
     private static final double HAMMER_THORIUM_BREAK_MULTIPLIER = 0.30d;
     private static final double HAMMER_IRON_DURABILITY_LOSS_FRACTION = 0.05d;
     private static final double HAMMER_THORIUM_DURABILITY_LOSS_FRACTION = 0.15d;
+    private static final double DEGRADE_B_SHARE_OF_DEGRADE = 0.20d;
+    private static final double JACKPOT_B_SHARE_OF_JACKPOT = 0.20d;
 
     private static final double[] DEFAULT_BREAK_CHANCES = {0.010, 0.050, 0.075};
     private static final double[][] DEFAULT_WEIGHTS = {
@@ -78,7 +80,7 @@ public final class ReforgeBenchUI {
     private static final int PROGRESS_TICK_MS = 50;
 
     private enum ContainerKind { HOTBAR, STORAGE }
-    private enum OutcomeType { DEGRADE, SAME, UPGRADE, JACKPOT }
+    private enum OutcomeType { DEGRADE, DEGRADE_B, SAME, UPGRADE, JACKPOT, JACKPOT_B }
     private enum HammerSupportType {
         IRON("ui.reforge.hammer_iron", HAMMER_IRON_BREAK_MULTIPLIER, HAMMER_IRON_DURABILITY_LOSS_FRACTION),
         THORIUM("ui.reforge.hammer_thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION);
@@ -183,6 +185,26 @@ public final class ReforgeBenchUI {
         ReforgeOutcome(int levelChange, OutcomeType type) {
             this.levelChange = levelChange;
             this.type = type;
+        }
+    }
+
+    private static final class OutcomeWeights {
+        final double degrade;
+        final double degradeB;
+        final double same;
+        final double upgrade;
+        final double jackpot;
+        final double jackpotB;
+        final double total;
+
+        OutcomeWeights(double degrade, double degradeB, double same, double upgrade, double jackpot, double jackpotB) {
+            this.degrade = degrade;
+            this.degradeB = degradeB;
+            this.same = same;
+            this.upgrade = upgrade;
+            this.jackpot = jackpot;
+            this.jackpotB = jackpotB;
+            this.total = degrade + degradeB + same + upgrade + jackpot + jackpotB;
         }
     }
 
@@ -641,42 +663,50 @@ public final class ReforgeBenchUI {
 
         double breakChance = effectiveBreakChance(level, isArmor, materialId, hammerSupport);
         double softcoreBreakProtectionChance = ReforgeEquip.getSoftcoreBreakProtectionChance(materialId);
-        double[] w = weights(level, materialId);
+        OutcomeWeights w = outcomeWeights(level, materialId);
         double survive = Math.max(0.0, 1.0 - breakChance);
 
+        int degBLevel = clampLevel(level - 2);
         int degLevel = clampLevel(level - 1);
         int sameLevel = clampLevel(level);
         int upLevel = clampLevel(level + 1);
         int jackLevel = clampLevel(level + 2);
+        int jackBLevel = clampLevel(level + 3);
         double pSoftBreak = breakChance * softcoreBreakProtectionChance;
 
+        double mDegB = statMultiplierForLevel(degBLevel, isArmor) * softcoreMultiplier;
         double mDeg = statMultiplierForLevel(degLevel, isArmor) * softcoreMultiplier;
         double mSame = statMultiplierForLevel(sameLevel, isArmor) * softcoreMultiplier;
         double mUp = statMultiplierForLevel(upLevel, isArmor) * softcoreMultiplier;
         double mJack = statMultiplierForLevel(jackLevel, isArmor) * softcoreMultiplier;
+        double mJackB = statMultiplierForLevel(jackBLevel, isArmor) * softcoreMultiplier;
         double mSoftBreak = 0.0;
         if (pSoftBreak > 0.0) {
             ItemStack softenedPreview = ReforgeEquip.previewSoftcoreBreakPenalty(item);
             mSoftBreak = ReforgeEquip.getEffectiveRefinementMultiplier(softenedPreview, isArmor);
         }
 
-        double pDeg = survive * w[0];
-        double pSame = survive * w[1];
-        double pUp = survive * w[2];
-        double pJack = survive * w[3];
+        double pDeg = survive * w.degrade;
+        double pDegB = survive * w.degradeB;
+        double pSame = survive * w.same;
+        double pUp = survive * w.upgrade;
+        double pJack = survive * w.jackpot;
+        double pJackB = survive * w.jackpotB;
         double expectedWithBreak = (pSoftBreak * mSoftBreak)
+                + (pDegB * mDegB)
                 + (pDeg * mDeg)
                 + (pSame * mSame)
                 + (pUp * mUp)
-                + (pJack * mJack);
+                + (pJack * mJack)
+                + (pJackB * mJackB);
 
         String expectedStats = t(player, "ui.reforge.chance_break") + ": " + formatPercent(breakChance) + "\n"
-                + t(player, "ui.reforge.chance_degrade") + ": " + formatPercent(pDeg) + "\n"
+                + t(player, "ui.reforge.chance_degrade") + ": " + formatPercent(pDeg + pDegB) + "\n"
                 + t(player, "ui.reforge.chance_same") + ": " + formatPercent(pSame) + "\n"
                 + t(player, "ui.reforge.chance_upgrade") + ": " + formatPercent(pUp) + "\n"
-                + t(player, "ui.reforge.chance_jackpot") + ": " + formatPercent(pJack);
+                + t(player, "ui.reforge.chance_jackpot") + ": " + formatPercent(pJack + pJackB);
 
-        String expectedDamage = t(player, "ui.reforge.preview_upgrade_jackpot", format3(mUp), format3(mJack)) + "\n"
+        String expectedDamage = t(player, "ui.reforge.preview_upgrade_jackpot", format3(mUp), format3(Math.max(mJack, mJackB))) + "\n"
                 + t(player, "ui.reforge.preview_expected_stat_with_break", statLabel, format3(expectedWithBreak));
 
         return new Preview(
@@ -684,13 +714,13 @@ public final class ReforgeBenchUI {
                 expectedStats,
                 expectedDamage,
                 t(player, "ui.reforge.preview_upgrade_line", format3(mUp)),
-                t(player, "ui.reforge.preview_jackpot_line", format3(mJack)),
+                t(player, "ui.reforge.preview_jackpot_line", format3(Math.max(mJack, mJackB))),
                 t(player, "ui.reforge.preview_expected_stat_line", statLabel, format3(expectedWithBreak)),
                 formatPercent(breakChance),
-                formatPercent(pDeg),
+                formatPercent(pDeg + pDegB),
                 formatPercent(pSame),
                 formatPercent(pUp),
-                formatPercent(pJack),
+                formatPercent(pJack + pJackB),
                 hammerSupport != null
                         ? t(player, "ui.reforge.preview_hammer_active", hammerLabel(player, hammerSupport),
                             durabilityPercent(hammerSupport))
@@ -773,7 +803,7 @@ public final class ReforgeBenchUI {
         registerReforgeTooltip(updated, newLevel, isArmor);
 
         switch (outcome.type) {
-            case DEGRADE -> {
+            case DEGRADE, DEGRADE_B -> {
                 sfxConfig.playFail(player);
                 return new ProcessResult(t(player, "ui.reforge.result_degraded", level, newLevel, hammerSuffix), 100);
             }
@@ -786,6 +816,10 @@ public final class ReforgeBenchUI {
                 return new ProcessResult(t(player, "ui.reforge.result_success", level, newLevel, hammerSuffix), 100);
             }
             case JACKPOT -> {
+                sfxConfig.playJackpot(player);
+                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, hammerSuffix), 100);
+            }
+            case JACKPOT_B -> {
                 sfxConfig.playJackpot(player);
                 return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, hammerSuffix), 100);
             }
@@ -809,16 +843,50 @@ public final class ReforgeBenchUI {
     }
 
     private static ReforgeOutcome rollOutcome(int level, String materialId) {
+        OutcomeWeights w = outcomeWeights(level, materialId);
+        if (w.total <= 0.0) return new ReforgeOutcome(0, OutcomeType.SAME);
+
+        double random = Math.random() * w.total;
+        if (random < w.degrade) return new ReforgeOutcome(-1, OutcomeType.DEGRADE);
+        random -= w.degrade;
+        if (random < w.degradeB) return new ReforgeOutcome(-2, OutcomeType.DEGRADE_B);
+        random -= w.degradeB;
+        if (random < w.same) return new ReforgeOutcome(0, OutcomeType.SAME);
+        random -= w.same;
+        if (random < w.upgrade) return new ReforgeOutcome(1, OutcomeType.UPGRADE);
+        random -= w.upgrade;
+        if (random < w.jackpot) return new ReforgeOutcome(2, OutcomeType.JACKPOT);
+        return new ReforgeOutcome(3, OutcomeType.JACKPOT_B);
+    }
+
+    private static OutcomeWeights outcomeWeights(int level, String materialId) {
         double[] w = weights(level, materialId);
-        double random = Math.random();
-        double cumulative = 0.0;
-        cumulative += w[0];
-        if (random < cumulative) return new ReforgeOutcome(-1, OutcomeType.DEGRADE);
-        cumulative += w[1];
-        if (random < cumulative) return new ReforgeOutcome(0, OutcomeType.SAME);
-        cumulative += w[2];
-        if (random < cumulative) return new ReforgeOutcome(1, OutcomeType.UPGRADE);
-        return new ReforgeOutcome(2, OutcomeType.JACKPOT);
+        double degradeTotal = weightAt(w, 0);
+        double same = weightAt(w, 1);
+        double upgrade = weightAt(w, 2);
+        double jackpotTotal = weightAt(w, 3);
+
+        double degradeB = level >= 2 ? degradeTotal * DEGRADE_B_SHARE_OF_DEGRADE : 0.0;
+        double degrade = degradeTotal - degradeB;
+        double jackpotB = level + 3 <= getMaxUpgradeLevel() ? jackpotTotal * JACKPOT_B_SHARE_OF_JACKPOT : 0.0;
+        double jackpot = jackpotTotal - jackpotB;
+        return normalizeOutcomeWeights(new OutcomeWeights(degrade, degradeB, same, upgrade, jackpot, jackpotB));
+    }
+
+    private static OutcomeWeights normalizeOutcomeWeights(OutcomeWeights weights) {
+        if (weights.total <= 0.0) return weights;
+        return new OutcomeWeights(
+                weights.degrade / weights.total,
+                weights.degradeB / weights.total,
+                weights.same / weights.total,
+                weights.upgrade / weights.total,
+                weights.jackpot / weights.total,
+                weights.jackpotB / weights.total);
+    }
+
+    private static double weightAt(double[] weights, int index) {
+        if (weights == null || index < 0 || index >= weights.length) return 0.0;
+        return Math.max(0.0, weights[index]);
     }
 
     private static double[] weights(int currentLevel, String materialId) {

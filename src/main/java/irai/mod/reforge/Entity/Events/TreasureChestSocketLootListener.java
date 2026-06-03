@@ -27,6 +27,7 @@ import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.ReforgePlugin;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 /**
  * Adds a one-time roll for treasure chest equipment to spawn with broken sockets.
@@ -359,7 +360,7 @@ public final class TreasureChestSocketLootListener {
             if (LootSocketRoller.hasResonantRecipeMetadata(stack)) {
                 ItemStack migrated = ResonantRecipeUtils.remapResonantRecipePattern(stack);
                 if (migrated != stack) {
-                    container.setItemStackForSlot(slot, migrated);
+                    container.setItemStackForSlot(slot, DynamicTooltipUtils.applyNativeTooltip(migrated));
                     updated++;
                 }
                 continue;
@@ -369,7 +370,7 @@ public final class TreasureChestSocketLootListener {
             if (seeded == null) {
                 continue;
             }
-            container.setItemStackForSlot(slot, seeded);
+            container.setItemStackForSlot(slot, DynamicTooltipUtils.applyNativeTooltip(seeded));
             updated++;
         }
         return updated;

@@ -19,6 +19,7 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.MathUtils;
 
@@ -215,11 +216,12 @@ public final class LootSocketRoller {
         String displayName = recipe.name().trim() + " Recipe";
         String pattern = buildPartialRecipe(recipe.pattern(), null);
         String appliesTo = recipe.appliesTo();
-        return new ItemStack(RECIPE_ITEM_ID, safeQty)
+        ItemStack stack = new ItemStack(RECIPE_ITEM_ID, safeQty)
                 .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, displayName)
                 .withMetadata(META_RECIPE_NAME, Codec.STRING, recipe.name().trim())
                 .withMetadata(META_RECIPE_PATTERN, Codec.STRING, pattern)
                 .withMetadata(META_RECIPE_TYPE, Codec.STRING, appliesTo == null ? "" : appliesTo);
+        return DynamicTooltipUtils.applyNativeTooltip(stack);
     }
 
     public static ItemStack createResonantRecipeShard(ItemStack context, int quantity, long seed) {
@@ -234,11 +236,12 @@ public final class LootSocketRoller {
         String displayName = recipe.name().trim() + " Recipe";
         String pattern = buildPartialRecipe(recipe.pattern(), rng);
         String appliesTo = recipe.appliesTo();
-        return new ItemStack(RECIPE_ITEM_ID, safeQty)
+        ItemStack stack = new ItemStack(RECIPE_ITEM_ID, safeQty)
                 .withMetadata(NameResolver.KEY_DISPLAY_NAME, Codec.STRING, displayName)
                 .withMetadata(META_RECIPE_NAME, Codec.STRING, recipe.name().trim())
                 .withMetadata(META_RECIPE_PATTERN, Codec.STRING, pattern)
                 .withMetadata(META_RECIPE_TYPE, Codec.STRING, appliesTo == null ? "" : appliesTo);
+        return DynamicTooltipUtils.applyNativeTooltip(stack);
     }
 
     public static boolean hasResonantRecipeMetadata(ItemStack stack) {

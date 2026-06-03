@@ -21,6 +21,8 @@ import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
@@ -77,6 +79,7 @@ import irai.mod.reforge.Entity.Events.LoreEffectEST;
 import irai.mod.reforge.Entity.Events.LoreKillEST;
 import irai.mod.reforge.Entity.Events.LorePlayerStateEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
+import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
@@ -127,6 +130,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final SalvageMetadataCompatEST salvageMetadataCompatEST;
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
+    private final NativeTooltipInventoryEventEST nativeTooltipInventoryEventEST;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -170,6 +174,7 @@ public class ReforgePlugin extends JavaPlugin {
         salvageMetadataCompatEST = new SalvageMetadataCompatEST();
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
+        nativeTooltipInventoryEventEST = new NativeTooltipInventoryEventEST();
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
@@ -269,6 +274,8 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, CropEssenceDropUtils::onBreakBlock);
+        this.getEventRegistry().registerGlobal(InventoryChangeEvent.class, DynamicTooltipUtils::onInventoryChange);
+        this.getEventRegistry().registerGlobal(InteractivelyPickupItemEvent.class, DynamicTooltipUtils::onInteractivelyPickupItem);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
@@ -310,11 +317,12 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
+        this.getEntityStoreRegistry().registerSystem(nativeTooltipInventoryEventEST);
 
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.8");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.8-beta.1");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {

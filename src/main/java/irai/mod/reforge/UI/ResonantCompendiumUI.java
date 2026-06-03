@@ -418,7 +418,8 @@ public final class ResonantCompendiumUI {
         if (usages != null && !usages.isBlank()) {
             recipe = recipe.withMetadata(ResonantRecipeUtils.META_RECIPE_USAGES, Codec.STRING, usages);
         }
-        return complete ? ResonantRecipeUtils.ensureRecipeUsages(recipe) : recipe;
+        ItemStack ready = complete ? ResonantRecipeUtils.ensureRecipeUsages(recipe) : recipe;
+        return DynamicTooltipUtils.applyNativeTooltip(ready, LangLoader.getPlayerLanguage(player));
     }
 
     private static String resolveRecipeType(Player player, Entry entry) {

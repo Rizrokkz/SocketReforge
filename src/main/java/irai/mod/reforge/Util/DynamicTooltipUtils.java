@@ -18,9 +18,12 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.item.config.metadata.ItemDisplayMetadata;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
 import com.hypixel.hytale.server.core.inventory.Inventory;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.inventory.transaction.Transaction;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -52,6 +55,7 @@ public class DynamicTooltipUtils {
     private static final String NATIVE_TOOLTIP_STATE_KEY = "SocketReforgeNativeTooltip";
     private static final String STATE_BASE_DESCRIPTION = "BaseDescription";
     private static final String STATE_LAST_DESCRIPTION = "LastDescription";
+    private static final String STATE_LAST_NAME = "LastName";
     
     // Possible class names for DynamicTooltipsLib
     private static final String[] LIB_CLASS_NAMES = {
@@ -715,7 +719,7 @@ public class DynamicTooltipUtils {
                 || extractLevelSuffix(metadataName) > 0;
         String displayName = null;
         if (shouldOverrideName) {
-            displayName = localizeDisplayName(metadataName, metadataNameKey, baseItemId, itemId, langCode);
+            displayName = localizeDisplayName(metadataName, metadataNameKey, baseItemId, itemId, langCode, reforgeLevel);
             if ((shouldBloodPrefix || hasResonance) && (displayName == null || displayName.isEmpty())) {
                 displayName = buildFallbackDisplayName(baseItemId, itemId, langCode);
             }
@@ -795,7 +799,7 @@ public class DynamicTooltipUtils {
             String refineLabel = tr(langCode, "tooltip.refine_grade", "Refine Grade");
             String gradeLabel = formatRefineGradeLabel(upgradeName, reforgeLevel, isArmorItem);
             String line = COLOR_WHITE + refineLabel + ": " + reforgeLevelEnum.getColor() + gradeLabel
-                     + COLOR_GREEN + " (" + "+" + percentBonus + "% " + statType + COLOR_WHITE + ")";
+                     + COLOR_GREEN + " (" + "+" + percentBonus + "% " + statType + ")";
             tooltipLines.add(line);
         }
 
@@ -1877,12 +1881,19 @@ public class DynamicTooltipUtils {
         return translated;
     }
 
-    private static String localizeDisplayName(String metadataName, String metadataNameKey, String baseItemId, String itemId, String langCode) {
+    private static String localizeDisplayName(String metadataName, String metadataNameKey, String baseItemId, String itemId, String langCode, int refinementLevel) {
         int level = extractLevelSuffix(metadataName);
+        if (level <= 0 && refinementLevel > 0) {
+            level = refinementLevel;
+        }
         String baseName = stripLevelSuffix(metadataName);
 
-        String localized = null;
-        if (metadataNameKey != null && !metadataNameKey.isBlank() && looksLikeTranslationKey(metadataNameKey)) {
+        String localized = resolveCustomMetadataBaseName(metadataName, metadataNameKey, baseItemId, itemId);
+        if (localized != null && localized.isBlank()) {
+            localized = null;
+        }
+        if ((localized == null || localized.isBlank())
+                && metadataNameKey != null && !metadataNameKey.isBlank() && looksLikeTranslationKey(metadataNameKey)) {
             String translated = LangLoader.getTranslationExact(metadataNameKey.trim(), langCode);
             if (translated != null && !translated.isBlank() && !translated.equals(metadataNameKey)
                     && !isEnglishFallback(translated, metadataNameKey, langCode)) {
@@ -1922,6 +1933,44 @@ public class DynamicTooltipUtils {
             localized = applyRefinementToName(localized, level, isArmor);
         }
         return localized;
+    }
+
+    private static String resolveCustomMetadataBaseName(String metadataName, String metadataNameKey, String baseItemId, String itemId) {
+        if (metadataName == null || metadataName.isBlank()) {
+            return null;
+        }
+        String baseName = stripLevelSuffix(metadataName);
+        if (baseName == null || baseName.isBlank() || looksLikeTranslationKey(baseName)) {
+            return null;
+        }
+
+        String defaultLang = LangLoader.getFallbackLanguage();
+        String translatedKeyName = null;
+        if (metadataNameKey != null && !metadataNameKey.isBlank() && looksLikeTranslationKey(metadataNameKey)) {
+            translatedKeyName = LangLoader.getTranslationExact(metadataNameKey.trim(), defaultLang);
+        }
+        if (sameItemName(baseName, translatedKeyName)) {
+            return null;
+        }
+
+        String defaultName = NameResolver.resolveItemIdTranslationExact(baseItemId, defaultLang);
+        if (defaultName == null || defaultName.isBlank()) {
+            defaultName = NameResolver.resolveItemIdTranslationExact(itemId, defaultLang);
+        }
+        if (defaultName == null || defaultName.isBlank()) {
+            defaultName = NameResolver.resolveItemIdTranslation(baseItemId, defaultLang);
+            if (defaultName == null || defaultName.isBlank()) {
+                defaultName = NameResolver.resolveItemIdTranslation(itemId, defaultLang);
+            }
+        }
+        return sameItemName(baseName, defaultName) ? null : baseName;
+    }
+
+    private static boolean sameItemName(String left, String right) {
+        if (left == null || right == null || right.isBlank()) {
+            return false;
+        }
+        return stripLevelSuffix(left).trim().equalsIgnoreCase(stripLevelSuffix(right).trim());
     }
 
     private static int extractLevelSuffix(String value) {
@@ -2550,6 +2599,7 @@ public class DynamicTooltipUtils {
 
         Message lastDescription = decodeStateMessage(state, STATE_LAST_DESCRIPTION);
         Message baseDescription = decodeStateMessage(state, STATE_BASE_DESCRIPTION);
+        Message lastName = decodeStateMessage(state, STATE_LAST_NAME);
         if (state == null || !messagesEqual(currentDescription, lastDescription)) {
             if (isGeneratedOrCorruptedDescription(currentDescription)) {
                 baseDescription = cleanBaseDescription(baseDescription);
@@ -2560,15 +2610,24 @@ public class DynamicTooltipUtils {
         baseDescription = cleanBaseDescription(baseDescription);
 
         Message name = currentName;
+        Message generatedName = null;
         if (payload.shouldOverrideName && payload.displayName != null && !payload.displayName.isBlank()) {
-            name = Message.raw(payload.displayName);
+            generatedName = Message.raw(payload.displayName);
+            if (shouldReplaceNativeName(state, currentName, lastName, generatedName)) {
+                name = generatedName;
+            } else {
+                Message mergedName = mergeExternalNameWithSocketReforgeAffixes(currentName, item.getItemId(), metadata, locale);
+                if (!isMessageEmpty(mergedName)) {
+                    name = mergedName;
+                }
+            }
         }
 
         Message tooltipBlock = buildNativeTooltipBlock(payload.lines);
         Message fullDescription = composeDescription(baseDescription, tooltipBlock);
         return writeDisplay(item, name, fullDescription)
                 .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
-                        encodeState(baseDescription, fullDescription));
+                        encodeState(baseDescription, fullDescription, generatedName));
     }
 
     private static void refreshPlayer(PlayerRef playerRef) {
@@ -2598,6 +2657,31 @@ public class DynamicTooltipUtils {
         refreshPlayer(playerRef);
     }
 
+    public static void onInventoryChange(InventoryChangeEvent event) {
+        if (event == null || event.getItemContainer() == null) {
+            return;
+        }
+        Transaction transaction = event.getTransaction();
+        if (transaction != null && !transaction.succeeded()) {
+            return;
+        }
+        refreshChangedContainerSlots(event.getItemContainer(), transaction);
+    }
+
+    public static void onInteractivelyPickupItem(InteractivelyPickupItemEvent event) {
+        if (event == null || event.isCancelled()) {
+            return;
+        }
+        ItemStack item = event.getItemStack();
+        if (ItemStack.isEmpty(item)) {
+            return;
+        }
+        ItemStack updated = applyNativeTooltip(item);
+        if (!updated.isEquivalentType(item) || hasNativeTooltipMetadataChanged(item, updated)) {
+            event.setItemStack(updated);
+        }
+    }
+
     private static void refreshInventory(Inventory inventory, String locale) {
         if (inventory == null) {
             return;
@@ -2620,17 +2704,73 @@ public class DynamicTooltipUtils {
         }
         int updatedCount = 0;
         for (short slot = 0; slot < container.getCapacity(); slot++) {
-            ItemStack item = container.getItemStack(slot);
-            if (ItemStack.isEmpty(item)) {
-                continue;
-            }
-            ItemStack updated = applyNativeTooltip(item, locale);
-            if (!updated.isEquivalentType(item)) {
-                container.setItemStackForSlot(slot, updated, false);
+            if (refreshContainerSlot(container, slot, locale)) {
                 updatedCount++;
             }
         }
         return updatedCount;
+    }
+
+    public static boolean refreshContainerSlot(ItemContainer container, short slot, String locale) {
+        if (container == null || slot < 0 || slot >= container.getCapacity()) {
+            return false;
+        }
+        ItemStack item = container.getItemStack(slot);
+        if (ItemStack.isEmpty(item)) {
+            return false;
+        }
+        ItemStack updated = applyNativeTooltip(item, locale);
+        if (!updated.isEquivalentType(item) || hasNativeTooltipMetadataChanged(item, updated)) {
+            container.setItemStackForSlot(slot, updated, false);
+            return true;
+        }
+        return false;
+    }
+
+    private static int refreshChangedContainerSlots(ItemContainer container, Transaction transaction) {
+        if (container == null) {
+            return 0;
+        }
+        int updatedCount = 0;
+        for (short slot = 0; slot < container.getCapacity(); slot++) {
+            if (transaction != null && !transaction.wasSlotModified(slot)) {
+                continue;
+            }
+            if (refreshContainerSlot(container, slot, null)) {
+                updatedCount++;
+            }
+        }
+        return updatedCount;
+    }
+
+    private static boolean hasNativeTooltipMetadataChanged(ItemStack original, ItemStack updated) {
+        if (original == updated) {
+            return false;
+        }
+        if (original == null || updated == null) {
+            return original != updated;
+        }
+
+        ItemDisplayMetadata originalDisplay = original.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
+        ItemDisplayMetadata updatedDisplay = updated.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
+        if (!displayMetadataEquals(originalDisplay, updatedDisplay)) {
+            return true;
+        }
+
+        BsonDocument originalState = original.getFromMetadataOrNull(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT);
+        BsonDocument updatedState = updated.getFromMetadataOrNull(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT);
+        return !java.util.Objects.equals(originalState, updatedState);
+    }
+
+    private static boolean displayMetadataEquals(ItemDisplayMetadata left, ItemDisplayMetadata right) {
+        if (left == right) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return messagesEqual(left.getName(), right.getName())
+                && messagesEqual(left.getDescription(), right.getDescription());
     }
 
     private static Message buildNativeTooltipBlock(List<String> lines) {
@@ -2662,6 +2802,102 @@ public class DynamicTooltipUtils {
         return item.withMetadata(
                 ItemDisplayMetadata.KEYED_CODEC,
                 new ItemDisplayMetadata(name, isMessageEmpty(description) ? null : description));
+    }
+
+    private static boolean shouldReplaceNativeName(BsonDocument state, Message currentName, Message lastName, Message generatedName) {
+        if (isMessageEmpty(generatedName)) {
+            return false;
+        }
+        if (isMessageEmpty(currentName)) {
+            return true;
+        }
+        if (messagesEqual(currentName, generatedName)) {
+            return true;
+        }
+        return state != null && !isMessageEmpty(lastName) && messagesEqual(currentName, lastName);
+    }
+
+    private static Message mergeExternalNameWithSocketReforgeAffixes(Message currentName, String itemId, String metadata, String locale) {
+        if (isMessageEmpty(currentName) || metadata == null || metadata.isBlank()) {
+            return null;
+        }
+        String baseName = flattenMessageText(currentName);
+        if (baseName == null || baseName.isBlank()) {
+            return null;
+        }
+        String langCode = resolveLangCode(locale);
+        String baseItemId = extractBaseItemId(metadata);
+        String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
+        int reforgeLevel = extractReforgeLevel(metadata);
+        String resonanceName = extractStringValue(metadata, META_RESONANCE_NAME);
+        boolean hasResonance = resonanceName != null && !resonanceName.isBlank();
+        boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
+        boolean isArmor = isArmorType(baseItemId, effectiveItemId);
+
+        String merged = stripSocketReforgeNameAffixes(baseName, reforgeLevel, isArmor, resonanceName, langCode);
+        if (reforgeLevel > 0) {
+            merged = applyRefinementToName(merged, reforgeLevel, isArmor);
+        }
+        if (shouldBloodPrefix) {
+            String bloodPrefix = getPrefixTranslation("name.prefix.blood_pact", BLOOD_PACT_PREFIX, langCode);
+            merged = applyPrefix(merged, bloodPrefix, BLOOD_PACT_PREFIX);
+        }
+        if (hasResonance) {
+            String localizedResonanceName = ResonanceSystem.getLocalizedName(resonanceName, langCode);
+            String desired = (localizedResonanceName == null || localizedResonanceName.isBlank())
+                    ? resonanceName
+                    : localizedResonanceName;
+            if (desired != null && !desired.isBlank()) {
+                merged = applyPrefix(merged, desired + " ", resonanceName + " ", localizedResonanceName + " ");
+            }
+        }
+        return merged.equals(baseName) ? null : Message.raw(merged);
+    }
+
+    private static String stripSocketReforgeNameAffixes(String value, int reforgeLevel, boolean isArmor, String resonanceName, String langCode) {
+        String stripped = value == null ? "" : value.trim();
+        if (stripped.isBlank()) {
+            return stripped;
+        }
+        if (resonanceName != null && !resonanceName.isBlank()) {
+            String localizedResonanceName = ResonanceSystem.getLocalizedName(resonanceName, langCode);
+            stripped = stripPrefix(stripped, resonanceName + " ");
+            if (localizedResonanceName != null && !localizedResonanceName.isBlank()) {
+                stripped = stripPrefix(stripped, localizedResonanceName + " ");
+            }
+        }
+        String bloodPrefix = getPrefixTranslation("name.prefix.blood_pact", BLOOD_PACT_PREFIX, langCode);
+        stripped = stripPrefix(stripped, bloodPrefix);
+        stripped = stripPrefix(stripped, BLOOD_PACT_PREFIX);
+        if (reforgeLevel > 0) {
+            stripped = stripSpecificRefinementAffix(stripped, reforgeLevel, isArmor);
+            stripped = stripLevelSuffix(stripped);
+        }
+        return stripped.trim();
+    }
+
+    private static String stripPrefix(String value, String prefix) {
+        if (value == null || prefix == null || prefix.isBlank()) {
+            return value;
+        }
+        return value.regionMatches(true, 0, prefix, 0, prefix.length())
+                ? value.substring(prefix.length()).trim()
+                : value;
+    }
+
+    private static String stripSpecificRefinementAffix(String value, int level, boolean isArmor) {
+        if (value == null || value.isBlank() || level <= 0) {
+            return value;
+        }
+        String label = formatRefinementSuffix(level, isArmor);
+        if (label == null || label.isBlank()) {
+            return value;
+        }
+        RefinementConfig cfg = refinementConfig;
+        if (cfg != null && cfg.isRefinementLevelUsePrefix()) {
+            return stripPrefix(value, label);
+        }
+        return value.endsWith(label) ? value.substring(0, value.length() - label.length()).trim() : value;
     }
 
     private static Message cleanBaseDescription(Message baseDescription) {
@@ -2704,11 +2940,62 @@ public class DynamicTooltipUtils {
             appendCleanedLine(cleaned, line);
         }
 
-        String cleanedText = trimBlankLines(cleaned.toString());
+        String cleanedText = dedupeForeignTooltipBlocks(trimBlankLines(cleaned.toString()));
         if (cleanedText.isBlank()) {
             return null;
         }
         return Message.raw(cleanedText);
+    }
+
+    private static String dedupeForeignTooltipBlocks(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String[] lines = text.split("\\R", -1);
+        StringBuilder deduped = new StringBuilder();
+        java.util.Set<String> seenForeignBlocks = new java.util.HashSet<>();
+
+        for (int i = 0; i < lines.length; ) {
+            String line = lines[i];
+            String trimmed = line.trim();
+            if (!isForeignTooltipHeader(trimmed)) {
+                appendCleanedLine(deduped, line);
+                i++;
+                continue;
+            }
+
+            int end = i + 1;
+            while (end < lines.length) {
+                String nextTrimmed = lines[end].trim();
+                if (nextTrimmed.isEmpty()
+                        || isForeignTooltipHeader(nextTrimmed)
+                        || isSocketReforgeGeneratedStart(nextTrimmed)) {
+                    break;
+                }
+                end++;
+            }
+
+            String blockKey = normalizeTooltipBlock(lines, i, end);
+            if (seenForeignBlocks.add(blockKey)) {
+                for (int j = i; j < end; j++) {
+                    appendCleanedLine(deduped, lines[j]);
+                }
+            }
+            i = end;
+        }
+
+        return trimBlankLines(deduped.toString());
+    }
+
+    private static String normalizeTooltipBlock(String[] lines, int start, int end) {
+        StringBuilder key = new StringBuilder();
+        for (int i = start; i < end && i < lines.length; i++) {
+            if (key.length() > 0) {
+                key.append('\n');
+            }
+            key.append(lines[i] == null ? "" : lines[i].trim().replaceAll("\\s+", " "));
+        }
+        return key.toString();
     }
 
     private static boolean containsStaleSocketReforgeTooltip(String text) {
@@ -3062,6 +3349,10 @@ public class DynamicTooltipUtils {
     }
 
     private static BsonDocument encodeState(Message baseDescription, Message lastDescription) {
+        return encodeState(baseDescription, lastDescription, null);
+    }
+
+    private static BsonDocument encodeState(Message baseDescription, Message lastDescription, Message lastName) {
         BsonDocument state = new BsonDocument();
         BsonValue base = encodeMessage(baseDescription);
         if (base != null) {
@@ -3070,6 +3361,10 @@ public class DynamicTooltipUtils {
         BsonValue last = encodeMessage(lastDescription);
         if (last != null) {
             state.put(STATE_LAST_DESCRIPTION, last);
+        }
+        BsonValue name = encodeMessage(lastName);
+        if (name != null) {
+            state.put(STATE_LAST_NAME, name);
         }
         return state;
     }

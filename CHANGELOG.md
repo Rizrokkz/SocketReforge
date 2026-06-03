@@ -7,17 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.8b - Update 5] - 2026-05-xx
+## [1.3.8-beta.1 - Hotfix] - 2026-06-01
 
-### Unofficial Patch Changelogs
+### Fixed
+
+- **Manifest Version Error** - Changed Manifest file version to 1.3.8-beta.1 in accordance with Semantic Versioning from Update 5.3 which rendered some functionalities to become inoperable.
+
+---
+
+## [1.3.8b - Update 5] - 2026-06-01
+
+### Changed
 
 - **Tooltips** - Socket Reforge `no longer depends on DynamicTooltipsLib` to show `weaponstats`. Instead, it uses Hytale's native name and description customization.
 
-- **Flexible Refinement Odds** - Players can now use different tier materials on refinement. 
--**`Higher-tier material on lower refinements: lower break chance, higher success, more +2 jackpot chance.`**
--**`Lower-tier material on higher refinements: higher break chance, lower upgrade/jackpot chance.`**
--**` Same-tier material: unchanged odds`.**
+- **Flexible Refinement Odds** - Players can now use different tier materials on refinement.
+  - **`Higher-tier material on lower refinements: lower break chance, higher success, more +2 jackpot chance.`**
+  - **`Lower-tier material on higher refinements: higher break chance, lower upgrade/jackpot chance.`**
+  - **` Same-tier material: unchanged odds`.**
+  - **` Added 2 refinement outcomes, -2 for degrade and +3 for jackpot`.**
 
+- **Custom Name Compatibility** - Preserves the engraved/custom base name, then reapplies SocketReforge affixes like resonance prefixes, essence tier prefix, and refinement +N when used along with Simple Enchantment's Engraving Bench.
+
+- **Resonant Recipe Info** - Fixed Resonant Recipes tooltip information not showing up on mob drops, chest loots, or compendium extraction.
 
 ---
 
