@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.9] - 2026-07-05
+
+### Fixed
+
+- **Essence Bench UI Process Stutter** - Fixed essence bench process server stutter during socketing process.
+
+### Changed
+
+- **Essence Bench UI Overhaul** - 
+  - **`Essence bench UI can now show tooltips on lore sockets when clicked from the equipments panel.`**
+  - **`Sockets are now clickable for easy slot selection`**
+  - **`Materials and equipments are now shown on left and right panels for easier navigation`**
+
+---
+
 ## [1.3.8-beta.1 - Hotfix] - 2026-06-01
 
 ### Fixed
