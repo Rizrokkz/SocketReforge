@@ -193,7 +193,7 @@ public class LoreConfig implements ConfigDefaultInjector {
      * Wildcard applies when a status-specific rule is not present.
      */
     private String[] statusBossReapplyRules = new String[0];
-    private String[] feedItemIds = new String[]{"Ingredient_Resonant_Essence", "Ingredient_Ghastly_Essence"};
+    private String[] feedItemIds = new String[]{"Ingredient_Resonant_Essence"};
     private String[] clearItemIds = new String[]{"Ingredient_Ghastly_Essence"};
     /**
      * Entry format: {@code NPC_ID|bleed=0.50|burn=1.0|poison=0.25|freeze=0.75}

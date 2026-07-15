@@ -8,21 +8,15 @@
             <div style="layout-mode:center; spacing:16;">
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.equipment}}</p>
-                    <select id="equipmentDropdown" data-hyui-showlabel="true" style="anchor-width: 280; flex-weight:1;">
-                        {{equipmentOptions}}
-                    </select>
+                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEquipmentText}}</p>
                 </div>
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.essence_material}}</p>
-                    <select id="essenceDropdown" data-hyui-showlabel="true" style="anchor-width: 280; flex-weight:1;">
-                        {{essenceOptions}}
-                    </select>
+                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEssenceText}}</p>
                 </div>
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.support_material}}</p>
-                    <select id="supportDropdown" data-hyui-showlabel="true" style="anchor-width: 280; flex-weight:1;">
-                        {{supportOptions}}
-                    </select>
+                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedSupportText}}</p>
                 </div>
             </div>
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
@@ -57,9 +51,6 @@
             <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             {{processButton}}
             <p></p>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>{{ui.essence_bench.extract_title}}</p>
-            <p style="font-size:11; text-align:center;">{{ui.essence_bench.extract_hint}}</p>
-            {{extractButton}}
+            {{extractSection}}
         </div>
 </div>

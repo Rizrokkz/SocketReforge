@@ -147,6 +147,7 @@ public final class EssenceBenchUI {
         final int supportCardPage;
         final String loreEquipmentKey;
         final String loreSocketKey;
+        final boolean extractPrompt;
 
         SelectionState(String equipmentKey, String essenceKey, String supportKey, String slotKey,
                        String statusText, int progressValue, boolean processing) {
@@ -170,6 +171,14 @@ public final class EssenceBenchUI {
                        String statusText, int progressValue, boolean processing,
                        int armorCardPage, int weaponCardPage, int essenceCardPage, int supportCardPage,
                        String loreEquipmentKey, String loreSocketKey) {
+            this(equipmentKey, essenceKey, supportKey, slotKey, statusText, progressValue, processing,
+                    armorCardPage, weaponCardPage, essenceCardPage, supportCardPage, loreEquipmentKey, loreSocketKey, false);
+        }
+
+        SelectionState(String equipmentKey, String essenceKey, String supportKey, String slotKey,
+                       String statusText, int progressValue, boolean processing,
+                       int armorCardPage, int weaponCardPage, int essenceCardPage, int supportCardPage,
+                       String loreEquipmentKey, String loreSocketKey, boolean extractPrompt) {
             this.equipmentKey = equipmentKey;
             this.essenceKey = essenceKey;
             this.supportKey = supportKey;
@@ -183,6 +192,7 @@ public final class EssenceBenchUI {
             this.supportCardPage = Math.max(0, supportCardPage);
             this.loreEquipmentKey = loreEquipmentKey;
             this.loreSocketKey = loreSocketKey;
+            this.extractPrompt = extractPrompt;
         }
     }
 
@@ -419,55 +429,21 @@ public final class EssenceBenchUI {
 	            final Player finalPlayer = player;
 	            final Snapshot finalSnapshot = snapshot;
 	            final SelectionState finalState = state;
-	            addListener.invoke(pageBuilder, "equipmentDropdown", valueChanged,
-	                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-		                        String equipmentVal = extractEventValue(eventObj);
-		                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
-		                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
-		                        pendingSelections.put(finalPlayer.getPlayerRef(),
-		                                selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, "",
-		                                        null, 0, false));
-	                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-	                    });
-
-            addListener.invoke(pageBuilder, "essenceDropdown", valueChanged,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-	                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
-	                        String essenceVal = extractEventValue(eventObj);
-		                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
-		                        String slotVal = finalState != null ? finalState.slotKey : null;
-	                        pendingSelections.put(finalPlayer.getPlayerRef(),
-	                                selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, slotVal,
-	                                        null, 0, false));
-	                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-	                    });
-
-            addListener.invoke(pageBuilder, "supportDropdown", valueChanged,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-	                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
-	                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
-		                        String supportVal = extractEventValue(eventObj);
-		                        String slotVal = finalState != null ? finalState.slotKey : null;
-	                        pendingSelections.put(finalPlayer.getPlayerRef(),
-	                                selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, slotVal,
-	                                        null, 0, false));
-	                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-	                    });
-
-		            registerEquipmentSocketCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
-	            registerMaterialCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
-	            registerSocketPreviewListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
-	            registerLoreOverlayCloseListener(pageBuilder, addListener, activating, finalPlayer, state);
+			            registerEquipmentSocketCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
+		            registerMaterialCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
+		            registerSocketPreviewListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
+		            registerLoreOverlayCloseListener(pageBuilder, addListener, activating, finalPlayer, state);
+            registerExtractPromptListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, state);
 
 	            addListener.invoke(pageBuilder, "processButton", activating,
 	                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
                         if (Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) {
                             return;
                         }
-	                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
-	                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
-	                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
-	                        String slotVal = finalState != null ? finalState.slotKey : null;
+		                        String equipmentVal = finalState != null ? finalState.equipmentKey : null;
+		                        String essenceVal = finalState != null ? finalState.essenceKey : null;
+		                        String supportVal = finalState != null ? finalState.supportKey : null;
+		                        String slotVal = finalState != null ? finalState.slotKey : null;
                         Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
                         Entry essence = resolveSelection(finalSnapshot.essences, essenceVal);
                         Entry support = resolveSelection(finalSnapshot.voidhearts, supportVal);
@@ -506,50 +482,18 @@ public final class EssenceBenchUI {
                         }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
                     });
 
-            addListener.invoke(pageBuilder, "extractButton", activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        if (Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) {
-                            return;
-                        }
-	                        String equipmentVal = getContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value");
-	                        String essenceVal = getContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value");
-	                        String supportVal = getContextValue(ctxObj, "supportDropdown", "#supportDropdown.value");
-	                        String slotVal = finalState != null ? finalState.slotKey : null;
-                        Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
-
-	                        processingPlayers.put(finalPlayer.getPlayerRef(), true);
-	                        pendingSelections.put(finalPlayer.getPlayerRef(),
-	                                selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, slotVal,
-	                                        LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_extracting"),
-	                                        0, true));
-                        sfxConfig.playReforgeStart(finalPlayer);
-                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-
-                        for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
-                            final int delay = elapsed;
-                            final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
-                            scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
-	                                if (!Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) return;
-	                                pendingSelections.put(finalPlayer.getPlayerRef(),
-	                                        selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, slotVal,
-	                                                LangLoader.getUITranslation(finalPlayer, "ui.essence_bench.status_extracting"),
-	                                                timedProgress, true));
-                                openWithSync(finalPlayer);
-                            }), delay, TimeUnit.MILLISECONDS);
-                        }
-
-                        scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
-                            try {
-	                                ProcessResult result = processExtraction(finalPlayer, equipment);
-	                                pendingSelections.put(finalPlayer.getPlayerRef(),
-	                                        selectionWithPages(finalState, equipmentVal, essenceVal, supportVal, slotVal,
-	                                                result.status, result.progress, false));
-                            } finally {
-                                processingPlayers.remove(finalPlayer.getPlayerRef());
-                                openWithSync(finalPlayer);
+            if (!shouldDisableExtract(finalState != null && finalState.processing,
+                    resolveSelection(finalSnapshot.equipments, finalState != null ? finalState.equipmentKey : null),
+                    finalPlayer)) {
+                addListener.invoke(pageBuilder, "extractButton", activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                            if (Boolean.TRUE.equals(processingPlayers.get(finalPlayer.getPlayerRef()))) {
+                                return;
                             }
-                        }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
-                    });
+                            pendingSelections.put(finalPlayer.getPlayerRef(), selectionWithExtractPrompt(finalState, true));
+                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
+                        });
+            }
 
 	            pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
 	            Object store = getStore(playerRef);
@@ -584,13 +528,11 @@ public final class EssenceBenchUI {
             if (!renderedEquipmentIndexes.contains(equipmentIndex)) {
                 continue;
             }
-            final String equipmentKey = String.valueOf(equipmentIndex);
-            addListener.invoke(pageBuilder, equipmentCardButtonId(equipmentIndex), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-                                state != null ? state.essenceKey : null);
-                        String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-                                state != null ? state.supportKey : null);
+	            final String equipmentKey = String.valueOf(equipmentIndex);
+	            addListener.invoke(pageBuilder, equipmentCardButtonId(equipmentIndex), activating,
+	                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+	                        String essenceVal = state != null ? state.essenceKey : null;
+	                        String supportVal = state != null ? state.supportKey : null;
                         pendingSelections.put(player.getPlayerRef(),
                                 new SelectionState(equipmentKey, essenceVal, supportVal, "", null, 0, false,
                                         state != null ? state.armorCardPage : 0,
@@ -603,13 +545,11 @@ public final class EssenceBenchUI {
             LoreSocketData loreData = LoreSocketManager.getLoreSocketData(equipment.item);
             if (loreData != null && loreData.getSocketCount() > 0) {
                 for (int loreIndex = 0; loreIndex < Math.min(3, loreData.getSocketCount()); loreIndex++) {
-                    final String loreSocketKey = String.valueOf(loreIndex);
-                    addListener.invoke(pageBuilder, loreSocketButtonId(equipmentIndex, loreIndex), activating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                                String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-                                        state != null ? state.essenceKey : null);
-                                String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-                                        state != null ? state.supportKey : null);
+	                    final String loreSocketKey = String.valueOf(loreIndex);
+	                    addListener.invoke(pageBuilder, loreSocketButtonId(equipmentIndex, loreIndex), activating,
+	                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+	                                String essenceVal = state != null ? state.essenceKey : null;
+	                                String supportVal = state != null ? state.supportKey : null;
                                 String slotVal = state != null ? state.slotKey : null;
                                 boolean sameOverlay = state != null
                                         && equipmentKey.equals(state.loreEquipmentKey)
@@ -638,13 +578,11 @@ public final class EssenceBenchUI {
                 if (socket == null) {
                     continue;
                 }
-                final String slotKey = String.valueOf(socket.getSlotIndex());
-                addListener.invoke(pageBuilder, equipmentSocketButtonId(equipmentIndex, socket.getSlotIndex()), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-                                    state != null ? state.essenceKey : null);
-                            String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-                                    state != null ? state.supportKey : null);
+	                final String slotKey = String.valueOf(socket.getSlotIndex());
+	                addListener.invoke(pageBuilder, equipmentSocketButtonId(equipmentIndex, socket.getSlotIndex()), activating,
+	                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+	                            String essenceVal = state != null ? state.essenceKey : null;
+	                            String supportVal = state != null ? state.supportKey : null;
                             pendingSelections.put(player.getPlayerRef(),
                                     new SelectionState(equipmentKey, essenceVal, supportVal, slotKey, null, 0, false,
                                             state != null ? state.armorCardPage : 0,
@@ -667,15 +605,12 @@ public final class EssenceBenchUI {
         if (state == null || state.loreEquipmentKey == null || state.loreSocketKey == null) {
             return;
         }
-        addListener.invoke(pageBuilder, "loreOverlayClose", activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                    String equipmentVal = selectionContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value", state.equipmentKey);
-                    String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value", state.essenceKey);
-                    String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value", state.supportKey);
-                    pendingSelections.put(player.getPlayerRef(),
-                            new SelectionState(equipmentVal, essenceVal, supportVal, state.slotKey, null, 0, false,
-                                    state.armorCardPage, state.weaponCardPage,
-                                    state.essenceCardPage, state.supportCardPage));
+	        addListener.invoke(pageBuilder, "loreOverlayClose", activating,
+	                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+	                    pendingSelections.put(player.getPlayerRef(),
+	                            new SelectionState(state.equipmentKey, state.essenceKey, state.supportKey, state.slotKey, null, 0, false,
+	                                    state.armorCardPage, state.weaponCardPage,
+	                                    state.essenceCardPage, state.supportCardPage));
                     player.getWorld().execute(() -> openWithSync(player));
                 });
     }
@@ -704,18 +639,12 @@ public final class EssenceBenchUI {
 	            if (socket == null) {
 	                continue;
 	            }
-	            final String slotKey = String.valueOf(socket.getSlotIndex());
-	            addListener.invoke(pageBuilder, socketPreviewButtonId(socket.getSlotIndex()), activating,
-	                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-	                        String equipmentVal = selectionContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value",
-	                                state.equipmentKey);
-	                        String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-	                                state.essenceKey);
-	                        String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-	                                state.supportKey);
-	                        pendingSelections.put(player.getPlayerRef(),
-	                                new SelectionState(equipmentVal, essenceVal, supportVal, slotKey, null, 0, false,
-	                                        state.armorCardPage, state.weaponCardPage,
+		            final String slotKey = String.valueOf(socket.getSlotIndex());
+		            addListener.invoke(pageBuilder, socketPreviewButtonId(socket.getSlotIndex()), activating,
+		                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+		                        pendingSelections.put(player.getPlayerRef(),
+		                                new SelectionState(state.equipmentKey, state.essenceKey, state.supportKey, slotKey, null, 0, false,
+		                                        state.armorCardPage, state.weaponCardPage,
 	                                        state.essenceCardPage, state.supportCardPage));
 	                        player.getWorld().execute(() -> openWithSync(player));
 	                    });
@@ -760,7 +689,7 @@ public final class EssenceBenchUI {
                         return;
                     }
                     pendingSelections.put(player.getPlayerRef(),
-                            selectionFromContext(ctxObj, state, armorPager, currentPage - 1));
+	                            selectionFromContext(ctxObj, state, armorPager, currentPage - 1));
                     player.getWorld().execute(() -> openWithSync(player));
                 });
         addListener.invoke(pageBuilder, nextId, activating,
@@ -769,7 +698,7 @@ public final class EssenceBenchUI {
                         return;
                     }
                     pendingSelections.put(player.getPlayerRef(),
-                            selectionFromContext(ctxObj, state, armorPager, currentPage + 1));
+	                            selectionFromContext(ctxObj, state, armorPager, currentPage + 1));
                     player.getWorld().execute(() -> openWithSync(player));
                 });
     }
@@ -820,18 +749,85 @@ public final class EssenceBenchUI {
             final String materialKey = noneSupport ? "" : String.valueOf(entryIndex);
             addListener.invoke(pageBuilder, noneSupport ? supportNoneCardButtonId() : materialCardButtonId(essence, entryIndex), activating,
                     (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        String equipmentVal = selectionContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value",
-                                state != null ? state.equipmentKey : null);
-                        String essenceVal = essence ? materialKey : selectionContextValue(ctxObj,
-                                "essenceDropdown", "#essenceDropdown.value", state != null ? state.essenceKey : null);
-                        String supportVal = essence ? selectionContextValue(ctxObj,
-                                "supportDropdown", "#supportDropdown.value", state != null ? state.supportKey : null) : materialKey;
+	                        String equipmentVal = state != null ? state.equipmentKey : null;
+	                        String essenceVal = essence ? materialKey : (state != null ? state.essenceKey : null);
+	                        String supportVal = essence ? (state != null ? state.supportKey : null) : materialKey;
                         String slotVal = state != null ? state.slotKey : null;
                         pendingSelections.put(player.getPlayerRef(),
                                 selectionWithPages(state, equipmentVal, essenceVal, supportVal, slotVal, null, 0, false));
                         player.getWorld().execute(() -> openWithSync(player));
-                    });
+	                    });
+	        }
+	    }
+
+    private static void registerExtractPromptListeners(
+            Object pageBuilder,
+            Method addListener,
+            Object activating,
+            Player player,
+            Snapshot snapshot,
+            SelectionState state) throws Exception {
+        if (state == null || !state.extractPrompt) {
+            return;
         }
+        addListener.invoke(pageBuilder, "extractCancelButton", activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                    pendingSelections.put(player.getPlayerRef(), selectionWithExtractPrompt(state, false));
+                    player.getWorld().execute(() -> openWithSync(player));
+                });
+        addListener.invoke(pageBuilder, "extractConfirmButton", activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
+                    if (Boolean.TRUE.equals(processingPlayers.get(player.getPlayerRef()))) {
+                        return;
+                    }
+                    Entry equipment = resolveSelection(snapshot != null ? snapshot.equipments : List.of(), state.equipmentKey);
+                    if (shouldDisableExtract(state.processing, equipment, player)) {
+                        pendingSelections.put(player.getPlayerRef(), selectionWithExtractPrompt(state, false));
+                        player.getWorld().execute(() -> openWithSync(player));
+                        return;
+                    }
+                    startExtractionProcess(player, equipment, selectionWithExtractPrompt(state, false));
+                });
+    }
+
+    private static void startExtractionProcess(Player player, Entry equipment, SelectionState state) {
+        String equipmentVal = state != null ? state.equipmentKey : null;
+        String essenceVal = state != null ? state.essenceKey : null;
+        String supportVal = state != null ? state.supportKey : null;
+        String slotVal = state != null ? state.slotKey : null;
+
+        processingPlayers.put(player.getPlayerRef(), true);
+        pendingSelections.put(player.getPlayerRef(),
+                selectionWithPages(state, equipmentVal, essenceVal, supportVal, slotVal,
+                        LangLoader.getUITranslation(player, "ui.essence_bench.status_extracting"),
+                        0, true));
+        sfxConfig.playReforgeStart(player);
+        player.getWorld().execute(() -> openWithSync(player));
+
+        for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
+            final int delay = elapsed;
+            final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
+            scheduler.schedule(() -> player.getWorld().execute(() -> {
+                if (!Boolean.TRUE.equals(processingPlayers.get(player.getPlayerRef()))) return;
+                pendingSelections.put(player.getPlayerRef(),
+                        selectionWithPages(state, equipmentVal, essenceVal, supportVal, slotVal,
+                                LangLoader.getUITranslation(player, "ui.essence_bench.status_extracting"),
+                                timedProgress, true));
+                openWithSync(player);
+            }), delay, TimeUnit.MILLISECONDS);
+        }
+
+        scheduler.schedule(() -> player.getWorld().execute(() -> {
+            try {
+                ProcessResult result = processExtraction(player, equipment);
+                pendingSelections.put(player.getPlayerRef(),
+                        selectionWithPages(state, equipmentVal, essenceVal, supportVal, slotVal,
+                                result.status, result.progress, false));
+            } finally {
+                processingPlayers.remove(player.getPlayerRef());
+                openWithSync(player);
+            }
+        }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
     }
 
     private static void registerMaterialPagerListeners(
@@ -874,12 +870,9 @@ public final class EssenceBenchUI {
 	            SelectionState fallback,
 	            boolean armorPager,
 	            int cardPage) {
-        String equipmentVal = selectionContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value",
-                fallback != null ? fallback.equipmentKey : null);
-        String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-                fallback != null ? fallback.essenceKey : null);
-        String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-                fallback != null ? fallback.supportKey : null);
+        String equipmentVal = fallback != null ? fallback.equipmentKey : null;
+        String essenceVal = fallback != null ? fallback.essenceKey : null;
+        String supportVal = fallback != null ? fallback.supportKey : null;
 	        String slotVal = fallback != null ? fallback.slotKey : null;
         int armorCardPage = fallback != null ? fallback.armorCardPage : 0;
         int weaponCardPage = fallback != null ? fallback.weaponCardPage : 0;
@@ -899,12 +892,9 @@ public final class EssenceBenchUI {
             SelectionState fallback,
             boolean essencePager,
             int cardPage) {
-        String equipmentVal = selectionContextValue(ctxObj, "equipmentDropdown", "#equipmentDropdown.value",
-                fallback != null ? fallback.equipmentKey : null);
-        String essenceVal = selectionContextValue(ctxObj, "essenceDropdown", "#essenceDropdown.value",
-                fallback != null ? fallback.essenceKey : null);
-        String supportVal = selectionContextValue(ctxObj, "supportDropdown", "#supportDropdown.value",
-                fallback != null ? fallback.supportKey : null);
+        String equipmentVal = fallback != null ? fallback.equipmentKey : null;
+        String essenceVal = fallback != null ? fallback.essenceKey : null;
+        String supportVal = fallback != null ? fallback.supportKey : null;
         String slotVal = fallback != null ? fallback.slotKey : null;
         int essenceCardPage = fallback != null ? fallback.essenceCardPage : 0;
         int supportCardPage = fallback != null ? fallback.supportCardPage : 0;
@@ -937,6 +927,24 @@ public final class EssenceBenchUI {
 	                fallback != null ? fallback.supportCardPage : 0);
 	    }
 
+    private static SelectionState selectionWithExtractPrompt(SelectionState fallback, boolean showPrompt) {
+        return new SelectionState(
+                fallback != null ? fallback.equipmentKey : null,
+                fallback != null ? fallback.essenceKey : null,
+                fallback != null ? fallback.supportKey : null,
+                fallback != null ? fallback.slotKey : null,
+                fallback != null ? fallback.statusText : null,
+                fallback != null ? fallback.progressValue : 0,
+                fallback != null && fallback.processing,
+                fallback != null ? fallback.armorCardPage : 0,
+                fallback != null ? fallback.weaponCardPage : 0,
+                fallback != null ? fallback.essenceCardPage : 0,
+                fallback != null ? fallback.supportCardPage : 0,
+                fallback != null ? fallback.loreEquipmentKey : null,
+                fallback != null ? fallback.loreSocketKey : null,
+                showPrompt);
+    }
+
     private static int renderedPunchedSocketCount(SocketData socketData) {
         if (socketData == null || socketData.getSockets() == null) {
             return 0;
@@ -947,10 +955,11 @@ public final class EssenceBenchUI {
 	    private static String buildPageHtml(Player player, Snapshot snapshot, SelectionState state) {
 	        String html = loadLayoutTemplate();
 	        html = html.replace("{{equipmentPanel}}", buildEquipmentHtml(player, snapshot, state));
-	        html = html.replace("{{benchPanel}}", buildHtml(player, snapshot, state));
-	        html = html.replace("{{materialsPanel}}", buildMaterialsHtml(player, snapshot, state));
-	        html = html.replace("{{loreOverlayPanel}}", buildLoreOverlayHtml(player, snapshot, state));
-	        return LangLoader.replaceUiTokens(player, html);
+		html = html.replace("{{benchPanel}}", buildHtml(player, snapshot, state));
+		html = html.replace("{{materialsPanel}}", buildMaterialsHtml(player, snapshot, state));
+		html = html.replace("{{loreOverlayPanel}}", buildLoreOverlayHtml(player, snapshot, state));
+        html = html.replace("{{extractOverlayPanel}}", buildExtractOverlayHtml(player, snapshot, state));
+		return LangLoader.replaceUiTokens(player, html);
 	    }
 
     private static String buildLoreOverlayHtml(Player player, Snapshot snapshot, SelectionState state) {
@@ -1077,8 +1086,9 @@ public final class EssenceBenchUI {
             progress = 0;
         }
 
-        Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
-        Entry selectedSupport = resolveSelection(snapshot.voidhearts, supportKey);
+	        Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
+        Entry selectedEssence = resolveSelection(snapshot.essences, essenceKey);
+	        Entry selectedSupport = resolveSelection(snapshot.voidhearts, supportKey);
         String idleText = LangLoader.getUITranslation(player, "ui.essence_bench.status_idle");
         if (!processing && (idleText.equals(status) || "Idle".equals(status)) && isFilled(selectedEquipment)) {
             status = LangLoader.getUITranslation(player, "ui.essence_bench.status_all_filled");
@@ -1088,12 +1098,15 @@ public final class EssenceBenchUI {
 	        boolean extractDisabled = shouldDisableExtract(processing, selectedEquipment, player);
 
 	        String html = loadTemplate();
-	        html = html.replace("{{equipmentOptions}}",
-	                buildOptions(snapshot.equipments,
-	                        LangLoader.getUITranslation(player, "ui.essence_bench.option_no_equipment"),
-	                        equipmentKey));
-	        html = html.replace("{{essenceOptions}}", buildEssenceOptions(player, snapshot.essences, essenceKey));
-	        html = html.replace("{{supportOptions}}", buildSupportOptions(player, snapshot.voidhearts, supportKey));
+        html = html.replace("{{selectedEquipmentText}}", escapeHtml(selectedEquipment != null
+                ? selectedEquipment.displayName
+                : LangLoader.getUITranslation(player, "ui.essence_bench.option_no_equipment")));
+        html = html.replace("{{selectedEssenceText}}", escapeHtml(selectedEssence != null
+                ? selectedEssence.displayName
+                : LangLoader.getUITranslation(player, "ui.essence_bench.option_no_essence")));
+        html = html.replace("{{selectedSupportText}}", escapeHtml(selectedSupport != null
+                ? selectedSupport.displayName
+                : LangLoader.getUITranslation(player, "ui.essence_bench.option_no_support")));
 	        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(player, selectedSupport)));
 	        html = html.replace("{{supportRecipeText}}", escapeHtml(buildSupportRecipeText(player, selectedSupport)));
 	        html = html.replace("{{effectPreviewText}}", escapeHtml(buildEffectPreviewText(player, selectedEquipment, selectedSupport)));
@@ -1107,14 +1120,11 @@ public final class EssenceBenchUI {
 	                "processButton",
 	                LangLoader.getUITranslation(player, "ui.essence_bench.process_button"),
 	                processDisabled));
-	        html = html.replace("{{extractButton}}", buildBenchButtonHtml(
-	                "extractButton",
-	                LangLoader.getUITranslation(player, "ui.essence_bench.extract_button"),
-	                extractDisabled));
+        html = html.replace("{{extractSection}}", buildExtractSectionHtml(player, extractDisabled));
 	        return LangLoader.replaceUiTokens(player, html);
 	    }
 
-	    private static String buildEquipmentHtml(Player player, Snapshot snapshot, SelectionState state) {
+    private static String buildEquipmentHtml(Player player, Snapshot snapshot, SelectionState state) {
 	        String equipmentKey = state != null ? state.equipmentKey : null;
 	        String slotKey = state != null ? state.slotKey : null;
 	        int armorCardPage = state != null ? state.armorCardPage : 0;
@@ -1123,7 +1133,52 @@ public final class EssenceBenchUI {
 	        html = html.replace("{{equipmentSocketCards}}",
 	                buildEquipmentSocketCardsHtml(player, snapshot, equipmentKey, slotKey, armorCardPage, weaponCardPage));
 	        return LangLoader.replaceUiTokens(player, html);
-	    }
+		    }
+
+    private static String buildExtractSectionHtml(Player player, boolean disabled) {
+        if (disabled) {
+            return "";
+        }
+        return "<img id=\"dynamic-image\" src=\"divider.png\" style=\"anchor-width: 920; anchor-height: 3;\">"
+                + "<p>" + escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.extract_title")) + "</p>"
+                + "<p style=\"font-size:11; text-align:center;\">"
+                + escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.extract_hint"))
+                + "</p>"
+                + buildBenchButtonHtml(
+                "extractButton",
+                LangLoader.getUITranslation(player, "ui.essence_bench.extract_button"),
+                false);
+    }
+
+    private static String buildExtractOverlayHtml(Player player, Snapshot snapshot, SelectionState state) {
+        if (state == null || !state.extractPrompt) {
+            return "";
+        }
+        Entry equipment = findByKey(snapshot != null ? snapshot.equipments : List.of(), state.equipmentKey);
+        String equipmentName = equipment != null && equipment.displayName != null
+                ? equipment.displayName
+                : LangLoader.getUITranslation(player, "ui.essence_bench.option_no_equipment_selected");
+        return "<div style=\"anchor-width:1840; anchor-height:900; layout-mode:center; background-color:#000000AA;\">"
+                + "<div class=\"decorated-container\" data-hyui-title=\""
+                + escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.extract_confirm_title"))
+                + "\" style=\"anchor-width:520; anchor-height:250;\">"
+                + "<div class=\"container-contents\" style=\"anchor-full:14; layout-mode:top; spacing:8;\">"
+                + "<p style=\"font-weight:bold; text-align:center;\">"
+                + escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.extract_confirm_equipment", equipmentName))
+                + "</p>"
+                + "<p style=\"white-space:wrap; text-align:center;\">"
+                + escapeHtml(LangLoader.getUITranslation(player, "ui.essence_bench.extract_confirm_warning"))
+                + "</p>"
+                + "<div style=\"flex-weight:1;\"></div>"
+                + "<div style=\"layout-mode:left; spacing:14;\">"
+                + "<div style=\"flex-weight:1;\"></div>"
+                + buildSmallBenchButtonHtml("extractCancelButton",
+                LangLoader.getUITranslation(player, "ui.essence_bench.extract_cancel_button"), false)
+                + buildSmallBenchButtonHtml("extractConfirmButton",
+                LangLoader.getUITranslation(player, "ui.essence_bench.extract_confirm_button"), false)
+                + "<div style=\"flex-weight:1;\"></div>"
+                + "</div></div></div></div>";
+    }
 
 	    private static String buildMaterialsHtml(Player player, Snapshot snapshot, SelectionState state) {
 	        String essenceKey = state != null ? state.essenceKey : null;
@@ -1318,6 +1373,12 @@ public final class EssenceBenchUI {
 	                + (disabled ? " disabled=\"true\"" : "")
 	                + ">" + escapeHtml(label) + "</button>";
 	    }
+
+    private static String buildSmallBenchButtonHtml(String id, String label, boolean disabled) {
+        return "<button id=\"" + escapeHtml(id) + "\" style=\"anchor-width: 190; anchor-height:36;\""
+                + (disabled ? " disabled=\"true\"" : "")
+                + ">" + escapeHtml(label) + "</button>";
+    }
 
     private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
         if (entries.isEmpty()) {
@@ -1613,15 +1674,9 @@ public final class EssenceBenchUI {
 	                ? equipment.displayName
 	                : LangLoader.getUITranslation(player, "ui.essence_bench.equipment_card_empty_slot",
 	                Math.max(1, placeholderSlotNumber));
-	        String location = hasEquipment ? equipmentLocationLabel(player, equipment.kind) : "";
 	        boolean renderLoreSockets = hasEquipment && getPunchedLoreSocketCount(equipment.item) > 0;
 	        boolean renderResonanceIcon = hasEquipment && SocketManager.hasResonance(equipment.item);
-	        String locationText = hasEquipment
-	                ? LangLoader.getUITranslation(player, "ui.essence_bench.metadata_inventory", location, equipment.slot)
-	                : LangLoader.getUITranslation(player, "ui.essence_bench.equipment_card_not_equipped");
-	        String summaryText = hasEquipment
-	                ? buildSocketCardSummary(player, equipment)
-	                : LangLoader.getUITranslation(player, "ui.essence_bench.equipment_card_socket_counts", 0, 4);
+        String background = selectedEquipment ? "#253456" : "#151526";
 
 	        StringBuilder essenceSockets = new StringBuilder();
 	        if (hasEquipment) {
@@ -1632,23 +1687,22 @@ public final class EssenceBenchUI {
 	        if (renderLoreSockets) {
 	            StringBuilder loreSockets = new StringBuilder();
 	            appendCompactLoreSocketCells(player, loreSockets, equipment, equipmentIndex);
-	            loreSocketsBlock = "<div style=\"anchor-width:62; anchor-height:58; layout-mode:left;\">"
-	                    + loreSockets
-	                    + "</div>";
+		            loreSocketsBlock = "<div style=\"anchor-width:92; anchor-height:34; layout-mode:left;\">"
+		                    + loreSockets
+		                    + "</div>";
 	        }
 	        String resonanceIconBlock = renderResonanceIcon ? buildResonanceIconBlock() : "";
-	        String essenceSocketsBlock = "<div style=\"anchor-width:" + (renderLoreSockets ? "190" : "300")
-	                + "; anchor-height:34; layout-mode:left; spacing:4;\">"
-	                + essenceSockets
-	                + "</div>";
+	        String essenceSocketsBlock = "<div style=\"anchor-width:" + (renderLoreSockets || renderResonanceIcon ? "170" : "290")
+		                + "; anchor-height:34; layout-mode:left; spacing:4;\">"
+		                + essenceSockets
+		                + "</div>";
 	        sb.append(renderTemplate(loadEquipmentCardTemplate(), Map.of(
-	                "displayName", escapeHtml(displayName),
-	                "iconCell", buildEquipmentIconCell(equipment, equipmentIndex),
-	                "locationText", escapeHtml(locationText),
-	                "summaryText", escapeHtml(summaryText),
-	                "essenceSocketsBlock", essenceSocketsBlock,
-	                "resonanceIconBlock", resonanceIconBlock,
-	                "loreSocketsBlock", loreSocketsBlock
+                    "backgroundColor", background,
+		                "displayName", escapeHtml(displayName),
+		                "iconCell", buildEquipmentIconCell(equipment, equipmentIndex),
+		                "essenceSocketsBlock", essenceSocketsBlock,
+		                "resonanceIconBlock", resonanceIconBlock,
+		                "loreSocketsBlock", loreSocketsBlock
 	        )));
 	    }
 
@@ -1656,8 +1710,8 @@ public final class EssenceBenchUI {
 	        String icon = UITemplateUtils.resolveCustomUiAsset(
 	                "Ingredient_Resonant_Essence.png",
 	                "Icons/ItemsGenerated/Ingredient_Resonant_Essence.png");
-	        return "<div style=\"anchor-width: 0; anchor-height:25; padding:1; layout-mode:right;\">"
-	                + "<img src=\"" + icon + "\" width=\"100\" height=\"100\"/>"
+	        return "<div style=\"anchor-width:34; anchor-height:34; padding:1; layout-mode:center;\">"
+	                + "<img src=\"" + icon + "\" width=\"32\" height=\"32\"/>"
 	                + "</div>";
 	    }
 
@@ -1666,16 +1720,16 @@ public final class EssenceBenchUI {
 	        if (clickable) {
             sb.append("<button id=\"")
                     .append(equipmentCardButtonId(equipmentIndex))
-                    .append("\" class=\"raw-button\" style=\"anchor-width:58; anchor-height:58; padding:0; background-color:#00000000; border:0; layout-mode:top;\">");
-        } else {
-            sb.append("<div style=\"anchor-width:58; anchor-height:58; padding:0; background-color:#00000000; border:0; layout-mode:top;\">");
-        }
-        sb.append("<div style=\"anchor-width:56; anchor-height:56; background-image:url('slot_bg.png'); background-size:100% 100%; background-repeat:no-repeat; layout-mode:top; padding:3;\">");
-        if (equipment != null && equipment.itemId != null && !equipment.itemId.isBlank()) {
-            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
-                    .append(escapeHtml(equipment.itemId))
-                    .append("\" style=\"anchor-width:50; anchor-height:50;\"></span>");
-        }
+	                    .append("\" class=\"raw-button\" style=\"anchor-width:66; anchor-height:66; padding:0; background-color:#00000000; border:0; layout-mode:top;\">");
+	        } else {
+	            sb.append("<div style=\"anchor-width:66; anchor-height:66; padding:0; background-color:#00000000; border:0; layout-mode:top;\">");
+	        }
+	        sb.append("<div style=\"anchor-width:66; anchor-height:66; background-image:url('slot_bg.png'); background-size:100% 100%; background-repeat:no-repeat; layout-mode:top; padding:3;\">");
+	        if (equipment != null && equipment.itemId != null && !equipment.itemId.isBlank()) {
+	            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
+	                    .append(escapeHtml(equipment.itemId))
+	                    .append("\" style=\"anchor-width:60; anchor-height:60;\"></span>");
+	        }
 	        sb.append("</div>")
 	                .append(clickable ? "</button>" : "</div>");
 	    }
@@ -1770,20 +1824,12 @@ public final class EssenceBenchUI {
         if (cells.isEmpty()) {
             return;
         }
-        sb.append("<div style=\"anchor-width:62; anchor-height:58; layout-mode:top;\">");
-        sb.append("<div style=\"anchor-width:62; anchor-height:28; layout-mode:left;\"><div style=\"flex-weight:1;\"></div>")
-                .append(cells.get(0))
-                .append("<div style=\"flex-weight:1;\"></div></div>");
-        if (cells.size() > 1) {
-            sb.append("<div style=\"anchor-width:62; anchor-height:28; layout-mode:left; spacing:4;\">");
-            sb.append(cells.get(1));
-            if (cells.size() > 2) {
-                sb.append(cells.get(2));
-            }
-            sb.append("</div>");
+	        sb.append("<div style=\"anchor-width:90; anchor-height:30; layout-mode:left; spacing:4;\">");
+        for (String cell : cells) {
+            sb.append(cell);
         }
-        sb.append("</div>");
-    }
+	        sb.append("</div>");
+	    }
 
     private static void appendCompactLoreSocketCell(
             Player player,

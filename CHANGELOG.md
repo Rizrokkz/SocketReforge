@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.9-alpha.1] - 2026-07-14
+
+### Fixed
+- **Lore Socket Clearing** - fixed a bug where during the process of clearing a socketted gem it returns "No Materials" when clearing a lore gem that has no spirit residing on it.
+### Changed
+
+- **Lore Bench UI Overhaul** - 
+  - **`Lore Bench UI can now information on lore sockets when clicked from sockets panel.`**
+  - **`Sockets are now clickable for easy slot selection`**
+  - **`Materials and equipments are now shown on left and right panels for easier navigation`**
+  - **`Unified UI for Lore feed and Gem socketing rather than having 2 separate UI for each`**
+
+- **Resonance Essence Extraction notification** - Notifies player on resonance extraction attempt before proceeding with the extraction
+---
+
 ## [1.3.9] - 2026-07-05
 
 ### Fixed

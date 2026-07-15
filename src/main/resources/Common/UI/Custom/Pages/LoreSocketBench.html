@@ -1,59 +1,72 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="{{ui.lore_socket.title}}" style="anchor-width: 900; anchor-height: 640;">
-        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">{{ui.lore_socket.title}}</h2>
-            <p style="text-align:center;">{{ui.lore_socket.subtitle}}</p>
-            <div style="layout-mode:Left; spacing:8; anchor-width:900;">
-                <button id="navSocketButton" style="anchor-width:160; height:32;" disabled="true">{{ui.lore_socket.nav_socket}}</button>
-                <button id="navFeedButton" style="anchor-width:160; height:32;">{{ui.lore_socket.nav_feed}}</button>
-            </div>
-            <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
-
-            <div style="layout-mode:center; spacing:12;">
-                <div style="anchor-width:280; layout-mode:Top;">
-                    <p style="text-align:center;">{{ui.lore_socket.equipment}}</p>
-                    <select id="equipmentDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
-                        {{equipmentOptions}}
-                    </select>
-                </div>
-                <div style="anchor-width:280; layout-mode:Top;">
-                    <p style="text-align:center;">{{ui.lore_socket.gem}}</p>
-                    <select id="gemDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
-                        {{gemOptions}}
-                    </select>
-                </div>
-                <div style="anchor-width:280; layout-mode:Top;">
-                    <p style="text-align:center;">{{ui.lore_socket.support}}</p>
-                    <select id="supportDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
-                        {{supportOptions}}
-                    </select>
+    <div style="anchor-width: 1840; anchor-height: 900; layout-mode:left; spacing:30;">
+        <div class="decorated-container" data-hyui-title="{{ui.lore_socket.equipment_list_title}}" style="anchor-width: 500; anchor-height: 900;">
+            <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+                <h2 style="text-align:center;">{{ui.lore_socket.equipment_list_title}}</h2>
+                <p style="text-align:center;">{{ui.lore_socket.equipment_list_hint}}</p>
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 450; anchor-height: 3;">
+                <div id="loreEquipmentCards" class="panel" style="anchor-width: 460; anchor-height: 760; overflow-y:auto;">
+                    <div style="anchor-width: 430; layout-mode:top; spacing:6;">
+                        {{equipmentCards}}
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <p style="text-align:center;">{{ui.lore_socket.slot}}</p>
-            <div style="anchor-width: 900; layout-mode:Center;">
-                <select id="slotDropdown" data-hyui-showlabel="true" style="anchor-width: 280;">
-                    {{slotOptions}}
-                </select>
+        <div class="decorated-container" data-hyui-title="{{ui.lore_socket.title}}" style="anchor-width: 920; anchor-height: 900;">
+            <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+                <h2 style="text-align:center;">{{ui.lore_socket.title}}</h2>
+                <p style="text-align:center;">{{ui.lore_socket.subtitle}}</p>
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+
+                <div style="layout-mode:center; spacing:16;">
+                    <div style="anchor-width:280; layout-mode:top;">
+                        <p style="text-align:center;">{{ui.lore_socket.equipment}}</p>
+                        <p style="anchor-width:280; anchor-height:24; background-color:#40527a; text-align:center; white-space:nowrap;">{{selectedEquipmentLabel}}</p>
+                    </div>
+                    <div style="anchor-width:280; layout-mode:top;">
+                        <p style="text-align:center;">{{ui.lore_socket.gem}}</p>
+                        <p style="anchor-width:280; anchor-height:24; background-color:#40527a; text-align:center; white-space:nowrap;">{{selectedGemLabel}}</p>
+                    </div>
+                    <div style="anchor-width:280; layout-mode:top;">
+                        <p style="text-align:center;">{{ui.lore_socket.support}}</p>
+                        <p style="anchor-width:280; anchor-height:24; background-color:#40527a; text-align:center; white-space:nowrap;">{{selectedSupportLabel}}</p>
+                    </div>
+                </div>
+
+                <p style="text-align:center;">{{slotLabel}}</p>
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+                <p>{{ui.lore_socket.sockets}}</p>
+                <div id="loreSocketRow">{{socketIcons}}</div>
+
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+                <p>{{ui.lore_socket.slot_details}}</p>
+                <div id="slotDetailsLabel" style="anchor-width:880; anchor-height:230; overflow-y:auto; background-color:#1a1a2b; padding:8; layout-mode:top;">
+                    {{slotDetails}}
+                </div>
+
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+                <p>{{ui.lore_socket.status}}</p>
+                <p id="statusLabel">{{statusText}}</p>
+
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+                <p>{{ui.lore_socket.metadata}}</p>
+                <p id="metadataLabel" style="white-space:pre-line; max-height:160; overflow-y:auto; word-break:break-word; background-color:#1a1a2b; padding:8;">{{metadataText}}</p>
+
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
+                <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{processButtonLabel}}</button>
             </div>
+        </div>
 
-            <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
-            <p>{{ui.lore_socket.sockets}}</p>
-            <div id="loreSocketRow">{{socketIcons}}</div>
-
-            <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
-            <p>{{ui.lore_socket.status}}</p>
-            <p id="statusLabel">{{statusText}}</p>
-
-            <hr/>
-            <p>{{ui.lore_socket.metadata}}</p>
-            <p id="metadataLabel" style="white-space:pre-line;max-height:180px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">{{metadataText}}</p>
-
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 900; anchor-height: 3;">
-            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{ui.lore_socket.process_button}}</button>
+        <div class="decorated-container" data-hyui-title="{{ui.lore_socket.materials_list_title}}" style="anchor-width: 360; anchor-height: 900;">
+            <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+                <h2 style="text-align:center;">{{ui.lore_socket.materials_list_title}}</h2>
+                <p style="text-align:center;">{{ui.lore_socket.materials_list_hint}}</p>
+                <img id="dynamic-image" src="divider.png" style="anchor-width: 320; anchor-height: 3;">
+                <div style="anchor-width: 330; layout-mode:top; spacing:6;">
+                    {{materialsCards}}
+                </div>
+            </div>
         </div>
     </div>
 </div>

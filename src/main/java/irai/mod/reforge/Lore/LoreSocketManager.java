@@ -544,7 +544,7 @@ public final class LoreSocketManager {
     }
 
     public static boolean applyStoredXp(LoreSocketData.LoreSocket socket) {
-        if (socket == null || !socket.hasSpirit()) {
+        if (socket == null || socket.isEmpty()) {
             return false;
         }
         int maxLevel = Math.max(1, config.getMaxLevel());
@@ -609,7 +609,7 @@ public final class LoreSocketManager {
             return true;
         }
 
-        String[] feedIds = config.getFeedItemIds();
+        String[] feedIds = feedItemIdsExcludingClearItems();
         if (feedIds == null || feedIds.length == 0) {
             return false;
         }
@@ -622,6 +622,28 @@ public final class LoreSocketManager {
         return true;
     }
 
+    private static String[] feedItemIdsExcludingClearItems() {
+        String[] feedIds = config.getFeedItemIds();
+        if (feedIds == null || feedIds.length == 0) {
+            return new String[0];
+        }
+        String[] clearIds = config.getClearItemIds();
+        int count = 0;
+        for (String feedId : feedIds) {
+            if (feedId != null && !feedId.isBlank() && !matchesAnyId(feedId, clearIds)) {
+                count++;
+            }
+        }
+        String[] filtered = new String[count];
+        int index = 0;
+        for (String feedId : feedIds) {
+            if (feedId != null && !feedId.isBlank() && !matchesAnyId(feedId, clearIds)) {
+                filtered[index++] = feedId;
+            }
+        }
+        return filtered;
+    }
+
     public static boolean tryClearSpirit(Player player, LoreSocketData data, int slotIndex) {
         return tryClearSpirit(player, data, slotIndex, false);
     }
@@ -631,7 +653,7 @@ public final class LoreSocketManager {
             return false;
         }
         LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
-        if (socket == null || !socket.hasSpirit()) {
+        if (socket == null || socket.isEmpty()) {
             return false;
         }
         String[] clearIds = config.getClearItemIds();
@@ -644,7 +666,7 @@ public final class LoreSocketManager {
         if (!consumed) {
             return false;
         }
-        clearSocketSpirit(socket);
+        clearSocketGem(socket);
         return true;
     }
 
@@ -663,10 +685,11 @@ public final class LoreSocketManager {
         return matchesAnyId(held.getItemId(), clearIds);
     }
 
-    private static void clearSocketSpirit(LoreSocketData.LoreSocket socket) {
+    private static void clearSocketGem(LoreSocketData.LoreSocket socket) {
         if (socket == null) {
             return;
         }
+        socket.setGemItemId("");
         socket.setSpiritId("");
         socket.setEffectOverride("");
         socket.setLevel(0);
