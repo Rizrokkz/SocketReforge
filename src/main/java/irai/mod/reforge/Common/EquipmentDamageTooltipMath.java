@@ -59,6 +59,24 @@ public final class EquipmentDamageTooltipMath {
         }
     }
 
+    public static final class DamageBreakdown {
+        private final String label;
+        private final double baseValue;
+
+        public DamageBreakdown(String label, double baseValue) {
+            this.label = label == null || label.isBlank() ? "Hit" : label;
+            this.baseValue = Math.max(0.0, baseValue);
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public double getBaseValue() {
+            return baseValue;
+        }
+    }
+
     /**
      * Computes the "Damage : X -> Y" summary using interaction base damage and current buffs.
      */
@@ -101,6 +119,54 @@ public final class EquipmentDamageTooltipMath {
             Item item = resolveItem(key);
             return getAverageBaseDamageFromInteractionVars(item);
         });
+    }
+
+    public static List<DamageBreakdown> getDamageBreakdownFromInteractionVars(String itemId) {
+        Item item = resolveItem(itemId);
+        if (item == null || item == Item.UNKNOWN) {
+            return List.of();
+        }
+        return getDamageBreakdownFromInteractionVars(item);
+    }
+
+    public static List<DamageBreakdown> getDamageBreakdownFromInteractionVars(Item item) {
+        if (item == null || item == Item.UNKNOWN) {
+            return List.of();
+        }
+
+        Map<String, String> interactionVars = item.getInteractionVars();
+        if (interactionVars == null || interactionVars.isEmpty()) {
+            return List.of();
+        }
+
+        List<DamageBreakdown> breakdowns = new ArrayList<>();
+        Set<String> emittedLabels = new HashSet<>();
+        int fallbackIndex = 1;
+        for (Map.Entry<String, String> entry : interactionVars.entrySet()) {
+            String rootId = entry.getValue();
+            if (rootId == null || rootId.isBlank()) {
+                continue;
+            }
+            List<Double> samples = collectRootDamageSamples(rootId);
+            if (samples.isEmpty()) {
+                continue;
+            }
+            double total = 0.0;
+            for (double sample : samples) {
+                total += sample;
+            }
+            String label = displayLabel(entry.getKey());
+            if (label.isBlank()) {
+                label = "Hit " + fallbackIndex;
+            }
+            while (!emittedLabels.add(label.toLowerCase(Locale.ROOT))) {
+                label = "Hit " + fallbackIndex;
+                fallbackIndex++;
+            }
+            fallbackIndex++;
+            breakdowns.add(new DamageBreakdown(label, total / samples.size()));
+        }
+        return breakdowns;
     }
 
     /**
@@ -165,6 +231,54 @@ public final class EquipmentDamageTooltipMath {
             total += sample;
         }
         return total / damageSamples.size();
+    }
+
+    private static List<Double> collectRootDamageSamples(String rootId) {
+        if (rootId == null || rootId.isBlank()) {
+            return List.of();
+        }
+        RootInteraction root = getRootInteraction(rootId);
+        if (root == null) {
+            return List.of();
+        }
+        String[] interactionIds = root.getInteractionIds();
+        if (interactionIds == null || interactionIds.length == 0) {
+            return List.of();
+        }
+        List<Double> damageSamples = new ArrayList<>();
+        Set<String> visitedInteractions = new HashSet<>();
+        for (String interactionId : interactionIds) {
+            collectInteractionDamage(interactionId, visitedInteractions, damageSamples);
+        }
+        return damageSamples;
+    }
+
+    private static String displayLabel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        String cleaned = raw.replaceAll("(?i)interaction|damage|root", "")
+                .replace('_', ' ')
+                .replace('-', ' ')
+                .trim();
+        if (cleaned.isBlank()) {
+            cleaned = raw.replace('_', ' ').replace('-', ' ').trim();
+        }
+        String[] parts = cleaned.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(' ');
+            }
+            sb.append(part.substring(0, 1).toUpperCase(Locale.ROOT));
+            if (part.length() > 1) {
+                sb.append(part.substring(1).toLowerCase(Locale.ROOT));
+            }
+        }
+        return sb.toString();
     }
 
     /**

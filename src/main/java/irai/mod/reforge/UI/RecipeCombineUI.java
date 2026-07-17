@@ -979,7 +979,7 @@ public final class RecipeCombineUI {
         }
 
         if (DynamicTooltipUtils.isAvailable()) {
-            DynamicTooltipUtils.refreshAllPlayers();
+            DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
         }
 
         String progress = afterStats.totalSlots() > 0

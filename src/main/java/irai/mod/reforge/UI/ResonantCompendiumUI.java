@@ -393,7 +393,7 @@ public final class ResonantCompendiumUI {
             hotbar.setItemStackForSlot(context.slot, updated);
         }
         if (DynamicTooltipUtils.isAvailable()) {
-            DynamicTooltipUtils.refreshAllPlayers();
+            DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
         }
         if (remaining > 0) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.compendium.status_extracted_remaining", remaining));

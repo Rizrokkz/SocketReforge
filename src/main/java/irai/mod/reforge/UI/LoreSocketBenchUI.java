@@ -14,22 +14,21 @@ import java.util.concurrent.TimeUnit;
 
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
+import irai.mod.reforge.Common.UI.UIHtmlUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
+import irai.mod.reforge.Common.UI.UISocketVisualUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreGemRegistry;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
-import irai.mod.reforge.Socket.Essence;
-import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -479,137 +478,22 @@ public final class LoreSocketBenchUI {
     }
 
     private static String resolveSmallFilledSocketBaseIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
+        return UISocketVisualUtils.filledSocketIconName();
     }
 
     private static String resolveSmallBrokenSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
+        return UISocketVisualUtils.brokenSocketIconName();
     }
 
     private static String getSmallEssenceColorHex(Socket socket) {
         if (socket == null || socket.isEmpty()) {
             return "#362f1e";
         }
-        String essenceId = socket.getEssenceId();
-        if (essenceId == null || essenceId.isBlank()) {
-            return "#362f1e";
-        }
-        String lower = essenceId.toLowerCase(Locale.ROOT);
-        if (lower.contains("fire")) return "#FFAA00";
-        if (lower.contains("ice")) return "#55FFFF";
-        if (lower.contains("life")) return "#55FF55";
-        if (lower.contains("lightning")) return "#FFFF55";
-        if (lower.contains("void")) return "#AA55FF";
-        if (lower.contains("water")) return "#5555FF";
-        return "#FFFFFF";
+        return UISocketVisualUtils.socketColorHex(socket);
     }
 
     private static String resolveSmallEssenceIconName(Socket socket) {
-        if (socket == null || socket.isEmpty()) {
-            return "socket_empty.png";
-        }
-        String essenceId = socket.getEssenceId();
-        String itemIcon = resolveSmallIconFromEssenceId(essenceId);
-        if (itemIcon != null && !itemIcon.isBlank()) {
-            return itemIcon;
-        }
-        Essence.Type type = null;
-        try {
-            Essence essence = essenceId == null ? null : EssenceRegistry.get().getById(essenceId);
-            if (essence != null) {
-                type = essence.getType();
-            }
-        } catch (Exception ignored) {
-        }
-        if (type == null) {
-            type = resolveSmallEssenceType(essenceId);
-        }
-        if (type == null) {
-            return resolveSmallFilledSocketBaseIconName();
-        }
-        String base = "essence_" + type.name().toLowerCase(Locale.ROOT);
-        boolean greater = essenceId != null && SocketManager.isGreaterEssenceId(essenceId);
-        if (greater) {
-            return UITemplateUtils.resolveCustomUiAsset(
-                    resolveSmallFilledSocketBaseIconName(),
-                    base + "_concentrated.png",
-                    base + "_greater.png",
-                    base + "_concentrated_icon.png",
-                    base + "_greater_icon.png",
-                    base + ".png");
-        }
-        return UITemplateUtils.resolveCustomUiAsset(resolveSmallFilledSocketBaseIconName(), base + ".png", base + "_icon.png");
-    }
-
-    private static Essence.Type resolveSmallEssenceType(String essenceId) {
-        if (essenceId == null || essenceId.isBlank()) {
-            return null;
-        }
-        String lower = essenceId.toLowerCase(Locale.ROOT);
-        if (lower.contains("fire")) return Essence.Type.FIRE;
-        if (lower.contains("ice")) return Essence.Type.ICE;
-        if (lower.contains("life")) return Essence.Type.LIFE;
-        if (lower.contains("lightning")) return Essence.Type.LIGHTNING;
-        if (lower.contains("void")) return Essence.Type.VOID;
-        if (lower.contains("water")) return Essence.Type.WATER;
-        return null;
-    }
-
-    private static String resolveSmallIconFromEssenceId(String essenceId) {
-        String itemId = resolveSmallEssenceItemId(essenceId);
-        if (itemId == null || itemId.isBlank()) {
-            return null;
-        }
-        try {
-            Item item = Item.getAssetMap().getAssetMap().get(itemId);
-            if (item == null || item == Item.UNKNOWN) {
-                return null;
-            }
-            String icon = item.getIcon();
-            if (icon == null || icon.isBlank() || Item.UNKNOWN_TEXTURE.equals(icon)) {
-                return null;
-            }
-            String uiIcon = resolveSmallUiIconPath(icon);
-            return uiIcon != null ? uiIcon : icon;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static String resolveSmallEssenceItemId(String essenceId) {
-        if (essenceId == null || essenceId.isBlank()) {
-            return null;
-        }
-        String lower = essenceId.toLowerCase(Locale.ROOT);
-        if (lower.contains("ingredient_") && lower.contains("essence")) {
-            return essenceId;
-        }
-        String cleaned = essenceId;
-        if (lower.startsWith("essence_")) {
-            cleaned = essenceId.substring("Essence_".length());
-        }
-        boolean concentrated = lower.endsWith("_concentrated");
-        if (concentrated && cleaned.length() >= "_Concentrated".length()) {
-            cleaned = cleaned.substring(0, cleaned.length() - "_Concentrated".length());
-        }
-        if (cleaned.isBlank()) {
-            return null;
-        }
-        return "Ingredient_" + cleaned + "_Essence" + (concentrated ? "_Concentrated" : "");
-    }
-
-    private static String resolveSmallUiIconPath(String iconPath) {
-        if (iconPath == null || iconPath.isBlank()) {
-            return null;
-        }
-        String normalized = iconPath.replace('\\', '/');
-        if (normalized.startsWith("Common/Icons/")) {
-            return normalized.substring("Common/".length());
-        }
-        if (normalized.startsWith("Icons/")) {
-            return normalized;
-        }
-        return "Icons/" + normalized;
+        return UISocketVisualUtils.essenceIconName(socket);
     }
 
     private static void appendSmallLoreSocketHtml(StringBuilder sb, LoreSocketData.LoreSocket socket) {
@@ -668,7 +552,7 @@ public final class LoreSocketBenchUI {
         sb.append("<div style=\"anchor-width:330; layout-mode:top; spacing:4;\">")
                 .append("<p style=\"anchor-height:18; text-align:left; font-weight:bold;\">")
                 .append(escapeHtml(LangLoader.getUITranslation(player, titleKey))).append("</p>")
-                .append("<img id=\"dynamic-image\" src=\"divider.png\" style=\"anchor-width: 320; anchor-height: 3;\">");
+                .append("<img src=\"divider.png\" style=\"anchor-width: 320; anchor-height: 3;\">");
         int totalCards = gemSection ? (entries == null ? 0 : entries.size()) : (entries == null ? 0 : entries.size()) + 1;
         if (gemSection && totalCards == 0) {
             String emptyKey = gemSection ? "ui.lore_socket.option_no_gem" : "ui.lore_socket.option_no_support";
@@ -1131,14 +1015,17 @@ public final class LoreSocketBenchUI {
         if (pageCount <= 1) {
             return "";
         }
-        return "<div style=\"anchor-width:" + width + "; anchor-height:30; layout-mode:left; spacing:8;\">"
-                + "<button id=\"" + prevId + "\" class=\"small-secondary-button\" style=\"anchor-width:92; anchor-height:24;\">"
-                + escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.pager_prev")) + "</button>"
-                + "<p style=\"anchor-width:" + Math.max(80, width - 200) + "; text-align:center;\">"
-                + escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.pager_page", page + 1, pageCount)) + "</p>"
-                + "<button id=\"" + nextId + "\" class=\"small-secondary-button\" style=\"anchor-width:92; anchor-height:24;\">"
-                + escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.pager_next")) + "</button>"
-                + "</div>";
+        return UIHtmlUtils.pager(
+                prevId,
+                LangLoader.getUITranslation(player, "ui.lore_socket.pager_prev"),
+                LangLoader.getUITranslation(player, "ui.lore_socket.pager_page", page + 1, pageCount),
+                nextId,
+                LangLoader.getUITranslation(player, "ui.lore_socket.pager_next"),
+                width,
+                30,
+                92,
+                24,
+                true);
     }
 
     private static int cardPageCount(int size, int perPage) {
@@ -1347,7 +1234,7 @@ public final class LoreSocketBenchUI {
                 .append("</div>")
                 .append("<p style=\"anchor-height:22; font-weight:bold; text-align:left;\">")
                 .append(escapeHtml(equipment.displayName)).append("</p>")
-                .append("<img id=\"dynamic-image\" src=\"divider.png\" style=\"anchor-width: 400; anchor-height: 3;\">")
+                .append("<img src=\"divider.png\" style=\"anchor-width: 400; anchor-height: 3;\">")
                 .append("<div style=\"anchor-width:400; layout-mode:top; spacing:4;\">");
         for (String line : lines) {
             sb.append("<p style=\"anchor-height:20; font-size:14; text-align:left; white-space:nowrap;\">")
@@ -1464,93 +1351,11 @@ public final class LoreSocketBenchUI {
     }
 
     private static String resolveLoreColorHex(LoreSocketData.LoreSocket socket) {
-        if (socket == null) {
-            return "#2b2b3a";
-        }
-        if (socket.isLocked()) {
-            return "#3a3a3a";
-        }
-        String color = socket.getColor();
-        if (color == null || color.isBlank()) {
-            return "#2b2b3a";
-        }
-        String trimmed = color.trim();
-        if (trimmed.startsWith("#")) {
-            return trimmed;
-        }
-        String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (lower.contains("red") || lower.contains("ruby")) return "#FF5555";
-        if (lower.contains("blue") || lower.contains("sapphire")) return "#5599FF";
-        if (lower.contains("green") || lower.contains("emerald")) return "#55FF77";
-        if (lower.contains("purple") || lower.contains("amethyst")) return "#AA55FF";
-        if (lower.contains("yellow") || lower.contains("topaz")) return "#FFFF55";
-        if (lower.contains("orange")) return "#FFAA00";
-        if (lower.contains("black") || lower.contains("onyx")) return "#555555";
-        if (lower.contains("white") || lower.contains("diamond")) return "#FFFFFF";
-        if (lower.contains("cyan") || lower.contains("opal")) return "#55FFFF";
-        return "#2b2b3a";
+        return UISocketVisualUtils.loreColorHex(socket);
     }
 
     private static String resolveLoreGemOverlayIcon(LoreSocketData.LoreSocket socket) {
-        if (socket == null || socket.isEmpty()) {
-            return null;
-        }
-        String gemItemId = socket.getGemItemId();
-        String byItem = resolveGemIconByItemId(gemItemId);
-        if (byItem != null) {
-            return byItem;
-        }
-        String color = socket.getColor();
-        String byColor = resolveGemIconByColor(color);
-        if (byColor != null) {
-            return byColor;
-        }
-        return UITemplateUtils.resolveCustomUiAsset(
-                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
-                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
-    }
-
-    private static String resolveGemIconByItemId(String itemId) {
-        if (itemId == null || itemId.isBlank()) {
-            return null;
-        }
-        String lower = itemId.toLowerCase(Locale.ROOT);
-        if (lower.contains("ruby")) return resolveGemIconByColor("red");
-        if (lower.contains("sapphire")) return resolveGemIconByColor("blue");
-        if (lower.contains("emerald")) return resolveGemIconByColor("green");
-        if (lower.contains("diamond")) return resolveGemIconByColor("white");
-        if (lower.contains("topaz")) return resolveGemIconByColor("yellow");
-        if (lower.contains("voidstone") || lower.contains("onyx")) return resolveGemIconByColor("black");
-        if (lower.contains("zephyr") || lower.contains("opal")) return resolveGemIconByColor("cyan");
-        return null;
-    }
-
-    private static String resolveGemIconByColor(String color) {
-        if (color == null || color.isBlank()) {
-            return null;
-        }
-        String lower = color.toLowerCase(Locale.ROOT);
-        String icon;
-        if (lower.contains("red") || lower.contains("ruby")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Ruby.png";
-        } else if (lower.contains("blue") || lower.contains("sapphire")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Sapphire.png";
-        } else if (lower.contains("green") || lower.contains("emerald")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Emerald.png";
-        } else if (lower.contains("white") || lower.contains("diamond")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Diamond.png";
-        } else if (lower.contains("yellow") || lower.contains("topaz")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Topaz.png";
-        } else if (lower.contains("black") || lower.contains("voidstone") || lower.contains("onyx")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Voidstone.png";
-        } else if (lower.contains("cyan") || lower.contains("opal") || lower.contains("zephyr")) {
-            icon = "Icons/ItemsGenerated/Rock_Gem_Zephyr.png";
-        } else {
-            return null;
-        }
-        return UITemplateUtils.resolveCustomUiAsset(
-                "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
-                icon);
+        return UISocketVisualUtils.loreGemOverlayIcon(socket);
     }
 
     private static String buildMetadata(Player player, Entry equipment) {

@@ -1,75 +1,78 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="{{title}}" style="anchor-width: 920; anchor-height: 760;">
-        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
-            <h2 style="text-align:center;">{{title}}</h2>
-            <p style="text-align:center;">{{materialCountText}}</p>
- 
-            <hr/>
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
- 
-            <p style="font-weight:bold;">{{equipmentLabel}}</p>
-            <select id="equipmentDropdown" data-hyui-showlabel="true">
-                {{equipmentOptions}}
-            </select>
- 
-            <p style="font-weight:bold;">{{materialLabel}}</p>
-            <select id="materialDropdown" data-hyui-showlabel="true">
-                {{materialOptions}}
-            </select>
- 
-            <p style="font-weight:bold;">{{supportLabel}}</p>
-            <select id="supportDropdown" data-hyui-showlabel="true">
-                {{supportOptions}}
-            </select>
-            <p style="font-size:11px;">{{supportDurabilityText}}</p>
- 
-            <hr/>
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <div style="layout-mode: Left; spacing: 14;">
-                <div style="flex-weight:1; layout-mode:Top; min-width:0;">
-                    <p style="font-weight:bold;">{{metadataLabel}}</p>
-                    <div id="metadataLabel" style="layout-mode:Top;max-height:220px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>{{metadataNameLabel}} : {{metadataNameText}}</p>
-                        <p>{{metadataLevelLabel}} : {{metadataLevelText}}</p>
-                        <p>{{metadataCurrentStatLabel}} : {{metadataCurrentStatText}}</p>
-                        <p>{{metadataBaseStatLabel}} : {{metadataBaseStatText}}</p>
+    <div style="anchor-width: 1660; anchor-height: 820; layout-mode:Left; spacing:18;">
+        <div class="decorated-container" data-hyui-title="{{equipmentPanelTitle}}" style="anchor-width: 430; anchor-height: 820;">
+            <div class="container-contents" style="anchor-full: 14; layout-mode:Top;">
+                <p style="text-align:center;">{{equipmentPanelHint}}</p>
+                <img src="divider.png" style="anchor-width: 390; anchor-height: 3;">
+                <div id="reforgeEquipmentCardsPanel" data-hyui-keep-scroll-position="true" style="anchor-width:390; anchor-height:720; layout-mode:TopScrolling; padding:6; background-color:#101823;">
+                    {{equipmentCards}}
+                </div>
+            </div>
+        </div>
+
+        <div class="decorated-container" data-hyui-title="{{title}}" style="anchor-width: 760; anchor-height: 820;">
+            <div class="container-contents" style="anchor-full: 14; layout-mode:Top;">
+                <h2 style="text-align:center;">{{title}}</h2>
+                <div style="anchor-width:730; layout-mode:center;">
+                    {{selectedEquipmentIcon}}
+                </div>
+                <img src="divider.png" style="anchor-width: 730; anchor-height: 3;">
+
+                <div style="anchor-width:730; layout-mode:left; spacing:14;">
+                    <div style="anchor-width:358; layout-mode:Top;">
+                        <p style="font-weight:bold; text-align:center;">{{currentDamageLabel}}</p>
+                        <div id="metadataPanel" data-hyui-keep-scroll-position="true" style="anchor-width:358; anchor-height:280; layout-mode:TopScrolling; background-color:#1a1a2b; padding:10;">
+                            {{currentDamageRows}}
+                        </div>
+                    </div>
+                    <div style="anchor-width:358; layout-mode:Top;">
+                        <p style="font-weight:bold; text-align:center;">{{expectedDamageLabel}}</p>
+                        <div id="expectedOutcomePanel" data-hyui-keep-scroll-position="true" style="anchor-width:358; anchor-height:280; layout-mode:TopScrolling; background-color:#1a1a2b; padding:10;">
+                            {{expectedDamageRows}}
+                        </div>
                     </div>
                 </div>
- 
-                <div style="flex-weight:1; layout-mode:Top; min-width:0;">
-                    <p style="font-weight:bold;">{{expectedOutcomeLabel}}</p>
-                    <div id="expectedStatsLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>{{chanceBreakLabel}} : {{chanceBreakText}}</p>
-                        <p>{{chanceDegradeLabel}} : {{chanceDegradeText}}</p>
-                        <p>{{chanceSameLabel}} : {{chanceSameText}}</p>
-                        <p>{{chanceUpgradeLabel}} : {{chanceUpgradeText}}</p>
-                        <p>{{chanceJackpotLabel}} : {{chanceJackpotText}}</p>
-                        <p>{{chanceNoteText}}</p>
+
+                <div style="flex-weight:1;"></div>
+
+                <div id="reforgeBottomActions" style="anchor-width:730; anchor-height:210; layout-mode:Top; spacing:6;">
+                    <img src="divider.png" style="anchor-width: 730; anchor-height: 3;">
+                    <div style="anchor-width:730; layout-mode:center; spacing:18;">
+                        {{materialCards}}
                     </div>
- 
-                    <img src="divider.png" style="anchor-width: 440; anchor-height: 3;">
-                    <p style="font-weight:bold;">{{expectedDamageLabel}}</p>
-                    <div id="expectedDamageLabel" style="layout-mode:Top;background-color:#1a1a2b;padding:8;border-radius:4;">
-                        <p>{{expectedDamageText}}</p>
+                    <p style="font-weight:bold;">{{refineProgressLabel}}</p>
+                    <progress id="refineProgress"
+                              max="100"
+                              value="{{progressValue}}"
+                              data-hyui-bar-texture-path="boost_fill.png"
+                              style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+                    </progress>
+                    <p id="statusLabel">{{statusText}}</p>
+                    <p style="font-size:11;">{{consumesMaterialText}}</p>
+                    <div style="anchor-width:730; layout-mode:left;">
+                        <div style="flex-weight:1;"></div>
+                        <button id="processButton" style="anchor-width:220; anchor-height:40;" {{processDisabledAttr}}>{{refineButtonText}}</button>
                     </div>
                 </div>
             </div>
- 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-weight:bold;">{{refineProgressLabel}}</p>
-            <progress id="refineProgress"
-                      max="100"
-                      value="{{progressValue}}"
-                      data-hyui-bar-texture-path="boost_fill.png"
-                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
-            </progress>
-            <p id="statusLabel">{{statusText}}</p>
- 
-            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11px;">{{consumesMaterialText}}</p> 
-            <p style="font-size:11px;">{{ironHammerInfoText}}</p> 
-            <p style="font-size:11px;">{{thoriumHammerInfoText}}</p>
-            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{refineButtonText}}</button>
+        </div>
+
+        <div class="decorated-container" data-hyui-title="{{supportPanelTitle}}" style="anchor-width: 430; anchor-height: 820;">
+            <div class="container-contents" style="anchor-full: 14; layout-mode:Top;">
+                <p style="font-weight:bold;">{{chancePanelTitle}}</p>
+                <div id="chancePanel" style="anchor-width:390; layout-mode:Top; background-color:#1a1a2b; padding:8;">
+                    <p>{{chanceBreakLabel}} : {{chanceBreakText}}</p>
+                    <p>{{chanceDegradeLabel}} : {{chanceDegradeText}}</p>
+                    <p>{{chanceSameLabel}} : {{chanceSameText}}</p>
+                    <p>{{chanceUpgradeLabel}} : {{chanceUpgradeText}}</p>
+                    <p>{{chanceJackpotLabel}} : {{chanceJackpotText}}</p>
+                </div>
+                <img src="divider.png" style="anchor-width: 390; anchor-height: 3;">
+                <p style="font-weight:bold;">{{supportLabel}}</p>
+                <div id="reforgeSupportCardsPanel" data-hyui-keep-scroll-position="true" style="anchor-width:390; anchor-height:560; layout-mode:TopScrolling; padding:6; background-color:#101823;">
+                    {{supportCards}}
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -1,53 +1,69 @@
 <div class="page-overlay">
-    <div class="decorated-container" data-hyui-title="{{ui.socket_bench.title}}" style="anchor-width: 920; anchor-height: 760;">
-        <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+    <div style=" anchor-height: 760; layout-mode:left; spacing:24;">
+    <div class="decorated-container" data-hyui-title="{{ui.socket_bench.equipment}}" style="anchor-width: 500; anchor-height: 760; margin-left: 24;">
+            <div class="container-contents" style="anchor-full: 14; layout-mode:top;">
+            <h2 style="text-align:center;">{{ui.socket_bench.equipment}}</h2>
+            <p style="text-align:center;">{{ui.socket_bench.option_select_equipment}}</p>
+            <img src="divider.png" style="anchor-width: 450; anchor-height: 3;">
+            <div id="equipmentCardsPanel" data-hyui-keep-scroll-position="true" style="anchor-width:460; anchor-height:640; layout-mode:topscrolling; padding:6; background-color:#101823;">
+                {{equipmentCards}}
+            </div>
+        </div>
+    </div>
+
+    <div class="decorated-container" data-hyui-title="{{ui.socket_bench.title}}" style="anchor-width: 920; anchor-height: 760; margin-left: 36;">
+        <div class="container-contents" style="anchor-full: 14; layout-mode:top;">
             <h2 style="text-align:center;">{{ui.socket_bench.tool_title}}</h2>
             <p style="text-align:center;">{{ui.socket_bench.subtitle}}</p>
             <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>{{ui.socket_bench.equipment}}</p>
-            <select id="equipmentDropdown" data-hyui-showlabel="true">
-                {{equipmentOptions}}
-            </select>
-
-            <p>{{ui.socket_bench.puncher}}</p>
-            <select id="puncherDropdown" data-hyui-showlabel="true">
-                {{puncherOptions}}
-            </select>
-
-            <p>{{ui.socket_bench.support}}</p>
-            <select id="supportDropdown" data-hyui-showlabel="true">
-                {{supportOptions}}
-            </select>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <div style="anchor-width: 890; layout-mode:left; spacing:10;">
+                <div style="anchor-width:440; layout-mode:top; spacing:4; ">
+                    <p>{{ui.socket_bench.puncher}}</p>
+                    <div id="puncherCardsPanel" data-hyui-keep-scroll-position="true" style="anchor-width: 440; anchor-height: 150; layout-mode: topscrolling; background-color:#101823; padding:6;">
+                        <div style="anchor-width: 440; layout-mode:top; spacing:6;">
+                            {{puncherCards}}
+                        </div>
+                    </div>
+                </div>
+                <div style="anchor-width:440; layout-mode:top; spacing:4; ">
+                    <p>{{ui.socket_bench.support}}</p>
+                    <div id="supportCardsPanel" data-hyui-keep-scroll-position="true" style="anchor-width: 440; anchor-height: 150; layout-mode: topscrolling; background-color:#101823; padding:6;">
+                        <div style="anchor-width: 440; layout-mode:top; spacing:6;">
+                            {{supportCards}}
+                        </div>
+                    </div>
+                </div>
+            </div>
             <p></p>    
             <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p>{{ui.socket_bench.socket_preview}}</p>
             <div id="socketIconsRow">{{socketIcons}}</div>
-            {{loreSocketSection}}
-            <div style="layout-mode: Left; spacing: 12;">
-                <p style="flex-weight:1;">{{ui.socket_bench.success_label}}: <span id="successChanceLabel">{{successText}}</span></p>
-                <p style="flex-weight:1;">{{ui.socket_bench.break_label}}: <span id="breakChanceLabel">{{breakText}}</span></p>
-                <p style="flex-weight:1;">{{ui.socket_bench.sockets_label}}: <span id="socketCountLabel">{{socketsText}}</span></p>
+            <div id="loreSocketSection">{{loreSocketSection}}</div>
+            <div style="flex-weight:1;"></div>
+
+            <div id="socketProcessActions" style="anchor-width: 890; anchor-height: 150; layout-mode:top;">
+                <img src="divider.png" style="anchor-width: 890; anchor-height: 3;">
+                <p>{{ui.socket_bench.progress}}</p>
+                <div style="anchor-width:890; layout-mode: center; spacing: 20;">
+                    <p id="successChanceLabel" style="anchor-width:260; text-align:center;">{{ui.socket_bench.success_label}}: {{successText}}</p>
+                    <p id="breakChanceLabel" style="anchor-width:260; text-align:center;">{{ui.socket_bench.break_label}}: {{breakText}}</p>
+                    <p id="socketCountLabel" style="anchor-width:260; text-align:center;">{{ui.socket_bench.sockets_label}}: {{socketsText}}</p>
+                </div>
+                <progress id="socketProgress"
+                          max="100"
+                          value="{{progressValue}}"
+                          data-hyui-bar-texture-path="boost_fill.png"
+                          style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
+                </progress>
+                <p id="statusLabel">{{statusText}}</p>
+
+                <img src="divider.png" style="anchor-width: 890; anchor-height: 3;">
+                <p style="font-size:11;">{{ui.socket_bench.failure_note}}</p>
+                <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{ui.socket_bench.process_button}}</button>
             </div>
-            
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p>{{ui.socket_bench.progress}}</p>
-            <progress id="socketProgress"
-                      max="100"
-                      value="{{progressValue}}"
-                      data-hyui-bar-texture-path="boost_fill.png"
-                      style="width:100%; anchor-height:18; background-image:url('boost_track.png'); background-size:100% 100%; background-repeat:no-repeat;">
-            </progress>
-            <p id="statusLabel">{{statusText}}</p>
-
-            <hr/>
-            <p>{{ui.socket_bench.metadata}}</p>
-            <p id="metadataLabel" style="white-space:pre-line;max-height:180px;overflow-y:auto;word-break:break-word;background-color:#1a1a2b;padding:8;border-radius:4;">{{metadataText}}</p>
-
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11;">{{ui.socket_bench.failure_note}}</p>
-            <button id="processButton" style="width:100%;height:40px;" {{processDisabledAttr}}>{{ui.socket_bench.process_button}}</button>
         </div>
+    </div>
     </div>
 </div>

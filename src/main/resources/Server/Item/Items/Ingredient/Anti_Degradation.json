@@ -1,0 +1,63 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Anti_Degradation.name",
+    "Description": "irai.items.Anti_Degradation.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Furniture_Royal_Magic_Potion_Glow.png",
+  "Model": "Blocks/Decorative_Sets/Royal_Magic/Potion_Glow.blockymodel",
+  "Texture": "Blocks/Decorative_Sets/Royal_Magic/Potion_Glow_Texture.png",
+  "IconProperties": {
+    "Scale": 0.67,
+    "Translation": [
+      1.3,
+      -7.1
+    ],
+    "Rotation": [
+      17.06,
+      74.435,
+      73.31
+    ]
+  },
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Recipe": {
+    "Input": [
+      {
+        "ItemId": "Socket_Stabilizer",
+        "Quantity": 10
+      },
+      {
+        "ItemId": "Ingredient_Fabric_Scrap_Shadoweave",
+        "Quantity": 20
+      },
+      {
+        "Quantity": 1,
+        "ItemId": "Ingredient_Ghastly_Essence"
+      },
+      {
+        "ItemId": "Ingredient_Sac_Venom"
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Categories": [
+          "Alchemy_Potions_Misc"
+        ],
+        "Id": "Alchemybench",
+        "RequiredTierLevel": 3
+      }
+    ],
+    "TimeSeconds": 3
+  },
+  "MaxStack": 100,
+  "ItemLevel": 1,
+  "ItemSoundSetId": "ISS_Items_Ingots",
+  "Tags": {
+    "Type": [
+      "SocketMaterial",
+      "SupportingMaterial"
+    ]
+  }
+}

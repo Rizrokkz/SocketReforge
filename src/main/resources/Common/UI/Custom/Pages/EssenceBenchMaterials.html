@@ -1,10 +1,12 @@
 <div class="decorated-container" data-hyui-title="{{ui.essence_bench.materials_list_title}}" style="anchor-width: 360; anchor-height: 900;">
-    <div class="container-contents" style="anchor-full: 14; overflow-y:auto;">
+    <div class="container-contents" style="anchor-full: 14; layout-mode:top;">
         <h2 style="text-align:center;">{{ui.essence_bench.materials_list_title}}</h2>
         <p style="text-align:center;">{{ui.essence_bench.materials_list_hint}}</p>
-        <img id="dynamic-image" src="divider.png" style="anchor-width: 320; anchor-height: 3;">
-        <div style="anchor-width: 330; layout-mode:top; spacing:6;">
-            {{materialsCards}}
+        <img src="divider.png" style="anchor-width: 286; anchor-height: 3;">
+        <div id="essenceMaterialsCards" data-hyui-keep-scroll-position="true" style="anchor-width:330; anchor-height:760; layout-mode:topscrolling; padding:6; background-color:#101823;">
+            <div style="anchor-width:286; layout-mode:top; spacing:6;">
+                {{materialsCards}}
+            </div>
         </div>
     </div>
 </div>

@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
 import com.hypixel.hytale.server.core.event.events.ecs.DamageBlockEvent;
 import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEvent;
 import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
@@ -270,6 +271,11 @@ public class ReforgePlugin extends JavaPlugin {
             }
             OpenGuiListener.openGui(event);
         });
+        this.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, event -> {
+            if (event != null) {
+                SocketBenchUI.closeForDisconnect(event.getPlayerRef());
+            }
+        });
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
@@ -322,7 +328,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.9-alpha.1");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.9-alpha.2");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {

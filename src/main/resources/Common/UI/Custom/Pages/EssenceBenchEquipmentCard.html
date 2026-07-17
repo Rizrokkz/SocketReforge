@@ -1,12 +1,19 @@
-<div style="anchor-width:440; anchor-height:78; layout-mode:left; padding:6; background-color:{{backgroundColor}};">
-    {{iconCell}}
-    <div style="anchor-width:12;"></div>
-    <div style="anchor-width:350; anchor-height:66; layout-mode:top; spacing:1;">
-        <p style="anchor-height:20; font-weight:bold; text-align:left; white-space:nowrap;">{{displayName}}</p>
-        <div style="anchor-width:350; anchor-height:36; layout-mode:left; spacing:10;">
-            {{essenceSocketsBlock}}
-            {{loreSocketsBlock}}
-            {{resonanceIconBlock}}
+<div id="{{cardId}}" style="anchor-width:424; anchor-height:78; layout-mode:full; background-color:#151526;">
+    <div id="{{selectedLayerId}}" style="anchor-width:424; anchor-height:78; layout-mode:top; background-color:#2B3F6D; visibility:{{selectedVisibility}};">
+        <img id="{{selectedLayerImageId}}" src="{{selectedLayerImage}}" width="424" height="78"/>
+    </div>
+    <div style="anchor-width:424; anchor-height:78; layout-mode:left; padding:6;">
+        {{iconCell}}
+        <div style="anchor-width:14;"></div>
+        <div style="anchor-width:334; anchor-height:66; layout-mode:top; spacing:1;">
+            <div style="anchor-width:334; anchor-height:20; layout-mode:left;">
+                <p style="anchor-width:234; anchor-height:20; font-weight:bold; text-align:left; white-space:nowrap;">{{displayName}}</p>
+                <p id="{{selectedMarkerId}}" style="anchor-width:90; anchor-height:20; text-align:right; font-size:11; color:#FFD24D; visibility:{{selectedVisibility}};">SELECTED</p>
+            </div>
+            <div style="anchor-width:334; anchor-height:36; layout-mode:left; spacing:5;">
+                {{essenceSocketsBlock}}
+                {{loreSocketsBlock}}
+            </div>
         </div>
     </div>
 </div>

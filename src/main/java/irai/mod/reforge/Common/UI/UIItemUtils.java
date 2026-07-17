@@ -51,21 +51,62 @@ public final class UIItemUtils {
         }
         String itemId = itemStack.getItemId();
         String displayName = NameResolver.getDisplayName(itemStack, langCode);
+        String itemIdTranslation = NameResolver.resolveItemIdTranslationNoFallback(itemId, langCode);
         String essenceFallback = resolveEssenceDisplayName(itemId, langCode);
         if (displayName == null || displayName.isBlank() || UNKNOWN_ITEM.equals(displayName)) {
             if (itemId == null || itemId.isBlank()) {
                 return UNKNOWN_ITEM;
             }
+            if (itemIdTranslation != null) {
+                return itemIdTranslation;
+            }
             return essenceFallback != null ? essenceFallback : itemId;
         }
         if (itemId != null && !itemId.isBlank()) {
             if (displayName.equalsIgnoreCase(itemId) || looksLikeTranslationKey(displayName)) {
+                if (itemIdTranslation != null) {
+                    return itemIdTranslation;
+                }
                 if (essenceFallback != null) {
                     return essenceFallback;
                 }
             }
+            if (itemIdTranslation != null && shouldPreferItemIdTranslation(displayName, itemId, langCode)) {
+                return transferRefinementSuffix(displayName, itemIdTranslation);
+            }
         }
         return displayName;
+    }
+
+    private static boolean shouldPreferItemIdTranslation(String displayName, String itemId, String langCode) {
+        if (displayName == null || displayName.isBlank() || itemId == null || itemId.isBlank()
+                || langCode == null || langCode.isBlank() || "en-US".equalsIgnoreCase(langCode)) {
+            return false;
+        }
+        String english = NameResolver.resolveItemIdTranslationExact(itemId, "en-US");
+        return english != null
+                && !english.isBlank()
+                && stripRefinementSuffix(displayName).equalsIgnoreCase(english);
+    }
+
+    private static String transferRefinementSuffix(String sourceName, String translatedBase) {
+        if (sourceName == null || translatedBase == null || translatedBase.isBlank()) {
+            return translatedBase;
+        }
+        String trimmed = sourceName.trim();
+        int plusIndex = trimmed.lastIndexOf(" +");
+        if (plusIndex < 0 || plusIndex >= trimmed.length() - 2) {
+            return translatedBase;
+        }
+        String suffix = trimmed.substring(plusIndex).trim();
+        return suffix.matches("\\+[0-9]+") ? translatedBase + " " + suffix : translatedBase;
+    }
+
+    private static String stripRefinementSuffix(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceFirst("\\s+\\+[0-9]+$", "");
     }
 
     private static boolean looksLikeTranslationKey(String value) {

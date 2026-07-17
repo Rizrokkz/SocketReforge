@@ -3,52 +3,48 @@
             <h2 style="text-align:center;">{{ui.essence_bench.tool_title}}</h2>
             <p style="text-align:center;">{{ui.essence_bench.select_instructions}}</p>
             <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
 
             <div style="layout-mode:center; spacing:16;">
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.equipment}}</p>
-                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEquipmentText}}</p>
+                    <p id="selectedEquipmentText" style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEquipmentText}}</p>
                 </div>
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.essence_material}}</p>
-                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEssenceText}}</p>
+                    <p id="selectedEssenceText" style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedEssenceText}}</p>
                 </div>
                 <div style="anchor-width:280; layout-mode:top;">
                     <p style="text-align:center;">{{ui.essence_bench.support_material}}</p>
-                    <p style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedSupportText}}</p>
+                    <p id="selectedSupportText" style="anchor-height:22; text-align:center; background-color:#1a1a2b; padding:4;">{{selectedSupportText}}</p>
                 </div>
             </div>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
-            <p style="font-size:11; text-align:center;">{{supportDurabilityText}}</p>
-            <p style="font-size:11; white-space:pre-line; text-align:center;">{{supportRecipeText}}</p>
-            <p style="font-size:11; white-space:pre-line; overflow-y:auto; flex-weight: 1;">{{effectPreviewText}}</p>
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <p id="supportDurabilityText" style="font-size:11; text-align:center;">{{supportDurabilityText}}</p>
+            <p id="supportRecipeText" style="font-size:11; white-space:pre-line; text-align:center;">{{supportRecipeText}}</p>
+            <p id="effectPreviewText" style="font-size:11; white-space:pre-line; overflow-y:auto; flex-weight: 1;">{{effectPreviewText}}</p>
             <hr/>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p>{{ui.essence_bench.socket_preview}}</p>
             <p style="flex-weight: 1;"></p>
-            <div id="socketIconsRow">{{socketIcons}}</div>
+            <div id="socketIconsRow" style="anchor-width:920; anchor-height:174; layout-mode:center; padding:10;">{{socketIcons}}</div>
             <p style="flex-weight: 1;"></p>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p></p>
             <p>{{ui.essence_bench.socket_summary}}</p>
             <p id="socketSummaryLabel">{{socketSummary}}</p>
             <p id="selectedSocketDetails" style="white-space:pre-line; max-height:160; word-break:break-word; background-color:#1a1a2b; padding:8; border-radius:4;">{{selectedSocketDetails}}</p>
 
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p>{{ui.essence_bench.progress}}</p>
             {{socketProgressBar}}
             <p id="statusLabel">{{statusText}}</p>
 
-            <hr/>
-            <p>{{ui.essence_bench.selected_item_metadata}}</p>
-            <p id="metadataLabel" style="white-space:pre-line; max-height:200; overflow-y:auto; word-break:break-word; background-color:#1a1a2b; padding:8; border-radius:4;">{{metadataText}}</p>
-
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             <p>{{ui.essence_bench.consumes_essence}}</p>
             <p>{{ui.essence_bench.voidheart_consumed}}</p>
             <p>{{ui.essence_bench.thorium_hammer_info}}</p>
-            <img id="dynamic-image" src="divider.png" style="anchor-width: 920; anchor-height: 3;">
+            <img src="divider.png" style="anchor-width: 920; anchor-height: 3;">
             {{processButton}}
             <p></p>
             {{extractSection}}

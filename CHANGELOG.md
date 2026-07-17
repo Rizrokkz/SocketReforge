@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.9-alpha.2] - 2026-07-14
+
+### Added 
+- **Anti-Degradation Support** - Added a support for refining that prevents degradation of an equipment by 80%
+- **Multiple Active Support Materials** - Punching and Refining can now choose to select and activate multiple support materials
+
+### Changed
+
+- **Socket Bench and Refining UI Overhaul** - 
+  - **`Socket Bench UI can now information on sockets when clicked from sockets panel.`**
+  - **`Materials and equipments are now shown on left and right panels for easier navigation`**
+  - **`Added more information on damage calculation changes while refining`**
+- **Benches now uses scroll bars instead of pagination**
+---
+
+---
+
 ## [1.3.9-alpha.1] - 2026-07-14
 
 ### Fixed

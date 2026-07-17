@@ -404,7 +404,7 @@ public final class ToolPartsUI {
         ToolAbilityUtils.HatchetThrowStats partStats = ToolAbilityUtils.getHatchetThrowStats(updated);
         updated = updated.withMetadata(META_DAMAGE_MULTIPLIER, Codec.DOUBLE, partStats.breakPowerMultiplier);
         writeTool(player, eq, updated);
-        DynamicTooltipUtils.refreshAllPlayers();
+        DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
 
         String extra = ToolAbilityUtils.describeHatchetThrowStatus(p.kind.name(), m1.tier, m2.tier, m3.tier);
         if (extra != null && !extra.isBlank() && !extra.startsWith(" ")) {

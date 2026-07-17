@@ -5,15 +5,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Shared HTML template and escaping helpers for custom UIs.
  */
 public final class UITemplateUtils {
 
+    private static final Map<String, String> TEMPLATE_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> CUSTOM_UI_ASSET_EXISTS_CACHE = new ConcurrentHashMap<>();
+
     private UITemplateUtils() {}
 
     public static String loadTemplate(Class<?> ownerClass, String templatePath, String missingHtml, String uiName) {
+        if (templatePath == null || templatePath.isBlank()) {
+            return missingHtml;
+        }
+        return TEMPLATE_CACHE.computeIfAbsent(templatePath, pathKey -> loadTemplateUncached(ownerClass, pathKey, missingHtml, uiName));
+    }
+
+    private static String loadTemplateUncached(Class<?> ownerClass, String templatePath, String missingHtml, String uiName) {
         String fileSystemPath = "src/main/resources/" + templatePath;
         try {
             Path path = Paths.get(fileSystemPath);
@@ -61,6 +73,13 @@ public final class UITemplateUtils {
     }
 
     private static boolean customUiAssetExists(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return false;
+        }
+        return CUSTOM_UI_ASSET_EXISTS_CACHE.computeIfAbsent(fileName, UITemplateUtils::customUiAssetExistsUncached);
+    }
+
+    private static boolean customUiAssetExistsUncached(String fileName) {
         try {
             Path fs = Paths.get("src", "main", "resources", "Common", "UI", "Custom", fileName);
             if (Files.exists(fs) && Files.isRegularFile(fs)) {

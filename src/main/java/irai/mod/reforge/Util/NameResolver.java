@@ -631,6 +631,8 @@ public final class NameResolver {
             }
             keys.add("items." + base + ".name");
             keys.add("item." + base + ".name");
+            keys.add("irai.items." + base + ".name");
+            keys.add("irai.item." + base + ".name");
             keys.add("server.items." + base + ".name");
             keys.add("server.item." + base + ".name");
             if (ns != null && !ns.isBlank()) {
