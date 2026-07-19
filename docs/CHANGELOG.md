@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.9-alpha.3] - 2026-07-14
+
+### Added 
+- **Leather Strap** - Default drops for Leather Straps are added and configurable via `/runtime Config`
+- **Runtime Config Localization** - localized added for `/runtime Config`
+
+### Changed
+
+- **Runtime Config UI Overhaul** - 
+  - **`Enhanced UI navigation`**
+  - **`Loot Injection Utils added for injecting loot on chests or npc drops`**
+  - **`Lore Configuration added in the categories at runtime to ease the burden of configuring lore spirits`**
+
+### Fixed
+- **Essence Bonus** - Fixed essence bonuses on equipped armors not being calculated properly
+
+---
+
 ## [1.3.9-alpha.2] - 2026-07-14
 
 ### Added 

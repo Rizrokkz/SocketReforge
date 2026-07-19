@@ -2,6 +2,7 @@ package irai.mod.reforge.Entity.Events;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,15 +41,18 @@ import irai.mod.reforge.Config.LootSocketRollConfig;
  */
 @SuppressWarnings("removal")
 public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
+    private static final String RESONANT_RECIPE_ITEM_ID = "Resonant_Recipe";
+
     private static volatile List<LootInjectionUtils.LootInjectionRule> npcWaterEssenceRules = List.of(
             LootInjectionUtils.rule("Ingredient_Water_Essence", 0.05d, 1, 5)
     );
     private static volatile List<LootInjectionUtils.LootInjectionRule> npcLightningEssenceRules = List.of(
             LootInjectionUtils.rule("Ingredient_Lightning_Essence", 0.05d, 1, 5)
     );
-    private static final List<LootInjectionUtils.LootInjectionRule> npcVoidGhastlyRules = List.of(
-            LootInjectionUtils.rule("Ingredient_Ghastly_Essence", 0.01d, 1, 1)
+    private static volatile List<LootInjectionUtils.LootInjectionRule> npcVoidGhastlyRules = List.of(
+            LootInjectionUtils.rule("Ingredient_Ghastly_Essence", 0.01d, 1, 1, "Spawn_Void")
     );
+    private static volatile List<LootInjectionUtils.LootInjectionRule> npcInjectedDropRules = List.of();
     private static volatile int npcWaterEssenceMinQuantity = 1;
     private static volatile int npcWaterEssenceMaxQuantity = 5;
     private static volatile int npcLightningEssenceMinQuantity = 1;
@@ -126,6 +130,7 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
                 continue;
             }
             long seed = mixSeed(seedBase, i);
+            stack = hydrateResonantRecipeDrop(stack, seed);
             drops.set(i, LootSocketRoller.maybeSocketizeLootStack(stack, LootSocketRoller.LootSource.NPC_DROP, seed));
         }
 
@@ -176,16 +181,31 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
             drops.addAll(rolledDrops);
         }
 
+        LootInjectionUtils.injectByRules(drops, matchingNpcRules(npcInjectedDropRules, npc, role));
         if (isAquaticRole(role)) {
-            LootInjectionUtils.injectByRules(drops, npcWaterEssenceRules);
+            LootInjectionUtils.injectByRules(drops, matchingNpcRules(npcWaterEssenceRules, npc, role));
         }
         if (isFlyingRole(role)) {
-            LootInjectionUtils.injectByRules(drops, npcLightningEssenceRules);
+            LootInjectionUtils.injectByRules(drops, matchingNpcRules(npcLightningEssenceRules, npc, role));
         }
         if (isVoidSpawnRole(role)) {
-            LootInjectionUtils.injectByRules(drops, npcVoidGhastlyRules);
+            LootInjectionUtils.injectByRules(drops, matchingNpcRules(npcVoidGhastlyRules, npc, role));
         }
         return drops;
+    }
+
+    private static ItemStack hydrateResonantRecipeDrop(ItemStack stack, long seed) {
+        if (stack == null || stack.isEmpty() || stack.getItemId() == null) {
+            return stack;
+        }
+        if (!RESONANT_RECIPE_ITEM_ID.equalsIgnoreCase(stack.getItemId())) {
+            return stack;
+        }
+        if (LootSocketRoller.hasResonantRecipeMetadata(stack)) {
+            return stack;
+        }
+        ItemStack rolled = LootSocketRoller.createResonantRecipeShard(null, stack.getQuantity(), seed);
+        return rolled == null ? stack : rolled;
     }
 
     public static void setConfig(LootSocketRollConfig config) {
@@ -198,12 +218,65 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
         npcWaterEssenceMaxQuantity = Math.max(npcWaterEssenceMinQuantity, config.getNpcWaterEssenceMaxQuantity());
         npcLightningEssenceMinQuantity = Math.max(0, config.getNpcLightningEssenceMinQuantity());
         npcLightningEssenceMaxQuantity = Math.max(npcLightningEssenceMinQuantity, config.getNpcLightningEssenceMaxQuantity());
-        npcWaterEssenceRules = waterChance <= 0.0d
-                ? List.of()
-                : List.of(LootInjectionUtils.rule("Ingredient_Water_Essence", waterChance, npcWaterEssenceMinQuantity, npcWaterEssenceMaxQuantity));
-        npcLightningEssenceRules = lightningChance <= 0.0d
-                ? List.of()
-                : List.of(LootInjectionUtils.rule("Ingredient_Lightning_Essence", lightningChance, npcLightningEssenceMinQuantity, npcLightningEssenceMaxQuantity));
+        npcInjectedDropRules = LootInjectionUtils.rulesFromEntries(config.getNpcInjectedDropRules());
+        npcWaterEssenceRules = config.getNpcAquaticInjectedDropRules().length > 0
+                ? LootInjectionUtils.rulesFromEntries(config.getNpcAquaticInjectedDropRules())
+                : waterChance <= 0.0d
+                        ? List.of()
+                        : List.of(LootInjectionUtils.rule("Ingredient_Water_Essence", waterChance, npcWaterEssenceMinQuantity, npcWaterEssenceMaxQuantity));
+        npcLightningEssenceRules = config.getNpcFlyingInjectedDropRules().length > 0
+                ? LootInjectionUtils.rulesFromEntries(config.getNpcFlyingInjectedDropRules())
+                : lightningChance <= 0.0d
+                        ? List.of()
+                        : List.of(LootInjectionUtils.rule("Ingredient_Lightning_Essence", lightningChance, npcLightningEssenceMinQuantity, npcLightningEssenceMaxQuantity));
+        npcVoidGhastlyRules = LootInjectionUtils.rulesFromEntries(config.getNpcVoidInjectedDropRules());
+    }
+
+    private static List<LootInjectionUtils.LootInjectionRule> matchingNpcRules(
+            List<LootInjectionUtils.LootInjectionRule> rules,
+            NPCEntity npc,
+            Role role) {
+        if (rules == null || rules.isEmpty()) {
+            return List.of();
+        }
+        List<LootInjectionUtils.LootInjectionRule> matched = new ArrayList<>();
+        for (LootInjectionUtils.LootInjectionRule rule : rules) {
+            if (rule == null) {
+                continue;
+            }
+            String targetId = rule.targetId();
+            if (targetId == null || targetId.isBlank() || "*".equals(targetId.trim()) || npcTargetMatches(targetId, npc, role)) {
+                matched.add(rule);
+            }
+        }
+        return matched.isEmpty() ? List.of() : matched;
+    }
+
+    private static boolean npcTargetMatches(String targetId, NPCEntity npc, Role role) {
+        if (targetId == null || targetId.isBlank()) {
+            return true;
+        }
+        String normalizedTarget = normalizeMatchKey(targetId);
+        if (normalizedTarget.isBlank()) {
+            return true;
+        }
+        return matchesNpcField(normalizedTarget, npc == null ? null : npc.getRoleName())
+                || matchesNpcField(normalizedTarget, role == null ? null : role.getRoleName())
+                || matchesNpcField(normalizedTarget, role == null ? null : role.getNameTranslationKey())
+                || matchesNpcField(normalizedTarget, role == null ? null : role.getAppearanceName())
+                || matchesNpcField(normalizedTarget, role == null ? null : role.getLabel())
+                || matchesNpcField(normalizedTarget, role == null ? null : role.getDropListId());
+    }
+
+    private static boolean matchesNpcField(String normalizedTarget, String field) {
+        if (normalizedTarget == null || normalizedTarget.isBlank() || field == null || field.isBlank()) {
+            return false;
+        }
+        return normalizedTarget.equals(normalizeMatchKey(field));
+    }
+
+    private static String normalizeMatchKey(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private static boolean isAquaticRole(Role role) {

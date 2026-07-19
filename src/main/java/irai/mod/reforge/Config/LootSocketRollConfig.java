@@ -1,6 +1,7 @@
 package irai.mod.reforge.Config;
 
 import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
+import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 
@@ -146,6 +147,31 @@ public class LootSocketRollConfig {
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.maxBrokenSockets = (int) Math.round(v[0]); },
                     cfg -> new double[]{cfg.maxBrokenSockets}
             ).add()
+            .append(
+                    new KeyedCodec<>("CHEST_INJECTED_LOOT_RULES", STRING_ARRAY),
+                    (cfg, v) -> cfg.chestInjectedLootRules = v == null ? new String[0] : v,
+                    cfg -> cfg.getChestInjectedLootRules()
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_INJECTED_DROP_RULES", STRING_ARRAY),
+                    (cfg, v) -> cfg.npcInjectedDropRules = v == null ? new String[0] : v,
+                    cfg -> cfg.getNpcInjectedDropRules()
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_AQUATIC_INJECTED_DROP_RULES", STRING_ARRAY),
+                    (cfg, v) -> cfg.npcAquaticInjectedDropRules = v == null ? new String[0] : v,
+                    cfg -> cfg.getNpcAquaticInjectedDropRules()
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_FLYING_INJECTED_DROP_RULES", STRING_ARRAY),
+                    (cfg, v) -> cfg.npcFlyingInjectedDropRules = v == null ? new String[0] : v,
+                    cfg -> cfg.getNpcFlyingInjectedDropRules()
+            ).add()
+            .append(
+                    new KeyedCodec<>("NPC_VOID_INJECTED_DROP_RULES", STRING_ARRAY),
+                    (cfg, v) -> cfg.npcVoidInjectedDropRules = v == null ? new String[0] : v,
+                    cfg -> cfg.getNpcVoidInjectedDropRules()
+            ).add()
             .build();
 
     // Chest rolls
@@ -184,6 +210,33 @@ public class LootSocketRollConfig {
     // Clamp range used after rolling
     private int minBrokenSockets = 3;
     private int maxBrokenSockets = 5;
+
+    // Injected loot rules: ItemId=chance,min,max,targetId(optional)
+    private String[] chestInjectedLootRules = new String[] {
+            "Refinement_Glob=0.15,1,30",
+            "Socket_Puncher=0.15,1,30",
+            "Socket_Stabilizer=0.15,1,5",
+            "Socket_Expander=0.10,1,2",
+            "Socket_Diffuser=0.10,1,2",
+            "Ingredient_Voidheart=0.05,1,2",
+            "Ingredient_Lightning_Essence=0.015,1,5",
+            "Ingredient_Water_Essence=0.025,1,5"
+    };
+    private String[] npcInjectedDropRules = new String[] {
+            "Ingredient_Strap_Leather=0.12,1,1,Raptor_Cave",
+            "Ingredient_Strap_Leather=0.12,1,3,Rex_Cave",
+            "Ingredient_Strap_Leather=0.01,1,1,Bear_Grizzly",
+            "Ingredient_Strap_Leather=0.01,1,1,Bear_Polar"
+    };
+    private String[] npcAquaticInjectedDropRules = new String[] {
+            "Ingredient_Water_Essence=0.05,1,5"
+    };
+    private String[] npcFlyingInjectedDropRules = new String[] {
+            "Ingredient_Lightning_Essence=0.05,1,5"
+    };
+    private String[] npcVoidInjectedDropRules = new String[] {
+            "Ingredient_Ghastly_Essence=0.01,1,1,Spawn_Void"
+    };
 
     public double getChestThreeSocketChance() {
         return chestThreeSocketChance;
@@ -291,6 +344,26 @@ public class LootSocketRollConfig {
 
     public int getMaxBrokenSockets() {
         return maxBrokenSockets;
+    }
+
+    public String[] getChestInjectedLootRules() {
+        return chestInjectedLootRules == null ? new String[0] : chestInjectedLootRules;
+    }
+
+    public String[] getNpcInjectedDropRules() {
+        return npcInjectedDropRules == null ? new String[0] : npcInjectedDropRules;
+    }
+
+    public String[] getNpcAquaticInjectedDropRules() {
+        return npcAquaticInjectedDropRules == null ? new String[0] : npcAquaticInjectedDropRules;
+    }
+
+    public String[] getNpcFlyingInjectedDropRules() {
+        return npcFlyingInjectedDropRules == null ? new String[0] : npcFlyingInjectedDropRules;
+    }
+
+    public String[] getNpcVoidInjectedDropRules() {
+        return npcVoidInjectedDropRules == null ? new String[0] : npcVoidInjectedDropRules;
     }
 
     public void setChestThreeSocketChance(double value) {
@@ -401,6 +474,26 @@ public class LootSocketRollConfig {
         this.maxBrokenSockets = value;
     }
 
+    public void setChestInjectedLootRules(String[] values) {
+        this.chestInjectedLootRules = values == null ? new String[0] : values;
+    }
+
+    public void setNpcInjectedDropRules(String[] values) {
+        this.npcInjectedDropRules = values == null ? new String[0] : values;
+    }
+
+    public void setNpcAquaticInjectedDropRules(String[] values) {
+        this.npcAquaticInjectedDropRules = values == null ? new String[0] : values;
+    }
+
+    public void setNpcFlyingInjectedDropRules(String[] values) {
+        this.npcFlyingInjectedDropRules = values == null ? new String[0] : values;
+    }
+
+    public void setNpcVoidInjectedDropRules(String[] values) {
+        this.npcVoidInjectedDropRules = values == null ? new String[0] : values;
+    }
+
     public void resetToDefaults() {
         LootSocketRollConfig defaults = new LootSocketRollConfig();
         this.chestThreeSocketChance = defaults.chestThreeSocketChance;
@@ -430,5 +523,10 @@ public class LootSocketRollConfig {
         this.npcLightningEssenceMaxQuantity = defaults.npcLightningEssenceMaxQuantity;
         this.minBrokenSockets = defaults.minBrokenSockets;
         this.maxBrokenSockets = defaults.maxBrokenSockets;
+        this.chestInjectedLootRules = defaults.chestInjectedLootRules.clone();
+        this.npcInjectedDropRules = defaults.npcInjectedDropRules.clone();
+        this.npcAquaticInjectedDropRules = defaults.npcAquaticInjectedDropRules.clone();
+        this.npcFlyingInjectedDropRules = defaults.npcFlyingInjectedDropRules.clone();
+        this.npcVoidInjectedDropRules = defaults.npcVoidInjectedDropRules.clone();
     }
 }

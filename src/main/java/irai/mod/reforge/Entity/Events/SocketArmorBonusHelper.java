@@ -19,7 +19,7 @@ public final class SocketArmorBonusHelper {
     private SocketArmorBonusHelper() {}
 
     // Rebalance multipliers for 4-piece armor stacking.
-    private static final double HEALTH_SCALE = 0.75;
+    // Health is left unscaled so Life essence tooltip values match live max-health bonuses.
     private static final double REGEN_SCALE = 0.35;
     private static final double DEFENSE_SCALE = 0.65;
     private static final double FIRE_DEFENSE_SCALE = 0.70;
@@ -27,7 +27,6 @@ public final class SocketArmorBonusHelper {
     private static final double SLOW_SCALE = 0.60;
 
     // Hard caps after scaling.
-    private static final double HEALTH_CAP = 40.0;
     private static final double REGEN_CAP = 3.5;
     private static final double DEFENSE_CAP = 35.0;
     private static final double FIRE_DEFENSE_CAP = 40.0;
@@ -58,7 +57,7 @@ public final class SocketArmorBonusHelper {
         if (raw <= 0.0) return 0.0;
 
         return switch (stat) {
-            case HEALTH -> Math.min(HEALTH_CAP, raw * HEALTH_SCALE);
+            case HEALTH -> raw;
             case REGENERATION -> Math.min(REGEN_CAP, raw * REGEN_SCALE);
             case DEFENSE -> Math.min(DEFENSE_CAP, raw * DEFENSE_SCALE);
             case FIRE_DEFENSE -> Math.min(FIRE_DEFENSE_CAP, raw * FIRE_DEFENSE_SCALE);

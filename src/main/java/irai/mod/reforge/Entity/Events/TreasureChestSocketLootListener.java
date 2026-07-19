@@ -39,7 +39,7 @@ public final class TreasureChestSocketLootListener {
     private static final Set<String> LOGGED_SKIPPED_CHESTS = ConcurrentHashMap.newKeySet();
     private static final boolean DEBUG_LOOT = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.chestloot", "false"));
-    private static final List<LootInjectionUtils.LootInjectionRule> CHEST_LOOT_INJECTION_RULES = List.of(
+    private static volatile List<LootInjectionUtils.LootInjectionRule> chestLootInjectionRules = List.of(
             LootInjectionUtils.rule("Refinement_Glob", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Puncher", 0.15d, 1, 30),
             LootInjectionUtils.rule("Socket_Stabilizer", 0.15d, 1, 5),
@@ -266,7 +266,7 @@ public final class TreasureChestSocketLootListener {
 
         // Inject additional configured loot only after chest loot has materialized.
         if (nonEmptyLootCount > 0) {
-            Map<String, Integer> injected = LootInjectionUtils.injectByRules(container, CHEST_LOOT_INJECTION_RULES);
+            Map<String, Integer> injected = LootInjectionUtils.injectByRules(container, chestLootInjectionRules);
             for (Map.Entry<String, Integer> entry : injected.entrySet()) {
                 String itemId = entry.getKey();
                 Integer qty = entry.getValue();
@@ -284,7 +284,7 @@ public final class TreasureChestSocketLootListener {
             if (DEBUG_LOOT) {
                 log("Loot injection summary: chest=" + chestKey(player, window)
                         + ", injected=" + injectedCount
-                        + ", rules=" + CHEST_LOOT_INJECTION_RULES.size());
+                        + ", rules=" + chestLootInjectionRules.size());
             }
         } else if (DEBUG_LOOT) {
             log("Loot injection skipped (empty container): chest=" + chestKey(player, window));
@@ -296,6 +296,13 @@ public final class TreasureChestSocketLootListener {
         }
 
         return new RollResult(eligibleCount, changedCount, nonEmptyLootCount, injectedCount, String.join(", ", foundLootIds));
+    }
+
+    public static void setConfig(irai.mod.reforge.Config.LootSocketRollConfig config) {
+        if (config == null) {
+            return;
+        }
+        chestLootInjectionRules = LootInjectionUtils.rulesFromEntries(config.getChestInjectedLootRules());
     }
 
     /**

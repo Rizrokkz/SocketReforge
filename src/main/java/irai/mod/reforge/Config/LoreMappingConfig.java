@@ -111,6 +111,14 @@ public class LoreMappingConfig implements ConfigDefaultInjector {
     public void setCoreColorEntries(String[] v) { this.coreColorEntries = v; }
     public void setAbilityEntries(String[] v) { this.abilityEntries = v; }
 
+    public void resetToDefaults() {
+        LoreMappingConfig defaults = new LoreMappingConfig();
+        this.gemColorEntries = defaults.gemColorEntries.clone();
+        this.colorSpiritEntries = defaults.colorSpiritEntries.clone();
+        this.coreColorEntries = defaults.coreColorEntries.clone();
+        this.abilityEntries = defaults.abilityEntries.clone();
+    }
+
     @Override
     public boolean injectMissingDefaults() {
         LoreMappingConfig defaults = new LoreMappingConfig();

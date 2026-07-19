@@ -381,6 +381,40 @@ public class LoreConfig implements ConfigDefaultInjector {
         this.bleedBossCounterNpcCache = null;
     }
 
+    public void resetToDefaults() {
+        LoreConfig defaults = new LoreConfig();
+        this.chestLoreSocketChance = defaults.chestLoreSocketChance;
+        this.dropLoreSocketChance = defaults.dropLoreSocketChance;
+        this.minLoreSockets = defaults.minLoreSockets;
+        this.maxLoreSockets = defaults.maxLoreSockets;
+        this.maxLevel = defaults.maxLevel;
+        this.xpPerProc = defaults.xpPerProc;
+        this.baseXpPerLevel = defaults.baseXpPerLevel;
+        this.xpGrowthPerLevel = defaults.xpGrowthPerLevel;
+        this.feedInterval = defaults.feedInterval;
+        this.feedBase = defaults.feedBase;
+        this.feedMultiplier = defaults.feedMultiplier;
+        this.bleedMaxHpPctPerTick = defaults.bleedMaxHpPctPerTick;
+        this.bleedRampPerTick = defaults.bleedRampPerTick;
+        this.bleedWeaponBaseCapPct = defaults.bleedWeaponBaseCapPct;
+        this.bleedTotalCurrentHpPct = defaults.bleedTotalCurrentHpPct;
+        this.bleedWeaponReferenceBase = defaults.bleedWeaponReferenceBase;
+        this.bleedWeaponScaleMin = defaults.bleedWeaponScaleMin;
+        this.bleedWeaponScaleMax = defaults.bleedWeaponScaleMax;
+        this.legacyBleedBossReapplyStepFallback = defaults.legacyBleedBossReapplyStepFallback;
+        this.legacyBleedBossReapplyPatternFallback = defaults.legacyBleedBossReapplyPatternFallback;
+        this.statusBossReapplyRules = defaults.statusBossReapplyRules.clone();
+        this.feedItemIds = defaults.feedItemIds.clone();
+        this.clearItemIds = defaults.clearItemIds.clone();
+        this.npcStatusResistanceEntries = defaults.npcStatusResistanceEntries.clone();
+        this.statusBossCounterNpcIds = defaults.statusBossCounterNpcIds.clone();
+        this.bleedBossCounterNpcIds = defaults.bleedBossCounterNpcIds.clone();
+        this.npcStatusResistanceCache = null;
+        this.statusBossCounterNpcCache = null;
+        this.statusBossReapplyRuleCache = null;
+        this.bleedBossCounterNpcCache = null;
+    }
+
     @Override
     public boolean injectMissingDefaults() {
         LoreConfig defaults = new LoreConfig();

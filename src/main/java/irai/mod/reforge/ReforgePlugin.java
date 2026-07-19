@@ -217,6 +217,7 @@ public class ReforgePlugin extends JavaPlugin {
             LootSocketRoller.setConfig(cfg);
             CropEssenceDropUtils.setConfig(cfg);
             NPCLootSocketDropEST.setConfig(cfg);
+            TreasureChestSocketLootListener.setConfig(cfg);
         });
 
         this.configService.register("LoreConfig", this.loreConfig, LoreSocketManager::initialize);
@@ -328,7 +329,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.9-alpha.2");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.9-alpha.3");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
@@ -507,6 +508,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public LoreConfig getLoreRuntimeConfig() {
         return loreConfig.get();
+    }
+
+    public LoreMappingConfig getLoreMappingRuntimeConfig() {
+        return loreMappingConfig.get();
     }
 
     public DamageNumberConfig getDamageNumberRuntimeConfig() {

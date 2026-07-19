@@ -444,6 +444,11 @@ public class RefinementConfig implements ConfigDefaultInjector {
         this.defenseMultipliers = buildDefaultDefenseMultipliers(safeMax);
     }
 
+    public void applyDefaultWeights() {
+        this.weightsByLevel = buildTieredWeightsByLevel();
+        syncLegacyWeightsFromByLevel(this.weightsByLevel);
+    }
+
     public void resetMaterialTiersToDefault() {
         this.materialTierEntries = buildDefaultMaterialTierEntries(getMaxLevel());
         invalidateMaterialCache();
