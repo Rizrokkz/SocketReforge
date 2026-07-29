@@ -19,6 +19,7 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Common.SmithyLegacyUtils;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.MathUtils;
@@ -89,6 +90,7 @@ public final class LootSocketRoller {
         if (stack == null || stack.isEmpty()) {
             return stack;
         }
+        stack = SmithyLegacyUtils.ensureRolledLegacy(stack);
         if (!isEquipment(stack)) {
             return stack;
         }
@@ -448,11 +450,12 @@ public final class LootSocketRoller {
             return stack;
         }
         int flag = Math.max(0, socketedFlag);
-        return stack
+        ItemStack marked = stack
                 .withMetadata(META_WORLD_LOOT_ROLL_DONE, Codec.INTEGER, 1)
                 .withMetadata(META_WORLD_LOOT_SOCKETED, Codec.INTEGER, flag)
                 .withMetadata(META_WORLD_CHEST_ROLL_DONE, Codec.INTEGER, 1)
                 .withMetadata(META_WORLD_CHEST_SOCKETED, Codec.INTEGER, flag);
+        return SmithyLegacyUtils.isSmithyChest(marked) ? DynamicTooltipUtils.applyNativeTooltip(marked) : marked;
     }
 
     private static boolean isEquipment(ItemStack stack) {

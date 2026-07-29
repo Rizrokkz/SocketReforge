@@ -25,6 +25,9 @@ import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
+import irai.mod.reforge.Common.SmithyLegacyUtils.Legacy;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.UI.ReforgeBenchUI;
@@ -173,6 +176,10 @@ public class ReforgeEquip extends SimpleInteraction {
         } else {
             breakChance = DEFAULT_BREAK_CHANCES[Math.min(currentLevel, DEFAULT_BREAK_CHANCES.length - 1)];
         }
+        Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
+        if (smithyBonuses != null) {
+            breakChance = Math.max(0.0d, Math.min(1.0d, breakChance * smithyBonuses.breakMultiplier()));
+        }
         if (Math.random() < breakChance) {
             if (shouldUseSoftcoreBreakProtection(materialId)) {
                 ItemStack softenedItem = applySoftcoreBreakPenalty(heldItem);
@@ -195,7 +202,7 @@ public class ReforgeEquip extends SimpleInteraction {
         }
 
         // Roll for upgrade outcome
-        ReforgeOutcome outcome = rollReforgeOutcome(currentLevel, materialId);
+        ReforgeOutcome outcome = rollReforgeOutcome(player, currentLevel, materialId);
         int newLevel = Math.max(0, Math.min(currentLevel + outcome.levelChange, maxLevel));
 
         // Create the upgraded item with new ID
@@ -290,6 +297,10 @@ public class ReforgeEquip extends SimpleInteraction {
         String translationKey = NameResolver.getTranslationKey(item);
         if (translationKey == null || translationKey.isBlank()) {
             translationKey = NameResolver.resolveItemIdTranslationKey(item.getItemId(), LangLoader.getFallbackLanguage());
+        }
+        Legacy smithyLegacy = SmithyLegacyUtils.getLegacy(item);
+        if (smithyLegacy != null) {
+            translationKey = smithyLegacy.itemNameKey();
         }
 
         String baseName = null;
@@ -1299,6 +1310,10 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     private ReforgeOutcome rollReforgeOutcome(int currentLevel, String materialId) {
+        return rollReforgeOutcome(null, currentLevel, materialId);
+    }
+
+    private ReforgeOutcome rollReforgeOutcome(Player player, int currentLevel, String materialId) {
         // Use config if available, otherwise use defaults
         double[] weights;
         if (refinementConfig != null) {
@@ -1307,13 +1322,29 @@ public class ReforgeEquip extends SimpleInteraction {
         } else {
             weights = DEFAULT_REFORGE_WEIGHTS[Math.min(currentLevel, DEFAULT_REFORGE_WEIGHTS.length - 1)];
         }
-        double random = Math.random(), cumulative = 0.0;
-        cumulative += weights[0];
-        if (random < cumulative) return new ReforgeOutcome(-1, OutcomeType.DEGRADE);
-        cumulative += weights[1];
-        if (random < cumulative) return new ReforgeOutcome(0, OutcomeType.SAME);
-        cumulative += weights[2];
-        if (random < cumulative) return new ReforgeOutcome(1, OutcomeType.UPGRADE);
+        double degrade = Math.max(0.0, weights[0]);
+        double same = Math.max(0.0, weights[1]);
+        double upgrade = Math.max(0.0, weights[2]);
+        double jackpot = Math.max(0.0, weights[3]);
+        Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
+        if (smithyBonuses != null) {
+            double[] adjusted = SmithyLegacyUtils.applyToOutcomeWeights(
+                    new double[] {degrade, same, upgrade, jackpot},
+                    smithyBonuses);
+            degrade = adjusted[0];
+            same = adjusted[1];
+            upgrade = adjusted[2];
+            jackpot = adjusted[3];
+        }
+        double total = degrade + same + upgrade + jackpot;
+        if (total <= 0.0) return new ReforgeOutcome(0, OutcomeType.SAME);
+
+        double random = Math.random() * total;
+        if (random < degrade) return new ReforgeOutcome(-1, OutcomeType.DEGRADE);
+        random -= degrade;
+        if (random < same) return new ReforgeOutcome(0, OutcomeType.SAME);
+        random -= same;
+        if (random < upgrade) return new ReforgeOutcome(1, OutcomeType.UPGRADE);
         return new ReforgeOutcome(2, OutcomeType.JACKPOT);
     }
 

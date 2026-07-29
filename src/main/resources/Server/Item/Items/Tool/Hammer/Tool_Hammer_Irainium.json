@@ -1,0 +1,41 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Tool_Hammer_Irainium.name",
+    "Description": "irai.items.Tool_Hammer_Irainium.description"
+  },
+  "Parent": "Tool_Hammer_Crude",
+  "Icon": "Icons/ItemsGenerated/Tool_Hammer_Irainium.png",
+  "Quality": "Legendary",
+  "ItemLevel": 20,
+  "Model": "Items/Tools/Hammer/Iron.blockymodel",
+  "Texture": "Resources/Tools/Hammer/IrainiumHammerTexture.png",
+  "MaxStack": 1,
+  "Recipe": {
+    "TimeSeconds": 3.5,
+    "Input": [
+      {
+        "ItemId": "Tool_Hammer_Thorium",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Ghastly_Essence",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Rock_Gem_Zephyr",
+        "Quantity": 1
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Id": "Workbench",
+        "Type": "Crafting",
+        "Categories": [
+          "Workbench_Tools"
+        ],
+        "RequiredTierLevel": 3
+      }
+    ]
+  },
+  "MaxDurability": 800
+}

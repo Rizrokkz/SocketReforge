@@ -34,6 +34,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
+import irai.mod.reforge.Common.SmithyLegacyUtils.Legacy;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Lore.LoreAbility;
@@ -672,8 +675,22 @@ public class DynamicTooltipUtils {
         boolean hasRecipeUsages = recipeUsages != null && !recipeUsages.isBlank();
         String recipeName = extractStringValue(metadata, META_RECIPE_NAME);
         boolean hasRecipeName = recipeName != null && !recipeName.isBlank();
+        Legacy smithyLegacy = SmithyLegacyUtils.fromId(extractStringValue(metadata, MetadataKeys.SMITHY_LEGACY));
+        Bonuses smithyBonuses = SmithyLegacyUtils.fromMetadata(
+                smithyLegacy,
+                extractDoubleValue(metadata, MetadataKeys.SMITHY_LEGACY_BREAK_MULTIPLIER,
+                        smithyLegacy == null ? 1.0 : smithyLegacy.breakMultiplier()),
+                extractDoubleValue(metadata, MetadataKeys.SMITHY_LEGACY_DEGRADE_MULTIPLIER,
+                        smithyLegacy == null ? 1.0 : smithyLegacy.degradeMultiplier()),
+                extractDoubleValue(metadata, MetadataKeys.SMITHY_LEGACY_SAME_MULTIPLIER,
+                        smithyLegacy == null ? 1.0 : smithyLegacy.sameMultiplier()),
+                extractDoubleValue(metadata, MetadataKeys.SMITHY_LEGACY_UPGRADE_MULTIPLIER,
+                        smithyLegacy == null ? 1.0 : smithyLegacy.upgradeMultiplier()),
+                extractDoubleValue(metadata, MetadataKeys.SMITHY_LEGACY_JACKPOT_MULTIPLIER,
+                        smithyLegacy == null ? 1.0 : smithyLegacy.jackpotMultiplier()));
         String baseItemId = extractBaseItemId(metadata);
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
+        boolean isSmithyChest = SmithyLegacyUtils.isSmithyChestId(effectiveItemId);
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         boolean isRecipeItem = "Resonant_Recipe".equalsIgnoreCase(effectiveItemId);
         boolean hasSoftcorePenalty = softcoreBreakCount > 0 || softcoreStatMultiplier < 0.9999;
@@ -768,6 +785,10 @@ public class DynamicTooltipUtils {
                 recipeDisplayName = "Resonance Recipe: " + localizedRecipeName;
             }
             displayName = recipeDisplayName;
+            shouldOverrideName = true;
+        }
+        if (isSmithyChest && smithyLegacy != null) {
+            displayName = SmithyLegacyUtils.localizedItemName(smithyLegacy, langCode);
             shouldOverrideName = true;
         }
         boolean isArmorItem = isArmorType(baseItemId, itemId);
@@ -883,6 +904,15 @@ public class DynamicTooltipUtils {
                     statType,
                     softcoreBreakCount);
             tooltipLines.add(COLOR_YELLOW + softcoreLine + COLOR_WHITE);
+        }
+        if (isSmithyChest && smithyLegacy != null) {
+            String legacyLabel = tr(langCode, "tooltip.smithy_legacy_label", "Smithy Legacy");
+            tooltipLines.add(COLOR_ORANGE + legacyLabel + ": "
+                    + COLOR_YELLOW + SmithyLegacyUtils.localizedName(smithyLegacy, langCode));
+            tooltipLines.add(COLOR_GREEN + SmithyLegacyUtils.localizedTooltip(smithyLegacy, langCode));
+            for (String line : SmithyLegacyUtils.bonusLines(smithyBonuses)) {
+                tooltipLines.add(COLOR_GRAY + line);
+            }
         }
         
         // Add socket line if present

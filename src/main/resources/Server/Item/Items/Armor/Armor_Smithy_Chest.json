@@ -1,0 +1,58 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Armor_Smithy_Chest.name",
+    "Description": "irai.items.Armor_Smithy_Chest.description"
+  },
+  "Parent": "Armor_Iron_Chest",
+  "Quality": "Legendary",
+  "ItemLevel": 30,
+  "Icon": "Icons/ItemsGenerated/Armor_Smithy_Chest.png",
+  "IconProperties": {
+    "Rotation": [
+      22.5,
+      45,
+      22.5
+    ],
+    "Scale": 0.415,
+    "Translation": [
+      1.5,
+      -6.9
+    ]
+  },
+  "Model": "Items/Armors/Wool/Chest.blockymodel",
+  "Texture": "Items/Armors/Smithy_Texture.png",
+  "Armor": {
+    "ArmorSlot": "Chest",
+    "BaseDamageResistance": 0,
+    "DamageResistance": {
+      "Physical": [
+        {
+          "Amount": 0.09,
+          "CalculationType": "Percent"
+        }
+      ],
+      "Projectile": [
+        {
+          "Amount": 0.09,
+          "CalculationType": "Percent"
+        }
+      ]
+    },
+    "StatModifiers": {
+      "Health": [
+        {
+          "Amount": 17,
+          "CalculationType": "Additive"
+        }
+      ]
+    }
+  },
+  "MaxDurability": 100,
+  "DurabilityLossOnHit": 1,
+  "Tags": {
+    "Type": [
+      "Armor"
+    ]
+  },
+  "ItemSoundSetId": "ISS_Armor_Cloth"
+}

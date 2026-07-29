@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Elemental Affinity System** - Added configurable NPC elemental multipliers, runtime config editing, and weapon mutation support for elemental affinity damage.
 - **Resonant Essence Support** - Added Resonant Essence as a support item for socketed essence mutation rolls on Essence Socketing Bench.
 - **Equipment Stats UI** - Added an equipment stat summary UI for held weapon and equipped armor calculations using `/equipstats` command.
+- **Smithy Chest Legacies** - `Armor_Smithy_Chest` now rolls one legacy identity on drop, renames itself by legacy, and applies distinct refinement odds bonuses while equipped.
+  - **`Rolled Legacy Bonuses`** - each Smithy legacy now stores rolled break/degrade/same/upgrade/jackpot modifiers and displays compact percentage changes with fixed caps.
+  - **`Legacy of Irai`** - balanced odds improvements across break, degrade, same, upgrade, and jackpot outcomes.
+  - **`Legacy of Snow`** - stability-focused odds that reduce degrade results and favor safe same outcomes.
+  - **`Legacy of Daevis`** - jackpot-focused odds with reduced break chance.
+  - **`Legacy of Frith`** - protection-focused odds that heavily reduce degrade and break risk.
 
 ### Changed
 - **Elemental Armor Bonuses** - Armor essence bonuses now provide individual elemental resistances.
@@ -23,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Lore Feed Persistence** - Fixed lore feed tiers/XP failing to persist when players logged out while held-item lore metadata was still queued.
 - **Held Item Save Safety** - Pending lore metadata now force-flushes on player disconnect and bench saves mark player data dirty.
+- **Refinement Roll Weights** - Fixed legacy refinement outcome rolling to use one normalized weighted roll instead of assuming weights already sum to exactly 100%.
 
 ---
 

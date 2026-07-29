@@ -10,6 +10,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
+import irai.mod.reforge.Util.DynamicTooltipUtils;
+
 /**
  * Utility helpers for injecting additional random loot into an item container.
  */
@@ -39,7 +41,7 @@ public final class LootInjectionUtils {
                 continue;
             }
 
-            ItemStack stack = new ItemStack(rule.itemId(), quantity);
+            ItemStack stack = createInjectedStack(rule.itemId(), quantity);
             if (!container.canAddItemStack(stack)) {
                 continue;
             }
@@ -73,7 +75,7 @@ public final class LootInjectionUtils {
                 continue;
             }
 
-            drops.add(new ItemStack(rule.itemId(), quantity));
+            drops.add(createInjectedStack(rule.itemId(), quantity));
             injected.merge(rule.itemId(), quantity, Integer::sum);
         }
 
@@ -86,6 +88,14 @@ public final class LootInjectionUtils {
 
     public static LootInjectionRule rule(String itemId, double chance, int minQuantity, int maxQuantity, String targetId) {
         return new LootInjectionRule(itemId, chance, minQuantity, maxQuantity, targetId);
+    }
+
+    private static ItemStack createInjectedStack(String itemId, int quantity) {
+        ItemStack stack = new ItemStack(itemId, quantity);
+        if (SmithyLegacyUtils.isSmithyChest(stack)) {
+            return DynamicTooltipUtils.applyNativeTooltip(SmithyLegacyUtils.ensureRolledLegacy(stack));
+        }
+        return stack;
     }
 
     public static List<LootInjectionRule> rulesFromEntries(String[] entries) {

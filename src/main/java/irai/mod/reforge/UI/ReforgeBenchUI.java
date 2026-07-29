@@ -35,6 +35,8 @@ import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils;
+import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -63,12 +65,15 @@ public final class ReforgeBenchUI {
     private static final double ANTI_DEGRADATION_BLOCK_CHANCE = 0.80d;
     private static final String HAMMER_IRON_ID = "Tool_Hammer_Iron";
     private static final String HAMMER_THORIUM_ID = "Tool_Hammer_Thorium";
+    private static final String HAMMER_IRAINIUM_ID = "Tool_Hammer_Irainium";
     private static final int DEFAULT_MATERIAL_COST = 3;
     private static final int DEFAULT_MAX_UPGRADE_LEVEL = 3;
     private static final double HAMMER_IRON_BREAK_MULTIPLIER = 0.50d;
     private static final double HAMMER_THORIUM_BREAK_MULTIPLIER = 0.30d;
+    private static final double HAMMER_IRAINIUM_BREAK_MULTIPLIER = 0.05d;
     private static final double HAMMER_IRON_DURABILITY_LOSS_FRACTION = 0.05d;
     private static final double HAMMER_THORIUM_DURABILITY_LOSS_FRACTION = 0.15d;
+    private static final double HAMMER_IRAINIUM_DURABILITY_LOSS_FRACTION = 0.50d;
     private static final double DEGRADE_B_SHARE_OF_DEGRADE = 0.20d;
     private static final double JACKPOT_B_SHARE_OF_JACKPOT = 0.20d;
 
@@ -96,7 +101,8 @@ public final class ReforgeBenchUI {
     private enum OutcomeType { DEGRADE, DEGRADE_B, SAME, UPGRADE, JACKPOT, JACKPOT_B }
     private enum HammerSupportType {
         IRON("ui.reforge.hammer_iron", HAMMER_IRON_BREAK_MULTIPLIER, HAMMER_IRON_DURABILITY_LOSS_FRACTION),
-        THORIUM("ui.reforge.hammer_thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION);
+        THORIUM("ui.reforge.hammer_thorium", HAMMER_THORIUM_BREAK_MULTIPLIER, HAMMER_THORIUM_DURABILITY_LOSS_FRACTION),
+        IRAINIUM("ui.reforge.hammer_irainium", HAMMER_IRAINIUM_BREAK_MULTIPLIER, HAMMER_IRAINIUM_DURABILITY_LOSS_FRACTION);
 
         final String labelKey;
         final double breakMultiplier;
@@ -917,6 +923,9 @@ public final class ReforgeBenchUI {
         if (type == HammerSupportType.THORIUM) {
             return LangLoader.getUITranslation(player, "ui.reforge.thorium_hammer_info");
         }
+        if (type == HammerSupportType.IRAINIUM) {
+            return LangLoader.getUITranslation(player, "ui.reforge.irainium_hammer_info");
+        }
         if (type == HammerSupportType.IRON) {
             return LangLoader.getUITranslation(player, "ui.reforge.iron_hammer_info");
         }
@@ -946,6 +955,7 @@ public final class ReforgeBenchUI {
         Entry hammerEntry = selectedHammerSupport(supports);
         HammerSupportType hammerSupport = getHammerSupportType(hammerEntry);
         boolean antiDegradationSupport = hasAntiDegradationSupport(supports);
+        Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
         int maxLevel = getMaxUpgradeLevel();
         int level = Math.max(0, Math.min(maxLevel, ReforgeEquip.getLevelFromItem(item)));
         MaterialRequirement requirement = getMaterialRequirement(player, equipment, material);
@@ -990,9 +1000,9 @@ public final class ReforgeBenchUI {
                     level);
         }
 
-        double breakChance = effectiveBreakChance(level, isArmor, materialId, hammerSupport);
+        double breakChance = effectiveBreakChance(level, isArmor, materialId, hammerSupport, smithyBonuses);
         double softcoreBreakProtectionChance = ReforgeEquip.getSoftcoreBreakProtectionChance(materialId);
-        OutcomeWeights w = outcomeWeights(level, materialId);
+        OutcomeWeights w = outcomeWeights(level, materialId, smithyBonuses);
         double survive = Math.max(0.0, 1.0 - breakChance);
 
         int degBLevel = clampLevel(level - 2);
@@ -1056,7 +1066,7 @@ public final class ReforgeBenchUI {
                 formatPercent(pSame),
                 formatPercent(pUp),
                 formatPercent(pJack + pJackB),
-                supportPreviewNote(player, hammerSupport, antiDegradationSupport),
+                supportPreviewNote(player, hammerSupport, antiDegradationSupport, smithyBonuses),
                 level);
     }
 
@@ -1085,6 +1095,7 @@ public final class ReforgeBenchUI {
         Entry hammerEntry = selectedHammerSupport(supports);
         HammerSupportType hammerSupport = getHammerSupportType(hammerEntry);
         boolean antiDegradationSupport = hasAntiDegradationSupport(supports);
+        Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
         HammerUseResult hammerUse = new HammerUseResult(true, false);
         if (hammerSupport != null) {
             hammerUse = applyHammerWear(player, hammerEntry, hammerSupport.durabilityLossFraction);
@@ -1097,7 +1108,8 @@ public final class ReforgeBenchUI {
             return new ProcessResult(t(player, "ui.reforge.error_material_consume", materialName), 0);
         }
 
-        double breakChance = effectiveBreakChance(level, isArmor, materialId, hammerSupport);
+        double breakChance = effectiveBreakChance(level, isArmor, materialId, hammerSupport, smithyBonuses);
+        String breakChanceSuffix = " " + t(player, "ui.reforge.break_roll_info", formatPercent(breakChance));
         String hammerSuffix = "";
         if (hammerSupport != null) {
             String hammerLabel = hammerLabel(player, hammerSupport);
@@ -1108,6 +1120,11 @@ public final class ReforgeBenchUI {
                 hammerSuffix = " " + rawSuffix;
             }
         }
+        String smithySuffix = smithyBonuses != null
+                ? " " + t(player, "ui.reforge.smithy_chest_roll_info",
+                        SmithyLegacyUtils.localizedName(smithyBonuses.legacy(), LangLoader.getPlayerLanguage(player)))
+                : "";
+        String resultSuffix = hammerSuffix + smithySuffix + breakChanceSuffix;
         if (Math.random() < breakChance) {
             if (ReforgeEquip.shouldUseSoftcoreBreakProtection(materialId)) {
                 ItemStack softened = ReforgeEquip.applySoftcoreBreakPenalty(current);
@@ -1121,15 +1138,15 @@ public final class ReforgeBenchUI {
                                 statLabel,
                                 formatPercent(1.0 - ReforgeEquip.getSoftcoreStatMultiplier(softened)),
                                 ReforgeEquip.getSoftcoreBreakCount(softened),
-                                hammerSuffix),
+                                resultSuffix),
                         100);
             }
             removeEquipment(player, equipment);
             sfxConfig.playShatter(player);
-            return new ProcessResult(t(player, "ui.reforge.result_shattered", hammerSuffix), 0);
+            return new ProcessResult(t(player, "ui.reforge.result_shattered", resultSuffix), 0);
         }
 
-        ReforgeOutcome outcome = rollOutcome(level, materialId);
+        ReforgeOutcome outcome = rollOutcome(level, materialId, smithyBonuses);
         String antiDegradationSuffix = "";
         if (antiDegradationSupport
                 && (outcome.type == OutcomeType.DEGRADE || outcome.type == OutcomeType.DEGRADE_B)
@@ -1150,23 +1167,24 @@ public final class ReforgeBenchUI {
         switch (outcome.type) {
             case DEGRADE, DEGRADE_B -> {
                 sfxConfig.playFail(player);
-                return new ProcessResult(t(player, "ui.reforge.result_degraded", level, newLevel, hammerSuffix), 100);
+                return new ProcessResult(t(player, "ui.reforge.result_degraded", level, newLevel, resultSuffix), 100);
             }
             case SAME -> {
                 sfxConfig.playNoChange(player);
-                return new ProcessResult(t(player, "ui.reforge.result_same", level, hammerSuffix + antiDegradationSuffix), 100);
+                return new ProcessResult(t(player, "ui.reforge.result_same", level,
+                        hammerSuffix + antiDegradationSuffix + smithySuffix + breakChanceSuffix), 100);
             }
             case UPGRADE -> {
                 sfxConfig.playSuccess(player);
-                return new ProcessResult(t(player, "ui.reforge.result_success", level, newLevel, hammerSuffix), 100);
+                return new ProcessResult(t(player, "ui.reforge.result_success", level, newLevel, resultSuffix), 100);
             }
             case JACKPOT -> {
                 sfxConfig.playJackpot(player);
-                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, hammerSuffix), 100);
+                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, resultSuffix), 100);
             }
             case JACKPOT_B -> {
                 sfxConfig.playJackpot(player);
-                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, hammerSuffix), 100);
+                return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, resultSuffix), 100);
             }
             default -> {
                 return new ProcessResult(t(player, "ui.reforge.result_unknown"), 0);
@@ -1188,7 +1206,11 @@ public final class ReforgeBenchUI {
     }
 
     private static ReforgeOutcome rollOutcome(int level, String materialId) {
-        OutcomeWeights w = outcomeWeights(level, materialId);
+        return rollOutcome(level, materialId, null);
+    }
+
+    private static ReforgeOutcome rollOutcome(int level, String materialId, Bonuses smithyBonuses) {
+        OutcomeWeights w = outcomeWeights(level, materialId, smithyBonuses);
         if (w.total <= 0.0) return new ReforgeOutcome(0, OutcomeType.SAME);
 
         double random = Math.random() * w.total;
@@ -1205,7 +1227,12 @@ public final class ReforgeBenchUI {
     }
 
     private static OutcomeWeights outcomeWeights(int level, String materialId) {
+        return outcomeWeights(level, materialId, null);
+    }
+
+    private static OutcomeWeights outcomeWeights(int level, String materialId, Bonuses smithyBonuses) {
         double[] w = weights(level, materialId);
+        w = SmithyLegacyUtils.applyToOutcomeWeights(w, smithyBonuses);
         double degradeTotal = weightAt(w, 0);
         double same = weightAt(w, 1);
         double upgrade = weightAt(w, 2);
@@ -1252,12 +1279,16 @@ public final class ReforgeBenchUI {
         return DEFAULT_BREAK_CHANCES[idx];
     }
 
-    private static double effectiveBreakChance(int currentLevel, boolean isArmor, String materialId, HammerSupportType hammerSupport) {
+    private static double effectiveBreakChance(int currentLevel, boolean isArmor, String materialId,
+                                               HammerSupportType hammerSupport, Bonuses smithyBonuses) {
         double base = refinementConfig != null
                 ? refinementConfig.getAdjustedBreakChance(currentLevel, isArmor, materialId)
                 : breakChance(currentLevel, isArmor);
-        if (hammerSupport == null) return base;
-        return Math.max(0.0, Math.min(1.0, base * hammerSupport.breakMultiplier));
+        double multiplier = hammerSupport == null ? 1.0d : hammerSupport.breakMultiplier;
+        if (smithyBonuses != null) {
+            multiplier *= smithyBonuses.breakMultiplier();
+        }
+        return Math.max(0.0, Math.min(1.0, base * multiplier));
     }
 
     private static double statMultiplierForLevel(int level, boolean isArmor) {
@@ -1409,7 +1440,7 @@ public final class ReforgeBenchUI {
     }
 
     private static boolean isHammerItem(String itemId) {
-        return isIronHammerItem(itemId) || isThoriumHammerItem(itemId);
+        return isIronHammerItem(itemId) || isThoriumHammerItem(itemId) || isIrainiumHammerItem(itemId);
     }
 
     private static boolean isAntiDegradationItem(Entry support) {
@@ -1437,16 +1468,20 @@ public final class ReforgeBenchUI {
             return null;
         }
         Entry iron = null;
+        Entry thorium = null;
         for (Entry support : supports) {
             if (support == null) continue;
-            if (isThoriumHammerItem(support.itemId)) {
+            if (isIrainiumHammerItem(support.itemId)) {
                 return support;
+            }
+            if (isThoriumHammerItem(support.itemId)) {
+                thorium = support;
             }
             if (iron == null && isIronHammerItem(support.itemId)) {
                 iron = support;
             }
         }
-        return iron;
+        return thorium != null ? thorium : iron;
     }
 
     private static boolean isIronHammerItem(String itemId) {
@@ -1457,8 +1492,13 @@ public final class ReforgeBenchUI {
         return itemId != null && HAMMER_THORIUM_ID.equalsIgnoreCase(itemId);
     }
 
+    private static boolean isIrainiumHammerItem(String itemId) {
+        return itemId != null && HAMMER_IRAINIUM_ID.equalsIgnoreCase(itemId);
+    }
+
     private static HammerSupportType getHammerSupportType(Entry support) {
         if (support == null) return null;
+        if (isIrainiumHammerItem(support.itemId)) return HammerSupportType.IRAINIUM;
         if (isThoriumHammerItem(support.itemId)) return HammerSupportType.THORIUM;
         if (isIronHammerItem(support.itemId)) return HammerSupportType.IRON;
         return null;
@@ -2030,7 +2070,8 @@ public final class ReforgeBenchUI {
         return LangLoader.getUITranslation(player, key, params);
     }
 
-    private static String supportPreviewNote(Player player, HammerSupportType hammerSupport, boolean antiDegradationSupport) {
+    private static String supportPreviewNote(Player player, HammerSupportType hammerSupport, boolean antiDegradationSupport,
+                                             Bonuses smithyBonuses) {
         StringBuilder sb = new StringBuilder();
         if (hammerSupport != null) {
             sb.append(t(player, "ui.reforge.preview_hammer_active", hammerLabel(player, hammerSupport),
@@ -2041,6 +2082,14 @@ public final class ReforgeBenchUI {
                 sb.append(" ");
             }
             sb.append(t(player, "ui.reforge.preview_anti_degradation_active"));
+        }
+        if (smithyBonuses != null) {
+            if (sb.length() > 0) {
+                sb.append(" ");
+            }
+            sb.append(t(player, "ui.reforge.preview_smithy_chest_active",
+                    SmithyLegacyUtils.localizedName(smithyBonuses.legacy(), LangLoader.getPlayerLanguage(player)),
+                    SmithyLegacyUtils.compactBonusText(smithyBonuses)));
         }
         return sb.toString();
     }

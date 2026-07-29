@@ -14,6 +14,12 @@ public final class MetadataKeys {
     public static final String REFINEMENT_DISPLAY_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
     public static final String REFINEMENT_SOFTCORE_BREAKS = "SocketReforge.Refinement.SoftcoreBreaks";
     public static final String REFINEMENT_SOFTCORE_STAT_MULTIPLIER = "SocketReforge.Refinement.SoftcoreStatMultiplier";
+    public static final String SMITHY_LEGACY = "SocketReforge.Smithy.Legacy";
+    public static final String SMITHY_LEGACY_BREAK_MULTIPLIER = "SocketReforge.Smithy.Legacy.BreakMultiplier";
+    public static final String SMITHY_LEGACY_DEGRADE_MULTIPLIER = "SocketReforge.Smithy.Legacy.DegradeMultiplier";
+    public static final String SMITHY_LEGACY_SAME_MULTIPLIER = "SocketReforge.Smithy.Legacy.SameMultiplier";
+    public static final String SMITHY_LEGACY_UPGRADE_MULTIPLIER = "SocketReforge.Smithy.Legacy.UpgradeMultiplier";
+    public static final String SMITHY_LEGACY_JACKPOT_MULTIPLIER = "SocketReforge.Smithy.Legacy.JackpotMultiplier";
 
     // Socket system
     public static final String SOCKET_MAX = "SocketReforge.Socket.Max";

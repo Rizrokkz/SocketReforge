@@ -3090,7 +3090,7 @@ public final class RuntimeConfigUI {
                     CATEGORY_REFINEMENT,
                     REFINEMENT_CONFIG_NAME,
                     "Weapon " + level + "->" + (level + 1) + " break",
-                    "Break chance while attempting +" + level + " to +" + (level + 1) + ".",
+                    "Equipment break chance while attempting +" + level + " to +" + (level + 1) + ". UI input is percent, so 0.1 means 0.1%. JSON stores fractions, so 0.001 means 0.1%.",
                     RuntimeConfigUI::ensureWeaponBreakArray,
                     level));
         }
@@ -3103,7 +3103,7 @@ public final class RuntimeConfigUI {
                     CATEGORY_REFINEMENT,
                     REFINEMENT_CONFIG_NAME,
                     "Armor " + level + "->" + (level + 1) + " break",
-                    "Break chance while attempting +" + level + " to +" + (level + 1) + ".",
+                    "Equipment break chance while attempting +" + level + " to +" + (level + 1) + ". UI input is percent, so 0.1 means 0.1%. JSON stores fractions, so 0.001 means 0.1%.",
                     RuntimeConfigUI::ensureArmorBreakArray,
                     level));
         }
