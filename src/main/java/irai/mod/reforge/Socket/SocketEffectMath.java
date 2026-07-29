@@ -47,8 +47,8 @@ public final class SocketEffectMath {
         return clampTier(tier) * 5.0;
     }
 
-    public static double armorFireDefensePercent(int tier) {
-        return clampTier(tier);
+    public static double armorFireBlockChancePercent(int tier) {
+        return clampTier(tier) * 3.0;
     }
 
     public static double armorIceSlowPercent(int tier) {
@@ -159,7 +159,7 @@ public final class SocketEffectMath {
 
         switch (type) {
             case FIRE:
-                return "+" + formatBonus(armorFireDefensePercent(safeTier) * safeMultiplier) + "% Fire Defense";
+                return "+" + formatBonus(armorFireBlockChancePercent(safeTier) * safeMultiplier) + "% Block Chance";
             case ICE:
                 return "+" + formatBonus(armorIceSlowPercent(safeTier) * safeMultiplier) + "% Slow";
             case LIGHTNING:
@@ -238,8 +238,8 @@ public final class SocketEffectMath {
         switch (type) {
             case FIRE:
                 return translate(langCode, "tooltip.essence.armor.fire",
-                        "+" + formatBonus(armorFireDefensePercent(safeTier) * safeMultiplier) + "% Fire Defense",
-                        formatBonus(armorFireDefensePercent(safeTier) * safeMultiplier));
+                        "+" + formatBonus(armorFireBlockChancePercent(safeTier) * safeMultiplier) + "% Block Chance",
+                        formatBonus(armorFireBlockChancePercent(safeTier) * safeMultiplier));
             case ICE:
                 return translate(langCode, "tooltip.essence.armor.ice",
                         "+" + formatBonus(armorIceSlowPercent(safeTier) * safeMultiplier) + "% Slow",

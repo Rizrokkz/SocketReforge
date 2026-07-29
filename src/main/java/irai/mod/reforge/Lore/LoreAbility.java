@@ -608,17 +608,10 @@ public final class LoreAbility {
     }
 
     private String describeBleedDamage(int feedTier) {
-        LoreConfig config = LoreSocketManager.getConfig();
-        double currentHpPct = config != null ? config.getBleedTotalCurrentHpPct() : 0.0005d;
-        double weaponScaleMin = config != null ? config.getBleedWeaponScaleMin() : 0.75d;
-        double weaponScaleMax = config != null ? config.getBleedWeaponScaleMax() : 1.50d;
-        double minPct = scaleEffectValue(currentHpPct * weaponScaleMin * 100.0d, feedTier);
-        double maxPct = scaleEffectValue(currentHpPct * weaponScaleMax * 100.0d, feedTier);
-        String hpSuffix = " current HP";
-        if (Math.abs(minPct - maxPct) < 0.0001d) {
-            return formatPercent(minPct) + "%" + hpSuffix;
-        }
-        return formatPercent(minPct) + "%-" + formatPercent(maxPct) + "%" + hpSuffix;
+        double elementalRatePct = scaleEffectValue(
+                irai.mod.reforge.Common.WeaponElementalDamageUtils.DAMAGE_RATE_PER_SOCKET_WEIGHT * 100.0d,
+                feedTier);
+        return formatPercent(elementalRatePct) + "% affinity-scaled elemental output/tick (physical)";
     }
 
     private static String formatValue(double value) {

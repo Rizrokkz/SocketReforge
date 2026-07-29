@@ -1056,7 +1056,8 @@ public final class ResonanceSystem {
         return switch (stat) {
             case DAMAGE -> "Damage";
             case DEFENSE -> "Defense";
-            case FIRE_DEFENSE -> "Fire Defense";
+            case FIRE_DEFENSE -> "Fire Resistance";
+            case BLOCK_CHANCE -> "Block Chance";
             case HEALTH -> "Health";
             case MOVEMENT_SPEED -> "Slow";
             case REGENERATION -> "Regen";
@@ -1077,6 +1078,7 @@ public final class ResonanceSystem {
             case DAMAGE -> "resonance.stat.damage";
             case DEFENSE -> "resonance.stat.defense";
             case FIRE_DEFENSE -> "resonance.stat.fire_defense";
+            case BLOCK_CHANCE -> "resonance.stat.block_chance";
             case HEALTH -> "resonance.stat.health";
             case MOVEMENT_SPEED -> "resonance.stat.slow";
             case REGENERATION -> "resonance.stat.regen";

@@ -113,23 +113,28 @@ Example:
 
 ## Bleed Damage Tuning
 
-`LORE_BLEED_MAX_HP_PCT_PER_TICK`
-- Caps bleed per tick as a percent of target max HP.
+Bleed damage now comes from the attacker's equipped weapon elemental socket output, but the DoT itself is still physical bleed:
+
+```text
+final hit damage -> socket elemental breakdown -> target elemental affinity multipliers -> feed tier scaling -> physical bleed ticks
+```
+
+No socketed elemental output means bleed does not deal damage.
 
 `LORE_BLEED_RAMP_PER_TICK`
-- Extra bleed ramp scaling over time.
+- Extra bleed distribution weight over time. This changes how bleed is spread across ticks, not the total elemental-output-based damage.
 
 `LORE_BLEED_WEAPON_BASE_CAP_PCT`
-- Optional weapon-based cap contribution.
+- Optional per-tick cap based on weapon base damage.
 
+Legacy keys retained for compatibility but no longer drive bleed damage:
+
+`LORE_BLEED_MAX_HP_PCT_PER_TICK`
 `LORE_BLEED_TOTAL_CURRENT_HP_PCT`
-- Extra total bleed scaling using current HP.
-
 `LORE_BLEED_WEAPON_REFERENCE_BASE`
-- Reference weapon damage used for bleed scaling.
-
 `LORE_BLEED_WEAPON_SCALE_MIN`
-- Minimum weapon scaling multiplier.
+`LORE_BLEED_WEAPON_SCALE_MIN`
+`LORE_BLEED_WEAPON_SCALE_MAX`
 
 `LORE_BLEED_WEAPON_SCALE_MAX`
 - Maximum weapon scaling multiplier.

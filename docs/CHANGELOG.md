@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.3.9-alpha.3] - 2026-07-14
+## [1.4.0] - 2026-07-29
+
+### Added
+- **Elemental Affinity System** - Added configurable NPC elemental multipliers, runtime config editing, and weapon mutation support for elemental affinity damage.
+- **Resonant Essence Support** - Added Resonant Essence as a support item for socketed essence mutation rolls on Essence Socketing Bench.
+- **Equipment Stats UI** - Added an equipment stat summary UI for held weapon and equipped armor calculations using `/equipstats` command.
+
+### Changed
+- **Elemental Armor Bonuses** - Armor essence bonuses now provide individual elemental resistances.
+- **Fire Essence Armor Socket Effect** - Fire essence now Block Chance as its primary socket stat on armor.
+- **Lore Bleed Scaling** - Bleed now uses physical damage while scaling from weapon elemental output instead of HP-based damage.
+- **Elemental Defaults** - Updated default NPC elemental multipliers for clearer weakness/resistance feedback.
+
+### Fixed
+- **Lore Feed Persistence** - Fixed lore feed tiers/XP failing to persist when players logged out while held-item lore metadata was still queued.
+- **Held Item Save Safety** - Pending lore metadata now force-flushes on player disconnect and bench saves mark player data dirty.
+
+---
+
+## [1.3.9-alpha.3] - 2026-07-19
 
 ### Added 
 - **Leather Strap** - Default drops for Leather Straps are added and configurable via `/runtime Config`

@@ -16,7 +16,8 @@ public enum StatType {
     DEFENSE("Defense", "DEF"),
     EVASION("Evasion", "EVA"),
     REGENERATION("Regeneration", "REGEN"),
-    FIRE_DEFENSE("Fire Defense", "FIRE DEF"),
+    FIRE_DEFENSE("Fire Resistance", "FIRE RES"),
+    BLOCK_CHANCE("Block Chance", "BLOCK"),
     
     // Utility Stats
     LIFE_STEAL("Life Steal", "LIFESTEAL"),
@@ -58,7 +59,7 @@ public enum StatType {
      * Checks if this stat is a defensive stat.
      */
     public boolean isDefensive() {
-        return this == HEALTH || this == DEFENSE || this == EVASION;
+        return this == HEALTH || this == DEFENSE || this == EVASION || this == BLOCK_CHANCE;
     }
     
     /**

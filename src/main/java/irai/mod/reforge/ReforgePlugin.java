@@ -40,6 +40,7 @@ import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
+import irai.mod.reforge.Commands.EquipmentStatsCommand;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
 import irai.mod.reforge.Commands.LoreAbilityMapCommand;
@@ -57,12 +58,14 @@ import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
+import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.CrossModConfig;
+import irai.mod.reforge.Config.ElementalAffinityConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
@@ -96,11 +99,13 @@ import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
+import irai.mod.reforge.UI.EquipmentStatsUI;
 import irai.mod.reforge.UI.EssenceBenchUI;
 import irai.mod.reforge.UI.LoreFeedBenchUI;
 import irai.mod.reforge.UI.LoreSocketBenchUI;
@@ -154,6 +159,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<LoreMappingConfig> loreMappingConfig;
     private final Config<DamageNumberConfig> damageNumberConfig;
     private final Config<WorldRepairConfig> worldRepairConfig;
+    private final Config<ElementalAffinityConfig> elementalAffinityConfig;
     private final ConfigService configService;
     private boolean customCombatTextEnabled = true;
     private boolean systemsRegistered = false;
@@ -186,6 +192,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.loreMappingConfig = this.withConfig("LoreMappingConfig", LoreMappingConfig.CODEC);
         this.damageNumberConfig = this.withConfig("DamageNumberConfig", DamageNumberConfig.CODEC);
         this.worldRepairConfig = this.withConfig("WorldRepairConfig", WorldRepairConfig.CODEC);
+        this.elementalAffinityConfig = this.withConfig("ElementalAffinityConfig", ElementalAffinityConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -227,6 +234,7 @@ public class ReforgePlugin extends JavaPlugin {
         });
         this.configService.register("DamageNumberConfig", this.damageNumberConfig, this::applyDamageNumberConfig);
         this.configService.register("WorldRepairConfig", this.worldRepairConfig, cfg -> {});
+        this.configService.register("ElementalAffinityConfig", this.elementalAffinityConfig, ElementalAffinityUtils::setConfig);
     }
 
     @Override
@@ -241,6 +249,7 @@ public class ReforgePlugin extends JavaPlugin {
         LoreSocketBenchUI.initialize();
         LoreFeedBenchUI.initialize();
         ReforgeBenchUI.initialize();
+        EquipmentStatsUI.initialize();
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
         ResonantCompendiumUI.initialize();
@@ -274,6 +283,7 @@ public class ReforgePlugin extends JavaPlugin {
         });
         this.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, event -> {
             if (event != null) {
+                LoreHeldItemUpdateManager.flushPendingOnDisconnect(event.getPlayerRef());
                 SocketBenchUI.closeForDisconnect(event.getPlayerRef());
             }
         });
@@ -293,6 +303,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new RuntimeConfigCommand("reforgeconfig", "Open live runtime config UI", false));
+        this.getCommandRegistry().registerCommand(new EquipmentStatsCommand("equipmentstats", "Show held weapon and equipped armor stat summary", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
         this.getCommandRegistry().registerCommand(new LoreSocketCommand("loregem", "Open lore gem socketing UI", false));
         this.getCommandRegistry().registerCommand(new LoreFeedCommand("lorefeed", "Open lore feed UI", false));
@@ -329,7 +340,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.3.9-alpha.3");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.0");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
@@ -516,6 +527,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public DamageNumberConfig getDamageNumberRuntimeConfig() {
         return damageNumberConfig.get();
+    }
+
+    public ElementalAffinityConfig getElementalAffinityRuntimeConfig() {
+        return elementalAffinityConfig.get();
     }
 
     /**

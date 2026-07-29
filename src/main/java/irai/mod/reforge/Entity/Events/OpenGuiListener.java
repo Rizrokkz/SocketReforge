@@ -201,10 +201,12 @@ public class OpenGuiListener {
                 continue;
             }
             boolean useGreater = false;
+            String mutationElement = null;
             if (i < existingSockets.size()) {
                 Socket existingSocket = existingSockets.get(i);
                 if (existingSocket != null && !existingSocket.isEmpty() && !existingSocket.isBroken()) {
                     useGreater = SocketManager.isGreaterEssenceId(existingSocket.getEssenceId());
+                    mutationElement = existingSocket.getMutationElement();
                 }
             }
             String essenceId = SocketManager.buildEssenceId(type.name(), useGreater);
@@ -215,6 +217,9 @@ public class OpenGuiListener {
                 continue;
             }
             data.setEssenceAt(i, essenceId);
+            if (mutationElement != null && !mutationElement.isBlank()) {
+                data.getSockets().get(i).setMutationElement(mutationElement);
+            }
         }
         return data;
     }

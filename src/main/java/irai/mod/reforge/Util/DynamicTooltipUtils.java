@@ -4,7 +4,9 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -30,7 +32,9 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
@@ -618,6 +622,10 @@ public class DynamicTooltipUtils {
      * Build native tooltip payload for an item from its serialized metadata.
      */
     private static TooltipPayload buildTooltipPayload(String itemId, String metadata, String locale) {
+        return buildTooltipPayload(null, itemId, metadata, locale);
+    }
+
+    private static TooltipPayload buildTooltipPayload(ItemStack item, String itemId, String metadata, String locale) {
         String langCode = resolveLangCode(locale);
         String normalizedItemId = normalizeItemId(itemId);
         if (normalizedItemId != null && !normalizedItemId.isBlank()) {
@@ -629,6 +637,11 @@ public class DynamicTooltipUtils {
         // Parse socket data from metadata
         int socketMax = extractSocketMax(metadata);
         int socketFilled = extractSocketFilled(metadata);
+        SocketData itemSocketData = item == null ? null : SocketManager.getSocketData(item);
+        if (itemSocketData != null) {
+            socketMax = Math.max(socketMax, itemSocketData.getMaxSockets());
+            socketFilled = Math.max(socketFilled, itemSocketData.getSockets().size());
+        }
 
         // Parse modular parts metadata
         String partsProfileType = extractStringValue(metadata, META_PARTS_PROFILE_TYPE);
@@ -759,10 +772,17 @@ public class DynamicTooltipUtils {
         }
         boolean isArmorItem = isArmorType(baseItemId, itemId);
         String[] socketEntries = extractSocketEntries(metadata);
-        SocketData parsedSocketData = buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries);
-        boolean hasRefineOrSocketedEssence = reforgeLevel > 0 || hasSocketedEssence(socketEntries) || hasSoftcorePenalty;
+        String[] socketMutations = extractSocketMutations(metadata);
+        SocketData parsedSocketData = itemSocketData != null
+                ? itemSocketData
+                : buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries, socketMutations);
+        boolean hasRefineOrSocketedEssence = reforgeLevel > 0
+                || hasSocketedEssence(socketEntries)
+                || hasSocketedEssence(parsedSocketData)
+                || hasSoftcorePenalty;
 
         String damageLabel = tr(langCode, "tooltip.damage_label", "Damage");
+        Map<Essence.Type, Double> weaponElementDamageRates = new EnumMap<>(Essence.Type.class);
         if (isEquipmentItem && !isArmorItem) {
             EquipmentDamageTooltipMath.StatSummary summary = EquipmentDamageTooltipMath.computeWeaponDamageSummary(
                     effectiveItemId,
@@ -783,6 +803,53 @@ public class DynamicTooltipUtils {
                         COLOR_WHITE + damageLabel + " : "
                                 + COLOR_GREEN + formatDamageValue(summary.getBaseValue())
                 );
+            }
+            List<WeaponElementalDamageUtils.ElementDamage> elementDamages =
+                    WeaponElementalDamageUtils.calculateElementDamage(parsedSocketData, summary.getBuffedValue());
+            for (WeaponElementalDamageUtils.ElementDamage elementDamage : elementDamages) {
+                if (elementDamage.type() != null && elementDamage.rate() > 0.0d) {
+                    weaponElementDamageRates.put(elementDamage.type(), elementDamage.rate());
+                }
+            }
+        }
+        if (isEquipmentItem && isArmorItem) {
+            String defenseLabel = tr(langCode, "tooltip.defense_label", "Defense");
+            EquipmentDamageTooltipMath.StatSummary summary = EquipmentDamageTooltipMath.computeArmorDefenseSummary(
+                    effectiveItemId,
+                    reforgeLevel,
+                    parsedSocketData,
+                    softcoreStatMultiplier
+            );
+            if (hasRefineOrSocketedEssence) {
+                tooltipLines.add(
+                        COLOR_WHITE + defenseLabel + " : "
+                                + COLOR_CYAN + formatDamageValue(summary.getBaseValue())
+                                + COLOR_WHITE + " -> "
+                                + COLOR_GREEN + formatDamageValue(summary.getBuffedValue())
+                );
+            } else {
+                tooltipLines.add(
+                        COLOR_WHITE + defenseLabel + " : "
+                                + COLOR_GREEN + formatDamageValue(summary.getBaseValue())
+                );
+            }
+
+            java.util.Map<Essence.Type, Double> resistances =
+                    ArmorAffinityResistanceUtils.calculateResistancePercentByIncomingType(parsedSocketData);
+            if (ArmorAffinityResistanceUtils.hasAnyResistance(resistances)) {
+                for (Essence.Type type : Essence.Type.values()) {
+                    double percent = resistances.getOrDefault(type, 0.0d);
+                    if (percent <= 0.0001d) {
+                        continue;
+                    }
+                    String resistanceLabel = tr(
+                            langCode,
+                            "tooltip.affinity_resistance_element",
+                            "{0} Resist",
+                            localizeEssenceType(type, langCode));
+                    tooltipLines.add(COLOR_CYAN + resistanceLabel + ": "
+                            + COLOR_GREEN + formatPercent(percent) + "%");
+                }
             }
         }
 
@@ -978,7 +1045,7 @@ public class DynamicTooltipUtils {
         
         // Add essence effects from the current socket entries so tooltip math always
         // matches live gameplay math.
-        java.util.Map<Essence.Type, Integer> liveTiers = SocketManager.calculateConsecutiveTiers(parsedSocketData);
+        java.util.Map<Essence.Type, Integer> liveTiers = SocketManager.calculateDisplayConsecutiveTiers(parsedSocketData);
         if (!liveTiers.isEmpty()) {
             for (java.util.Map.Entry<Essence.Type, Integer> entry : liveTiers.entrySet()) {
                 Essence.Type type = entry.getKey();
@@ -997,6 +1064,16 @@ public class DynamicTooltipUtils {
                         essenceName, tier);
                 String effectDesc = SocketManager.describeEssenceEffect(type, tier, !isArmorItem, parsedSocketData, langCode);
                 String essenceLine = color + essenceTier + "</color> " + COLOR_GRAY + effectDesc;
+                Double elementDamageRate = !isArmorItem ? weaponElementDamageRates.get(type) : null;
+                if (elementDamageRate != null && elementDamageRate > 0.0d) {
+                    String elementLabel = tr(
+                            langCode,
+                            "tooltip.elemental_damage_element",
+                            "{0} Damage",
+                            essenceName);
+                    essenceLine += COLOR_GRAY + ", " + color + elementLabel
+                            + " " + COLOR_GREEN + formatPercent(elementDamageRate * 100.0d) + "%";
+                }
                 tooltipLines.add(essenceLine);
             }
         }
@@ -1226,7 +1303,24 @@ public class DynamicTooltipUtils {
         return false;
     }
 
-    private static SocketData buildSocketDataFromMetadata(int socketMax, int socketFilled, String[] socketEntries) {
+    private static boolean hasSocketedEssence(SocketData socketData) {
+        if (socketData == null || socketData.getSockets().isEmpty()) {
+            return false;
+        }
+        for (irai.mod.reforge.Socket.Socket socket : socketData.getSockets()) {
+            if (socket != null && !socket.isEmpty() && !socket.isBroken()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String[] extractSocketMutations(String metadata) {
+        String[] values = extractStringArray(metadata, MetadataKeys.SOCKET_MUTATIONS);
+        return values == null ? new String[0] : values;
+    }
+
+    private static SocketData buildSocketDataFromMetadata(int socketMax, int socketFilled, String[] socketEntries, String[] socketMutations) {
         int resolvedMax = Math.max(0, socketMax);
         int entryCount = socketEntries == null ? 0 : socketEntries.length;
         int maxSockets = Math.max(resolvedMax, Math.max(socketFilled, entryCount));
@@ -1246,6 +1340,12 @@ public class DynamicTooltipUtils {
                 continue;
             }
             socketData.setEssenceAt(i, entry);
+            if (socketMutations != null && i < socketMutations.length) {
+                Essence.Type mutationType = SocketManager.parseEssenceType(normalizeSocketEntry(socketMutations[i]));
+                if (mutationType != null) {
+                    socketData.getSockets().get(i).setMutationElement(mutationType.name());
+                }
+            }
         }
         return socketData;
     }
@@ -1401,6 +1501,18 @@ public class DynamicTooltipUtils {
         }
         if (!ItemTypeUtils.isWeaponItemId(base)) {
             return false;
+        }
+
+        SocketData socketData = buildSocketDataFromMetadata(
+                extractSocketMax(metadata),
+                extractSocketFilled(metadata),
+                extractSocketEntries(metadata),
+                extractSocketMutations(metadata));
+        if (socketData != null) {
+            Integer rawVoidTier = SocketManager.calculateRawConsecutiveTiers(socketData).get(Essence.Type.VOID);
+            if (rawVoidTier != null && rawVoidTier >= 5) {
+                return true;
+            }
         }
 
         String[] effects = extractEssenceEffects(metadata);
@@ -2582,7 +2694,7 @@ public class DynamicTooltipUtils {
         }
 
         String metadata = item.getMetadata() == null ? null : item.getMetadata().toJson();
-        TooltipPayload payload = buildTooltipPayload(item.getItemId(), metadata, locale);
+        TooltipPayload payload = buildTooltipPayload(item, item.getItemId(), metadata, locale);
         BsonDocument state = item.getFromMetadataOrNull(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT);
         ItemDisplayMetadata display = item.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
         Message currentName = display == null ? null : display.getName();
@@ -3066,6 +3178,10 @@ public class DynamicTooltipUtils {
 
     private static boolean startsWithLocalizedTooltipLabel(String line) {
         return startsWithLocalizedTooltipLabel(line, "tooltip.damage_label", "Damage")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.defense_label", "Defense")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.affinity_resistance_label", "Element Resist")
+                || startsWithLocalizedTooltipTemplate(line, "tooltip.affinity_resistance_element", "{0} Resist")
+                || startsWithLocalizedTooltipTemplate(line, "tooltip.elemental_damage_element", "{0} Damage")
                 || startsWithLocalizedTooltipLabel(line, "tooltip.refine_grade", "Refine Grade")
                 || startsWithLocalizedTooltipLabel(line, "tooltip.sockets_label", "Sockets")
                 || startsWithLocalizedTooltipLabel(line, "tooltip.lore_sockets_label", "Lore Sockets")
@@ -3095,6 +3211,47 @@ public class DynamicTooltipUtils {
             }
         }
         return false;
+    }
+
+    private static boolean startsWithLocalizedTooltipTemplate(String line, String key, String fallback) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        if (startsWithTooltipTemplate(line, fallback)) {
+            return true;
+        }
+        String fallbackLanguage = LangLoader.getFallbackLanguage();
+        if (startsWithTooltipTemplate(line, tr(fallbackLanguage, key, fallback))) {
+            return true;
+        }
+        for (String langCode : LangLoader.getLoadedLanguages()) {
+            if (startsWithTooltipTemplate(line, tr(langCode, key, fallback))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithTooltipTemplate(String line, String template) {
+        if (line == null || template == null || template.isBlank()) {
+            return false;
+        }
+        int tokenIndex = template.indexOf("{0}");
+        if (tokenIndex < 0) {
+            return startsWithTooltipLabel(line, template);
+        }
+        String prefix = template.substring(0, tokenIndex).trim();
+        String suffix = template.substring(tokenIndex + 3).trim();
+        String normalized = line.trim();
+        int colonIndex = normalized.indexOf(':');
+        String label = colonIndex >= 0 ? normalized.substring(0, colonIndex).trim() : normalized;
+        if (!prefix.isEmpty() && !label.startsWith(prefix)) {
+            return false;
+        }
+        if (!suffix.isEmpty() && !label.endsWith(suffix)) {
+            return false;
+        }
+        return !label.isBlank();
     }
 
     private static boolean startsWithTooltipLabel(String line, String label) {

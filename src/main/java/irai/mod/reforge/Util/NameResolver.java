@@ -951,7 +951,7 @@ public final class NameResolver {
         if (socketData == null || socketData.getCurrentSocketCount() <= 0) {
             return false;
         }
-        Integer voidTier = SocketManager.calculateConsecutiveTiers(socketData).get(Essence.Type.VOID);
+        Integer voidTier = SocketManager.calculateRawConsecutiveTiers(socketData).get(Essence.Type.VOID);
         return voidTier != null && voidTier >= 5;
     }
 

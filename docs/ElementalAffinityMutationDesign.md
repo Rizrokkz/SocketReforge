@@ -87,55 +87,123 @@ Start with a **dominant element** model. Split elemental damage can be added lat
 
 ## Damage Formula
 
-Recommended first-pass formula:
+Implemented first-pass formula:
 
 ```text
-finalDamage = baseDamage
-            × refinementMultiplier
-            × socketDamageMultiplier
-            × resonanceMultiplier
-            × elementalEffectiveness
+ecsDamageOutput = baseDamage
+                x refinementMultiplier
+                x socketDamageMultiplier
+                x partsMultiplier
+                + flatSocketDamage
+
+dominantAffinityBonus = ecsDamageOutput x (dominantElementWeight x 5%)
+finalDamage = ecsDamageOutput + dominantAffinityBonus
 ```
 
 Example:
 
 ```text
 Weapon dominant element: Fire
-Enemy fire modifier: 1.25
-Damage before element: 100
-Final damage: 125
+Fire affinity weight: 3.5
+Damage before affinity: 100
+Affinity bonus: 17.5 Fire damage
+Final damage: 117.5
 ```
+
+Current implementation notes:
+
+- Weapon affinity damage is based only on the ECS weapon damage output.
+- Only one affinity can apply per weapon hit: the dominant socketed essence element.
+- Normal essences add `1.0` affinity weight; greater/concentrated essences add `1.5`.
+- If a socket has a stored mutation element, that mutation determines the affinity element.
+- If no mutation is stored, the socket falls back to its original essence element.
+- Empty and broken sockets do not contribute.
+- Ties keep the first dominant element encountered in socket order.
+- Monster elemental effectiveness applies only to the additional affinity damage bonus.
+
+## First-Pass Elemental Matchups
+
+Elemental matchups use two tracks:
+
+- **Natural elements** use a one-way ascendant cycle.
+- **Life/Void** stay as a separate mutually opposed axis.
+
+```text
+Ice       > Fire
+Fire      > Water
+Water     > Lightning
+Lightning > Ice
+
+Life      > Void
+Void      > Life
+```
+
+First-pass multipliers:
+
+```text
+Weakness element:          1.15x to 1.30x affinity bonus damage
+Off element:               0.40x to 0.60x affinity bonus damage
+Same element:              0.10x to 0.20x affinity bonus damage
+Neutral/unmatched:         1.00x affinity bonus damage
+```
+
+This keeps the four currently available natural elements in a meaningful counter loop even without Earth, Wind, or Light. Same-element hits are heavily resisted, weakness hits are the clear best choice, and off-elements still deal partial damage instead of feeling fully useless. Void and Life are intentionally separated so undead/void enemies can be made weak to Life without making every creature part of that axis.
+
+Default monster affinity hints:
+
+```text
+Void:      void, undead, wraith, skeleton, zombie, ghast, ghoul, shadow, spectre, aberrant, crawler, cultist, spider, cave, rat, mouse, molerat, werewolf
+Life:      life, holy, nature, healer, forest, moss, mosshorn, root, rootling, sapling, seedling, sproutling, kweebec, snapdragon, hedera, cactee, deer, cow, bison, moose, mouflon, sheep, goat, horse, boar, pig, piglet, warthog, bunny, rabbit, squirrel, bear_grizzly, fox, wolf_black, tiger, antelope, tortoise, armadillo, ram, chicken, turkey, hyena, meerkat, gecko, larva_silk, earth, toad_rhino, scarak
+Fire:      fire, flame, ember, magma, lava, burn, desert, sand, scorpion, camel, rattle, cobra, lizard_sand, snake_rattle, chicken_desert
+Water:     water, aqua, ocean, sea, river, whale, shark, crocodile, fish, eel_moray, bluegill, crab, lobster, pike, piranha, minnow, salmon, trout, tang, duck, flamingo, frog, jellyfish, snapjaw, trillodon, trilobite, skrill, snake_marsh
+Ice:       ice, frost, snow, frozen, glacier, polar, penguin, yeti, bleached, white
+Lightning: lightning, thunder, storm, shock, electric, spark, wind, windwalker, bird, hawk, crow, raven, owl, parrot, pigeon, sparrow, finch, woodpecker, vulture, pterodactyl, archaeopteryx, bat, tetrabird
+```
+
+If no monster affinity can be resolved, the hit is neutral.
 
 ## Mob Affinity Config
 
-Example config:
+NPC affinity rules now live in `ElementalAffinityConfig`, so servers can add IDs that are not part of the default list without code changes.
+
+Rule formats:
+
+```text
+hint:partial_role_name=ELEMENT
+role:Exact_Role_ID=ELEMENT
+```
+
+Effectiveness override formats:
+
+```text
+hint:partial_role_name=ELEMENT:multiplier,ELEMENT:multiplier
+role:Exact_Role_ID=ELEMENT:multiplier,ELEMENT:multiplier
+```
+
+Example config entries:
 
 ```json
 {
-  "Zombie_Burnt": {
-    "FIRE": 0.50,
-    "ICE": 1.25,
-    "WATER": 1.15,
-    "VOID": 1.00
-  },
-  "Emberwulf": {
-    "FIRE": 0.25,
-    "ICE": 1.35,
-    "WATER": 1.20
-  },
-  "Cave_Rex": {
-    "LIGHTNING": 1.20,
-    "VOID": 0.85
-  }
+  "CUSTOM_ROLE_AFFINITIES": [
+    "role:Custom_Undead_Boss=VOID",
+    "hint:crystal_golem=ICE"
+  ],
+  "ELEMENT_MULTIPLIERS": [
+    "role:Zombie_Burnt=FIRE:0.60,WATER:0.45,ICE:0.45,LIGHTNING:0.45,LIFE:1.30,VOID:0.15",
+    "role:Emberwulf=FIRE:0.15,WATER:0.50,ICE:1.25,LIGHTNING:0.45,LIFE:0.50,VOID:0.50",
+    "hint:scarak=FIRE:1.30,WATER:0.55,ICE:0.45,LIGHTNING:0.50,LIFE:0.20,VOID:0.50"
+  ]
 }
 ```
+
+Scaraks are mapped as Life/insect targets by default, but have an explicit Fire weakness so fire affinity remains their natural counter.
 
 Suggested balance ranges:
 
 ```text
-Weakness: 1.15x to 1.35x
-Resistance: 0.65x to 0.85x
-Strong resistance: 0.35x to 0.50x
+Weakness: 1.15x to 1.30x
+Off-element partial resistance: 0.40x to 0.60x
+Same-element heavy resistance: 0.10x to 0.20x
 Neutral: 1.00x
 ```
 
@@ -150,6 +218,15 @@ Rules:
 ```text
 Selected filled socket + Resonant Essence support = reroll mutation element
 ```
+
+Implemented first-pass behavior:
+
+- Resonant Essence appears as an Essence Bench support material.
+- Processing with Resonant Essence requires a selected filled essence socket.
+- The socketed essence remains unchanged for stats and resonance recipes.
+- The socket mutation is stored separately in `SocketReforge.Socket.Mutations`.
+- The reroll picks a new affinity element from Fire, Ice, Lightning, Water, Life, or Void.
+- Empty, broken, or locked sockets cannot be mutated.
 
 Possible mutation results:
 

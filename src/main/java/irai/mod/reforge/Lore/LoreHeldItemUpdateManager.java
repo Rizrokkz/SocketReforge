@@ -13,6 +13,7 @@ import com.hypixel.hytale.server.core.inventory.Inventory;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.interaction.InteractionModule;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
@@ -98,20 +99,58 @@ public final class LoreHeldItemUpdateManager {
             return;
         }
 
-        ItemContainer container = resolveContainer(player, pending.sectionId);
-        if (container != null && pending.slot >= 0 && pending.slot < container.getCapacity()) {
-            ItemStack slotItem = safeGetItem(container, pending.slot);
-            if (itemIdsMatch(pending.baseItemId, safeItemId(slotItem))) {
-                ItemStack merged = mergeLoreMetadata(slotItem, pending.data);
-                if (merged != null && !merged.isEmpty()) {
-                    container.setItemStackForSlot(pending.slot, merged);
-                }
-                PENDING.remove(playerId);
-                return;
-            }
+        if (writePending(player, pending)) {
+            PENDING.remove(playerId);
+            return;
         }
 
         PENDING.remove(playerId);
+    }
+
+    public static void flushPendingOnDisconnect(PlayerRef playerRef) {
+        if (playerRef == null) {
+            return;
+        }
+        UUID playerId = playerRef.getUuid();
+        if (playerId == null) {
+            return;
+        }
+        PendingHeldItemUpdate pending = PENDING.get(playerId);
+        if (pending == null || pending.data == null) {
+            RECENT_BLOCKING_UNTIL.remove(playerId);
+            return;
+        }
+
+        Player player = null;
+        try {
+            player = playerRef.getComponent(Player.getComponentType());
+        } catch (Throwable ignored) {
+        }
+        if (player != null) {
+            writePending(player, pending);
+        }
+        PENDING.remove(playerId);
+        RECENT_BLOCKING_UNTIL.remove(playerId);
+    }
+
+    public static void clearPending(Player player, int sectionId, short slot, ItemStack itemStack) {
+        if (player == null) {
+            return;
+        }
+        UUID playerId = player.getUuid();
+        if (playerId == null) {
+            return;
+        }
+        PendingHeldItemUpdate pending = PENDING.get(playerId);
+        if (pending == null) {
+            return;
+        }
+        if (pending.sectionId == sectionId
+                && pending.slot == slot
+                && itemIdsMatch(pending.baseItemId, safeItemId(itemStack))) {
+            PENDING.remove(playerId);
+            RECENT_BLOCKING_UNTIL.remove(playerId);
+        }
     }
 
     private static PendingHeldItemUpdate getPending(Player player, PlayerInventoryUtils.HeldItemContext ctx) {
@@ -239,11 +278,34 @@ public final class LoreHeldItemUpdateManager {
             ItemStack current = safeGetItem(container, slot);
             ItemStack merged = data == null ? updated : mergeLoreMetadata(current, data);
             container.setItemStackForSlot(slot, merged == null ? updated : merged);
+            player.markNeedsSave();
             return;
         }
         ItemStack current = PlayerInventoryUtils.getSelectedHotbarItem(player);
         ItemStack merged = data == null ? updated : mergeLoreMetadata(current, data);
         PlayerInventoryUtils.setSelectedHotbarItem(player, merged == null ? updated : merged);
+        player.markNeedsSave();
+    }
+
+    private static boolean writePending(Player player, PendingHeldItemUpdate pending) {
+        if (player == null || pending == null || pending.data == null) {
+            return false;
+        }
+        ItemContainer container = resolveContainer(player, pending.sectionId);
+        if (container == null || pending.slot < 0 || pending.slot >= container.getCapacity()) {
+            return false;
+        }
+        ItemStack slotItem = safeGetItem(container, pending.slot);
+        if (!itemIdsMatch(pending.baseItemId, safeItemId(slotItem))) {
+            return false;
+        }
+        ItemStack merged = mergeLoreMetadata(slotItem, pending.data);
+        if (merged == null || merged.isEmpty()) {
+            return false;
+        }
+        container.setItemStackForSlot(pending.slot, merged);
+        player.markNeedsSave();
+        return true;
     }
 
     private static ItemStack mergeLoreMetadata(ItemStack base, LoreSocketData data) {

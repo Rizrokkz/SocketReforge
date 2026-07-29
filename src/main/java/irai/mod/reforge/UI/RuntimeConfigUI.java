@@ -20,6 +20,7 @@ import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Config.CrossModConfig;
+import irai.mod.reforge.Config.ElementalAffinityConfig;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Config.LoreMappingConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
@@ -49,6 +50,7 @@ public final class RuntimeConfigUI {
     private static final String LORE_CONFIG_NAME = "LoreConfig";
     private static final String LORE_MAPPING_CONFIG_NAME = "LoreMappingConfig";
     private static final String DAMAGE_NUMBER_CONFIG_NAME = "DamageNumberConfig";
+    private static final String ELEMENTAL_AFFINITY_CONFIG_NAME = "ElementalAffinityConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
@@ -57,6 +59,7 @@ public final class RuntimeConfigUI {
     private static final String CATEGORY_LORE = "lore";
     private static final String CATEGORY_LORE_MAPPING = "lore_mapping";
     private static final String CATEGORY_DAMAGE_NUMBERS = "damage_numbers";
+    private static final String CATEGORY_ELEMENTAL_AFFINITY = "elemental_affinity";
     private static final String GROUP_LORE_MAPPING_GEMS = "lore_mapping_gems";
     private static final String GROUP_LORE_MAPPING_SPIRITS = "lore_mapping_spirits";
     private static final String GROUP_LORE_MAPPING_ABILITIES = "lore_mapping_abilities";
@@ -66,6 +69,11 @@ public final class RuntimeConfigUI {
     private static final String GROUP_LOOT_NPC_AQUATIC_INJECTIONS = "loot_npc_aquatic_injections";
     private static final String GROUP_LOOT_NPC_FLYING_INJECTIONS = "loot_npc_flying_injections";
     private static final String GROUP_LOOT_NPC_VOID_INJECTIONS = "loot_npc_void_injections";
+    private static final String GROUP_AFFINITY_ROLE_RULES = "affinity_role_rules";
+    private static final String GROUP_AFFINITY_CUSTOM_RULES = "affinity_custom_role_rules";
+    private static final String GROUP_AFFINITY_MULTIPLIERS = "affinity_multipliers";
+    private static final String[] AFFINITY_MODES = {"hint", "role"};
+    private static final String[] AFFINITY_ELEMENTS = {"FIRE", "WATER", "ICE", "LIGHTNING", "LIFE", "VOID"};
     private static final String[] LORE_COLORS = {"black", "blue", "cyan", "green", "red", "white", "yellow"};
     private static final String[] LORE_TRIGGERS = {
             "ON_HIT", "ON_CRIT", "ON_KILL", "ON_DAMAGED", "ON_BLOCK", "ON_BLOCKED",
@@ -553,6 +561,7 @@ public final class RuntimeConfigUI {
             }
             registerLoreMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
             registerLootInjectionListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
+            registerAffinityMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
 
             pageBuilder = onDismiss.invoke(pageBuilder,
                     (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByServer) ->
@@ -800,6 +809,57 @@ public final class RuntimeConfigUI {
         }
     }
 
+    private static void registerAffinityMappingListeners(
+            Object pageBuilder,
+            Method addListener,
+            Object activating,
+            Object valueChanged,
+            Object validating,
+            ControlGroup activeGroup,
+            Player player,
+            ViewState state) throws Exception {
+        if (activeGroup == null || !isAffinityMappingGroup(activeGroup.id)) {
+            return;
+        }
+        if (isAffinityRuleGroup(activeGroup.id)) {
+            String[] entries = affinityRuleEntries(activeGroup.id);
+            addListener.invoke(pageBuilder, affinityRuleAddButtonId(activeGroup.id), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityRule(player, state, activeGroup.id));
+            for (int i = 0; i < entries.length; i++) {
+                int index = i;
+                addListener.invoke(pageBuilder, affinityRuleModeSelectId(activeGroup.id, index), valueChanged,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityRuleTargetInputId(activeGroup.id, index), state);
+                addListener.invoke(pageBuilder, affinityRuleTargetInputId(activeGroup.id, index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityRuleElementSelectId(activeGroup.id, index), valueChanged,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityRuleDeleteButtonId(activeGroup.id, index), activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityRule(player, state, activeGroup.id, index));
+            }
+            return;
+        }
+
+        String[] entries = elementalAffinityConfig().getElementMultipliers();
+        addListener.invoke(pageBuilder, affinityMultiplierAddButtonId(), activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityMultiplier(player, state));
+        for (int i = 0; i < entries.length; i++) {
+            int index = i;
+            addListener.invoke(pageBuilder, affinityMultiplierModeSelectId(index), valueChanged,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierTargetInputId(index), state);
+            addListener.invoke(pageBuilder, affinityMultiplierTargetInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
+            for (String element : AFFINITY_ELEMENTS) {
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierElementInputId(index, element), state);
+                addListener.invoke(pageBuilder, affinityMultiplierElementInputId(index, element), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
+            }
+            addListener.invoke(pageBuilder, affinityMultiplierDeleteButtonId(index), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityMultiplier(player, state, index));
+        }
+    }
+
     private static void handleReload(Player player, ViewState state) {
         try {
             plugin.getConfigService().reloadAll();
@@ -864,6 +924,11 @@ public final class RuntimeConfigUI {
         if (CATEGORY_DAMAGE_NUMBERS.equals(categoryId)) {
             damageNumberConfig().resetToDefaults();
             plugin.getConfigService().saveAndApply(DAMAGE_NUMBER_CONFIG_NAME);
+            return;
+        }
+        if (CATEGORY_ELEMENTAL_AFFINITY.equals(categoryId)) {
+            elementalAffinityConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
         }
     }
 
@@ -1067,6 +1132,93 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
+    private static void handleAddAffinityRule(Player player, ViewState state, String groupId) {
+        List<String> entries = mutableList(affinityRuleEntries(groupId));
+        entries.add("hint:new_npc=" + AFFINITY_ELEMENTS[0]);
+        setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteAffinityRule(Player player, ViewState state, String groupId, int index) {
+        List<String> entries = mutableList(affinityRuleEntries(groupId));
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleAffinityRuleChange(Player player, ViewState state, String groupId, int index, Object ctxObj) {
+        List<String> entries = mutableList(affinityRuleEntries(groupId));
+        if (index < 0 || index >= entries.size()) {
+            requestReopen(player, state);
+            return;
+        }
+        AffinityRuleEntry entry = parseAffinityRuleEntry(entries.get(index));
+        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityRuleModeSelectId(groupId, index), entry.mode()));
+        String target = draftOrContextValue(state, ctxObj, affinityRuleTargetInputId(groupId, index), entry.target()).trim();
+        String element = normalizeAffinityElement(draftOrContextValue(state, ctxObj, affinityRuleElementSelectId(groupId, index), entry.element()));
+        if (!target.isBlank()) {
+            entries.set(index, formatAffinityRuleEntry(new AffinityRuleEntry(mode, target, element)));
+            setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
+        }
+        clearAffinityRuleDrafts(state, groupId, index);
+        requestReopen(player, state);
+    }
+
+    private static void handleAddAffinityMultiplier(Player player, ViewState state) {
+        List<String> entries = mutableList(elementalAffinityConfig().getElementMultipliers());
+        entries.add("hint:new_npc=FIRE:1.0,WATER:1.0,ICE:1.0,LIGHTNING:1.0,LIFE:1.0,VOID:1.0");
+        elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteAffinityMultiplier(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(elementalAffinityConfig().getElementMultipliers());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleAffinityMultiplierChange(Player player, ViewState state, int index, Object ctxObj) {
+        String[] before = elementalAffinityConfig().getElementMultipliers();
+        if (index < 0 || index >= before.length) {
+            requestReopen(player, state);
+            return;
+        }
+        List<String> entries = mutableList(before);
+        AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries.get(index));
+        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(index), entry.mode()));
+        String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(index), entry.target()).trim();
+        Map<String, String> multipliers = new LinkedHashMap<>();
+        for (String element : AFFINITY_ELEMENTS) {
+            String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(index, element), entry.multipliers().getOrDefault(element, "")).trim();
+            if (!rawValue.isBlank()) {
+                multipliers.put(element, normalizeAffinityMultiplierText(rawValue, "1.0"));
+            }
+        }
+        if (!target.isBlank() && !multipliers.isEmpty()) {
+            entries.set(index, formatAffinityMultiplierEntry(new AffinityMultiplierEntry(mode, target, multipliers)));
+            elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
+        }
+        clearAffinityMultiplierDrafts(state, index);
+        requestReopen(player, state);
+    }
+
     private static int applyVisibleMappingInputs(ViewState state, ControlGroup activeGroup, Object ctxObj, List<String> configsToSave) {
         if (activeGroup == null) {
             return 0;
@@ -1086,7 +1238,58 @@ public final class RuntimeConfigUI {
         if (isLootInjectionGroup(activeGroup.id)) {
             return applyLootInjectionInputs(state, activeGroup.id, ctxObj, configsToSave);
         }
+        if (isAffinityMappingGroup(activeGroup.id)) {
+            return applyAffinityMappingInputs(state, activeGroup.id, ctxObj, configsToSave);
+        }
         return 0;
+    }
+
+    private static int applyAffinityMappingInputs(ViewState state, String groupId, Object ctxObj, List<String> configsToSave) {
+        if (isAffinityRuleGroup(groupId)) {
+            String[] before = affinityRuleEntries(groupId);
+            List<String> after = new ArrayList<>();
+            for (int i = 0; i < before.length; i++) {
+                AffinityRuleEntry entry = parseAffinityRuleEntry(before[i]);
+                String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityRuleModeSelectId(groupId, i), entry.mode()));
+                String target = draftOrContextValue(state, ctxObj, affinityRuleTargetInputId(groupId, i), entry.target()).trim();
+                String element = normalizeAffinityElement(draftOrContextValue(state, ctxObj, affinityRuleElementSelectId(groupId, i), entry.element()));
+                if (!target.isBlank()) {
+                    after.add(formatAffinityRuleEntry(new AffinityRuleEntry(mode, target, element)));
+                }
+                clearAffinityRuleDrafts(state, groupId, i);
+            }
+            if (java.util.Arrays.asList(before).equals(after)) {
+                return 0;
+            }
+            setAffinityRuleEntries(groupId, after.toArray(String[]::new));
+            addUniqueConfig(configsToSave, ELEMENTAL_AFFINITY_CONFIG_NAME);
+            return 1;
+        }
+
+        String[] before = elementalAffinityConfig().getElementMultipliers();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < before.length; i++) {
+            AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(before[i]);
+            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(i), entry.mode()));
+            String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(i), entry.target()).trim();
+            Map<String, String> multipliers = new LinkedHashMap<>();
+            for (String element : AFFINITY_ELEMENTS) {
+                String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(i, element), entry.multipliers().getOrDefault(element, "")).trim();
+                if (!rawValue.isBlank()) {
+                    multipliers.put(element, normalizeAffinityMultiplierText(rawValue, "1.0"));
+                }
+            }
+            if (!target.isBlank() && !multipliers.isEmpty()) {
+                after.add(formatAffinityMultiplierEntry(new AffinityMultiplierEntry(mode, target, multipliers)));
+            }
+            clearAffinityMultiplierDrafts(state, i);
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        elementalAffinityConfig().setElementMultipliers(after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, ELEMENTAL_AFFINITY_CONFIG_NAME);
+        return 1;
     }
 
     private static int applyLootInjectionInputs(ViewState state, String groupId, Object ctxObj, List<String> configsToSave) {
@@ -1720,6 +1923,8 @@ public final class RuntimeConfigUI {
             sb.append(buildLoreStatusCardsHtml(player));
         } else if (isLootInjectionGroup(group.id)) {
             sb.append(buildLootInjectionCardsHtml(player, group.id));
+        } else if (isAffinityMappingGroup(group.id)) {
+            sb.append(buildAffinityMappingCardsHtml(player, group.id));
         } else if ("refine_limits".equals(group.id)) {
             sb.append(buildRefineLimitsWithWeightCardsHtml(player, group, state));
         } else if (group.controls == null || group.controls.isEmpty()) {
@@ -1954,6 +2159,117 @@ public final class RuntimeConfigUI {
     private static void appendBlankAbilitySpacerCards(StringBuilder sb) {
         for (int i = 0; i < ABILITY_MAPPING_BOTTOM_SPACER_CARDS; i++) {
             sb.append("<div style=\"anchor-width:1040; anchor-height:42; padding:7; background-color:#101827; border-radius:3;\"></div>");
+        }
+    }
+
+    private static String buildAffinityMappingCardsHtml(Player player, String groupId) {
+        if (isAffinityRuleGroup(groupId)) {
+            return buildAffinityRuleCardsHtml(player, groupId);
+        }
+        return buildAffinityMultiplierCardsHtml(player);
+    }
+
+    private static String buildAffinityRuleCardsHtml(Player player, String groupId) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = affinityRuleEntries(groupId);
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
+                .append(escapeHtml(isCustomAffinityRuleGroup(groupId)
+                        ? tOrFallback(player, "ui.runtime_config.mapping_affinity_custom_title", "Custom Affinity Overrides")
+                        : tOrFallback(player, "ui.runtime_config.mapping_affinity_default_title", "Default Affinity Rules")))
+                .append("</p>");
+        sb.append("<button id=\"").append(affinityRuleAddButtonId(groupId))
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        if (entries == null || entries.length == 0) {
+            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_rules", "No affinity rule cards yet."));
+        } else {
+            for (int i = 0; i < entries.length; i++) {
+                AffinityRuleEntry entry = parseAffinityRuleEntry(entries[i]);
+                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
+                sb.append("<select id=\"").append(affinityRuleModeSelectId(groupId, i))
+                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
+                        .append(" style=\"anchor-width:90; anchor-height:26; background-color:#1b2332;\">")
+                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
+                sb.append("<input type=\"text\" id=\"").append(affinityRuleTargetInputId(groupId, i))
+                        .append("\" style=\"anchor-width:400; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.target())).append("\">");
+                sb.append("<select id=\"").append(affinityRuleElementSelectId(groupId, i))
+                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
+                        .append(" style=\"anchor-width:150; anchor-height:26; background-color:#1b2332;\">")
+                        .append(buildOptions(AFFINITY_ELEMENTS, entry.element())).append("</select>");
+                sb.append("<button id=\"").append(affinityRuleDeleteButtonId(groupId, i))
+                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+                sb.append("</div>");
+            }
+        }
+        appendBlankAffinitySpacerCards(sb, 1020, 42);
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildAffinityMultiplierCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = elementalAffinityConfig().getElementMultipliers();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
+                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_affinity_multiplier_title", "Per-Target Effectiveness")))
+                .append("</p>");
+        sb.append("<button id=\"").append(affinityMultiplierAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<div style=\"layout-mode:Top; spacing:2; anchor-width:1020; padding:7; background-color:#111b2b; border-radius:3;\">");
+        sb.append("<p style=\"font-size:11; color:#D8E2F0; white-space:wrap;\">")
+                .append(escapeHtml(tOrFallback(player,
+                        "ui.runtime_config.mapping_affinity_multiplier_help",
+                        "Multiplier guide: values above 1.0 mean the target is weak to that incoming element and takes more damage; values below 1.0 mean the target resists it and takes less damage; exactly 1.0 is neutral and keeps the hit as physical/white damage.")))
+                .append("</p>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; white-space:wrap;\">")
+                .append(escapeHtml(tOrFallback(player,
+                        "ui.runtime_config.mapping_affinity_multiplier_formula",
+                        "Damage delta is scaled by the weapon's socket affinity rate, so 0.90 is only a small resistance while 0.001 is near-immunity.")))
+                .append("</p>");
+        sb.append("</div>");
+        if (entries == null || entries.length == 0) {
+            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_multipliers", "No effectiveness cards yet."));
+        } else {
+            for (int i = 0; i < entries.length; i++) {
+                AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries[i]);
+                sb.append("<div style=\"layout-mode:Left; spacing:5; anchor-width:1020; anchor-height:62; padding:7; background-color:#172033; border-radius:3;\">");
+                sb.append("<select id=\"").append(affinityMultiplierModeSelectId(i))
+                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
+                        .append(" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332;\">")
+                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
+                sb.append("<input type=\"text\" id=\"").append(affinityMultiplierTargetInputId(i))
+                        .append("\" style=\"anchor-width:230; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.target())).append("\">");
+                for (String element : AFFINITY_ELEMENTS) {
+                    sb.append("<div style=\"layout-mode:Top; spacing:1; anchor-width:84;\">");
+                    sb.append("<p style=\"font-size:9; color:#9EA8B5; text-align:center;\">").append(escapeHtml(element)).append("</p>");
+                    sb.append("<input type=\"text\" id=\"").append(affinityMultiplierElementInputId(i, element))
+                            .append("\" style=\"anchor-width:78; anchor-height:24; background-color:#1b2332; padding:4;\" value=\"")
+                            .append(escapeHtml(entry.multipliers().getOrDefault(element, ""))).append("\">");
+                    sb.append("</div>");
+                }
+                sb.append("<button id=\"").append(affinityMultiplierDeleteButtonId(i))
+                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+                sb.append("</div>");
+            }
+        }
+        appendBlankAffinitySpacerCards(sb, 1020, 62);
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static void appendBlankAffinitySpacerCards(StringBuilder sb, int width, int height) {
+        for (int i = 0; i < 5; i++) {
+            sb.append("<div style=\"anchor-width:")
+                    .append(width)
+                    .append("; anchor-height:")
+                    .append(height)
+                    .append("; padding:7; background-color:#101827; border-radius:3;\"></div>");
         }
     }
 
@@ -2590,6 +2906,7 @@ public final class RuntimeConfigUI {
         addCategory(buildCrossModCategory());
         addCategory(buildLootCategory());
         addCategory(buildLoreCategory());
+        addCategory(buildElementalAffinityCategory());
         addCategory(buildDamageNumberCategory());
     }
 
@@ -2937,6 +3254,51 @@ public final class RuntimeConfigUI {
                 null);
     }
 
+    private static CategorySection buildElementalAffinityCategory() {
+        List<ControlGroup> groups = new ArrayList<>();
+
+        List<ControlEntry> core = new ArrayList<>();
+        core.add(toggleControl(
+                "affinity_enabled",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Enable elemental affinities",
+                "Applies weapon affinity damage modifiers against NPC elemental profiles.",
+                () -> elementalAffinityConfig().isEnabled(),
+                value -> elementalAffinityConfig().setEnabled(value)));
+        core.add(multiplierControl(
+                "affinity_weakness_multiplier",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Default weakness multiplier",
+                "Fallback multiplier when an attacking element counters the target affinity.",
+                () -> elementalAffinityConfig().getWeaknessMultiplier(),
+                delta -> elementalAffinityConfig().setWeaknessMultiplier(
+                        clamp(elementalAffinityConfig().getWeaknessMultiplier() + delta, 0.10, 10.0))));
+        core.add(multiplierControl(
+                "affinity_resistance_multiplier",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Same-element resistance multiplier",
+                "Fallback multiplier when attack and target affinities match. 0.10-0.20 heavily resists; 1.0 is neutral; above 1.0 is weakness.",
+                () -> elementalAffinityConfig().getResistanceMultiplier(),
+                delta -> elementalAffinityConfig().setResistanceMultiplier(
+                        clamp(elementalAffinityConfig().getResistanceMultiplier() + delta, 0.10, 10.0))));
+        groups.add(new ControlGroup("affinity_core", "Core Rules", "Global switches and fallback elemental effectiveness values.", core));
+
+        groups.add(new ControlGroup(GROUP_AFFINITY_ROLE_RULES, "Default Affinity Rules", "Rules used after custom overrides to resolve an NPC's base affinity.", List.of()));
+        groups.add(new ControlGroup(GROUP_AFFINITY_CUSTOM_RULES, "Custom Affinity Overrides", "Server-added NPC rules that win over default rules.", List.of()));
+        groups.add(new ControlGroup(GROUP_AFFINITY_MULTIPLIERS, "Per-Target Effectiveness", "Optional damage overrides by target hint or exact NPC role.", List.of()));
+
+        return new CategorySection(
+                CATEGORY_ELEMENTAL_AFFINITY,
+                "toggleElementalAffinityCategory",
+                "Elemental Affinity",
+                "NPC affinity matching and per-element damage modifiers.",
+                groups,
+                "Valid elements: FIRE, WATER, ICE, LIGHTNING, LIFE, VOID. Custom rules are checked before defaults.");
+    }
+
     private static CategorySection buildLoreCategory() {
         List<ControlGroup> groups = new ArrayList<>();
 
@@ -2972,14 +3334,9 @@ public final class RuntimeConfigUI {
         groups.add(new ControlGroup("lore_feeding", "Lore Feeding and Clearing", "Feed cadence, feed cost, and material item ID lists.", feeding));
 
         List<ControlEntry> bleed = new ArrayList<>();
-        bleed.add(chanceControl("lore_bleed_max_hp_pct", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed max HP per tick", "Percent of max HP dealt by bleed each tick.", () -> loreConfig().getBleedMaxHpPctPerTick(), delta -> loreConfig().setBleedMaxHpPctPerTick(clampChance(loreConfig().getBleedMaxHpPctPerTick() + delta))));
-        bleed.add(multiplierControl("lore_bleed_ramp", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed ramp per tick", "Additional bleed scaling each tick.", () -> loreConfig().getBleedRampPerTick(), delta -> loreConfig().setBleedRampPerTick(clamp(loreConfig().getBleedRampPerTick() + delta, 0.0, 10.0))));
-        bleed.add(chanceControl("lore_bleed_weapon_base_cap", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon base cap pct", "Optional cap based on weapon base damage. Zero disables this cap.", () -> loreConfig().getBleedWeaponBaseCapPct(), delta -> loreConfig().setBleedWeaponBaseCapPct(clampChance(loreConfig().getBleedWeaponBaseCapPct() + delta))));
-        bleed.add(chanceControl("lore_bleed_total_current_hp", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed total current HP pct", "Total current HP pressure applied by bleed.", () -> loreConfig().getBleedTotalCurrentHpPct(), delta -> loreConfig().setBleedTotalCurrentHpPct(clampChance(loreConfig().getBleedTotalCurrentHpPct() + delta))));
-        bleed.add(multiplierControl("lore_bleed_weapon_ref_base", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon reference base", "Reference weapon base used for bleed scaling.", () -> loreConfig().getBleedWeaponReferenceBase(), delta -> loreConfig().setBleedWeaponReferenceBase(clamp(loreConfig().getBleedWeaponReferenceBase() + (delta * 100.0), 1.0, 10000.0))));
-        bleed.add(multiplierControl("lore_bleed_weapon_scale_min", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon scale min", "Minimum weapon scaling multiplier for bleed.", () -> loreConfig().getBleedWeaponScaleMin(), delta -> loreConfig().setBleedWeaponScaleMin(clamp(loreConfig().getBleedWeaponScaleMin() + delta, 0.0, loreConfig().getBleedWeaponScaleMax()))));
-        bleed.add(multiplierControl("lore_bleed_weapon_scale_max", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon scale max", "Maximum weapon scaling multiplier for bleed.", () -> loreConfig().getBleedWeaponScaleMax(), delta -> loreConfig().setBleedWeaponScaleMax(clamp(loreConfig().getBleedWeaponScaleMax() + delta, loreConfig().getBleedWeaponScaleMin(), 20.0))));
-        groups.add(new ControlGroup("lore_bleed", "Lore Bleed Scaling", "Damage and boss-scaling knobs for bleed-style lore effects.", bleed));
+        bleed.add(multiplierControl("lore_bleed_ramp", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed ramp per tick", "Additional bleed distribution weight each tick. Bleed tick baseline comes from equipped Void essence output.", () -> loreConfig().getBleedRampPerTick(), delta -> loreConfig().setBleedRampPerTick(clamp(loreConfig().getBleedRampPerTick() + delta, 0.0, 10.0))));
+        bleed.add(chanceControl("lore_bleed_weapon_base_cap", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon base cap pct", "Optional per-tick cap based on weapon base damage. Zero disables this cap.", () -> loreConfig().getBleedWeaponBaseCapPct(), delta -> loreConfig().setBleedWeaponBaseCapPct(clampChance(loreConfig().getBleedWeaponBaseCapPct() + delta))));
+        groups.add(new ControlGroup("lore_bleed", "Lore Bleed Scaling", "Bleed ticks use Void elemental output from socketed essences, then apply ailment resistance and tick ramping.", bleed));
 
         groups.add(new ControlGroup(GROUP_LORE_STATUS_RULES, "Lore Status Rules", "Resistance, counter, and reapply rules for lore statuses.", List.of()));
         groups.addAll(buildLoreMappingGroups());
@@ -3216,6 +3573,10 @@ public final class RuntimeConfigUI {
 
     private static DamageNumberConfig damageNumberConfig() {
         return plugin.getDamageNumberRuntimeConfig();
+    }
+
+    private static ElementalAffinityConfig elementalAffinityConfig() {
+        return plugin.getElementalAffinityRuntimeConfig();
     }
 
     private static List<MaterialTier> getMaterialTierSnapshot() {
@@ -4165,6 +4526,15 @@ public final class RuntimeConfigUI {
         return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
     }
 
+    private static String normalizeAffinityMultiplierText(String raw, String fallback) {
+        Double parsed = extractFirstNumber(raw);
+        if (parsed == null) {
+            return fallback;
+        }
+        double value = clamp(parsed, 0.0d, 10.0d);
+        return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
+    }
+
     private static boolean containsOption(String[] values, String selected) {
         if (values == null || selected == null) {
             return false;
@@ -4192,6 +4562,139 @@ public final class RuntimeConfigUI {
         }
         return value;
     }
+
+    private static boolean isAffinityMappingGroup(String groupId) {
+        return isAffinityRuleGroup(groupId) || GROUP_AFFINITY_MULTIPLIERS.equals(groupId);
+    }
+
+    private static boolean isAffinityRuleGroup(String groupId) {
+        return GROUP_AFFINITY_ROLE_RULES.equals(groupId) || isCustomAffinityRuleGroup(groupId);
+    }
+
+    private static boolean isCustomAffinityRuleGroup(String groupId) {
+        return GROUP_AFFINITY_CUSTOM_RULES.equals(groupId);
+    }
+
+    private static String[] affinityRuleEntries(String groupId) {
+        return isCustomAffinityRuleGroup(groupId)
+                ? elementalAffinityConfig().getCustomRoleAffinities()
+                : elementalAffinityConfig().getRoleAffinities();
+    }
+
+    private static void setAffinityRuleEntries(String groupId, String[] entries) {
+        if (isCustomAffinityRuleGroup(groupId)) {
+            elementalAffinityConfig().setCustomRoleAffinities(entries);
+        } else {
+            elementalAffinityConfig().setRoleAffinities(entries);
+        }
+    }
+
+    private static AffinityRuleEntry parseAffinityRuleEntry(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new AffinityRuleEntry("hint", "", AFFINITY_ELEMENTS[0]);
+        }
+        String[] split = raw.trim().split("=", 2);
+        String key = split[0].trim();
+        String element = split.length > 1 ? normalizeAffinityElement(split[1]) : AFFINITY_ELEMENTS[0];
+        String mode = "hint";
+        if (key.regionMatches(true, 0, "role:", 0, 5)) {
+            mode = "role";
+            key = key.substring(5).trim();
+        } else if (key.regionMatches(true, 0, "id:", 0, 3)) {
+            mode = "role";
+            key = key.substring(3).trim();
+        } else if (key.regionMatches(true, 0, "hint:", 0, 5)) {
+            key = key.substring(5).trim();
+        }
+        return new AffinityRuleEntry(mode, key, element);
+    }
+
+    private static String formatAffinityRuleEntry(AffinityRuleEntry entry) {
+        String mode = normalizeAffinityMode(entry.mode());
+        String target = entry.target() == null ? "" : entry.target().trim();
+        String element = normalizeAffinityElement(entry.element());
+        return mode + ":" + target + "=" + element;
+    }
+
+    private static AffinityMultiplierEntry parseAffinityMultiplierEntry(String raw) {
+        AffinityRuleEntry key = parseAffinityRuleEntry(raw);
+        Map<String, String> multipliers = new LinkedHashMap<>();
+        if (raw != null && raw.contains("=")) {
+            String values = raw.substring(raw.indexOf('=') + 1);
+            for (String part : values.split(",")) {
+                String[] pair = part.split(":", 2);
+                if (pair.length != 2) {
+                    continue;
+                }
+                String element = normalizeAffinityElement(pair[0]);
+                String multiplier = normalizeAffinityMultiplierText(pair[1], "1.0");
+                multipliers.put(element, multiplier);
+            }
+        }
+        return new AffinityMultiplierEntry(key.mode(), key.target(), multipliers);
+    }
+
+    private static String formatAffinityMultiplierEntry(AffinityMultiplierEntry entry) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(normalizeAffinityMode(entry.mode()))
+                .append(":")
+                .append(entry.target() == null ? "" : entry.target().trim())
+                .append("=");
+        boolean first = true;
+        for (String element : AFFINITY_ELEMENTS) {
+            String value = entry.multipliers().get(element);
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append(element).append(":").append(normalizeAffinityMultiplierText(value, "1.0"));
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    private static String normalizeAffinityMode(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return "role".equals(normalized) || "id".equals(normalized) ? "role" : "hint";
+    }
+
+    private static String normalizeAffinityElement(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        return containsOption(AFFINITY_ELEMENTS, normalized) ? normalized : AFFINITY_ELEMENTS[0];
+    }
+
+    private static void clearAffinityRuleDrafts(ViewState state, String groupId, int index) {
+        if (state == null) {
+            return;
+        }
+        state.draftValues.remove(affinityRuleModeSelectId(groupId, index));
+        state.draftValues.remove(affinityRuleTargetInputId(groupId, index));
+        state.draftValues.remove(affinityRuleElementSelectId(groupId, index));
+    }
+
+    private static void clearAffinityMultiplierDrafts(ViewState state, int index) {
+        if (state == null) {
+            return;
+        }
+        state.draftValues.remove(affinityMultiplierModeSelectId(index));
+        state.draftValues.remove(affinityMultiplierTargetInputId(index));
+        for (String element : AFFINITY_ELEMENTS) {
+            state.draftValues.remove(affinityMultiplierElementInputId(index, element));
+        }
+    }
+
+    private static String affinityRuleAddButtonId(String groupId) { return "affinityRuleAdd_" + groupId; }
+    private static String affinityRuleModeSelectId(String groupId, int index) { return "affinityRuleMode_" + groupId + "_" + index; }
+    private static String affinityRuleTargetInputId(String groupId, int index) { return "affinityRuleTarget_" + groupId + "_" + index; }
+    private static String affinityRuleElementSelectId(String groupId, int index) { return "affinityRuleElement_" + groupId + "_" + index; }
+    private static String affinityRuleDeleteButtonId(String groupId, int index) { return "affinityRuleDelete_" + groupId + "_" + index; }
+    private static String affinityMultiplierAddButtonId() { return "affinityMultiplierAdd"; }
+    private static String affinityMultiplierModeSelectId(int index) { return "affinityMultiplierMode_" + index; }
+    private static String affinityMultiplierTargetInputId(int index) { return "affinityMultiplierTarget_" + index; }
+    private static String affinityMultiplierElementInputId(int index, String element) { return "affinityMultiplier_" + element + "_" + index; }
+    private static String affinityMultiplierDeleteButtonId(int index) { return "affinityMultiplierDelete_" + index; }
 
     private static boolean isLootInjectionGroup(String groupId) {
         return GROUP_LOOT_CHEST_INJECTIONS.equals(groupId)
@@ -4426,6 +4929,8 @@ public final class RuntimeConfigUI {
     private record StatusResistanceEntry(String npcId, String status, String value) {}
     private record StatusCounterEntry(String npcId, String status) {}
     private record LootRuleEntry(String itemId, String chance, String min, String max, String targetId) {}
+    private record AffinityRuleEntry(String mode, String target, String element) {}
+    private record AffinityMultiplierEntry(String mode, String target, Map<String, String> multipliers) {}
 
     private static double computeDelta(DisplayKind kind, double current, double target) {
         if (kind == DisplayKind.TOGGLE) {

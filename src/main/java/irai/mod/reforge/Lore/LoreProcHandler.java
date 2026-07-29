@@ -69,8 +69,14 @@ import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Common.ElementalAffinityUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
+import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.LangLoader;
 
 import it.unimi.dsi.fastutil.Pair;
@@ -123,6 +129,7 @@ public final class LoreProcHandler {
     private static final long BLEED_BASE_DURATION_MS = 3000L;
     private static final double BLEED_RAMP_PER_TICK = 0.08d;
     private static final double BLEED_BASE_MAX_HP_PCT = 0.005d;
+    private static final double BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER = 1.0d;
     private static final long DRAIN_DOT_TICK_MS = 300L;
     private static final long DRAIN_BASE_DURATION_MS = 3000L;
     private static final long BURN_DOT_TICK_MS = 1000L;
@@ -886,6 +893,10 @@ public final class LoreProcHandler {
                 continue;
             }
             result.eligible.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
+            if (!canAttemptEffect(store, damage, resolved, socket.getLevel(), socket.getFeedTier(),
+                    selfIsAttacker, selfRef, otherRef)) {
+                continue;
+            }
             if (!tryProc(playerId, spiritId, resolved, socket.getFeedTier())) {
                 continue;
             }
@@ -1270,6 +1281,9 @@ public final class LoreProcHandler {
                         "spirit", spiritId);
                 continue;
             }
+            if (!canAttemptEffect(store, damage, ability, maxLevel, 0, selfIsAttacker, selfRef, otherRef)) {
+                continue;
+            }
             if (!tryProc(playerId, spiritId, ability, 0)) {
                 continue;
             }
@@ -1326,6 +1340,67 @@ public final class LoreProcHandler {
         applyAbsorbedInternal(store, self, selfRef, otherRef, damage,
                 LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer);
         return changed;
+    }
+
+    private static boolean canAttemptEffect(Store<EntityStore> store,
+                                            Damage damage,
+                                            LoreAbility ability,
+                                            int level,
+                                            int feedTier,
+                                            boolean selfIsAttacker,
+                                            Ref<EntityStore> selfRef,
+                                            Ref<EntityStore> otherRef) {
+        if (store == null || ability == null) {
+            return false;
+        }
+        int safeFeedTier = Math.max(0, feedTier);
+        double value = Math.max(0.0d, ability.getValueForLevel(level));
+        float amount = (float) value;
+        Ref<EntityStore> opponentRef = otherRef;
+        Ref<EntityStore> attackerRef = selfIsAttacker ? selfRef : opponentRef;
+        Ref<EntityStore> defenderRef = selfIsAttacker ? opponentRef : selfRef;
+
+        return switch (ability.getEffectType()) {
+            case DAMAGE_TARGET, APPLY_SHOCK, APPLY_SLOW, APPLY_WEAKNESS, APPLY_BLIND,
+                    APPLY_ROOT, APPLY_FEAR, VORTEXSTRIKE, MULTI_HIT, CRIT_CHARGE,
+                    CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE, CHARGE_ATTACK,
+                    OMNISLASH, OCTASLASH, PUMMEL, BLOOD_RUSH -> opponentRef != null;
+            case DAMAGE_ATTACKER -> attackerRef != null;
+            case HEAL_SELF, HEAL_SELF_OVER_TIME, HEAL_AREA, HEAL_AREA_OVER_TIME,
+                    LIFESTEAL, APPLY_HASTE, APPLY_INVISIBLE, APPLY_SHIELD,
+                    SUMMON_WOLF_PACK -> selfRef != null;
+            case HEAL_DEFENDER -> defenderRef != null;
+            case APPLY_BURN -> opponentRef != null
+                    && resolveNpcAilmentMultiplier(store, opponentRef, "burn") > 0.0d
+                    && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "burn");
+            case APPLY_POISON -> opponentRef != null
+                    && resolveNpcAilmentMultiplier(store, opponentRef, "poison") > 0.0d
+                    && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "poison");
+            case DRAIN_LIFE -> opponentRef != null
+                    && resolveNpcAilmentMultiplier(store, opponentRef, "drain") > 0.0d;
+            case APPLY_FREEZE -> opponentRef != null
+                    && scaleAilmentDuration(
+                            resolveStunFreezeDurationMs(value, safeFeedTier),
+                            resolveNpcAilmentMultiplier(store, opponentRef, "freeze")) > 0L
+                    && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "freeze");
+            case APPLY_STUN -> opponentRef != null
+                    && scaleAilmentDuration(
+                            resolveStunFreezeDurationMs(value, safeFeedTier),
+                            resolveNpcAilmentMultiplier(store, opponentRef, "stun")) > 0L
+                    && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "stun");
+            case APPLY_BLEED -> {
+                Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
+                float bleedDamageBase = selfIsAttacker && damage != null && damage.getAmount() > 0f
+                        ? damage.getAmount()
+                        : amount;
+                yield opponentRef != null
+                        && resolveNpcAilmentMultiplier(store, opponentRef, "bleed") > 0.0d
+                        && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "bleed")
+                        && calculateElementalEssenceBleedDamage(store, bleedSource, opponentRef, bleedDamageBase, safeFeedTier) > 0f;
+            }
+            case DOUBLE_CAST -> opponentRef != null;
+            case BERSERK -> true;
+        };
     }
 
     private static boolean tryProc(UUID playerId, String spiritId, LoreAbility ability, int feedTier) {
@@ -1584,8 +1659,11 @@ public final class LoreProcHandler {
             case APPLY_BLEED -> {
                 double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "bleed");
                 Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
-                boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, damageAmount, safeFeedTier,
-                        ailmentMultiplier);
+                float bleedDamageBase = selfIsAttacker && damage != null && damage.getAmount() > 0f
+                        ? damage.getAmount()
+                        : damageAmount;
+                boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, bleedDamageBase,
+                        safeFeedTier, ailmentMultiplier);
                 if (!bleedApplied) {
                     break;
                 }
@@ -5031,6 +5109,24 @@ public final class LoreProcHandler {
         return blocked >= required;
     }
 
+    private static boolean canAttemptBossCounterAilmentReadOnly(Store<EntityStore> store,
+                                                                Ref<EntityStore> targetRef,
+                                                                String ailmentKey) {
+        if (targetRef == null) {
+            return false;
+        }
+        if (ailmentKey == null || ailmentKey.isBlank()) {
+            return true;
+        }
+        if (!isBossCounterNpc(store, targetRef, ailmentKey)) {
+            return true;
+        }
+        if (isBossCounterAilmentActive(store, targetRef, ailmentKey)) {
+            return false;
+        }
+        return canAttemptBossCounterAilment(store, targetRef, ailmentKey);
+    }
+
     private static void recordBlockedBossCounterAilment(Store<EntityStore> store,
                                                         Ref<EntityStore> targetRef,
                                                         String ailmentKey) {
@@ -5548,7 +5644,7 @@ public final class LoreProcHandler {
     private static boolean applyBleedOverTime(Store<EntityStore> store,
                                               Ref<EntityStore> sourceRef,
                                               Ref<EntityStore> targetRef,
-                                              float totalAmount,
+                                              float damageOutput,
                                               int feedTier,
                                               double ailmentMultiplier) {
         if (store == null || targetRef == null || ailmentMultiplier <= 0.0d) {
@@ -5564,18 +5660,6 @@ public final class LoreProcHandler {
         double bleedRampPerTick = loreConfig != null
                 ? loreConfig.getBleedRampPerTick()
                 : BLEED_RAMP_PER_TICK;
-        double bleedTotalCurrentHpPct = loreConfig != null
-                ? loreConfig.getBleedTotalCurrentHpPct()
-                : 0.0005d;
-        double bleedWeaponReferenceBase = loreConfig != null
-                ? loreConfig.getBleedWeaponReferenceBase()
-                : 200.0d;
-        double bleedWeaponScaleMin = loreConfig != null
-                ? loreConfig.getBleedWeaponScaleMin()
-                : 0.75d;
-        double bleedWeaponScaleMax = loreConfig != null
-                ? loreConfig.getBleedWeaponScaleMax()
-                : 1.50d;
         double bleedWeaponBaseCapPct = loreConfig != null
                 ? loreConfig.getBleedWeaponBaseCapPct()
                 : 0.0d;
@@ -5583,20 +5667,8 @@ public final class LoreProcHandler {
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
 
-        float totalBleed = 0f;
-        float currentHealth = LoreDamageUtils.resolveCurrentHealth(store, targetRef);
-        if (currentHealth > 0f && bleedTotalCurrentHpPct > 0.0d) {
-            totalBleed = currentHealth * (float) bleedTotalCurrentHpPct;
-            float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
-            if (weaponBase > 0f) {
-                double weaponScale = Math.sqrt(Math.max(0.0d, weaponBase) / Math.max(1.0d, bleedWeaponReferenceBase));
-                weaponScale = Math.max(bleedWeaponScaleMin, Math.min(bleedWeaponScaleMax, weaponScale));
-                totalBleed *= (float) weaponScale;
-            }
-            totalBleed = (float) LoreAbility.scaleEffectValue(totalBleed, feedTier);
-        } else if (totalAmount > 0f) {
-            totalBleed = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
-        }
+        float elementalBleedPerTick = calculateElementalEssenceBleedDamage(store, sourceRef, targetRef, damageOutput, feedTier);
+        float totalBleed = elementalBleedPerTick * ticks;
         totalBleed *= (float) ailmentMultiplier;
         if (totalBleed <= 0f) {
             return false;
@@ -5637,6 +5709,53 @@ public final class LoreProcHandler {
                     delay, TimeUnit.MILLISECONDS);
         }
         return true;
+    }
+
+    private static float calculateElementalEssenceBleedDamage(Store<EntityStore> store,
+                                                              Ref<EntityStore> sourceRef,
+                                                              Ref<EntityStore> targetRef,
+                                                              float damageOutput,
+                                                              int feedTier) {
+        if (store == null || sourceRef == null) {
+            return 0f;
+        }
+        Player player = store.getComponent(sourceRef, Player.getComponentType());
+        if (player == null) {
+            return 0f;
+        }
+        ItemStack weapon = PlayerInventoryUtils.getHeldItem(player);
+        if (weapon == null || weapon.isEmpty() || !ReforgeEquip.isWeapon(weapon)) {
+            return 0f;
+        }
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        if (socketData == null || socketData.getSockets().isEmpty()) {
+            return 0f;
+        }
+
+        float weaponDamageOutput = damageOutput > 0f
+                ? damageOutput
+                : LoreDamageUtils.resolveWeaponRefinedDamage(store, sourceRef, 0f);
+        if (weaponDamageOutput <= 0f) {
+            return 0f;
+        }
+
+        double elementalDamage = 0.0d;
+        for (WeaponElementalDamageUtils.ElementDamage elementDamage :
+                WeaponElementalDamageUtils.calculateElementDamage(socketData, weaponDamageOutput)) {
+            if (elementDamage.type() == null || elementDamage.damage() <= 0.0d) {
+                continue;
+            }
+            double effectivenessMultiplier = ElementalAffinityUtils.effectivenessMultiplier(
+                    elementDamage.type(),
+                    store,
+                    targetRef);
+            elementalDamage += elementDamage.damage() * effectivenessMultiplier;
+        }
+        if (elementalDamage <= 0.0d) {
+            return 0f;
+        }
+        double perTickDamage = elementalDamage * BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER;
+        return (float) LoreAbility.scaleEffectValue(perTickDamage, feedTier);
     }
 
     private static void scheduleBleedExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {

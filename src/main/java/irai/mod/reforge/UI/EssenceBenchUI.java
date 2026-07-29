@@ -363,7 +363,7 @@ public final class EssenceBenchUI {
             if (isEssenceItem(itemId)) {
                 essences.add(entry);
             }
-            if (isVoidheartItem(itemId) || isHammerItem(itemId) || isCompletedRecipeSupport(stack)) {
+            if (isVoidheartItem(itemId) || isHammerItem(itemId) || isMutationSupportItem(itemId) || isCompletedRecipeSupport(stack)) {
                 voidhearts.add(entry);
             }
         }
@@ -392,6 +392,10 @@ public final class EssenceBenchUI {
 
     private static boolean isHammerItem(String itemId) {
         return isIronHammerItem(itemId) || isThoriumHammerItem(itemId);
+    }
+
+    private static boolean isMutationSupportItem(String itemId) {
+        return itemId != null && RESONANT_ESSENCE_ID.equalsIgnoreCase(itemId);
     }
 
     private static boolean isCompletedRecipeSupport(ItemStack stack) {
@@ -1340,14 +1344,17 @@ public final class EssenceBenchUI {
 	        if (isVoidheartItem(itemId)) {
 	            return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_voidheart");
 	        }
-	        if (isHammerItem(itemId)) {
-	            return isThoriumHammerItem(itemId)
-	                    ? LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_thorium_hammer")
-	                    : LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_hammer");
-	        }
-	        if (entry.item != null && ResonantRecipeUtils.isResonantRecipeItem(entry.item)) {
-	            return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_recipe");
-	        }
+        if (isHammerItem(itemId)) {
+            return isThoriumHammerItem(itemId)
+                    ? LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_thorium_hammer")
+                    : LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_hammer");
+        }
+        if (isMutationSupportItem(itemId)) {
+            return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_resonant_mutation");
+        }
+        if (entry.item != null && ResonantRecipeUtils.isResonantRecipeItem(entry.item)) {
+            return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_recipe");
+        }
 	        return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_support");
 	    }
 
@@ -1426,7 +1433,9 @@ public final class EssenceBenchUI {
                     ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_clear")
                     : (isVoidheartItem(entry.itemId)
                     ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_repair")
-                    : "");
+                    : (isMutationSupportItem(entry.itemId)
+                    ? " " + LangLoader.getUITranslation(player, "ui.essence_bench.support_suffix_mutate")
+                    : ""));
             if (suffix.isEmpty() && ResonantRecipeUtils.isResonantRecipeItem(entry.item)) {
                 ResonantRecipeUtils.UsageState usage = ResonantRecipeUtils.getUsageState(entry.item);
                 String usageLabel = ResonantRecipeUtils.formatUsages(usage);
@@ -1977,10 +1986,14 @@ public final class EssenceBenchUI {
         if (selectedSupport != null && isHammerItem(selectedSupport.itemId)) {
             return false;
         }
+        if (selectedSupport != null && isMutationSupportItem(selectedSupport.itemId)) {
+            return !canMutateSelectedSlot(equipment, selectedSupport, slotKey);
+        }
         if (essenceKey == null || essenceKey.isEmpty()) {
             return !canRepairWithoutEssence(equipment, selectedSupport)
                     && !canAutoSocketWithRecipe(equipment, selectedSupport)
-                    && !canRepairSelectedSlot(equipment, selectedSupport, slotKey);
+                    && !canRepairSelectedSlot(equipment, selectedSupport, slotKey)
+                    && !canMutateSelectedSlot(equipment, selectedSupport, slotKey);
         }
         return isFilled(equipment);
     }
@@ -2005,6 +2018,17 @@ public final class EssenceBenchUI {
         if (slotIndex < 0) return false;
         Socket target = findSocketByIndex(sd, slotIndex);
         return target != null && target.isBroken();
+    }
+
+    private static boolean canMutateSelectedSlot(Entry equipment, Entry support, String slotKey) {
+        if (equipment == null || support == null) return false;
+        if (!isMutationSupportItem(support.itemId)) return false;
+        SocketData sd = SocketManager.getSocketData(equipment.item);
+        if (sd == null || sd.getSockets().isEmpty()) return false;
+        int slotIndex = resolveSlotIndex(slotKey, sd);
+        if (slotIndex < 0) return false;
+        Socket target = findSocketByIndex(sd, slotIndex);
+        return target != null && !target.isBroken() && !target.isLocked() && !target.isEmpty();
     }
 
     private static boolean canAutoSocketWithRecipe(Entry equipment, Entry support) {
@@ -2062,6 +2086,8 @@ public final class EssenceBenchUI {
         String backgroundIcon = isBroken ? resolveBrokenSocketIconName() : (visible ? "socket_empty.png" : "slot_bg.png");
         String overlayIcon = (visible && isFilled && !isBroken) ? resolveEssenceIconName(socket) : null;
         String colorKey = socketPreviewColorKey(socket, visible, isBroken, isFilled);
+        String badgeColor = UISocketVisualUtils.socketAffinityBadgeColor(socket);
+        boolean badgeVisible = visible && UISocketVisualUtils.socketAffinityBadgeVisible(socket);
 
         sb.append("<button id=\"")
                 .append(socketPreviewButtonId(slotIndex))
@@ -2097,6 +2123,7 @@ public final class EssenceBenchUI {
                     .append(";\"/>")
                     .append("<div style=\"flex-weight:1;\"></div></div>")
                     .append("<div style=\"flex-weight:1;\"></div></div>")
+                    .append(affinityBadgeHtml(socketPreviewAffinityBadgeId(slotIndex, key), badgeColor, badgeVisible, 16, 3))
                     .append("</div>")
                     .append("<div style=\"flex-weight:1;\"></div></div>")
                     .append("<div style=\"flex-weight:1;\"></div>")
@@ -2122,6 +2149,33 @@ public final class EssenceBenchUI {
     private static String socketPreviewColorLayerStyle(String color, boolean visible) {
         return "anchor-width:103; anchor-height:103; background-color:" + color
                 + "; layout-mode:top; padding:4; visibility:" + (visible ? "shown" : "hidden") + ";";
+    }
+
+    private static String affinityBadgeHtml(String id, String color, boolean visible, int size, int inset) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"layout-mode:top;\">")
+                .append("<div style=\"anchor-height:").append(inset).append(";\"></div>")
+                .append("<div style=\"layout-mode:left;\">")
+                .append("<div style=\"flex-weight:1;\"></div>")
+                .append("<div");
+        if (id != null && !id.isBlank()) {
+            sb.append(" id=\"").append(id).append("\"");
+        }
+        sb.append(" style=\"")
+                .append(affinityBadgeStyle(color, visible, size))
+                .append("\"></div>")
+                .append("<div style=\"anchor-width:").append(inset).append(";\"></div>")
+                .append("</div>")
+                .append("<div style=\"flex-weight:1;\"></div>")
+                .append("</div>");
+        return sb.toString();
+    }
+
+    private static String affinityBadgeStyle(String color, boolean visible, int size) {
+        return "anchor-width:" + size
+                + "; anchor-height:" + size
+                + "; background-color:" + (color == null || color.isBlank() ? "#00000000" : color)
+                + "; border:0; visibility:" + (visible ? "shown" : "hidden") + ";";
     }
 
     private static String socketEssenceAccentColor(Socket socket, boolean visible, boolean broken, boolean filled) {
@@ -2200,6 +2254,8 @@ public final class EssenceBenchUI {
             String backgroundIcon = isBroken ? resolveBrokenSocketIconName() : (visible ? "socket_empty.png" : "slot_bg.png");
             String overlayIcon = (visible && isFilled && !isBroken) ? resolveEssenceIconName(socket) : null;
             String colorKey = socketPreviewColorKey(socket, visible, isBroken, isFilled);
+            String badgeColor = UISocketVisualUtils.socketAffinityBadgeColor(socket);
+            boolean badgeVisible = visible && UISocketVisualUtils.socketAffinityBadgeVisible(socket);
             HyUIEditUtils.editVisible(ctxObj, socketPreviewButtonId(i), visible);
             HyUIEditUtils.editVisible(ctxObj, socketPreviewWrapId(i), visible);
             HyUIEditUtils.editStyle(ctxObj, socketPreviewWrapId(i), socketPreviewWrapStyle(selected, visible));
@@ -2211,6 +2267,8 @@ public final class EssenceBenchUI {
                 HyUIEditUtils.editImage(ctxObj, socketPreviewBackgroundId(i, key), backgroundIcon);
                 HyUIEditUtils.editImage(ctxObj, socketPreviewOverlayId(i, key), overlayIcon != null ? overlayIcon : backgroundIcon);
                 HyUIEditUtils.editVisible(ctxObj, socketPreviewOverlayId(i, key), layerVisible && overlayIcon != null);
+                HyUIEditUtils.editStyle(ctxObj, socketPreviewAffinityBadgeId(i, key), affinityBadgeStyle(badgeColor, badgeVisible && layerVisible, 16));
+                HyUIEditUtils.editVisible(ctxObj, socketPreviewAffinityBadgeId(i, key), badgeVisible && layerVisible);
             }
         }
     }
@@ -2328,6 +2386,39 @@ public final class EssenceBenchUI {
             return new ProcessResult(t(player, "ui.essence_bench.error_no_sockets"), 0);
         }
         int selectedSlot = resolveSlotIndex(slotKey, socketData);
+
+        if (support != null && isMutationSupportItem(support.itemId)) {
+            if (selectedSlot < 0) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_mutation_pick_slot"), 0);
+            }
+            Socket target = findSocketByIndex(socketData, selectedSlot);
+            if (target == null) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_invalid"), 0);
+            }
+            if (target.isBroken()) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_broken"), 100);
+            }
+            if (target.isLocked()) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_slot_locked"), 100);
+            }
+            if (target.isEmpty()) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_mutation_filled_slot"), 100);
+            }
+            if (!consumeMaterial(player, support, 1)) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_mutation_support_changed"), 0);
+            }
+            Essence.Type mutationType = SocketManager.rerollSocketMutation(socketData, selectedSlot);
+            if (mutationType == null) {
+                return new ProcessResult(t(player, "ui.essence_bench.error_mutation_failed"), 0);
+            }
+            ItemStack updated = SocketManager.withSocketData(item, socketData);
+            writeStack(player, equipment, updated);
+            socketData.registerTooltips(updated, updated.getItemId(), isWeapon);
+            DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
+            sfxConfig.playSuccess(player);
+            return new ProcessResult(t(player, "ui.essence_bench.status_socket_mutated",
+                    selectedSlot + 1, formatEssenceTypeName(player, mutationType.name())), 100);
+        }
 
         // Hammer support action: clear all socketed essences (broken sockets remain broken).
         if (support != null && isHammerItem(support.itemId)) {
@@ -3327,6 +3418,10 @@ public final class EssenceBenchUI {
 
     private static String socketPreviewOverlayId(int slotIndex, String colorKey) {
         return "socketPreviewOverlay_" + slotIndex + "_" + colorKey;
+    }
+
+    private static String socketPreviewAffinityBadgeId(int slotIndex, String colorKey) {
+        return "socketPreviewAffinity_" + slotIndex + "_" + colorKey;
     }
 
     private static Object getStore(PlayerRef playerRef) throws Exception {

@@ -6,7 +6,7 @@ public class EssenceEffect {
         // Offensive
         ATTACK_SPEED, DAMAGE, CRIT_CHANCE, CRIT_DAMAGE,
         // Defensive
-        HEALTH, DEFENSE, EVASION, REGENERATION, FIRE_DEFENSE,
+        HEALTH, DEFENSE, EVASION, REGENERATION, FIRE_DEFENSE, BLOCK_CHANCE,
         // Utility
         LIFE_STEAL, MOVEMENT_SPEED, LUCK
     }
@@ -34,7 +34,7 @@ public class EssenceEffect {
     public String getDisplayLine(String essenceName) {
         String sign   = value >= 0 ? "+" : "";
         String suffix = type == EffectType.PERCENTAGE ? "%" : "";
-        String label  = stat.name().replace("_", " ");
+        String label  = stat == StatType.FIRE_DEFENSE ? "FIRE RESISTANCE" : stat.name().replace("_", " ");
         return sign + (int) value + suffix + " " + label + " (" + essenceName + ")";
     }
 }

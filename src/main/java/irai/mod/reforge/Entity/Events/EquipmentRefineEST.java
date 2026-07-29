@@ -23,7 +23,9 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -33,6 +35,7 @@ import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Util.DamageNumberFormatter;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 
 
@@ -45,6 +48,9 @@ public class EquipmentRefineEST extends DamageEventSystem {
     public static final MetaKey<Boolean> META_SKIP_REFORGE =
             Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
                     "socketreforge:skip_reforge", Codec.BOOLEAN);
+    public static final MetaKey<String> META_WEAPON_ELEMENTAL_DAMAGE =
+            Damage.META_REGISTRY.registerMetaObject(d -> "", false,
+                    "socketreforge:weapon_elemental_damage", Codec.STRING);
 
     // Refinement config - will be injected from plugin
     private RefinementConfig refinementConfig;
@@ -113,9 +119,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
-        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
-            return;
-        }
+        boolean loreDamage = Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
 
         // Get target (entity receiving damage)
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
@@ -129,7 +133,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
         Ref<EntityStore> attackerRef = entitySource.getRef();
         LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
         LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
-        boolean skipRefine = Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
+        boolean skipRefine = loreDamage || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
 
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
         if (!skipRefine) {
@@ -146,7 +150,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     double socketFlat = calculateSocketFlatDamage(weapon);
                     double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
                     double partsMultiplier = getPartsDamageMultiplier(weapon);
-                    int voidTier = getEssenceTier(weapon, Essence.Type.VOID);
+                    int voidTier = getRawEssenceTier(weapon, Essence.Type.VOID);
                     double critChancePercent = calculateSocketCritChancePercent(weapon);
                     double critDamagePercent = calculateSocketCritDamagePercent(weapon);
 
@@ -175,6 +179,20 @@ public class EquipmentRefineEST extends DamageEventSystem {
                         newDamage += bloodPactDamage;
                     }
 
+                    WeaponElementalDamageUtils.AffinityDamage affinityDamage =
+                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, newDamage, store, targetRef);
+                    if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
+                        damage.putMetaObject(META_WEAPON_ELEMENTAL_DAMAGE, affinityDamage.elementDamagePayload());
+                    }
+                    if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
+                        newDamage = Math.max(0f, newDamage + affinityDamage.damageDelta());
+                        markAffinityDamageKind(damage, affinityDamage.type());
+                    }
+                    double brokenWeaponMultiplier = EquipmentDurabilityPenaltyUtils.weaponMultiplier(attacker, weapon);
+                    if (brokenWeaponMultiplier != 1.0d) {
+                        newDamage = (float) Math.max(0.0d, newDamage * brokenWeaponMultiplier);
+                    }
+
                     damage.setAmount(newDamage);
 
                     if (DEBUG_DAMAGE_LOG) {
@@ -193,6 +211,13 @@ public class EquipmentRefineEST extends DamageEventSystem {
                                 + " voidTier=" + voidTier
                                 + " voidEssences=" + equippedVoidEssenceCount
                                 + " bloodPact=" + bloodPactDamage
+                                + " affinity=" + affinityDamage.type()
+                                + " affinityWeight=" + affinityDamage.weight()
+                                + " affinityRate=" + affinityDamage.rate()
+                                + " targetAffinity=" + affinityDamage.targetType()
+                                + " affinityMultiplier=" + affinityDamage.effectivenessMultiplier()
+                                + " affinityDelta=" + affinityDamage.damageDelta()
+                                + " brokenWeaponMultiplier=" + brokenWeaponMultiplier
                                 + " final=" + newDamage);
                     }
                 }
@@ -200,11 +225,38 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         // ── Defender armor bonus (defense / damage reduction) ─────────────────
+        if (skipRefine && !isPhysicalBleedLoreDamage(damage)) {
+            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+            if (attacker != null) {
+                ItemStack weapon = findWeaponInHotbar(attacker);
+                if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
+                    float newDamage = damage.getAmount();
+                    WeaponElementalDamageUtils.AffinityDamage affinityDamage =
+                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, newDamage, store, targetRef);
+                    if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
+                        damage.putMetaObject(META_WEAPON_ELEMENTAL_DAMAGE,
+                                WeaponElementalDamageUtils.mergeElementDamagePayload(
+                                        damage.getIfPresentMetaObject(META_WEAPON_ELEMENTAL_DAMAGE),
+                                        affinityDamage.elementDamagePayload()));
+                    }
+                    if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
+                        newDamage = Math.max(0f, newDamage + affinityDamage.damageDelta());
+                        markAffinityDamageKind(damage, affinityDamage.type());
+                    }
+                    double brokenWeaponMultiplier = EquipmentDurabilityPenaltyUtils.weaponMultiplier(attacker, weapon);
+                    if (brokenWeaponMultiplier != 1.0d) {
+                        newDamage = (float) Math.max(0.0d, newDamage * brokenWeaponMultiplier);
+                    }
+                    damage.setAmount(newDamage);
+                }
+            }
+        }
+
         Player defender = store.getComponent(targetRef, Player.getComponentType());
         if (defender != null) {
             List<ItemStack> armorPieces = getAllEquippedArmor(defender);
             if (!armorPieces.isEmpty()) {
-                double avgDefenseMultiplier = calculateAverageDefenseMultiplier(armorPieces);
+                double avgDefenseMultiplier = calculateAverageDefenseMultiplier(defender, armorPieces);
 
                 // Get the highest level armor for display purposes
                 int highestLevel = 0;
@@ -244,7 +296,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
     /**
      * Calculates the average defense multiplier from all equipped armor pieces.
      */
-    private double calculateAverageDefenseMultiplier(List<ItemStack> armorPieces) {
+    private double calculateAverageDefenseMultiplier(Player player, List<ItemStack> armorPieces) {
         if (armorPieces.isEmpty()) {
             return 1.0; // No armor, no bonus
         }
@@ -258,7 +310,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 int level = ReforgeEquip.getLevelFromItem(armor);
                 int clampedLevel = clampLevel(level);
                 double multiplier = getDefenseMultiplier(clampedLevel) * ReforgeEquip.getSoftcoreStatMultiplier(armor);
-                totalMultiplier += multiplier;
+                double armorMultiplier = EquipmentDurabilityPenaltyUtils.armorMultiplier(player, armor);
+                totalMultiplier += 1.0d + ((multiplier - 1.0d) * armorMultiplier);
                 count++;
             }
         }
@@ -320,6 +373,24 @@ public class EquipmentRefineEST extends DamageEventSystem {
         return bonuses[0];
     }
 
+    private void markAffinityDamageKind(Damage damage, Essence.Type type) {
+        DamageNumberFormatter.DamageKind kind = switch (type) {
+            case FIRE -> DamageNumberFormatter.DamageKind.BURN;
+            case ICE -> DamageNumberFormatter.DamageKind.ICE;
+            case LIGHTNING -> DamageNumberFormatter.DamageKind.SHOCK;
+            case WATER -> DamageNumberFormatter.DamageKind.WATER;
+            case VOID -> DamageNumberFormatter.DamageKind.VOID;
+            case LIFE -> DamageNumberFormatter.DamageKind.LIFE;
+        };
+        DamageNumberMeta.markKind(damage, kind);
+    }
+
+    private boolean isPhysicalBleedLoreDamage(Damage damage) {
+        return damage != null
+                && Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))
+                && DamageNumberFormatter.DamageKind.BLEED == DamageNumberMeta.readKind(damage);
+    }
+
     /**
      * Deterministic attack speed from Lightning tier.
      * Tier scaling: +1% per tier (T1..T5 => 1..5%).
@@ -364,6 +435,16 @@ public class EquipmentRefineEST extends DamageEventSystem {
         SocketData socketData = SocketManager.getSocketData(weapon);
         if (socketData == null || socketData.getMaxSockets() == 0) return 0;
         Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(socketData);
+        Integer tier = tierMap.get(type);
+        if (tier == null) return 0;
+        return Math.max(0, Math.min(5, tier));
+    }
+
+    private int getRawEssenceTier(ItemStack weapon, Essence.Type type) {
+        if (weapon == null || weapon.isEmpty() || type == null) return 0;
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        if (socketData == null || socketData.getMaxSockets() == 0) return 0;
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateRawConsecutiveTiers(socketData);
         Integer tier = tierMap.get(type);
         if (tier == null) return 0;
         return Math.max(0, Math.min(5, tier));
@@ -483,4 +564,5 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
         return Math.max(0.5, Math.min(2.0, value));
     }
+
 }

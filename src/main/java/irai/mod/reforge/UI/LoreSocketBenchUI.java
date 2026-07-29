@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
+import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIHtmlUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
@@ -27,6 +28,7 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.Socket;
@@ -702,7 +704,8 @@ public final class LoreSocketBenchUI {
             return sb.toString();
         }
 
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
+        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
         if (data == null || data.getSocketCount() == 0) {
             sb.append("<option value=\"\" selected=\"true\">")
                     .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets")))
@@ -756,7 +759,8 @@ public final class LoreSocketBenchUI {
             sb.append("<div style=\"flex-weight:1;\"></div></div>");
             return sb.toString();
         }
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
+        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
         if (data == null || data.getSocketCount() == 0) {
             sb.append("<p>").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets")))
                     .append("</p>");
@@ -1493,11 +1497,7 @@ public final class LoreSocketBenchUI {
                 rerollSocketColor(socket, rng);
             }
 
-            ItemStack updated = LoreSocketManager.withLoreSocketData(equipment.item, data);
-            ItemContainer equipmentContainer = getContainer(player, equipment.kind);
-            if (equipmentContainer != null) {
-                equipmentContainer.setItemStackForSlot(equipment.slot, updated);
-            }
+            saveEquipment(player, equipment, data);
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_reroll_done"));
         }
 
@@ -1538,11 +1538,7 @@ public final class LoreSocketBenchUI {
             socket.setColor(gemColor.toLowerCase(Locale.ROOT));
         }
 
-        ItemStack updated = LoreSocketManager.withLoreSocketData(equipment.item, data);
-        ItemContainer equipmentContainer = getContainer(player, equipment.kind);
-        if (equipmentContainer != null) {
-            equipmentContainer.setItemStackForSlot(equipment.slot, updated);
-        }
+        saveEquipment(player, equipment, data);
 
         ItemContainer gemContainer = getContainer(player, gem.kind);
         if (gemContainer != null) {
@@ -1559,7 +1555,8 @@ public final class LoreSocketBenchUI {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_equipment"));
         }
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
+        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
         int slotIndex = resolveSlotIndex(data, slotKey, null);
         if (slotIndex < 0 || data == null || slotIndex >= data.getSocketCount()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
@@ -1585,7 +1582,8 @@ public final class LoreSocketBenchUI {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_equipment"));
         }
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
+        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
         int slotIndex = resolveSlotIndex(data, slotKey, null);
         if (slotIndex < 0 || data == null || slotIndex >= data.getSocketCount()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
@@ -1602,10 +1600,16 @@ public final class LoreSocketBenchUI {
     }
 
     private static void saveEquipment(Player player, Entry equipment, LoreSocketData data) {
-        ItemStack updated = LoreSocketManager.withLoreSocketData(equipment.item, data);
+        ItemStack baseItem = getEffectiveEquipmentItem(player, equipment);
+        if (baseItem == null || baseItem.isEmpty()) {
+            baseItem = equipment.item;
+        }
+        ItemStack updated = LoreSocketManager.withLoreSocketData(baseItem, data);
         ItemContainer equipmentContainer = getContainer(player, equipment.kind);
         if (equipmentContainer != null) {
             equipmentContainer.setItemStackForSlot(equipment.slot, updated);
+            player.markNeedsSave();
+            LoreHeldItemUpdateManager.clearPending(player, sectionIdFor(equipment.kind), equipment.slot, updated);
         }
     }
 
@@ -1744,6 +1748,43 @@ public final class LoreSocketBenchUI {
 
     private static Entry findByKey(List<Entry> entries, String key) {
         return HyUIReflectionUtils.resolveIndexSelection(entries, key);
+    }
+
+    private static ItemStack getEffectiveEquipmentItem(Player player, Entry equipment) {
+        if (player == null || equipment == null) {
+            return equipment == null ? null : equipment.item;
+        }
+        ItemContainer container = getContainer(player, equipment.kind);
+        ItemStack item = equipment.item;
+        if (container != null && equipment.slot >= 0 && equipment.slot < container.getCapacity()) {
+            try {
+                ItemStack current = container.getItemStack(equipment.slot);
+                if (current != null && !current.isEmpty()) {
+                    item = current;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (equipment.kind == ContainerKind.HOTBAR
+                && player.getInventory() != null
+                && PlayerInventoryUtils.getSelectedHotbarSlot(player) == equipment.slot) {
+            PlayerInventoryUtils.HeldItemContext ctx = new PlayerInventoryUtils.HeldItemContext(
+                    PlayerInventoryUtils.HOTBAR_SECTION_ID,
+                    equipment.slot,
+                    container,
+                    item);
+            ItemStack resolved = LoreHeldItemUpdateManager.resolveHeldItem(player, ctx);
+            if (resolved != null && !resolved.isEmpty()) {
+                return resolved;
+            }
+        }
+        return item;
+    }
+
+    private static int sectionIdFor(ContainerKind kind) {
+        return kind == ContainerKind.HOTBAR
+                ? PlayerInventoryUtils.HOTBAR_SECTION_ID
+                : 0;
     }
 
     private static ItemContainer getContainer(Player player, ContainerKind kind) {

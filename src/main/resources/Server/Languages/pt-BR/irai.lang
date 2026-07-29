@@ -85,9 +85,12 @@ ui.reforge.base_defense = Defesa Base
 ui.reforge.essence_resonance_defense = Def. Ess/Res
 ui.reforge.health_bonus = Vida
 ui.reforge.regen_bonus = Regeneração
-ui.reforge.fire_defense_bonus = Def. Fogo
+ui.reforge.fire_defense_bonus = Res. Fogo
+ui.reforge.block_chance_bonus = Chance de Bloqueio
 ui.reforge.evasion_bonus = Evasão
 ui.reforge.slow_bonus = Lentidão
+ui.reforge.affinity_resistance_element = Resist. {0}
+ui.reforge.elemental_damage_element = Dano {0}
 ui.reforge.refine_progress = Progresso de Refinamento
 ui.reforge.status_idle = Ocioso
 ui.reforge.status_no_equipment = Nenhum equipamento reforgável encontrado.
@@ -749,6 +752,31 @@ ui.runtime_config.lore_color.green = Verde
 ui.runtime_config.lore_color.red = Vermelho
 ui.runtime_config.lore_color.white = Branco
 ui.runtime_config.lore_color.yellow = Amarelo
+ui.runtime_config.category.elemental_affinity.title = Afinidade Elemental
+ui.runtime_config.category.elemental_affinity.summary = Correspondência de afinidade de NPCs e modificadores de dano por elemento.
+ui.runtime_config.category.elemental_affinity.note = Elementos válidos: FIRE, WATER, ICE, LIGHTNING, LIFE, VOID. Regras personalizadas são verificadas antes dos padrões.
+ui.runtime_config.group.elemental_affinity.affinity_core.title = Regras Principais
+ui.runtime_config.group.elemental_affinity.affinity_core.description = Alternâncias globais e valores fallback de efetividade elemental.
+ui.runtime_config.group.elemental_affinity.affinity_role_rules.title = Regras de Afinidade Padrão
+ui.runtime_config.group.elemental_affinity.affinity_role_rules.description = Regras usadas após substituições personalizadas para resolver a afinidade base de um NPC.
+ui.runtime_config.group.elemental_affinity.affinity_custom_role_rules.title = Substituições de Afinidade
+ui.runtime_config.group.elemental_affinity.affinity_custom_role_rules.description = Regras de NPC adicionadas pelo servidor que têm prioridade sobre os padrões.
+ui.runtime_config.group.elemental_affinity.affinity_multipliers.title = Efetividade por Alvo
+ui.runtime_config.group.elemental_affinity.affinity_multipliers.description = Substituições opcionais de dano por dica de alvo ou ID exato de função de NPC.
+ui.runtime_config.control.affinity_enabled.label = Ativar afinidades elementais
+ui.runtime_config.control.affinity_enabled.description = Aplica modificadores de dano de afinidade da arma contra perfis elementais de NPCs.
+ui.runtime_config.control.affinity_weakness_multiplier.label = Multiplicador padrão de fraqueza
+ui.runtime_config.control.affinity_weakness_multiplier.description = Multiplicador fallback quando um elemento atacante neutraliza a afinidade do alvo.
+ui.runtime_config.control.affinity_resistance_multiplier.label = Multiplicador de resistência do mesmo elemento
+ui.runtime_config.control.affinity_resistance_multiplier.description = Multiplicador fallback quando ataque e alvo têm a mesma afinidade. 0.10-0.20 resiste muito; 1.0 é neutro; acima de 1.0 é fraqueza.
+ui.runtime_config.control.affinity_role_rules.label = Afinidades de função padrão
+ui.runtime_config.control.affinity_role_rules.description = Uma regra por linha. Use hint:nome=ELEMENT ou role:Exact_NPC_ID=ELEMENT.
+ui.runtime_config.control.affinity_custom_role_rules.label = Afinidades de função personalizadas
+ui.runtime_config.control.affinity_custom_role_rules.description = Verificadas antes dos padrões. Útil para IDs de NPCs de mods ou para sobrescrever uma regra padrão.
+ui.runtime_config.control.affinity_element_multipliers.label = Multiplicadores elementais
+ui.runtime_config.control.affinity_element_multipliers.description = Uma regra por linha. Exemplo: hint:scarak=FIRE:1.35,WATER:1.15,LIFE:0.85
+ui.runtime_config.mapping_affinity_multiplier_help = Guia de multiplicadores: valores acima de 1.0 significam que o alvo é fraco contra esse elemento recebido e toma mais dano; valores abaixo de 1.0 significam resistência e menos dano; exatamente 1.0 é neutro e mantém o golpe como dano físico/branco.
+ui.runtime_config.mapping_affinity_multiplier_formula = A diferença de dano é escalada pela taxa de afinidade dos soquetes da arma, então 0.90 é uma resistência pequena enquanto 0.001 é quase imunidade.
 
 # Prefixos de nomes localizados
 name.prefix.blood_pact = Pacto de Sangue
@@ -760,6 +788,10 @@ ui.essence_bench.essence_concentrated_suffix = (Concentrada)
 
 # Rótulos de tooltip
 tooltip.damage_label = Dano
+tooltip.defense_label = Defesa
+tooltip.affinity_resistance_label = Resist. Elemental
+tooltip.affinity_resistance_element = Resist. {0}
+tooltip.elemental_damage_element = Dano {0}
 tooltip.refine_grade = Grau de Refino
 tooltip.refine_stat_damage = dano
 tooltip.refine_stat_defense = defesa
@@ -873,7 +905,7 @@ tooltip.essence.weapon.life = +{0}% Roubo de Vida
 tooltip.essence.weapon.void = +{0}% Dano Crítico
 tooltip.essence.weapon.void_blood_pact = +{0}% Dano Crítico, {1}
 tooltip.essence.weapon.void_blood_pact_suffix = Pacto de Sangue (1% de HP Máx por essência do Vazio equipada -> dano extra)
-tooltip.essence.armor.fire = +{0}% Defesa contra Fogo
+tooltip.essence.armor.fire = +{0}% Chance de Bloqueio
 tooltip.essence.armor.ice = +{0}% Lentidão
 tooltip.essence.armor.lightning = +{0}% Evasão
 tooltip.essence.armor.life = +{0} Vida
@@ -888,7 +920,8 @@ resonance.detail.proc_only = {0}
 # Rótulos de atributo de ressonância
 resonance.stat.damage = Dano
 resonance.stat.defense = Defesa
-resonance.stat.fire_defense = Defesa contra Fogo
+resonance.stat.fire_defense = Resistência ao Fogo
+resonance.stat.block_chance = Chance de Bloqueio
 resonance.stat.health = Vida
 resonance.stat.slow = Lentidão
 resonance.stat.regen = Regeneração
@@ -1254,10 +1287,16 @@ ui.lore_socket.detail_empty = Nenhum espirito esta vinculado.
 ui.lore_socket.detail_eligible = Espiritos/NPCs elegiveis:
 ui.lore_feed.nav_socket = Socket de Lore
 ui.lore_feed.nav_feed = Alimentar Lore
-ui.lore_feed.collection = Espiritos coletados
+ui.lore_feed.collection = Espíritos coletados
 ui.lore_feed.collection_header = Coletados: {0}/{1}
-ui.lore_feed.collection_empty = Nenhum espirito configurado.
+ui.lore_feed.collection_empty = Nenhum espírito configurado.
 ui.lore_feed.collection_unknown = Desconhecido
-
+ui.essence_bench.support_suffix_mutate = [Mutar]
+ui.essence_bench.error_mutation_pick_slot = Selecione um soquete preenchido para mutar.
+ui.essence_bench.error_mutation_filled_slot = O soquete selecionado deve conter uma essência para mutar.
+ui.essence_bench.error_mutation_support_changed = A pilha de Essência Ressonante mudou. Tente novamente.
+ui.essence_bench.error_mutation_failed = Falha na mutação do soquete.
+ui.essence_bench.status_socket_mutated = Afinidade do slot {0} mutada para {1}.
+ui.essence_bench.material_desc_resonant_mutation = Rerrola a afinidade do soquete preenchido selecionado.
 
 

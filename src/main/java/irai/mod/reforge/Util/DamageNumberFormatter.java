@@ -27,6 +27,7 @@ public final class DamageNumberFormatter {
         SHOCK,
         WATER,
         VOID,
+        LIFE,
         HEAL
     }
 
@@ -44,6 +45,7 @@ public final class DamageNumberFormatter {
         STYLES.put(DamageKind.SHOCK, new Style("Shock", "#FFFF55", true));
         STYLES.put(DamageKind.WATER, new Style("Water", "#5555FF", true));
         STYLES.put(DamageKind.VOID, new Style("Void", "#8000ff", true));
+        STYLES.put(DamageKind.LIFE, new Style("Life", "#55FF55", true));
         STYLES.put(DamageKind.HEAL, new Style("Heal", "#55FF55", true));
     }
 
@@ -149,6 +151,7 @@ public final class DamageNumberFormatter {
         if (lower.contains("shock") || lower.contains("lightning") || lower.contains("electric")) return DamageKind.SHOCK;
         if (lower.contains("water")) return DamageKind.WATER;
         if (lower.contains("void")) return DamageKind.VOID;
+        if (lower.contains("life")) return DamageKind.LIFE;
         if (lower.contains("heal") || lower.contains("regen")) return DamageKind.HEAL;
         return DamageKind.FLAT;
     }

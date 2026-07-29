@@ -168,6 +168,30 @@ public final class UISocketVisualUtils {
         return "#FFFFFF";
     }
 
+    public static String socketAffinityBadgeColor(Socket socket) {
+        Essence.Type type = socket == null || socket.isEmpty() || socket.isBroken()
+                ? null
+                : SocketManager.parseEssenceType(socket.getMutationElement());
+        if (type == null) {
+            return "#00000000";
+        }
+        return switch (type) {
+            case FIRE -> "#FFAA00";
+            case ICE -> "#55FFFF";
+            case LIFE -> "#55FF55";
+            case LIGHTNING -> "#FFFF55";
+            case VOID -> "#AA55FF";
+            case WATER -> "#5555FF";
+        };
+    }
+
+    public static boolean socketAffinityBadgeVisible(Socket socket) {
+        return socket != null
+                && !socket.isEmpty()
+                && !socket.isBroken()
+                && SocketManager.parseEssenceType(socket.getMutationElement()) != null;
+    }
+
     public static String socketPreviewAccent(Socket socket, boolean punched, boolean broken, boolean filled) {
         if (broken) {
             return "#8A2020";

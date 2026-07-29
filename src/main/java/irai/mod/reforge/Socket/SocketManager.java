@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -133,6 +134,7 @@ public class SocketManager {
 
         Integer maxFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_MAX, Codec.INTEGER);
         String[] socketsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY);
+        String[] mutationsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_MUTATIONS, Codec.STRING_ARRAY);
 
         int defaultMax = isWeapon
                 ? config.getMaxSocketsWeapon()
@@ -154,6 +156,12 @@ public class SocketManager {
                     socketData.getSockets().get(i).setBroken(true);
                 } else {
                     socketData.setEssenceAt(i, essenceId);
+                    if (mutationsFromMeta != null && i < mutationsFromMeta.length) {
+                        Essence.Type mutationType = parseEssenceType(mutationsFromMeta[i]);
+                        if (mutationType != null) {
+                            socketData.getSockets().get(i).setMutationElement(mutationType.name());
+                        }
+                    }
                 }
             }
         }
@@ -170,6 +178,7 @@ public class SocketManager {
         if (item == null || item.isEmpty() || socketData == null) return item;
 
         String[] encoded = encodeSockets(socketData);
+        String[] mutations = encodeSocketMutations(socketData);
         boolean isWeapon = ReforgeEquip.isWeapon(item);
 
         // Determine resonance based on current socket layout and unlock metadata.
@@ -191,8 +200,9 @@ public class SocketManager {
                 ? ResonanceSystem.buildDetailedEffect(resonance, isWeapon)
                 : "";
         
-        // Calculate tier map and effects for metadata storage
-        Map<Essence.Type, Integer> tierMap = calculateConsecutiveTiers(socketData);
+        // Calculate tier map and effects for metadata storage.
+        // Display uses raw essence tiers plus mutation-influenced affinity tiers.
+        Map<Essence.Type, Integer> tierMap = calculateDisplayConsecutiveTiers(socketData);
         String[] effectTypes = new String[tierMap.size()];
         String[] effectTiers = new String[tierMap.size()];
         String[] effectLines = new String[tierMap.size()];
@@ -226,6 +236,7 @@ public class SocketManager {
         return baseItem
                 .withMetadata(MetadataKeys.SOCKET_MAX, Codec.INTEGER, socketData.getMaxSockets())
                 .withMetadata(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY, encoded)
+                .withMetadata(MetadataKeys.SOCKET_MUTATIONS, Codec.STRING_ARRAY, mutations)
                 .withMetadata(MetadataKeys.ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
                 .withMetadata(MetadataKeys.ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
                 .withMetadata(MetadataKeys.ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY, effectLines)
@@ -276,12 +287,12 @@ public class SocketManager {
     }
 
     public static String describeEssenceEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData) {
-        double multiplier = getTypeEffectMultiplier(socketData, type);
+        double multiplier = Math.max(getRawTypeEffectMultiplier(socketData, type), getTypeEffectMultiplier(socketData, type));
         return SocketEffectMath.describeEffect(type, tier, isWeapon, socketData, multiplier);
     }
 
     public static String describeEssenceEffect(Essence.Type type, int tier, boolean isWeapon, SocketData socketData, String langCode) {
-        double multiplier = getTypeEffectMultiplier(socketData, type);
+        double multiplier = Math.max(getRawTypeEffectMultiplier(socketData, type), getTypeEffectMultiplier(socketData, type));
         return SocketEffectMath.describeEffect(type, tier, isWeapon, socketData, multiplier, langCode);
     }
 
@@ -489,11 +500,27 @@ public class SocketManager {
             return totals;
         }
 
-        Map<Essence.Type, Integer> tiers = calculateConsecutiveTiers(socketData);
+        addTierBonuses(totals, socketData, calculateRawConsecutiveTiers(socketData), isWeapon, false);
+        addTierBonuses(totals, socketData, calculateMutationConsecutiveTiers(socketData), isWeapon, true);
+        return totals;
+    }
+
+    private static void addTierBonuses(
+            Map<EssenceEffect.StatType, double[]> totals,
+            SocketData socketData,
+            Map<Essence.Type, Integer> tiers,
+            boolean isWeapon,
+            boolean mutationBonus
+    ) {
+        if (totals == null || tiers == null || tiers.isEmpty()) {
+            return;
+        }
         for (Map.Entry<Essence.Type, Integer> entry : tiers.entrySet()) {
             Essence.Type type = entry.getKey();
             int tierValue = SocketEffectMath.clampTier(entry.getValue());
-            double multiplier = getTypeEffectMultiplier(socketData, type);
+            double multiplier = mutationBonus
+                    ? getTypeEffectMultiplier(socketData, type)
+                    : getRawTypeEffectMultiplier(socketData, type);
 
             if (isWeapon) {
                 switch (type) {
@@ -517,7 +544,7 @@ public class SocketManager {
                 switch (type) {
                     case LIFE -> addFlat(totals, EssenceEffect.StatType.HEALTH, SocketEffectMath.armorLifeHealthFlat(tierValue) * multiplier);
                     case WATER -> addFlat(totals, EssenceEffect.StatType.REGENERATION, SocketEffectMath.armorWaterRegenFlat(tierValue) * multiplier);
-                    case FIRE -> addPercent(totals, EssenceEffect.StatType.FIRE_DEFENSE, SocketEffectMath.armorFireDefensePercent(tierValue) * multiplier);
+                    case FIRE -> addPercent(totals, EssenceEffect.StatType.BLOCK_CHANCE, SocketEffectMath.armorFireBlockChancePercent(tierValue) * multiplier);
                     case ICE -> addPercent(totals, EssenceEffect.StatType.MOVEMENT_SPEED, SocketEffectMath.armorIceSlowPercent(tierValue) * multiplier);
                     case LIGHTNING -> addPercent(totals, EssenceEffect.StatType.EVASION, SocketEffectMath.armorLightningEvasionPercent(tierValue) * multiplier);
                     case VOID -> addPercent(totals, EssenceEffect.StatType.DEFENSE, SocketEffectMath.armorVoidDefensePercent(tierValue) * multiplier);
@@ -527,7 +554,6 @@ public class SocketManager {
                 }
             }
         }
-        return totals;
     }
 
     private static void addFlat(Map<EssenceEffect.StatType, double[]> totals, EssenceEffect.StatType stat, double value) {
@@ -550,8 +576,34 @@ public class SocketManager {
             if (socket == null || socket.isEmpty() || socket.isBroken()) {
                 continue;
             }
-            Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
-            if (essence == null || essence.getType() != type) {
+            Essence.Type socketType = getSocketAffinityType(socket);
+            if (socketType != type) {
+                continue;
+            }
+            totalForType++;
+            if (isGreaterEssenceId(socket.getEssenceId())) {
+                greaterForType++;
+            }
+        }
+        if (totalForType <= 0) {
+            return 1.0;
+        }
+        double ratio = (double) greaterForType / (double) totalForType;
+        return 1.0 + (0.5 * ratio);
+    }
+
+    private static double getRawTypeEffectMultiplier(SocketData socketData, Essence.Type type) {
+        if (socketData == null || type == null) {
+            return 1.0;
+        }
+        int totalForType = 0;
+        int greaterForType = 0;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken()) {
+                continue;
+            }
+            Essence.Type socketType = getRawSocketEssenceType(socket);
+            if (socketType != type) {
                 continue;
             }
             totalForType++;
@@ -577,6 +629,20 @@ public class SocketManager {
             } else {
                 values[i] = socket.getEssenceId();
             }
+        }
+        return values;
+    }
+
+    private static String[] encodeSocketMutations(SocketData socketData) {
+        String[] values = new String[socketData.getCurrentSocketCount()];
+        for (int i = 0; i < socketData.getCurrentSocketCount(); i++) {
+            Socket socket = socketData.getSockets().get(i);
+            if (socket == null || socket.isBroken() || socket.isEmpty()) {
+                values[i] = "";
+                continue;
+            }
+            String mutation = socket.getMutationElement();
+            values[i] = mutation == null || mutation.isBlank() ? "" : mutation.trim().toUpperCase(Locale.ROOT);
         }
         return values;
     }
@@ -643,6 +709,61 @@ public class SocketManager {
      */
     public static boolean socketEssence(SocketData socketData, String essenceId) {
         return socketData.socketEssence(essenceId);
+    }
+
+    public static Essence.Type getSocketAffinityType(Socket socket) {
+        if (socket == null || socket.isEmpty() || socket.isBroken()) {
+            return null;
+        }
+        Essence.Type mutationType = parseEssenceType(socket.getMutationElement());
+        if (mutationType != null) {
+            return mutationType;
+        }
+        Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+        return essence != null ? essence.getType() : null;
+    }
+
+    public static Essence.Type rerollSocketMutation(SocketData socketData, int slotIndex) {
+        if (socketData == null) {
+            return null;
+        }
+        Socket target = null;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket != null && socket.getSlotIndex() == slotIndex) {
+                target = socket;
+                break;
+            }
+        }
+        if (target == null || target.isBroken() || target.isLocked() || target.isEmpty()) {
+            return null;
+        }
+        Essence.Type[] types = Essence.Type.values();
+        if (types.length == 0) {
+            return null;
+        }
+        Essence.Type current = getSocketAffinityType(target);
+        Essence.Type next = types[ThreadLocalRandom.current().nextInt(types.length)];
+        if (types.length > 1) {
+            int guard = 0;
+            while (next == current && guard++ < 12) {
+                next = types[ThreadLocalRandom.current().nextInt(types.length)];
+            }
+        }
+        target.setMutationElement(next.name());
+        return next;
+    }
+
+    public static Essence.Type parseEssenceType(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        for (Essence.Type type : Essence.Type.values()) {
+            if (type.name().equals(normalized)) {
+                return type;
+            }
+        }
+        return null;
     }
 
     // ── Remove essence ────────────────────────────────────────────────────────
@@ -728,12 +849,15 @@ public class SocketManager {
      */
     public static Map<Essence.Type, Integer> calculateConsecutiveTiers(SocketData socketData) {
         Map<Essence.Type, Integer> tierMap = new LinkedHashMap<>();
+        if (socketData == null) {
+            return tierMap;
+        }
 
         Essence.Type currentType = null;
         int consecutiveCount = 0;
 
         for (Socket socket : socketData.getSockets()) {
-            if (socket.isEmpty() || socket.isBroken()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken()) {
                 // Reset on empty/broken socket
                 if (currentType != null && consecutiveCount > 0) {
                     int previous = tierMap.getOrDefault(currentType, 0);
@@ -744,11 +868,8 @@ public class SocketManager {
                 continue;
             }
 
-            String essenceId = socket.getEssenceId();
-            Essence essence = EssenceRegistry.get().getById(essenceId);
-            if (essence == null) continue;
-
-            Essence.Type essenceType = essence.getType();
+            Essence.Type essenceType = getSocketAffinityType(socket);
+            if (essenceType == null) continue;
 
             if (essenceType == currentType) {
                 consecutiveCount++;
@@ -770,6 +891,113 @@ public class SocketManager {
         }
 
         return tierMap;
+    }
+
+    public static Map<Essence.Type, Integer> calculateDisplayConsecutiveTiers(SocketData socketData) {
+        Map<Essence.Type, Integer> tierMap = new LinkedHashMap<>(calculateRawConsecutiveTiers(socketData));
+        mergeMaxTiers(tierMap, calculateMutationConsecutiveTiers(socketData));
+        return tierMap;
+    }
+
+    public static Map<Essence.Type, Integer> calculateRawConsecutiveTiers(SocketData socketData) {
+        Map<Essence.Type, Integer> tierMap = new LinkedHashMap<>();
+        if (socketData == null) {
+            return tierMap;
+        }
+
+        Essence.Type currentType = null;
+        int consecutiveCount = 0;
+
+        for (Socket socket : socketData.getSockets()) {
+            Essence.Type essenceType = getRawSocketEssenceType(socket);
+            if (essenceType == null) {
+                putMaxTier(tierMap, currentType, consecutiveCount);
+                currentType = null;
+                consecutiveCount = 0;
+                continue;
+            }
+
+            if (essenceType == currentType) {
+                consecutiveCount++;
+            } else {
+                putMaxTier(tierMap, currentType, consecutiveCount);
+                currentType = essenceType;
+                consecutiveCount = 1;
+            }
+        }
+
+        putMaxTier(tierMap, currentType, consecutiveCount);
+        return tierMap;
+    }
+
+    private static Map<Essence.Type, Integer> calculateMutationConsecutiveTiers(SocketData socketData) {
+        Map<Essence.Type, Integer> tierMap = new LinkedHashMap<>();
+        if (socketData == null) {
+            return tierMap;
+        }
+
+        Essence.Type currentType = null;
+        int consecutiveCount = 0;
+        boolean groupHasMutation = false;
+
+        for (Socket socket : socketData.getSockets()) {
+            Essence.Type essenceType = getSocketAffinityType(socket);
+            boolean mutated = socket != null
+                    && !socket.isEmpty()
+                    && !socket.isBroken()
+                    && parseEssenceType(socket.getMutationElement()) != null;
+            if (essenceType == null) {
+                if (groupHasMutation) {
+                    putMaxTier(tierMap, currentType, consecutiveCount);
+                }
+                currentType = null;
+                consecutiveCount = 0;
+                groupHasMutation = false;
+                continue;
+            }
+
+            if (essenceType == currentType) {
+                consecutiveCount++;
+                groupHasMutation = groupHasMutation || mutated;
+            } else {
+                if (groupHasMutation) {
+                    putMaxTier(tierMap, currentType, consecutiveCount);
+                }
+                currentType = essenceType;
+                consecutiveCount = 1;
+                groupHasMutation = mutated;
+            }
+        }
+
+        if (groupHasMutation) {
+            putMaxTier(tierMap, currentType, consecutiveCount);
+        }
+        return tierMap;
+    }
+
+    private static Essence.Type getRawSocketEssenceType(Socket socket) {
+        if (socket == null || socket.isEmpty() || socket.isBroken()) {
+            return null;
+        }
+        Essence essence = EssenceRegistry.get().getById(socket.getEssenceId());
+        return essence != null ? essence.getType() : null;
+    }
+
+    private static void mergeMaxTiers(Map<Essence.Type, Integer> target, Map<Essence.Type, Integer> source) {
+        if (target == null || source == null) {
+            return;
+        }
+        for (Map.Entry<Essence.Type, Integer> entry : source.entrySet()) {
+            putMaxTier(target, entry.getKey(), entry.getValue() != null ? entry.getValue() : 0);
+        }
+    }
+
+    private static void putMaxTier(Map<Essence.Type, Integer> tierMap, Essence.Type type, int tier) {
+        if (tierMap == null || type == null || tier <= 0) {
+            return;
+        }
+        int previous = tierMap.getOrDefault(type, 0);
+        tierMap.put(type, Math.max(previous, Math.min(tier, 5)));
     }
 }
 

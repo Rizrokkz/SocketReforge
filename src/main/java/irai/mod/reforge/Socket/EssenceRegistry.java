@@ -48,8 +48,7 @@ public class EssenceRegistry {
         // FIRE - T1: +1% DMG or +1 Flat, T3: +3% or +3, T5: +5% or +5
         registerWithGreater("Essence_Fire", Essence.Type.FIRE, List.of(
             new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.PERCENTAGE, 1.0),
-            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 1.0),
-            new EssenceEffect(EssenceEffect.StatType.FIRE_DEFENSE, EssenceEffect.EffectType.PERCENTAGE, 1.0)
+            new EssenceEffect(EssenceEffect.StatType.DAMAGE, EssenceEffect.EffectType.FLAT, 1.0)
         ));
 
         // ICE - T1: +1% Slow, +1 Cold DMG, T3: +3% Slow, +3 Cold DMG, T5: +5% Slow, +5 Cold DMG
@@ -119,7 +118,7 @@ public class EssenceRegistry {
         }
 
         return switch (essenceType) {
-            case FIRE -> new double[] {SocketEffectMath.armorFireDefensePercent(safeTier), 0.0};
+            case FIRE -> new double[] {SocketEffectMath.armorFireBlockChancePercent(safeTier), 0.0};
             case ICE -> new double[] {SocketEffectMath.armorIceSlowPercent(safeTier), 0.0};
             case LIGHTNING -> new double[] {SocketEffectMath.armorLightningEvasionPercent(safeTier), 0.0};
             case LIFE -> new double[] {0.0, SocketEffectMath.armorLifeHealthFlat(safeTier)};

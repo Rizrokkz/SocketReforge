@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
@@ -33,6 +34,8 @@ import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Util.DamageNumberFormatter;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 
 /**
  * Applies lore socket procs on damage events (on-hit/on-crit/on-damaged).
@@ -112,6 +115,7 @@ public final class LoreEffectEST extends DamageEventSystem {
         boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
         boolean isCrit = rollCrit(weapon);
         boolean isBlocked = isBlocked(damage);
+        float beforeLoreProcDamage = damage.getAmount();
         Set<String> used = new HashSet<>();
         LoreProcHandler.ProcState procState = new LoreProcHandler.ProcState();
         changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
@@ -141,6 +145,8 @@ public final class LoreEffectEST extends DamageEventSystem {
             changed |= LoreProcHandler.applyLoreProcChain(store, attacker, attackerRef, defenderRef,
                     damage, data, true, used, commandBuffer);
         }
+
+        applyElementalAffinityToAddedDamage(store, defenderRef, weapon, damage, beforeLoreProcDamage);
 
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
@@ -292,6 +298,44 @@ public final class LoreEffectEST extends DamageEventSystem {
             if (value != null) return value.getIndex();
         }
         return -1;
+    }
+
+    private void applyElementalAffinityToAddedDamage(Store<EntityStore> store,
+                                                     Ref<EntityStore> defenderRef,
+                                                     ItemStack weapon,
+                                                     Damage damage,
+                                                     float beforeDamage) {
+        if (store == null || defenderRef == null || weapon == null || damage == null) {
+            return;
+        }
+        float addedDamage = damage.getAmount() - beforeDamage;
+        if (addedDamage <= 0.0001f) {
+            return;
+        }
+        WeaponElementalDamageUtils.AffinityDamage affinityDamage =
+                WeaponElementalDamageUtils.calculateAffinityDamage(weapon, addedDamage, store, defenderRef);
+        if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
+            damage.putMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE,
+                    WeaponElementalDamageUtils.mergeElementDamagePayload(
+                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE),
+                            affinityDamage.elementDamagePayload()));
+        }
+        if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
+            damage.setAmount(Math.max(0f, damage.getAmount() + affinityDamage.damageDelta()));
+            markAffinityDamageKind(damage, affinityDamage.type());
+        }
+    }
+
+    private void markAffinityDamageKind(Damage damage, Essence.Type type) {
+        DamageNumberFormatter.DamageKind kind = switch (type) {
+            case FIRE -> DamageNumberFormatter.DamageKind.BURN;
+            case ICE -> DamageNumberFormatter.DamageKind.ICE;
+            case LIGHTNING -> DamageNumberFormatter.DamageKind.SHOCK;
+            case WATER -> DamageNumberFormatter.DamageKind.WATER;
+            case VOID -> DamageNumberFormatter.DamageKind.VOID;
+            case LIFE -> DamageNumberFormatter.DamageKind.LIFE;
+        };
+        DamageNumberMeta.markKind(damage, kind);
     }
 
 }

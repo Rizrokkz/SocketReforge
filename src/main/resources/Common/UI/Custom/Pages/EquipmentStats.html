@@ -1,0 +1,59 @@
+<div class="page-overlay">
+    <div class="decorated-container" data-hyui-title="{{title}}" style="anchor-width: 1180; anchor-height: 760;">
+        <div class="container-contents" style="anchor-full: 14; layout-mode:Top;">
+            <h2 style="text-align:center;">{{title}}</h2>
+            <p style="text-align:center;">{{subtitle}}</p>
+            <img src="divider.png" style="anchor-width: 1140; anchor-height: 3;">
+
+            <div style="anchor-width:1140; anchor-height:620; layout-mode:Left; spacing:18;">
+                <div style="anchor-width:560; anchor-height:620; layout-mode:Top;">
+                    <p style="font-weight:bold; font-size:18; color:#FFD36A;">{{weaponTitle}}</p>
+                    <div style="anchor-width:540; anchor-height:100; layout-mode:Left; spacing:12; background-color:#1a1a2b; padding:10;">
+                        {{weaponIcon}}
+                        <div style="anchor-width:420; layout-mode:Top;">
+                            <p style="font-weight:bold; font-size:17; color:#FFFFFF;">{{weaponName}}</p>
+                            <p style="font-size:13; color:#B9C7D6;">{{weaponSummary}}</p>
+                            <p style="font-size:13; color:#B9C7D6;">{{weaponCritLine}}</p>
+                        </div>
+                    </div>
+
+                    <img src="divider.png" style="anchor-width: 540; anchor-height: 3;">
+                    <p style="font-weight:bold;">{{weaponBreakdownTitle}}</p>
+                    <div id="weaponBreakdownPanel" data-hyui-keep-scroll-position="true" style="anchor-width:540; anchor-height:205; layout-mode:TopScrolling; background-color:#101823; padding:8;">
+                        {{weaponRows}}
+                    </div>
+
+                    <img src="divider.png" style="anchor-width: 540; anchor-height: 3;">
+                    <p style="font-weight:bold;">{{weaponElementTitle}}</p>
+                    <div id="weaponElementPanel" data-hyui-keep-scroll-position="true" style="anchor-width:540; anchor-height:175; layout-mode:TopScrolling; background-color:#101823; padding:8;">
+                        {{weaponElementRows}}
+                    </div>
+                </div>
+
+                <div style="anchor-width:560; anchor-height:620; layout-mode:Top;">
+                    <p style="font-weight:bold; font-size:18; color:#83D8FF;">{{armorTitle}}</p>
+                    <div style="anchor-width:540; anchor-height:120; layout-mode:Top; background-color:#1a1a2b; padding:10;">
+                        <p style="font-weight:bold; font-size:17; color:#FFFFFF;">{{armorSummary}}</p>
+                        <p style="font-size:13; color:#B9C7D6;">{{armorBonusLine}}</p>
+                        <p style="font-size:13; color:#B9C7D6;">{{defensiveCacheLine}}</p>
+                    </div>
+
+                    <img src="divider.png" style="anchor-width: 540; anchor-height: 3;">
+                    <p style="font-weight:bold;">{{armorPiecesTitle}}</p>
+                    <div id="armorPiecesPanel" data-hyui-keep-scroll-position="true" style="anchor-width:540; anchor-height:235; layout-mode:TopScrolling; background-color:#101823; padding:8;">
+                        {{armorRows}}
+                    </div>
+
+                    <img src="divider.png" style="anchor-width: 540; anchor-height: 3;">
+                    <p style="font-weight:bold;">{{resistanceTitle}}</p>
+                    <div id="resistancePanel" data-hyui-keep-scroll-position="true" style="anchor-width:540; anchor-height:145; layout-mode:TopScrolling; background-color:#101823; padding:8;">
+                        {{resistanceRows}}
+                    </div>
+                </div>
+            </div>
+
+            <div style="flex-weight:1;"></div>
+            <p style="font-size:12; color:#B9C7D6;">{{footerText}}</p>
+        </div>
+    </div>
+</div>

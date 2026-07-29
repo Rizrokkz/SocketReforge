@@ -16,11 +16,11 @@ import irai.mod.reforge.Socket.EssenceEffect;
 
 /**
  * Tracks balanced defensive armor socket bonuses for each player while equipped.
- * This provides a central source for EVASION/DEFENSE/FIRE_DEFENSE values.
+ * This provides a central source for EVASION/DEFENSE/BLOCK_CHANCE values.
  */
 public class SocketStatSystem extends EntityTickingSystem<EntityStore> {
 
-    public record DefensiveBonuses(double defensePercent, double fireDefensePercent, double evasionPercent) {}
+    public record DefensiveBonuses(double defensePercent, double evasionPercent, double blockChancePercent) {}
 
     private static final Map<UUID, DefensiveBonuses> DEFENSIVE_CACHE = new ConcurrentHashMap<>();
 
@@ -45,12 +45,12 @@ public class SocketStatSystem extends EntityTickingSystem<EntityStore> {
             if (player == null) return;
 
             double defense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.DEFENSE);
-            double fireDefense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.FIRE_DEFENSE);
             double evasion = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.EVASION);
+            double blockChance = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.BLOCK_CHANCE);
 
             UUID uuid = player.getUuid();
             if (uuid != null) {
-                DEFENSIVE_CACHE.put(uuid, new DefensiveBonuses(defense, fireDefense, evasion));
+                DEFENSIVE_CACHE.put(uuid, new DefensiveBonuses(defense, evasion, blockChance));
             }
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketStatSystem tick error: " + t.getMessage());
@@ -80,8 +80,8 @@ public class SocketStatSystem extends EntityTickingSystem<EntityStore> {
 
     private static DefensiveBonuses computeLiveDefensiveBonuses(Player player) {
         double defense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.DEFENSE);
-        double fireDefense = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.FIRE_DEFENSE);
         double evasion = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.EVASION);
-        return new DefensiveBonuses(defense, fireDefense, evasion);
+        double blockChance = SocketArmorBonusHelper.getScaledPercentBonus(player, EssenceEffect.StatType.BLOCK_CHANCE);
+        return new DefensiveBonuses(defense, evasion, blockChance);
     }
 }

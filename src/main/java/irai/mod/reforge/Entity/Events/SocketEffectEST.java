@@ -32,8 +32,13 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
+import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreStatusTracker;
 import irai.mod.reforge.Lore.LoreDamageUtils;
@@ -43,6 +48,7 @@ import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Util.DamageNumberFormatter;
 
 /**
  * Entity Stat Type (EST) that applies socket effects to damage calculations.
@@ -189,18 +195,43 @@ public class SocketEffectEST extends DamageEventSystem {
                         return;
                     }
 
+                    double blockChance = Math.max(0.0, Math.min(100.0, defensiveBonuses.blockChancePercent()));
+                    if (blockChance > 0.0 && ThreadLocalRandom.current().nextDouble(100.0) < blockChance) {
+                        damage.putMetaObject(Damage.BLOCKED, Boolean.TRUE);
+                        damage.setAmount(0f);
+                        return;
+                    }
+
                     double defenseMultiplier = 1.0 + (defensiveBonuses.defensePercent() / 100.0);
-                    double flatReduction = calculateSocketFlatDefense(armorPieces);
+                    double flatReduction = calculateSocketFlatDefense(defenderPlayer, armorPieces);
                     double slowPercent = 0.0;
                     // ICE armor slow is enemy-only: it should penalize the attacker, never the defender.
                     if (attacker != null && !isSamePlayer(attacker, defenderPlayer)) {
                         slowPercent = SocketArmorBonusHelper.getScaledPercentBonus(defenderPlayer, EssenceEffect.StatType.MOVEMENT_SPEED);
                         slowPercent = Math.max(0.0, Math.min(ICE_SLOW_DAMAGE_PENALTY_CAP, slowPercent));
                     }
-                    double fireDefensePercent = isFireDamage(damage) ? defensiveBonuses.fireDefensePercent() : 0.0;
-                    double fireDefenseMultiplier = Math.max(0.0, 1.0 - (fireDefensePercent / 100.0));
+                    Map<Essence.Type, Double> incomingWeaponElementDamage = WeaponElementalDamageUtils.decodeElementDamage(
+                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE));
+                    boolean hasIncomingWeaponElementDamage = hasAnyIncomingElementDamage(incomingWeaponElementDamage);
+                    Essence.Type incomingAffinityType = hasIncomingWeaponElementDamage
+                            ? null
+                            : ElementalAffinityUtils.resolveTargetAffinity(store, attackerRef);
+                    if (incomingAffinityType != null) {
+                        markAffinityDamageKind(damage, incomingAffinityType);
+                    }
+                    double affinityDefensePercent = hasIncomingWeaponElementDamage
+                            ? 0.0d
+                            : ArmorAffinityResistanceUtils.calculateResistancePercent(
+                                    defenderPlayer,
+                                    armorPieces,
+                                    incomingAffinityType);
+                    double affinityDefenseMultiplier = Math.max(0.0, 1.0 - (affinityDefensePercent / 100.0));
 
-                    if (defenseMultiplier != 1.0 || flatReduction != 0 || fireDefenseMultiplier != 1.0 || slowPercent > 0.0) {
+                    if (defenseMultiplier != 1.0
+                            || flatReduction != 0
+                            || affinityDefenseMultiplier != 1.0
+                            || hasIncomingWeaponElementDamage
+                            || slowPercent > 0.0) {
                         float damageAmount = damage.getAmount();
 
                         // Ice armor slow: model as reduced attacker hit potency.
@@ -210,10 +241,28 @@ public class SocketEffectEST extends DamageEventSystem {
 
                         float reducedDamage = (float) Math.max(0, (damageAmount / defenseMultiplier) - flatReduction);
                         
-                        // Fire defense only applies to fire-like damage causes.
-                        reducedDamage = (float) (reducedDamage * fireDefenseMultiplier);
+                        if (hasIncomingWeaponElementDamage) {
+                            double genericScale = damageAmount <= 0.0001f ? 0.0d : reducedDamage / damageAmount;
+                            double elementalReduction = calculateIncomingWeaponElementalReduction(
+                                    defenderPlayer,
+                                    armorPieces,
+                                    incomingWeaponElementDamage,
+                                    genericScale);
+                            reducedDamage = (float) Math.max(0.0d, reducedDamage - elementalReduction);
+                        } else {
+                            reducedDamage = (float) (reducedDamage * affinityDefenseMultiplier);
+                        }
 
                         damage.setAmount(reducedDamage);
+
+                        if (DEBUG_DAMAGE_LOG && (affinityDefensePercent > 0.0d || hasIncomingWeaponElementDamage)) {
+                            System.out.println("[SocketReforge][ARMOR_AFFINITY] defender=" + defenderPlayer.getUuid()
+                                    + " incoming=" + incomingAffinityType
+                                    + " weaponElements=" + incomingWeaponElementDamage
+                                    + " resistPercent=" + affinityDefensePercent
+                                    + " multiplier=" + affinityDefenseMultiplier
+                                    + " final=" + reducedDamage);
+                        }
                     }
 
                     // Apply Fire Burn effect on hit if Fire Essence is Max Tier
@@ -228,6 +277,7 @@ public class SocketEffectEST extends DamageEventSystem {
             }
 
             if (attacker != null && targetRef != null && attackerWeapon != null) {
+                float beforeWeaponResonanceDamage = damage.getAmount();
                 applyWeaponResonanceOnHit(
                         store,
                         commandBuffer,
@@ -239,6 +289,7 @@ public class SocketEffectEST extends DamageEventSystem {
                         attackerResonanceType,
                         damage
                 );
+                applyElementalAffinityToAddedDamage(store, targetRef, attackerWeapon, damage, beforeWeaponResonanceDamage);
             }
 
             // Log final per-hit damage after socket processing for easier balancing/debugging.
@@ -794,26 +845,44 @@ public class SocketEffectEST extends DamageEventSystem {
         damage.setAmount(Math.max(0f, penalized));
     }
 
-    private boolean isFireDamage(Damage damage) {
-        if (damage == null) {
-            return false;
+    private void markAffinityDamageKind(Damage damage, Essence.Type type) {
+        if (damage == null || type == null) {
+            return;
         }
-        try {
-            var cause = damage.getCause();
-            if (cause == null) {
-                return false;
-            }
-            String causeId = cause.getId();
-            if (causeId == null || causeId.isBlank()) {
-                return false;
-            }
-            String lower = causeId.toLowerCase(Locale.ROOT);
-            return lower.contains("fire")
-                    || lower.contains("burn")
-                    || lower.contains("lava")
-                    || lower.contains("flame");
-        } catch (Throwable ignored) {
-            return false;
+        DamageNumberFormatter.DamageKind kind = switch (type) {
+            case FIRE -> DamageNumberFormatter.DamageKind.BURN;
+            case ICE -> DamageNumberFormatter.DamageKind.ICE;
+            case LIGHTNING -> DamageNumberFormatter.DamageKind.SHOCK;
+            case WATER -> DamageNumberFormatter.DamageKind.WATER;
+            case VOID -> DamageNumberFormatter.DamageKind.VOID;
+            case LIFE -> DamageNumberFormatter.DamageKind.LIFE;
+        };
+        DamageNumberMeta.markKind(damage, kind);
+    }
+
+    private void applyElementalAffinityToAddedDamage(Store<EntityStore> store,
+                                                     Ref<EntityStore> targetRef,
+                                                     ItemStack weapon,
+                                                     Damage damage,
+                                                     float beforeDamage) {
+        if (store == null || targetRef == null || weapon == null || damage == null) {
+            return;
+        }
+        float addedDamage = damage.getAmount() - beforeDamage;
+        if (addedDamage <= 0.0001f) {
+            return;
+        }
+        WeaponElementalDamageUtils.AffinityDamage affinityDamage =
+                WeaponElementalDamageUtils.calculateAffinityDamage(weapon, addedDamage, store, targetRef);
+        if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
+            damage.putMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE,
+                    WeaponElementalDamageUtils.mergeElementDamagePayload(
+                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE),
+                            affinityDamage.elementDamagePayload()));
+        }
+        if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
+            damage.setAmount(Math.max(0f, damage.getAmount() + affinityDamage.damageDelta()));
+            markAffinityDamageKind(damage, affinityDamage.type());
         }
     }
 
@@ -890,15 +959,60 @@ public class SocketEffectEST extends DamageEventSystem {
     /**
      * Calculates the total flat defense reduction from socketed armor essences using tier-based calculation.
      */
-    private double calculateSocketFlatDefense(List<ItemStack> armorPieces) {
+    private double calculateSocketFlatDefense(Player player, List<ItemStack> armorPieces) {
         double totalReduction = 0;
 
         for (ItemStack armor : armorPieces) {
             double[] bonuses = SocketManager.getStoredStatBonus(armor, EssenceEffect.StatType.DEFENSE);
-            totalReduction += bonuses[0];
+            totalReduction += EquipmentDurabilityPenaltyUtils.scaleBonus(
+                    bonuses[0],
+                    player,
+                    armor,
+                    EquipmentDurabilityPenaltyUtils.BrokenKind.ARMOR);
         }
 
         return totalReduction;
+    }
+
+    private boolean hasAnyIncomingElementDamage(Map<Essence.Type, Double> incomingElementDamage) {
+        if (incomingElementDamage == null || incomingElementDamage.isEmpty()) {
+            return false;
+        }
+        for (double value : incomingElementDamage.values()) {
+            if (value > 0.0001d) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private double calculateIncomingWeaponElementalReduction(
+            Player defender,
+            List<ItemStack> armorPieces,
+            Map<Essence.Type, Double> incomingElementDamage,
+            double genericScale) {
+        if (armorPieces == null || armorPieces.isEmpty()
+                || incomingElementDamage == null || incomingElementDamage.isEmpty()
+                || genericScale <= 0.0001d) {
+            return 0.0d;
+        }
+
+        double totalReduction = 0.0d;
+        for (Essence.Type incomingType : Essence.Type.values()) {
+            double elementDamage = incomingElementDamage.getOrDefault(incomingType, 0.0d);
+            if (elementDamage <= 0.0001d) {
+                continue;
+            }
+            double resistancePercent = ArmorAffinityResistanceUtils.calculateResistancePercent(
+                    defender,
+                    armorPieces,
+                    incomingType);
+            if (resistancePercent <= 0.0001d) {
+                continue;
+            }
+            totalReduction += elementDamage * genericScale * (resistancePercent / 100.0d);
+        }
+        return Math.max(0.0d, totalReduction);
     }
 
     /**
@@ -1008,20 +1122,6 @@ public class SocketEffectEST extends DamageEventSystem {
             if (value != null) return value.getIndex();
         }
         return -1;
-    }
-
-    /**
-     * Calculates the total fire defense multiplier from socketed armor essences using tier-based calculation.
-     */
-    private double calculateSocketFireDefenseBonus(List<ItemStack> armorPieces) {
-        double totalPercent = 0.0;
-
-        for (ItemStack armor : armorPieces) {
-            double[] bonuses = SocketManager.getStoredStatBonus(armor, EssenceEffect.StatType.FIRE_DEFENSE);
-            totalPercent += bonuses[1];
-        }
-
-        return Math.max(0.0, 1.0 - (totalPercent / 100.0));
     }
 
     private boolean isProjectileDamage(Damage damage) {

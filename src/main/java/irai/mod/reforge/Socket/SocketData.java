@@ -251,6 +251,7 @@ public class SocketData {
             case EVASION: return StatType.EVASION;
             case REGENERATION: return StatType.REGENERATION;
             case FIRE_DEFENSE: return StatType.FIRE_DEFENSE;
+            case BLOCK_CHANCE: return StatType.BLOCK_CHANCE;
             case LIFE_STEAL: return StatType.LIFE_STEAL;
             case MOVEMENT_SPEED: return StatType.MOVEMENT_SPEED;
             case LUCK: return StatType.LUCK;
@@ -270,6 +271,7 @@ public class SocketData {
             case EVASION: return EssenceEffect.StatType.EVASION;
             case REGENERATION: return EssenceEffect.StatType.REGENERATION;
             case FIRE_DEFENSE: return EssenceEffect.StatType.FIRE_DEFENSE;
+            case BLOCK_CHANCE: return EssenceEffect.StatType.BLOCK_CHANCE;
             case LIFE_STEAL: return EssenceEffect.StatType.LIFE_STEAL;
             case MOVEMENT_SPEED: return EssenceEffect.StatType.MOVEMENT_SPEED;
             case LUCK: return EssenceEffect.StatType.LUCK;
@@ -326,26 +328,7 @@ public class SocketData {
         // Register colored socket display with broken socket info
         DynamicTooltipUtils.registerColoredSocketTooltip(itemId, null, maxSockets, socketColors, brokenSockets);
 
-        // Try to get tier info from metadata first
-        String[] effectTypes = SocketManager.getEssenceEffects(item);
-        String[] effectTiers = SocketManager.getEssenceTiers(item);
-        
-        // Fall back to calculating from socket data if not in metadata
-        Map<Essence.Type, Integer> tierMap;
-        if (effectTypes != null && effectTiers != null && effectTypes.length == effectTiers.length) {
-            tierMap = new LinkedHashMap<>();
-            for (int i = 0; i < effectTypes.length; i++) {
-                try {
-                    Essence.Type type = Essence.Type.valueOf(effectTypes[i]);
-                    int tier = Integer.parseInt(effectTiers[i]);
-                    tierMap.put(type, tier);
-                } catch (Exception e) {
-                    // Ignore invalid entries
-                }
-            }
-        } else {
-            tierMap = SocketManager.calculateConsecutiveTiers(this);
-        }
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateDisplayConsecutiveTiers(this);
 
         // Add stat bonuses from metadata so tooltip values match applied gameplay values.
         List<String> statLines = new ArrayList<>();
@@ -409,7 +392,7 @@ public class SocketData {
         DynamicTooltipUtils.registerColoredSocketTooltip(itemId, null, maxSockets, socketColors, brokenSockets);
 
         // Calculate tier map
-        Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(this);
+        Map<Essence.Type, Integer> tierMap = SocketManager.calculateDisplayConsecutiveTiers(this);
 
         // Add stat bonuses
         List<String> statLines = new ArrayList<>();

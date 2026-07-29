@@ -28,6 +28,8 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Common.UI.HyUIEditUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
@@ -36,6 +38,7 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -1544,6 +1547,7 @@ public final class ReforgeBenchUI {
             sb.append(statRow(t(player, "ui.reforge.base_defense"), formatDamageValue(armor.base), "#D8DEE9", "#FFFFFF"));
             sb.append(statRow(t(player, "ui.reforge.essence_resonance_defense"), bonusLine(0.0, armor.defensePercent), "#77DD77", "#77DD77"));
             appendArmorBonusRows(player, sb, armor);
+            appendArmorAffinityRows(player, sb, item);
             return sb.toString();
         }
 
@@ -1552,6 +1556,7 @@ public final class ReforgeBenchUI {
         WeaponDamageProfile averageProfile = weaponProfile(item, level, 0.0);
         sb.append(statRow(t(player, "ui.reforge.damage_multiplier"), "x" + format3(averageProfile.multiplier), "#83D8FF", "#83D8FF"));
         sb.append(statRow(t(player, "ui.reforge.essence_resonance_damage"), bonusLine(averageProfile.damageFlat, averageProfile.damagePercent), "#77DD77", "#77DD77"));
+        appendWeaponElementalDamageRows(player, sb, item, averageProfile.normal);
         sb.append(statRow(t(player, "ui.reforge.crit"), formatPercent(averageProfile.critChance / 100.0)
                 + " / +" + formatPercent(averageProfile.critDamage / 100.0), "#FF8888", "#FFAAAA"));
         if (breakdowns.isEmpty()) {
@@ -1598,6 +1603,7 @@ public final class ReforgeBenchUI {
             sb.append(statRow(t(player, "ui.reforge.base_defense"), formatDamageValue(nextArmor.base), "#D8DEE9", "#FFFFFF"));
             sb.append(statRow(t(player, "ui.reforge.essence_resonance_defense"), bonusLine(0.0, nextArmor.defensePercent), "#77DD77", "#77DD77"));
             appendArmorBonusRows(player, sb, nextArmor);
+            appendArmorAffinityRows(player, sb, item);
             sb.append(statRow(t(player, "ui.reforge.preview_upgrade_line", format3(statMultiplierForLevel(nextLevel, true))),
                     "+" + formatPercent(statMultiplierForLevel(nextLevel, true) - statMultiplierForLevel(level, true)), "#83D8FF", "#83D8FF"));
             return sb.toString();
@@ -1609,6 +1615,7 @@ public final class ReforgeBenchUI {
         WeaponDamageProfile nextAverage = weaponProfile(item, nextLevel, 0.0);
         sb.append(statRow(t(player, "ui.reforge.damage_multiplier"), "x" + format3(nextAverage.multiplier), "#83D8FF", "#83D8FF"));
         sb.append(statRow(t(player, "ui.reforge.essence_resonance_damage"), bonusLine(currentAverage.damageFlat, currentAverage.damagePercent), "#77DD77", "#77DD77"));
+        appendWeaponElementalDamageRows(player, sb, item, nextAverage.normal);
         sb.append(statRow(t(player, "ui.reforge.crit"), formatPercent(currentAverage.critChance / 100.0)
                 + " / +" + formatPercent(currentAverage.critDamage / 100.0), "#FF8888", "#FFAAAA"));
         if (breakdowns.isEmpty()) {
@@ -1754,9 +1761,39 @@ public final class ReforgeBenchUI {
     private static void appendArmorBonusRows(Player player, StringBuilder sb, ArmorProfile armor) {
         appendBonusRow(player, sb, "ui.reforge.health_bonus", armor.healthFlat, armor.healthPercent, "#77DD77");
         appendBonusRow(player, sb, "ui.reforge.regen_bonus", armor.regenFlat, armor.regenPercent, "#77DD77");
-        appendBonusRow(player, sb, "ui.reforge.fire_defense_bonus", armor.fireDefenseFlat, armor.fireDefensePercent, "#FFAA55");
         appendBonusRow(player, sb, "ui.reforge.evasion_bonus", armor.evasionFlat, armor.evasionPercent, "#83D8FF");
+        appendBonusRow(player, sb, "ui.reforge.block_chance_bonus", armor.blockChanceFlat, armor.blockChancePercent, "#FFD166");
         appendBonusRow(player, sb, "ui.reforge.slow_bonus", armor.slowFlat, armor.slowPercent, "#AAAAFF");
+    }
+
+    private static void appendArmorAffinityRows(Player player, StringBuilder sb, ItemStack armor) {
+        Map<Essence.Type, Double> resistances = ArmorAffinityResistanceUtils.calculateResistancePercentByIncomingType(armor);
+        if (!ArmorAffinityResistanceUtils.hasAnyResistance(resistances)) {
+            return;
+        }
+        for (Essence.Type type : Essence.Type.values()) {
+            double percent = resistances.getOrDefault(type, 0.0d);
+            if (percent <= 0.0001d) {
+                continue;
+            }
+            sb.append(statRow(
+                    t(player, "ui.reforge.affinity_resistance_element", localizeEssenceType(player, type)),
+                    formatPercent(percent / 100.0d),
+                    "#B388FF",
+                    "#D8B4FE"));
+        }
+    }
+
+    private static void appendWeaponElementalDamageRows(Player player, StringBuilder sb, ItemStack weapon, double damageOutput) {
+        List<WeaponElementalDamageUtils.ElementDamage> elementDamages =
+                WeaponElementalDamageUtils.calculateElementDamage(weapon, damageOutput);
+        for (WeaponElementalDamageUtils.ElementDamage elementDamage : elementDamages) {
+            sb.append(statRow(
+                    t(player, "ui.reforge.elemental_damage_element", localizeEssenceType(player, elementDamage.type())),
+                    formatDamageValue(elementDamage.damage()) + " (" + formatPercent(elementDamage.rate()) + ")",
+                    essenceColor(elementDamage.type()),
+                    "#D8B4FE"));
+        }
     }
 
     private static void appendBonusRow(Player player,
@@ -1780,8 +1817,8 @@ public final class ReforgeBenchUI {
         double[] defense = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.DEFENSE);
         double[] health = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.HEALTH);
         double[] regen = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.REGENERATION);
-        double[] fireDefense = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.FIRE_DEFENSE);
         double[] evasion = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.EVASION);
+        double[] blockChance = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.BLOCK_CHANCE);
         double[] slow = SocketManager.getStoredStatBonus(item, EssenceEffect.StatType.MOVEMENT_SPEED);
         return new ArmorProfile(
                 summary.getBaseValue(),
@@ -1793,10 +1830,10 @@ public final class ReforgeBenchUI {
                 health[1],
                 regen[0],
                 regen[1],
-                fireDefense[0],
-                fireDefense[1],
                 evasion[0],
                 evasion[1],
+                blockChance[0],
+                blockChance[1],
                 slow[0],
                 slow[1]);
     }
@@ -1821,10 +1858,10 @@ public final class ReforgeBenchUI {
                                 double healthPercent,
                                 double regenFlat,
                                 double regenPercent,
-                                double fireDefenseFlat,
-                                double fireDefensePercent,
                                 double evasionFlat,
                                 double evasionPercent,
+                                double blockChanceFlat,
+                                double blockChancePercent,
                                 double slowFlat,
                                 double slowPercent) {}
     private record WeaponDamageProfile(double base,
@@ -1953,6 +1990,40 @@ public final class ReforgeBenchUI {
             return Long.toString(rounded);
         }
         return String.format(Locale.ROOT, "%.1f", safe);
+    }
+
+    private static String localizeEssenceType(Player player, Essence.Type type) {
+        if (type == null) {
+            return t(player, "tooltip.essence.unknown");
+        }
+        String key = switch (type) {
+            case FIRE -> "essence.type.fire";
+            case WATER -> "essence.type.water";
+            case ICE -> "essence.type.ice";
+            case LIGHTNING -> "essence.type.lightning";
+            case LIFE -> "essence.type.life";
+            case VOID -> "essence.type.void";
+        };
+        String translated = LangLoader.getUITranslation(player, key);
+        if (translated == null || translated.isBlank() || translated.equals(key)) {
+            String raw = type.name().toLowerCase(Locale.ROOT);
+            return raw.isEmpty() ? type.name() : Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+        }
+        return translated;
+    }
+
+    private static String essenceColor(Essence.Type type) {
+        if (type == null) {
+            return "#D8DEE9";
+        }
+        return switch (type) {
+            case FIRE -> "#FFAA55";
+            case WATER -> "#5599FF";
+            case ICE -> "#55FFFF";
+            case LIGHTNING -> "#FFFF55";
+            case LIFE -> "#55FF55";
+            case VOID -> "#B388FF";
+        };
     }
 
     private static String t(Player player, String key, Object... params) {

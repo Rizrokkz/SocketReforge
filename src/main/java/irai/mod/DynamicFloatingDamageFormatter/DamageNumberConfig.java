@@ -67,6 +67,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
             "SHOCK|label=|color=#FFFF55|ui=SocketReforge_CombatText_Shock|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Shock",
             "WATER|label=|color=#5555FF|ui=SocketReforge_CombatText_Water|particleFont=FloatingDamage",
             "VOID|label=|color=#8000FF|ui=SocketReforge_CombatText_Void|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Void",
+            "LIFE|label=|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage",
             "HEAL|label=|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage"
     };
 
@@ -87,6 +88,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
             "electric=SHOCK",
             "water=WATER",
             "void=VOID",
+            "life=LIFE",
             "heal=HEAL",
             "regen=HEAL"
     };
