@@ -1120,7 +1120,7 @@ public final class RuntimeConfigUI {
         String targetId = isNpcLootInjectionGroup(groupId)
                 ? draftOrContextValue(state, ctxObj, lootInjectionTargetInputId(groupId, index), entry.targetId()).trim()
                 : "";
-        String chance = normalizeDecimalText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, index), entry.chance()), entry.chance(), true);
+        String chance = normalizeLootChanceText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, index), entry.chance()), entry.chance());
         int minQty = Math.max(0, parseIntSafe(normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMinInputId(groupId, index), entry.min()), entry.min()), 1));
         int maxQty = Math.max(minQty, parseIntSafe(normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMaxInputId(groupId, index), entry.max()), entry.max()), minQty));
         if (!itemId.isBlank()) {
@@ -1301,7 +1301,7 @@ public final class RuntimeConfigUI {
             String targetId = isNpcLootInjectionGroup(groupId)
                     ? draftOrContextValue(state, ctxObj, lootInjectionTargetInputId(groupId, i), entry.targetId()).trim()
                     : "";
-            String chance = normalizeDecimalText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, i), entry.chance()), entry.chance(), true);
+            String chance = normalizeLootChanceText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, i), entry.chance()), entry.chance());
             String min = normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMinInputId(groupId, i), entry.min()), entry.min());
             String max = normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMaxInputId(groupId, i), entry.max()), entry.max());
             if (!itemId.isBlank()) {
@@ -4526,6 +4526,25 @@ public final class RuntimeConfigUI {
         return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
     }
 
+    private static String normalizeLootChanceText(String raw, String fallback) {
+        Double parsed = extractFirstNumber(raw);
+        if (parsed == null) {
+            return fallback;
+        }
+        double value = parsed;
+        if (value > 1.0d) {
+            value = value / 100.0d;
+        }
+        value = clampChance(value);
+        return formatPreciseChance(value);
+    }
+
+    private static String formatPreciseChance(double value) {
+        return String.format(Locale.ROOT, "%.8f", value)
+                .replaceAll("0+$", "")
+                .replaceAll("\\.$", ".0");
+    }
+
     private static String normalizeAffinityMultiplierText(String raw, String fallback) {
         Double parsed = extractFirstNumber(raw);
         if (parsed == null) {
@@ -4753,7 +4772,7 @@ public final class RuntimeConfigUI {
         String[] split = raw.trim().split("=", 2);
         String itemId = split[0].trim();
         String[] params = split.length > 1 ? split[1].split(",") : new String[0];
-        String chance = params.length > 0 ? normalizeDecimalText(params[0], "0.0", true) : "0.0";
+        String chance = params.length > 0 ? normalizeLootChanceText(params[0], "0.0") : "0.0";
         String min = params.length > 1 ? normalizeIntegerText(params[1], "1") : "1";
         String max = params.length > 2 ? normalizeIntegerText(params[2], min) : min;
         String targetId = params.length > 3 ? params[3].trim() : "";

@@ -210,7 +210,7 @@ public final class LootInjectionUtils {
     }
 
     private static String formatChance(double value) {
-        return String.format(Locale.ROOT, "%.4f", clamp01(value))
+        return String.format(Locale.ROOT, "%.8f", clamp01(value))
                 .replaceAll("0+$", "")
                 .replaceAll("\\.$", ".0");
     }
