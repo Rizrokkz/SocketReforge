@@ -1,6 +1,8 @@
 package irai.mod.DynamicFloatingDamageFormatter;
 
 import static com.hypixel.hytale.codec.Codec.BOOLEAN;
+import static com.hypixel.hytale.codec.Codec.DOUBLE;
+import static com.hypixel.hytale.codec.Codec.INTEGER;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 
 import java.util.Arrays;
@@ -39,6 +41,26 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
                             new KeyedCodec<>("USE_CUSTOM_COMBAT_TEXT", BOOLEAN),
                             (cfg, v) -> cfg.useCustomCombatText = v,
                             cfg -> cfg.useCustomCombatText
+                    ).add()
+                    .append(
+                            new KeyedCodec<>("CULLING_ENABLED", BOOLEAN),
+                            (cfg, v) -> cfg.cullingEnabled = v,
+                            cfg -> cfg.cullingEnabled
+                    ).add()
+                    .append(
+                            new KeyedCodec<>("CULLING_WINDOW_MS", INTEGER),
+                            (cfg, v) -> cfg.cullingWindowMs = v,
+                            cfg -> cfg.cullingWindowMs
+                    ).add()
+                    .append(
+                            new KeyedCodec<>("CULLING_MAX_PER_TARGET", INTEGER),
+                            (cfg, v) -> cfg.cullingMaxPerTarget = v,
+                            cfg -> cfg.cullingMaxPerTarget
+                    ).add()
+                    .append(
+                            new KeyedCodec<>("CULLING_BYPASS_AMOUNT", DOUBLE),
+                            (cfg, v) -> cfg.cullingBypassAmount = v,
+                            cfg -> cfg.cullingBypassAmount
                     ).add()
                     .build();
 
@@ -94,16 +116,28 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
     };
 
     private boolean useCustomCombatText = true;
+    private boolean cullingEnabled = true;
+    private int cullingWindowMs = 500;
+    private int cullingMaxPerTarget = 6;
+    private double cullingBypassAmount = 75.0d;
 
     public String[] getDefaultsEntries() { return defaultsEntries; }
     public String[] getKindEntries() { return kindEntries; }
     public String[] getAliasEntries() { return aliasEntries; }
     public boolean isUseCustomCombatText() { return useCustomCombatText; }
+    public boolean isCullingEnabled() { return cullingEnabled; }
+    public int getCullingWindowMs() { return cullingWindowMs; }
+    public int getCullingMaxPerTarget() { return cullingMaxPerTarget; }
+    public double getCullingBypassAmount() { return cullingBypassAmount; }
 
     public void setDefaultsEntries(String[] v) { this.defaultsEntries = v; }
     public void setKindEntries(String[] v) { this.kindEntries = v; }
     public void setAliasEntries(String[] v) { this.aliasEntries = v; }
     public void setUseCustomCombatText(boolean v) { this.useCustomCombatText = v; }
+    public void setCullingEnabled(boolean v) { this.cullingEnabled = v; }
+    public void setCullingWindowMs(int v) { this.cullingWindowMs = v; }
+    public void setCullingMaxPerTarget(int v) { this.cullingMaxPerTarget = v; }
+    public void setCullingBypassAmount(double v) { this.cullingBypassAmount = v; }
 
     @Override
     public boolean injectMissingDefaults() {
@@ -137,6 +171,10 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
         this.kindEntries = defaults.kindEntries == null ? null : defaults.kindEntries.clone();
         this.aliasEntries = defaults.aliasEntries == null ? null : defaults.aliasEntries.clone();
         this.useCustomCombatText = defaults.useCustomCombatText;
+        this.cullingEnabled = defaults.cullingEnabled;
+        this.cullingWindowMs = defaults.cullingWindowMs;
+        this.cullingMaxPerTarget = defaults.cullingMaxPerTarget;
+        this.cullingBypassAmount = defaults.cullingBypassAmount;
     }
 }
 

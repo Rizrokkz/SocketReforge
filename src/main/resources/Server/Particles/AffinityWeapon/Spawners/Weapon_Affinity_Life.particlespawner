@@ -1,0 +1,127 @@
+{
+    "RenderMode":  "BlendAdd",
+    "EmitOffset":  {
+                       "X":  {
+                                 "Min":  0,
+                                 "Max":  0
+                             },
+                       "Y":  {
+                                 "Min":  0,
+                                 "Max":  0
+                             },
+                       "Z":  {
+                                 "Min":  0,
+                                 "Max":  0
+                             }
+                   },
+    "ParticleRotationInfluence":  "None",
+    "LinearFiltering":  true,
+    "LightInfluence":  0,
+    "ParticleRotateWithSpawner":  true,
+    "TrailSpawnerPositionMultiplier":  0,
+    "TrailSpawnerRotationMultiplier":  0,
+    "InitialVelocity":  {
+                            "Speed":  {
+                                          "Min":  0,
+                                          "Max":  0
+                                      },
+                            "Yaw":  {
+                                        "Min":  0,
+                                        "Max":  0
+                                    },
+                            "Pitch":  {
+                                          "Min":  0,
+                                          "Max":  0
+                                      }
+                        },
+    "Particle":  {
+                     "Texture":  "Particles/Textures/Affinity/life.png",
+                     "ScaleRatioConstraint":  "OneToOne",
+                     "Animation":  {
+                                       "0":  {
+                                                 "Opacity":  0.95,
+                                                 "Scale":  {
+                                                               "X":  {
+                                                                         "Min":  0.66,
+                                                                         "Max":  0.66
+                                                                     }
+                                                           },
+                                                 "Rotation":  {
+                                                                  "X":  {
+                                                                            "Min":  0,
+                                                                            "Max":  0
+                                                                        },
+                                                                  "Y":  {
+                                                                            "Min":  0,
+                                                                            "Max":  0
+                                                                        },
+                                                                  "Z":  {
+                                                                            "Min":  90,
+                                                                            "Max":  90
+                                                                        }
+                                                              }
+                                             },
+                                       "100":  {
+                                                   "Opacity":  0.0,
+                                                   "Scale":  {
+                                                                 "X":  {
+                                                                           "Min":  0.66,
+                                                                           "Max":  0.66
+                                                                       }
+                                                             },
+                                                   "Rotation":  {
+                                                                    "X":  {
+                                                                              "Min":  0,
+                                                                              "Max":  0
+                                                                          },
+                                                                    "Y":  {
+                                                                              "Min":  0,
+                                                                              "Max":  0
+                                                                          },
+                                                                    "Z":  {
+                                                                              "Min":  90,
+                                                                              "Max":  90
+                                                                          }
+                                                                }
+                                               }
+                                   },
+                     "InitialAnimationFrame":  {
+                                                   "Opacity":  0.95,
+                                                   "Scale":  {
+                                                                 "X":  {
+                                                                           "Min":  0.66,
+                                                                           "Max":  0.66
+                                                                       }
+                                                             },
+                                                   "Rotation":  {
+                                                                    "X":  {
+                                                                              "Min":  0,
+                                                                              "Max":  0
+                                                                          },
+                                                                    "Y":  {
+                                                                              "Min":  0,
+                                                                              "Max":  0
+                                                                          },
+                                                                    "Z":  {
+                                                                              "Min":  90,
+                                                                              "Max":  90
+                                                                          }
+                                                                }
+                                               },
+                     "SoftParticles":  "Require"
+                 },
+    "ParticleLifeSpan":  {
+                             "Min":  0.3,
+                             "Max":  0.3
+                         },
+    "SpawnRate":  {
+                      "Min":  1,
+                      "Max":  1
+                  },
+    "MaxConcurrentParticles":  2,
+    "WaveDelay":  {
+                      "Min":  0.2,
+                      "Max":  0.2
+                  },
+    "SpawnBurst":  true
+}

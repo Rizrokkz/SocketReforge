@@ -1,0 +1,8 @@
+{
+  "Spawners": [
+    { "SpawnerId": "Weapon_Affinity_Ice" },
+    { "SpawnerId": "Weapon_Affinity_Ice_Back" }
+  ],
+  "BoundingRadius": 4,
+  "IsImportant": false
+}

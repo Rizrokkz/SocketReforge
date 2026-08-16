@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Iterator;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
@@ -47,8 +49,13 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
+import irai.mod.reforge.Common.EnemyElementalShieldUtils;
+import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Lore.LoreTargetingUtils;
+import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.UI.EnemyAffinityHudUI;
 
 public class DamageNumberEST extends DamageEventSystem {
     private static final float NON_DOT_RANDOM_JITTER_DEGREES = 240f;
@@ -67,7 +74,14 @@ public class DamageNumberEST extends DamageEventSystem {
     private static final HytaleLogger LOGGER = HytaleLogger.get("SocketReforge.DamageNumber");
     private static final HytaleLogger ROOT_LOGGER = HytaleLogger.getLogger();
     private static final Level DEBUG_LOG_LEVEL = Level.WARNING;
+    private static final long CULL_BUCKET_TTL_MS = 10_000L;
     private static volatile boolean customCombatTextEnabled = true;
+    private static volatile boolean cullingEnabled = true;
+    private static volatile int cullingWindowMs = 500;
+    private static volatile int cullingMaxPerTarget = 6;
+    private static volatile double cullingBypassAmount = 75.0d;
+    private static volatile long lastCullCleanupMs = 0L;
+    private static final ConcurrentHashMap<String, CullBucket> cullBuckets = new ConcurrentHashMap<>();
 
     static {
         try {
@@ -115,6 +129,20 @@ public class DamageNumberEST extends DamageEventSystem {
 
     public static boolean isCustomCombatTextEnabled() {
         return customCombatTextEnabled;
+    }
+
+    public static void applyConfig(DamageNumberConfig config) {
+        if (config == null) {
+            cullingEnabled = true;
+            cullingWindowMs = 500;
+            cullingMaxPerTarget = 6;
+            cullingBypassAmount = 75.0d;
+            return;
+        }
+        cullingEnabled = config.isCullingEnabled();
+        cullingWindowMs = Math.max(50, config.getCullingWindowMs());
+        cullingMaxPerTarget = Math.max(0, config.getCullingMaxPerTarget());
+        cullingBypassAmount = Math.max(0.0d, config.getCullingBypassAmount());
     }
 
     public static void resetCombatTextComponentsForAllViewers() {
@@ -179,7 +207,10 @@ public class DamageNumberEST extends DamageEventSystem {
             debug("[DamageNumberEST] skip via meta");
             return;
         }
-        if (damage.getAmount() <= 0f) {
+        double shieldDamage = safeDouble(damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ABSORBED_DAMAGE));
+        boolean shieldActiveHit = Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ACTIVE_HIT));
+        if (damage.getAmount() <= 0f && shieldDamage <= 0.0001d && !shieldActiveHit) {
             debug("[DamageNumberEST] skip amount <= 0");
             return;
         }
@@ -201,8 +232,18 @@ public class DamageNumberEST extends DamageEventSystem {
             debug("[DamageNumberEST] visibleComponentType is null");
         }
         String kindId = resolveKind(damage);
+        EnemyAffinityHudUI.showDamage(store, attackerRef, targetRef, damage.getAmount(), kindId, (float) shieldDamage, shieldActiveHit);
+        float displayAmount = resolveDisplayAmount(damage.getAmount(), shieldDamage, shieldActiveHit);
+        if (displayAmount <= 0f) {
+            debug("[DamageNumberEST] skip combat text for guarded zero display");
+            return;
+        }
+        if (shouldCullFloatingDamage(targetRef, displayAmount)) {
+            debug("[DamageNumberEST] culled floating damage for target=" + targetRef);
+            return;
+        }
         applyCombatTextVfx(store, targetRef, attackerRef, visible, kindId);
-        if (trySpawnParticleFloatingDamage(store, targetRef, attackerRef, visible, damage.getAmount(), kindId)) {
+        if (trySpawnParticleFloatingDamage(store, targetRef, attackerRef, visible, displayAmount, kindId)) {
             return;
         }
         UIComponentList uiList = null;
@@ -232,7 +273,7 @@ public class DamageNumberEST extends DamageEventSystem {
             resolvedAngle += jitter;
         }
         resolvedAngle = normalizeAngle(resolvedAngle);
-        String text = DamageNumbers.format(damage.getAmount(), kindId);
+        String text = DamageNumbers.format(displayAmount, kindId);
         CombatTextUpdate update = new CombatTextUpdate(resolvedAngle, text);
         for (EntityViewer viewer : viewers) {
             if (viewer == null) {
@@ -762,7 +803,50 @@ public class DamageNumberEST extends DamageEventSystem {
     }
 
     private static String resolveKind(Damage damage) {
-        return DamageNumbers.resolveKindId(damage);
+        String resolved = DamageNumbers.resolveKindId(damage);
+        if (resolved != null && !resolved.isBlank() && !"FLAT".equalsIgnoreCase(resolved)) {
+            return resolved;
+        }
+        Essence.Type strongestElement = strongestElementFromPayload(
+                damage == null ? null : damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE));
+        return strongestElement == null ? resolved : kindIdForElement(strongestElement);
+    }
+
+    private static float resolveDisplayAmount(float hpDamage, double shieldDamage, boolean shieldActiveHit) {
+        if (shieldDamage > 0.0001d) {
+            return (float) shieldDamage;
+        }
+        if (shieldActiveHit && hpDamage < 0.05f) {
+            return 0f;
+        }
+        return Math.max(0f, hpDamage);
+    }
+
+    private static Essence.Type strongestElementFromPayload(String payload) {
+        Map<Essence.Type, Double> elementDamage = WeaponElementalDamageUtils.decodeElementDamage(payload);
+        Essence.Type strongestType = null;
+        double strongestDamage = 0.0d;
+        for (Map.Entry<Essence.Type, Double> entry : elementDamage.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            if (entry.getValue() > strongestDamage) {
+                strongestDamage = entry.getValue();
+                strongestType = entry.getKey();
+            }
+        }
+        return strongestType;
+    }
+
+    private static String kindIdForElement(Essence.Type type) {
+        return switch (type) {
+            case FIRE -> "BURN";
+            case ICE -> "ICE";
+            case LIGHTNING -> "SHOCK";
+            case WATER -> "WATER";
+            case VOID -> "VOID";
+            case LIFE -> "LIFE";
+        };
     }
 
     private static void queueCombatTextComponentSwap(EntityViewer viewer,
@@ -813,6 +897,9 @@ public class DamageNumberEST extends DamageEventSystem {
             return;
         }
         if (store == null || targetRef == null || amount <= 0f) {
+            return;
+        }
+        if (shouldCullFloatingDamage(targetRef, amount)) {
             return;
         }
         ComponentType<EntityStore, Visible> visibleType;
@@ -1019,6 +1106,58 @@ public class DamageNumberEST extends DamageEventSystem {
         return DamageNumbers.isDotKind(kindId);
     }
 
+    private static boolean shouldCullFloatingDamage(Ref<EntityStore> targetRef, float amount) {
+        if (!cullingEnabled || targetRef == null || cullingMaxPerTarget <= 0) {
+            return false;
+        }
+        if (cullingBypassAmount > 0.0d && amount >= cullingBypassAmount) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        cleanupCullBuckets(now);
+        String key = String.valueOf(targetRef);
+        CullBucket bucket = cullBuckets.computeIfAbsent(key, ignored -> new CullBucket(now));
+        synchronized (bucket) {
+            if (now - bucket.windowStartMs >= cullingWindowMs) {
+                bucket.windowStartMs = now;
+                bucket.count = 0;
+                bucket.lastTouchedMs = now;
+            }
+            bucket.lastTouchedMs = now;
+            if (bucket.count < cullingMaxPerTarget) {
+                bucket.count++;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    private static void cleanupCullBuckets(long now) {
+        if (now - lastCullCleanupMs < CULL_BUCKET_TTL_MS) {
+            return;
+        }
+        lastCullCleanupMs = now;
+        Iterator<Map.Entry<String, CullBucket>> iterator = cullBuckets.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, CullBucket> entry = iterator.next();
+            CullBucket bucket = entry.getValue();
+            if (bucket == null || now - bucket.lastTouchedMs > CULL_BUCKET_TTL_MS) {
+                iterator.remove();
+            }
+        }
+    }
+
+    private static final class CullBucket {
+        private long windowStartMs;
+        private long lastTouchedMs;
+        private int count;
+
+        private CullBucket(long now) {
+            this.windowStartMs = now;
+            this.lastTouchedMs = now;
+        }
+    }
+
     private static EntityViewer[] resolveViewers(CommandBuffer<EntityStore> commandBuffer,
                                                  Visible visible,
                                                  Ref<EntityStore> attackerRef) {
@@ -1075,6 +1214,10 @@ public class DamageNumberEST extends DamageEventSystem {
         }
         LOGGER.at(DEBUG_LOG_LEVEL).log("%s", message);
         ROOT_LOGGER.at(DEBUG_LOG_LEVEL).log("%s", message);
+    }
+
+    private static double safeDouble(Double value) {
+        return value == null || !Double.isFinite(value) ? 0.0d : value;
     }
 
     private static void resetCombatTextComponentsInWorld(World world) {

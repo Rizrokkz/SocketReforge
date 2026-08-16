@@ -79,7 +79,8 @@ public final class LoreAbilityRegistry {
             LoreEffectType.CAUSTIC_FINALE,
             LoreEffectType.SHRAPNEL_FINALE,
             LoreEffectType.BURN_FINALE,
-            LoreEffectType.DRAIN_LIFE
+            LoreEffectType.DRAIN_LIFE,
+            LoreEffectType.RESTORE_MANA
     };
 
     private static volatile Map<String, AbilityProfile> UNIQUE_ABILITY_PROFILES = new ConcurrentHashMap<>();
@@ -639,7 +640,7 @@ public final class LoreAbilityRegistry {
         return switch (effectType) {
             case HEAL_SELF, HEAL_DEFENDER, HEAL_SELF_OVER_TIME, HEAL_AREA, HEAL_AREA_OVER_TIME,
                     APPLY_SLOW, APPLY_WEAKNESS, APPLY_BLIND -> 1;
-            case APPLY_HASTE, APPLY_SHIELD, APPLY_INVISIBLE, LIFESTEAL -> 2;
+            case APPLY_HASTE, APPLY_SHIELD, APPLY_INVISIBLE, LIFESTEAL, RESTORE_MANA -> 2;
             case DAMAGE_TARGET, DAMAGE_ATTACKER, APPLY_BLEED, APPLY_POISON, DRAIN_LIFE -> 3;
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> 4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
@@ -778,6 +779,9 @@ public final class LoreAbilityRegistry {
         String key = abilityId == null ? "" : abilityId.toUpperCase(Locale.ROOT);
         if (containsAny(key, "LIFESTEAL")) {
             return LoreEffectType.LIFESTEAL;
+        }
+        if (containsAny(key, "MANA", "STAMINA")) {
+            return LoreEffectType.RESTORE_MANA;
         }
         if (containsAny(key, "DOUBLE", "ECHO_CAST", "ECHO", "PROC_ECHO")) {
             return LoreEffectType.DOUBLE_CAST;
@@ -926,6 +930,12 @@ public final class LoreAbilityRegistry {
                 cooldownMs = 2600L;
                 baseValue = 0.08d;
                 perLevel = 0.005d;
+            }
+            case RESTORE_MANA -> {
+                procChance = 0.08d;
+                cooldownMs = 4500L;
+                baseValue = 8.0d;
+                perLevel = 0.50d;
             }
             case DAMAGE_ATTACKER -> {
                 procChance = 0.08d;

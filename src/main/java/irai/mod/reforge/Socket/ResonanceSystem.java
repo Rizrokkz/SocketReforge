@@ -44,7 +44,9 @@ public final class ResonanceSystem {
         CHEAT_DEATH,
         HEAL_SURGE,
         SHOCK_DODGE,
-        AURA_BURN
+        AURA_BURN,
+        PRISMATIC_FORCE,
+        SHIELD_SUNDER
     }
 
     public record ResonanceRecipe(String name, Essence.Type[] pattern, String appliesTo) {}
@@ -74,10 +76,19 @@ public final class ResonanceSystem {
         BOW,
         CROSSBOW,
         STAFF,
+        GUN,
+        GLAIVE,
+        KNUCKLE,
         GENERIC
     }
 
     private record Bonus(EssenceEffect.StatType stat, double flat, double percent) {}
+
+    private record ScopeOverride(Scope scope, List<WeaponClass> weaponClasses) {}
+
+    private record ParsedClassMapping(String name, ScopeOverride override) {}
+
+    private record WeaponClassHint(WeaponClass weaponClass, List<String> hints) {}
 
     private static final class Definition {
         final String name;
@@ -105,9 +116,25 @@ public final class ResonanceSystem {
         }
 
         boolean matches(List<Essence.Type> sequence, boolean isWeapon, boolean isArmor, WeaponClass weaponClass) {
-            if (scope == Scope.WEAPON && !isWeapon) return false;
-            if (scope == Scope.ARMOR && !isArmor) return false;
-            if (requiredWeaponClass != null && !matchesWeaponClass(requiredWeaponClass, weaponClass)) return false;
+            ScopeOverride override = scopeOverrideFor(name);
+            Scope effectiveScope = override == null ? scope : override.scope();
+            List<WeaponClass> effectiveWeaponClasses = override == null ? List.of() : override.weaponClasses();
+            WeaponClass effectiveRequiredWeaponClass = override == null ? requiredWeaponClass : null;
+            if (effectiveScope == Scope.WEAPON && !isWeapon) return false;
+            if (effectiveScope == Scope.ARMOR && !isArmor) return false;
+            if (effectiveScope == Scope.WEAPON && effectiveWeaponClasses != null && !effectiveWeaponClasses.isEmpty()) {
+                boolean classAllowed = false;
+                for (WeaponClass allowed : effectiveWeaponClasses) {
+                    if (matchesWeaponClass(allowed, weaponClass)) {
+                        classAllowed = true;
+                        break;
+                    }
+                }
+                if (!classAllowed) {
+                    return false;
+                }
+            }
+            if (effectiveRequiredWeaponClass != null && !matchesWeaponClass(effectiveRequiredWeaponClass, weaponClass)) return false;
             if (sequence.size() != pattern.length) return false;
             for (int i = 0; i < pattern.length; i++) {
                 if (sequence.get(i) != pattern[i]) {
@@ -285,6 +312,17 @@ public final class ResonanceSystem {
                     b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 6),
                     b(EssenceEffect.StatType.LIFE_STEAL, 0, 3),
                     Essence.Type.FIRE, Essence.Type.ICE, Essence.Type.LIGHTNING, Essence.Type.LIFE, Essence.Type.VOID),
+            def("Prismatic Force", "Physical strikes and elemental output are amplified together.",
+                    ResonanceType.PRISMATIC_FORCE, Scope.WEAPON, WeaponClass.GENERIC,
+                    b(EssenceEffect.StatType.DAMAGE, 4, 14),
+                    b(EssenceEffect.StatType.CRIT_DAMAGE, 0, 10),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
+                    Essence.Type.FIRE, Essence.Type.WATER, Essence.Type.ICE, Essence.Type.LIGHTNING, Essence.Type.VOID),
+            def("Shield Sunder", "Elemental shields take heavier pressure while a portion of the hit pierces through.",
+                    ResonanceType.SHIELD_SUNDER, Scope.WEAPON, WeaponClass.GENERIC,
+                    b(EssenceEffect.StatType.DAMAGE, 2, 8),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
+                    Essence.Type.LIGHTNING, Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.ICE),
 
             // Armor
             def("Tideguard", "Max health and regeneration surge.",
@@ -345,6 +383,8 @@ public final class ResonanceSystem {
     private static volatile boolean seedConfigured = false;
     private static volatile long configuredSeed = 0L;
     private static volatile List<Definition> seededDefinitions = null;
+    private static volatile Map<String, ScopeOverride> classMappingOverrides = Map.of();
+    private static volatile List<WeaponClassHint> weaponClassHints = List.of();
 
     private static final double RECIPE_WEIGHT_3_SOCKET = 25.0d;
     private static final double RECIPE_WEIGHT_4_SOCKET = 10.0d;
@@ -366,6 +406,44 @@ public final class ResonanceSystem {
 
     public static boolean isResonanceSeedConfigured() {
         return seedConfigured;
+    }
+
+    public static void setResonanceClassMappings(String[] mappings) {
+        if (mappings == null || mappings.length == 0) {
+            classMappingOverrides = Map.of();
+            return;
+        }
+        Map<String, ScopeOverride> parsed = new java.util.HashMap<>();
+        for (String mapping : mappings) {
+            ParsedClassMapping entry = parseClassMapping(mapping);
+            if (entry != null) {
+                parsed.put(resonanceKey(entry.name()), entry.override());
+            }
+        }
+        classMappingOverrides = Map.copyOf(parsed);
+    }
+
+    public static void setWeaponClassHints(String[] hints) {
+        weaponClassHints = parseWeaponClassHints(hints);
+    }
+
+    public static String[] getDefaultWeaponClassHints() {
+        return new String[] {
+                "GUN=gun,rifle,pistol,blunderbuss,firearm",
+                "GLAIVE=glaive,glaives",
+                "KNUCKLE=knuckle,knuckles,fist,claw,claws"
+        };
+    }
+
+    public static String[] getDefaultResonanceClassMappings() {
+        List<String> entries = new ArrayList<>();
+        for (Definition definition : getDefinitions()) {
+            if (definition == null || definition.name == null || definition.name.isBlank()) {
+                continue;
+            }
+            entries.add(definition.name + "=" + formatClassMapping(definition));
+        }
+        return entries.toArray(String[]::new);
     }
 
     private static List<Definition> getDefinitions() {
@@ -726,6 +804,10 @@ public final class ResonanceSystem {
         if (definition == null) {
             return "Weapon";
         }
+        ScopeOverride override = scopeOverrideFor(definition.name);
+        if (override != null) {
+            return formatScopeOverrideDisplay(override);
+        }
         if (definition.scope == Scope.ARMOR) {
             return "Armor";
         }
@@ -735,6 +817,132 @@ public final class ResonanceSystem {
         }
         if (weaponClass == WeaponClass.BOW) {
             return "Bow/Crossbow";
+        }
+        String raw = weaponClass.name().toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
+    }
+
+    private static ScopeOverride scopeOverrideFor(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        return classMappingOverrides.get(resonanceKey(name));
+    }
+
+    private static ParsedClassMapping parseClassMapping(String mapping) {
+        if (mapping == null || mapping.isBlank()) {
+            return null;
+        }
+        String[] split = mapping.split("=", 2);
+        if (split.length != 2) {
+            return null;
+        }
+        String name = split[0].trim();
+        if (name.isBlank()) {
+            return null;
+        }
+        ScopeOverride override = parseScopeOverride(split[1]);
+        return override == null ? null : new ParsedClassMapping(name, override);
+    }
+
+    private static ScopeOverride parseScopeOverride(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        List<WeaponClass> weaponClasses = new ArrayList<>();
+        boolean armor = false;
+        boolean anyWeapon = false;
+        for (String token : value.split(",")) {
+            String normalized = token == null ? "" : token.trim().toUpperCase(Locale.ROOT)
+                    .replace('-', '_')
+                    .replace(' ', '_');
+            if (normalized.isBlank()) {
+                continue;
+            }
+            if ("ARMOR".equals(normalized)) {
+                armor = true;
+                continue;
+            }
+            if ("WEAPON".equals(normalized) || "ANY_WEAPON".equals(normalized) || "GENERIC".equals(normalized)) {
+                anyWeapon = true;
+                continue;
+            }
+            try {
+                weaponClasses.add(WeaponClass.valueOf(normalized));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        if (armor) {
+            return new ScopeOverride(Scope.ARMOR, List.of());
+        }
+        if (anyWeapon || !weaponClasses.isEmpty()) {
+            return new ScopeOverride(Scope.WEAPON, anyWeapon ? List.of() : List.copyOf(weaponClasses));
+        }
+        return null;
+    }
+
+    private static List<WeaponClassHint> parseWeaponClassHints(String[] entries) {
+        String[] safeEntries = entries == null || entries.length == 0 ? getDefaultWeaponClassHints() : entries;
+        List<WeaponClassHint> parsed = new ArrayList<>();
+        for (String entry : safeEntries) {
+            if (entry == null || entry.isBlank() || !entry.contains("=")) {
+                continue;
+            }
+            String[] split = entry.split("=", 2);
+            WeaponClass weaponClass;
+            try {
+                weaponClass = WeaponClass.valueOf(split[0].trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                continue;
+            }
+            List<String> hints = new ArrayList<>();
+            for (String hint : split[1].split(",")) {
+                String normalized = hint == null ? "" : hint.trim().toLowerCase(Locale.ROOT);
+                if (!normalized.isBlank() && !hints.contains(normalized)) {
+                    hints.add(normalized);
+                }
+            }
+            if (!hints.isEmpty()) {
+                parsed.add(new WeaponClassHint(weaponClass, List.copyOf(hints)));
+            }
+        }
+        return List.copyOf(parsed);
+    }
+
+    private static String formatClassMapping(Definition definition) {
+        if (definition == null) {
+            return "WEAPON";
+        }
+        if (definition.scope == Scope.ARMOR) {
+            return "ARMOR";
+        }
+        WeaponClass weaponClass = definition.requiredWeaponClass;
+        return weaponClass == null || weaponClass == WeaponClass.GENERIC ? "WEAPON" : weaponClass.name();
+    }
+
+    private static String formatScopeOverrideDisplay(ScopeOverride override) {
+        if (override == null) {
+            return "Weapon";
+        }
+        if (override.scope() == Scope.ARMOR) {
+            return "Armor";
+        }
+        List<WeaponClass> classes = override.weaponClasses();
+        if (classes == null || classes.isEmpty()) {
+            return "Weapon";
+        }
+        List<String> labels = new ArrayList<>();
+        for (WeaponClass weaponClass : classes) {
+            if (weaponClass != null) {
+                labels.add(formatWeaponClass(weaponClass));
+            }
+        }
+        return labels.isEmpty() ? "Weapon" : String.join("/", labels);
+    }
+
+    private static String formatWeaponClass(WeaponClass weaponClass) {
+        if (weaponClass == null || weaponClass == WeaponClass.GENERIC) {
+            return "Weapon";
         }
         String raw = weaponClass.name().toLowerCase(Locale.ROOT);
         return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
@@ -956,7 +1164,7 @@ public final class ResonanceSystem {
             case ARMOR_SHRED -> "On hit: 30% chance (0.9s cooldown) to deal +10% damage.";
             case THUNDER_STRIKE -> "On hit: 20% chance (1.2s cooldown) to deal +10% bonus damage (min +1).";
             case MULTISHOT_BARRAGE -> "On projectile hit: 20% chance (1.6s cooldown) to fire 2 extra arrows at 35% damage each.";
-            case CROSSBOW_AUTO_RELOAD -> "On projectile hit: 35% chance to refund 1 arrow/bolt to inventory.";
+            case CROSSBOW_AUTO_RELOAD -> "On projectile hit: 35% chance to refund 1 ammo item to inventory.";
             case PLUNDERING_BLADE -> "On hit: 15% chance (2.5s cooldown) to steal an item roll from NPC drop table.";
             case FROST_NOVA_ON_HIT -> "When hit: 25% chance (4.0s cooldown) to freeze attacker for 1.5s.";
             case THORNS_SHOCK -> "When hit: reflect 6% of incoming damage as Shock (min 1).";
@@ -966,6 +1174,8 @@ public final class ResonanceSystem {
                     : "When hit: heal for 5% of incoming damage (min 1) every 5.0s.";
             case SHOCK_DODGE -> "On dodge: 20% chance (3.5s cooldown) to retaliate for 4% of incoming damage (min 1).";
             case AURA_BURN -> "When hit: 20% chance (0.9s cooldown) to burn attacker for 5% of incoming damage (min 1).";
+            case PRISMATIC_FORCE -> "Passive: boosts physical damage and the elemental damage derived from it.";
+            case SHIELD_SUNDER -> "Passive: +100% damage to elemental shields and 10% HP pierce while shields are active.";
             case NONE -> "";
         };
     }
@@ -989,6 +1199,8 @@ public final class ResonanceSystem {
             case HEAL_SURGE -> isWeapon ? "resonance.proc.heal_surge.weapon" : "resonance.proc.heal_surge.armor";
             case SHOCK_DODGE -> "resonance.proc.shock_dodge";
             case AURA_BURN -> "resonance.proc.aura_burn";
+            case PRISMATIC_FORCE -> "resonance.proc.prismatic_force";
+            case SHIELD_SUNDER -> "resonance.proc.shield_sunder";
             case NONE -> "";
         };
         if (key.isBlank()) {
@@ -1174,6 +1386,16 @@ public final class ResonanceSystem {
 
     private static WeaponClass classifyWeapon(String itemId) {
         String id = itemId == null ? "" : itemId.toLowerCase(java.util.Locale.ROOT);
+        for (WeaponClassHint hint : weaponClassHints) {
+            if (hint == null || hint.weaponClass() == null || hint.hints() == null) {
+                continue;
+            }
+            for (String token : hint.hints()) {
+                if (token != null && !token.isBlank() && id.contains(token)) {
+                    return hint.weaponClass();
+                }
+            }
+        }
         if (id.contains("sword")) return WeaponClass.SWORD;
         if (id.contains("battleaxe") || id.contains("axe")) return WeaponClass.AXE;
         if (id.contains("mace") || id.contains("club")) return WeaponClass.MACE;

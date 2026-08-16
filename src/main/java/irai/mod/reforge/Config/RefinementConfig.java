@@ -72,6 +72,12 @@ public class RefinementConfig implements ConfigDefaultInjector {
     private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK_MIN = 0.01;
     private static final String RESONANT_GLOB_ITEM_ID = "Resonant_Glob";
     private static final String LEGACY_RESONANT_GLOB_ITEM_ID = "Ingredient_Resonant_Glob";
+    private static final String[] DEFAULT_SUPPORT_MATERIAL_ENTRIES = {
+            "Tool_Hammer_Iron=0.50,0.05,0.0,NEVER,0.0,0.0,1.0,1.0,Iron Hammer reduces break chance by 50% (5% durability per use).",
+            "Tool_Hammer_Thorium=0.30,0.15,0.0,NEVER,0.0,0.0,1.0,1.0,Thorium Hammer reduces break chance by 70% (15% durability per use).",
+            "Tool_Hammer_Irainium=0.05,0.50,0.0,NEVER,0.0,0.0,1.0,1.0,Irainium Hammer reduces break chance by 95% (50% durability per use).",
+            "Anti_Degradation=1.0,0.0,0.80,ON_BLOCK,0.0,0.0,1.0,1.0,80% chance to prevent refinement degradation. Consumed only when it blocks."
+    };
 
     public static final BuilderCodec<RefinementConfig> CODEC = BuilderCodec.<RefinementConfig>builder(RefinementConfig.class, RefinementConfig::new)
             .append(
@@ -87,6 +93,11 @@ public class RefinementConfig implements ConfigDefaultInjector {
                     new KeyedCodec<>("REFINEMENT_MATERIAL_TIERS", com.hypixel.hytale.codec.Codec.STRING_ARRAY),
                     (config, values) -> config.setMaterialTierEntries(values),
                     config -> config.materialTierEntries == null ? new String[0] : config.materialTierEntries
+            ).add()
+            .append(
+                    new KeyedCodec<>("REFORGE_SUPPORT_MATERIALS", STRING_ARRAY),
+                    (config, values) -> config.setSupportMaterialEntries(values),
+                    RefinementConfig::getSupportMaterialEntries
             ).add()
             .append(
                     new KeyedCodec<>("REFINEMENT_LEVEL_PREFIX", STRING),
@@ -191,6 +202,8 @@ public class RefinementConfig implements ConfigDefaultInjector {
     private int maxLevel = DEFAULT_MAX_LEVEL;
     // Format: "min-max=ItemId:Cost"
     private String[] materialTierEntries = buildDefaultMaterialTierEntries(DEFAULT_MAX_LEVEL);
+    // Format: "ItemId=breakMultiplier,durabilityLossFraction,antiDegradeChance,consumeMode,upgradeGuaranteeChance,jackpotGuaranteeChance,upgradeWeightMultiplier,jackpotWeightMultiplier,description"
+    private String[] supportMaterialEntries = DEFAULT_SUPPORT_MATERIAL_ENTRIES.clone();
     private String refinementLevelPrefix = DEFAULT_REFINEMENT_PREFIX;
     private String refinementLevelSuffix = DEFAULT_REFINEMENT_SUFFIX;
     private boolean refinementLevelUsePrefix = DEFAULT_REFINEMENT_LEVEL_USE_PREFIX;
@@ -199,6 +212,7 @@ public class RefinementConfig implements ConfigDefaultInjector {
 
     private transient List<MaterialTier> materialTierCache;
     private transient List<String> materialIdCache;
+    private transient List<SupportMaterial> supportMaterialCache;
 
     // ── Weapon Configuration ──────────────────────────────────────────────────
 
@@ -271,6 +285,11 @@ public class RefinementConfig implements ConfigDefaultInjector {
     public String[] getMaterialTierEntries() { return materialTierEntries == null || materialTierEntries.length == 0
             ? buildDefaultMaterialTierEntries(getMaxLevel())
             : materialTierEntries; }
+    public String[] getSupportMaterialEntries() {
+        return supportMaterialEntries == null || supportMaterialEntries.length == 0
+                ? DEFAULT_SUPPORT_MATERIAL_ENTRIES.clone()
+                : supportMaterialEntries;
+    }
     public String getRefinementLevelPrefix() { return refinementLevelPrefix == null ? DEFAULT_REFINEMENT_PREFIX : refinementLevelPrefix; }
     public String getRefinementLevelSuffix() { return refinementLevelSuffix == null ? DEFAULT_REFINEMENT_SUFFIX : refinementLevelSuffix; }
     public boolean isRefinementLevelUsePrefix() { return refinementLevelUsePrefix; }
@@ -436,6 +455,15 @@ public class RefinementConfig implements ConfigDefaultInjector {
         invalidateMaterialCache();
     }
 
+    public void setSupportMaterialEntries(String[] values) {
+        if (values == null || values.length == 0) {
+            this.supportMaterialEntries = DEFAULT_SUPPORT_MATERIAL_ENTRIES.clone();
+        } else {
+            this.supportMaterialEntries = values;
+        }
+        invalidateSupportMaterialCache();
+    }
+
     public void applyDefaultMultipliersAndWeights() {
         int safeMax = getMaxLevel();
         this.weightsByLevel = buildTieredWeightsByLevel();
@@ -471,6 +499,7 @@ public class RefinementConfig implements ConfigDefaultInjector {
         this.weightsByLevel = defaults.weightsByLevel == null ? null : defaults.weightsByLevel.clone();
         this.maxLevel = defaults.maxLevel;
         this.materialTierEntries = defaults.materialTierEntries == null ? null : defaults.materialTierEntries.clone();
+        this.supportMaterialEntries = defaults.supportMaterialEntries == null ? null : defaults.supportMaterialEntries.clone();
         this.refinementLevelPrefix = defaults.refinementLevelPrefix;
         this.refinementLevelSuffix = defaults.refinementLevelSuffix;
         this.refinementLevelUsePrefix = defaults.refinementLevelUsePrefix;
@@ -492,10 +521,14 @@ public class RefinementConfig implements ConfigDefaultInjector {
         String[] originalRefinementLabels = refinementLevelLabels == null ? null : refinementLevelLabels.clone();
         String[] originalArmorLabels = refinementLevelLabelsArmor == null ? null : refinementLevelLabelsArmor.clone();
         String[] originalMaterialTierEntries = materialTierEntries == null ? null : materialTierEntries.clone();
+        String[] originalSupportMaterialEntries = supportMaterialEntries == null ? null : supportMaterialEntries.clone();
 
         setMaxLevel(safeMaxLevel);
         if (materialTierEntries == null || materialTierEntries.length == 0) {
             setMaterialTierEntries(materialTierEntries);
+        }
+        if (supportMaterialEntries == null || supportMaterialEntries.length == 0) {
+            setSupportMaterialEntries(supportMaterialEntries);
         }
 
         return !Arrays.equals(originalDamageMultipliers, damageMultipliers)
@@ -505,7 +538,8 @@ public class RefinementConfig implements ConfigDefaultInjector {
                 || !Arrays.equals(originalWeightsByLevel, weightsByLevel)
                 || !Arrays.equals(originalRefinementLabels, refinementLevelLabels)
                 || !Arrays.equals(originalArmorLabels, refinementLevelLabelsArmor)
-                || !Arrays.equals(originalMaterialTierEntries, materialTierEntries);
+                || !Arrays.equals(originalMaterialTierEntries, materialTierEntries)
+                || !Arrays.equals(originalSupportMaterialEntries, supportMaterialEntries);
     }
 
     /**
@@ -680,6 +714,30 @@ public class RefinementConfig implements ConfigDefaultInjector {
         return materialIdCache;
     }
 
+    public List<SupportMaterial> getSupportMaterials() {
+        if (supportMaterialCache != null) {
+            return supportMaterialCache;
+        }
+        List<SupportMaterial> parsed = parseSupportMaterials(getSupportMaterialEntries());
+        if (parsed.isEmpty()) {
+            parsed = parseSupportMaterials(DEFAULT_SUPPORT_MATERIAL_ENTRIES);
+        }
+        supportMaterialCache = Collections.unmodifiableList(parsed);
+        return supportMaterialCache;
+    }
+
+    public SupportMaterial getSupportMaterial(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        for (SupportMaterial support : getSupportMaterials()) {
+            if (support.itemId.equalsIgnoreCase(itemId)) {
+                return support;
+            }
+        }
+        return null;
+    }
+
     public MaterialTier getMaterialTierForLevel(int level) {
         int safe = Math.max(0, level);
         for (MaterialTier tier : getMaterialTiers()) {
@@ -772,6 +830,10 @@ public class RefinementConfig implements ConfigDefaultInjector {
     private void invalidateMaterialCache() {
         materialTierCache = null;
         materialIdCache = null;
+    }
+
+    private void invalidateSupportMaterialCache() {
+        supportMaterialCache = null;
     }
 
     private void boostSuccessWeights(double[] weights, int currentLevel) {
@@ -948,10 +1010,74 @@ public class RefinementConfig implements ConfigDefaultInjector {
         return tiers;
     }
 
+    private static List<SupportMaterial> parseSupportMaterials(String[] entries) {
+        if (entries == null || entries.length == 0) {
+            return new ArrayList<>();
+        }
+        List<SupportMaterial> supports = new ArrayList<>();
+        for (String raw : entries) {
+            if (raw == null) continue;
+            String entry = raw.trim();
+            if (entry.isEmpty() || entry.startsWith("#")) continue;
+            int eq = entry.indexOf('=');
+            if (eq <= 0 || eq >= entry.length() - 1) continue;
+            String itemId = entry.substring(0, eq).trim();
+            String data = entry.substring(eq + 1).trim();
+            if (itemId.isEmpty() || data.isEmpty()) continue;
+
+            String[] parts = data.split(",", 9);
+            double breakMultiplier = parts.length > 0 ? parseDouble(parts[0], 1.0) : 1.0;
+            double durabilityLossFraction = parts.length > 1 ? parseDouble(parts[1], 0.0) : 0.0;
+            double antiDegradeChance = parts.length > 2 ? parseDouble(parts[2], 0.0) : 0.0;
+            String consumeMode = parts.length > 3 ? parts[3].trim() : "NEVER";
+            boolean oldDescriptionFormat = parts.length > 4 && !looksLikeNumber(parts[4]);
+            double upgradeGuaranteeChance = !oldDescriptionFormat && parts.length > 4 ? parseDouble(parts[4], 0.0) : 0.0;
+            double jackpotGuaranteeChance = !oldDescriptionFormat && parts.length > 5 ? parseDouble(parts[5], 0.0) : 0.0;
+            double upgradeWeightMultiplier = !oldDescriptionFormat && parts.length > 6 ? parseDouble(parts[6], 1.0) : 1.0;
+            double jackpotWeightMultiplier = !oldDescriptionFormat && parts.length > 7 ? parseDouble(parts[7], 1.0) : 1.0;
+            String description = oldDescriptionFormat
+                    ? parts[4].trim()
+                    : parts.length > 8 ? parts[8].trim() : "";
+            supports.add(new SupportMaterial(
+                    itemId,
+                    clamp(breakMultiplier, 0.0, 10.0),
+                    clamp(durabilityLossFraction, 0.0, 1.0),
+                    clamp(antiDegradeChance, 0.0, 1.0),
+                    clamp(upgradeGuaranteeChance, 0.0, 1.0),
+                    clamp(jackpotGuaranteeChance, 0.0, 1.0),
+                    clamp(upgradeWeightMultiplier, 0.0, 10.0),
+                    clamp(jackpotWeightMultiplier, 0.0, 10.0),
+                    SupportConsumeMode.from(consumeMode),
+                    description));
+        }
+        return supports;
+    }
+
+    private static boolean looksLikeNumber(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        try {
+            Double.parseDouble(value.trim());
+            return true;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
     private static int parseInt(String value, int fallback) {
         if (value == null || value.isBlank()) return fallback;
         try {
             return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static double parseDouble(String value, double fallback) {
+        if (value == null || value.isBlank()) return fallback;
+        try {
+            return Double.parseDouble(value.trim());
         } catch (NumberFormatException ignored) {
             return fallback;
         }
@@ -1222,6 +1348,74 @@ public class RefinementConfig implements ConfigDefaultInjector {
 
         public boolean matches(int level) {
             return level >= minLevel && level <= maxLevel;
+        }
+    }
+
+    public enum SupportConsumeMode {
+        NEVER,
+        ON_USE,
+        ON_BLOCK;
+
+        static SupportConsumeMode from(String value) {
+            if (value == null || value.isBlank()) {
+                return NEVER;
+            }
+            String normalized = value.trim().replace('-', '_').replace(' ', '_').toUpperCase();
+            for (SupportConsumeMode mode : values()) {
+                if (mode.name().equals(normalized)) {
+                    return mode;
+                }
+            }
+            return NEVER;
+        }
+    }
+
+    public static final class SupportMaterial {
+        public final String itemId;
+        public final double breakMultiplier;
+        public final double durabilityLossFraction;
+        public final double antiDegradeChance;
+        public final double upgradeGuaranteeChance;
+        public final double jackpotGuaranteeChance;
+        public final double upgradeWeightMultiplier;
+        public final double jackpotWeightMultiplier;
+        public final SupportConsumeMode consumeMode;
+        public final String description;
+
+        public SupportMaterial(String itemId, double breakMultiplier, double durabilityLossFraction,
+                               double antiDegradeChance, double upgradeGuaranteeChance,
+                               double jackpotGuaranteeChance, double upgradeWeightMultiplier,
+                               double jackpotWeightMultiplier, SupportConsumeMode consumeMode,
+                               String description) {
+            this.itemId = itemId == null ? "" : itemId.trim();
+            this.breakMultiplier = breakMultiplier;
+            this.durabilityLossFraction = durabilityLossFraction;
+            this.antiDegradeChance = antiDegradeChance;
+            this.upgradeGuaranteeChance = upgradeGuaranteeChance;
+            this.jackpotGuaranteeChance = jackpotGuaranteeChance;
+            this.upgradeWeightMultiplier = upgradeWeightMultiplier;
+            this.jackpotWeightMultiplier = jackpotWeightMultiplier;
+            this.consumeMode = consumeMode == null ? SupportConsumeMode.NEVER : consumeMode;
+            this.description = description == null ? "" : description;
+        }
+
+        public boolean reducesBreakChance() {
+            return breakMultiplier >= 0.0 && breakMultiplier < 1.0;
+        }
+
+        public boolean usesDurability() {
+            return durabilityLossFraction > 0.0;
+        }
+
+        public boolean blocksDegradation() {
+            return antiDegradeChance > 0.0;
+        }
+
+        public boolean affectsOutcomeRoll() {
+            return upgradeGuaranteeChance > 0.0
+                    || jackpotGuaranteeChance > 0.0
+                    || Math.abs(upgradeWeightMultiplier - 1.0) > 0.0001
+                    || Math.abs(jackpotWeightMultiplier - 1.0) > 0.0001;
         }
     }
 }

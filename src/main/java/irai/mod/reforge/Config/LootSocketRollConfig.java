@@ -221,11 +221,11 @@ public class LootSocketRollConfig {
             "Ingredient_Voidheart=0.05,1,2",
             "Ingredient_Lightning_Essence=0.015,1,5",
             "Ingredient_Water_Essence=0.025,1,5",
-            "Armor_Smithy_Chest=0.000001,1,1"
+            "Armor_Smithy_Chest=0.01,1,1"
     };
     private String[] npcInjectedDropRules = new String[] {
             "Ingredient_Strap_Leather=0.12,1,1,Raptor_Cave",
-            "Armor_Smithy_Chest=0.000001,1,1,Rex_Cave",
+            "Armor_Smithy_Chest=0.01,1,1,Rex_Cave",
             "Ingredient_Strap_Leather=0.12,1,3,Rex_Cave",
             "Ingredient_Strap_Leather=0.01,1,1,Bear_Grizzly",
             "Ingredient_Strap_Leather=0.01,1,1,Bear_Polar"

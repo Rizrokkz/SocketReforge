@@ -2,6 +2,7 @@ package irai.mod.reforge;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,6 +41,7 @@ import com.hypixel.hytale.server.core.util.Config;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
+import irai.mod.reforge.Commands.AffinityHudCommand;
 import irai.mod.reforge.Commands.EquipmentStatsCommand;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
@@ -60,7 +62,9 @@ import irai.mod.reforge.Commands.ToolPartsCommand;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
 import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Common.ItemTypeUtils;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
+import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.ConfigService;
@@ -75,6 +79,7 @@ import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Config.WorldRepairConfig;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
+import irai.mod.reforge.Entity.Events.EnemyElementalShieldEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
@@ -90,6 +95,8 @@ import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
+import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryChangeEST;
+import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryEventEST;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -99,12 +106,12 @@ import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
-import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
+import irai.mod.reforge.UI.EnemyAffinityHudUI;
 import irai.mod.reforge.UI.EquipmentStatsUI;
 import irai.mod.reforge.UI.EssenceBenchUI;
 import irai.mod.reforge.UI.LoreFeedBenchUI;
@@ -119,6 +126,7 @@ import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.RuntimeBenchPatchHost;
+import irai.mod.reforge.Util.RuntimeWeaponAffinityPatchHost;
 
 public class ReforgePlugin extends JavaPlugin {
     private static final String HATCHET_THROW_INTERACTION_ID = "HatchetThrowUse";
@@ -126,6 +134,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
     private final LoreEffectEST loreEffectEST;
+    private final EnemyElementalShieldEST enemyElementalShieldEST;
     private final DamageNumberEST damageNumberEST;
     private final LoreKillEST loreKillEST;
     private final LorePlayerStateEST lorePlayerStateEST;
@@ -137,6 +146,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
     private final NativeTooltipInventoryEventEST nativeTooltipInventoryEventEST;
+    private final WeaponAffinityAppearanceInventoryEventEST weaponAffinityAppearanceInventoryEventEST;
+    private final WeaponAffinityAppearanceInventoryChangeEST weaponAffinityAppearanceInventoryChangeEST;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -171,6 +182,7 @@ public class ReforgePlugin extends JavaPlugin {
         refineEST = new EquipmentRefineEST();
         socketEffectEST = new SocketEffectEST();
         loreEffectEST = new LoreEffectEST();
+        enemyElementalShieldEST = new EnemyElementalShieldEST();
         damageNumberEST = new DamageNumberEST();
         loreKillEST = new LoreKillEST();
         lorePlayerStateEST = new LorePlayerStateEST();
@@ -182,6 +194,8 @@ public class ReforgePlugin extends JavaPlugin {
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
         nativeTooltipInventoryEventEST = new NativeTooltipInventoryEventEST();
+        weaponAffinityAppearanceInventoryEventEST = new WeaponAffinityAppearanceInventoryEventEST();
+        weaponAffinityAppearanceInventoryChangeEST = new WeaponAffinityAppearanceInventoryChangeEST();
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
@@ -217,7 +231,10 @@ public class ReforgePlugin extends JavaPlugin {
 
         this.configService.register("SocketConfig", this.socketConfig, cfg -> {
             SocketManager.initialize(cfg);
+            ItemTypeUtils.setNonEquipmentWeaponIdHints(cfg.getClockworkAmmoItemHints());
             EssenceRegistry.initialize();
+            ResonanceSystem.setWeaponClassHints(cfg.getResonanceWeaponClassHints());
+            ResonanceSystem.setResonanceClassMappings(cfg.getResonanceClassMappings());
         });
 
         this.configService.register("LootSocketRollConfig", this.lootSocketRollConfig, cfg -> {
@@ -250,6 +267,7 @@ public class ReforgePlugin extends JavaPlugin {
         LoreFeedBenchUI.initialize();
         ReforgeBenchUI.initialize();
         EquipmentStatsUI.initialize();
+        EnemyAffinityHudUI.initialize();
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
         ResonantCompendiumUI.initialize();
@@ -280,11 +298,15 @@ public class ReforgePlugin extends JavaPlugin {
                 LangLoader.getPlayerLanguage(event.getPlayer());
             }
             OpenGuiListener.openGui(event);
+            if (event != null) {
+                WeaponAffinityAppearanceState.refresh(event.getPlayer());
+            }
         });
         this.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, event -> {
             if (event != null) {
-                LoreHeldItemUpdateManager.flushPendingOnDisconnect(event.getPlayerRef());
+                flushPendingLoreUpdatesOnDisconnect(event.getPlayerRef());
                 SocketBenchUI.closeForDisconnect(event.getPlayerRef());
+                EnemyAffinityHudUI.closeForDisconnect(event.getPlayerRef());
             }
         });
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
@@ -293,7 +315,6 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, CropEssenceDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(InventoryChangeEvent.class, DynamicTooltipUtils::onInventoryChange);
         this.getEventRegistry().registerGlobal(InteractivelyPickupItemEvent.class, DynamicTooltipUtils::onInteractivelyPickupItem);
-        //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerMouseButtonEvent.class, hatchetThrowEST::onPlayerMouseButton);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
         this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, TreasureChestSocketLootListener::onPlayerInteract);
@@ -304,6 +325,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new RuntimeConfigCommand("reforgeconfig", "Open live runtime config UI", false));
         this.getCommandRegistry().registerCommand(new EquipmentStatsCommand("equipmentstats", "Show held weapon and equipped armor stat summary", false));
+        this.getCommandRegistry().registerCommand(new AffinityHudCommand("affinityhud", "Toggle the enemy elemental affinity HUD", false));
         this.getCommandRegistry().registerCommand(new ReforgeAdminCommand("reforgeadmin", "OP tools for held-item refinement/socket metadata", false));
         this.getCommandRegistry().registerCommand(new LoreSocketCommand("loregem", "Open lore gem socketing UI", false));
         this.getCommandRegistry().registerCommand(new LoreFeedCommand("lorefeed", "Open lore feed UI", false));
@@ -321,6 +343,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(loreEffectEST);
+        this.getEntityStoreRegistry().registerSystem(enemyElementalShieldEST);
         if (customCombatTextEnabled) {
             registerDamageNumberSystem();
         } else {
@@ -336,15 +359,18 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
         this.getEntityStoreRegistry().registerSystem(nativeTooltipInventoryEventEST);
+        this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryEventEST);
+        this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryChangeEST);
 
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.0");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.1");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
         DamageNumbers.applyConfig(cfg);
+        DamageNumberEST.applyConfig(cfg);
         boolean useCustom = cfg == null || cfg.isUseCustomCombatText();
         customCombatTextEnabled = useCustom;
         DamageNumberEST.setCustomCombatTextEnabled(useCustom);
@@ -455,6 +481,12 @@ public class ReforgePlugin extends JavaPlugin {
     @Override
     protected void start() {
         RuntimeBenchPatchHost.applyEmbeddedBenchPatches(this);
+        if (socketConfig.get() != null && socketConfig.get().isWeaponAffinityAppearancePatchingEnabled()) {
+            RuntimeWeaponAffinityPatchHost.applyStartupWeaponAffinityPatches(this);
+        } else {
+            System.out.println("[SocketReforge] Weapon affinity appearance patching skipped "
+                    + "(set WEAPON_AFFINITY_APPEARANCE_PATCHING_ENABLED=true in SocketConfig to opt in).");
+        }
         logDroplistPatchStatus();
         autoRegenRegionIfNeeded();
         scheduleChunkRemovalIfNeeded();
@@ -1066,6 +1098,28 @@ public class ReforgePlugin extends JavaPlugin {
         setField(item, "interactions", updatedInteractions);
         setField(item, "cachedPacket", null);
         return true;
+    }
+
+    private static void flushPendingLoreUpdatesOnDisconnect(Object playerRef) {
+        if (playerRef == null) {
+            return;
+        }
+
+        try {
+            Class<?> manager = Class.forName("irai.mod.reforge.Lore.LoreHeldItemUpdateManager");
+            for (Method method : manager.getDeclaredMethods()) {
+                if (!"flushPendingOnDisconnect".equals(method.getName()) || method.getParameterCount() != 1) {
+                    continue;
+                }
+                method.setAccessible(true);
+                method.invoke(null, playerRef);
+                return;
+            }
+            System.err.println("[SocketReforge] Lore disconnect flush method not found; pending held lore updates skipped.");
+        } catch (Throwable error) {
+            System.err.println("[SocketReforge] Lore disconnect flush skipped: " + error.getClass().getSimpleName()
+                    + ": " + error.getMessage());
+        }
     }
 
     private static void setField(Object target, String fieldName, Object value) throws ReflectiveOperationException {

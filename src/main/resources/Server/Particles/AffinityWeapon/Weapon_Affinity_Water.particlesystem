@@ -1,0 +1,8 @@
+{
+  "Spawners": [
+    { "SpawnerId": "Weapon_Affinity_Water" },
+    { "SpawnerId": "Weapon_Affinity_Water_Back" }
+  ],
+  "BoundingRadius": 4,
+  "IsImportant": false
+}

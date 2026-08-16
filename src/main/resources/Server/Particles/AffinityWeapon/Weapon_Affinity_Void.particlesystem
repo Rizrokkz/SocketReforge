@@ -1,0 +1,8 @@
+{
+  "Spawners": [
+    { "SpawnerId": "Weapon_Affinity_Void" },
+    { "SpawnerId": "Weapon_Affinity_Void_Back" }
+  ],
+  "BoundingRadius": 4,
+  "IsImportant": false
+}

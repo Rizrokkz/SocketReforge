@@ -1368,7 +1368,7 @@ public final class LoreProcHandler {
             case DAMAGE_ATTACKER -> attackerRef != null;
             case HEAL_SELF, HEAL_SELF_OVER_TIME, HEAL_AREA, HEAL_AREA_OVER_TIME,
                     LIFESTEAL, APPLY_HASTE, APPLY_INVISIBLE, APPLY_SHIELD,
-                    SUMMON_WOLF_PACK -> selfRef != null;
+                    SUMMON_WOLF_PACK, RESTORE_MANA -> selfRef != null;
             case HEAL_DEFENDER -> defenderRef != null;
             case APPLY_BURN -> opponentRef != null
                     && resolveNpcAilmentMultiplier(store, opponentRef, "burn") > 0.0d
@@ -1612,6 +1612,14 @@ public final class LoreProcHandler {
                     float heal = base > 0f ? (float) (base * pct) : amount;
                     if (heal > 0f) {
                         LoreDamageUtils.applyHeal(store, selfRef, heal);
+                    }
+                }
+            }
+            case RESTORE_MANA -> {
+                if (selfRef != null) {
+                    restoreSignatureEnergy(store, selfRef, amount);
+                    if (primaryProc) {
+                        LoreVisuals.tryApplyVisualEffect(store, selfRef, HEAL_TOTEM_EFFECT_IDS);
                     }
                 }
             }
@@ -2808,6 +2816,37 @@ public final class LoreProcHandler {
         float current = value.get();
         if (current + 0.01f < originalEnergy) {
             setSignatureEnergy(statMap, statIndex, originalEnergy);
+        }
+    }
+
+    private static void restoreSignatureEnergy(Store<EntityStore> store,
+                                               Ref<EntityStore> attackerRef,
+                                               float amount) {
+        if (store == null || attackerRef == null || amount <= 0f) {
+            return;
+        }
+        EntityStatMap statMap;
+        try {
+            statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        } catch (IllegalStateException ignored) {
+            return;
+        }
+        if (statMap == null) {
+            return;
+        }
+        int signatureIndex = LoreDamageUtils.getSignatureEnergyStatIndex(statMap);
+        if (signatureIndex < 0) {
+            return;
+        }
+        EntityStatValue value = statMap.get(signatureIndex);
+        if (value == null) {
+            return;
+        }
+        float current = Math.max(0f, value.get());
+        float max = value.getMax();
+        float target = max > 0f ? Math.min(max, current + amount) : current + amount;
+        if (target > current) {
+            setSignatureEnergy(statMap, signatureIndex, target);
         }
     }
 

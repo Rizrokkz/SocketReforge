@@ -5,5 +5,31 @@
     "ESSENCE_REMOVAL_SUCCESS": [0.70],
     "ESSENCE_REMOVAL_DESTROY": [0.30],
     "BONUS_SOCKET_CHANCE": [0.01],
-    "MAX_REDUCE_CHANCE": [0.25]
+    "MAX_REDUCE_CHANCE": [0.25],
+    "WEAPON_AFFINITY_APPEARANCE_PATCHING_ENABLED": false,
+    "RESONANCE_CLASS_MAPPINGS": [
+        "Clockwork Loader=CROSSBOW,GUN"
+    ],
+    "RESONANCE_WEAPON_CLASS_HINTS": [
+        "GUN=gun,rifle,pistol,blunderbuss,firearm",
+        "GLAIVE=glaive,glaives",
+        "KNUCKLE=knuckle,knuckles,fist,claw,claws"
+    ],
+    "CLOCKWORK_AMMO_ITEM_HINTS": [
+        "arrow",
+        "bolt",
+        "projectile",
+        "ammo",
+        "ammunition",
+        "bullet",
+        "dart",
+        "cartridge",
+        "round",
+        "shell",
+        "rocket",
+        "missile",
+        "grenade",
+        "slug",
+        "pellet"
+    ]
 }

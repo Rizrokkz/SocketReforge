@@ -1,0 +1,59 @@
+{
+  "Condition": [
+    "${VALUE}",
+    "${VALUE}"
+  ],
+  "ConditionValueType": "${CONDITION_VALUE_TYPE}",
+  "Particles": [
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin1",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin2",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin3",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin4",
+      "Scale": "${SCALE}"
+    }
+  ],
+  "FirstPersonParticles": [
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin1",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin2",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin3",
+      "Scale": "${SCALE}"
+    },
+    {
+      "SystemId": "${SYSTEM_ID}",
+      "TargetEntityPart": "${TARGET_ENTITY_PART}",
+      "TargetNodeName": "Attachment_Spin4",
+      "Scale": "${SCALE}"
+    }
+  ]
+}

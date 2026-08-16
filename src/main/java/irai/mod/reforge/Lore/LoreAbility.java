@@ -367,6 +367,12 @@ public final class LoreAbility {
                 fallback = "Lifesteal {0}%";
                 return formatEffect(langCode, key, fallback, percent);
             }
+            case RESTORE_MANA -> {
+                key = "tooltip.lore.effect.restore_mana";
+                fallback = "Restores {0} mana";
+                double scaledValue = scaleEffectValue(value, safeFeedTier);
+                return formatEffect(langCode, key, fallback, formatValue(scaledValue));
+            }
             case APPLY_BURN -> {
                 key = "tooltip.lore.effect.burn";
                 fallback = "Burns target";

@@ -29,6 +29,7 @@ import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UISocketVisualUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
+import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -2933,9 +2934,14 @@ public final class EssenceBenchUI {
             if (container != null) {
                 container.setItemStackForSlot(entry.slot, stack);
             }
+            WeaponAffinityAppearanceState.refresh(player);
             return;
         }
         UIInventoryUtils.writeItem(player, entry.kind == ContainerKind.HOTBAR, entry.slot, stack);
+        // Socketing, clearing or mutating essences can change the held weapon's dominant affinity.
+        // Refresh the in-world weapon visualization immediately so it doesn't keep showing the
+        // previous affinity (e.g. Fire) for the next weapon.
+        WeaponAffinityAppearanceState.refresh(player);
     }
 
     private static boolean removeEquipmentStack(Player player, Entry equipment) {

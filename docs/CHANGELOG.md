@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] - 2026-08-15
+
+### Added
+
+- **Affinity Appearance Patch Diagnostics** - Startup export failures now report useful exception summaries instead of `null`, making missing/invalid weapon override issues easier to trace.
+- **Enemy Affinity HUD** - Added a compact enemy affinity HUD showing target name, HP bar, recent damage, and elemental weakness/resistance values.
+  - **Affinity HUD Toggle Command** - Added a non-OP command for players to enable or disable the enemy affinity HUD via `/affinityhud`.
+  - **Weapon Affinity Appearance Opt-In** - Added `WEAPON_AFFINITY_APPEARANCE_PATCHING_ENABLED` to `SocketConfig.json`, defaulting to `false` so weapon model/item appearance patching only runs when explicitly enabled.
+- **Elemental Shield Modifiers** - Added configurable enemy elemental shield pools that absorb elemental damage before HP, reduce HP leak-through while active, and drive the shield layer in the affinity HUD.
+  - **Elemental Shield Recharge** - Depleted shields can now lazily recharge after a configurable no-damage delay, with configurable recharge rate and duration.
+- **New Weapon Resonances** - Added `Prismatic Force` for combined physical and elemental damage scaling, and `Shield Sunder` for stronger elemental shield damage with partial HP pierce.
+- **Runtime Resonance Class Mapping** - Added runtime-configurable resonance scope overrides so each resonance can be mapped to `WEAPON`, `ARMOR`, or specific weapon classes.
+- **Runtime Refinement Support Creation** - Added runtime-configurable reforge support material entries with item ID, consumption mode, break/degrade protection, guarantee chances, roll weight bonuses, and descriptions.
+- **Resonance Class Hints** - Added configurable weapon class hints for modded families like guns, glaives, and knuckles; Clockwork Loader now defaults to `CROSSBOW,GUN` and refunds broader ammo stacks without making ammo socketable.
+- **Clockwork Ammo Hints** - Added configurable ammo item-id hints for arrows, bolts, bullets, shells, rockets, and other modded ammo names used by Clockwork Loader refunds.
+
+---
+
 ## [1.4.0] - 2026-07-29
 
 ### Added

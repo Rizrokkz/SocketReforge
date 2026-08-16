@@ -52,7 +52,7 @@ public class LoreMappingConfig implements ConfigDefaultInjector {
     // Empty means "all spirits allowed".
     private String[] colorSpiritEntries = new String[] {
             "black=Wraith,Spawn_Void,Horse_Skeleton,Skeleton_Burnt_Praetorian,Skeleton_Burnt_Soldier,Zombie_Burnt,Cow_Undead",
-            "blue=Whale_Humpback,Shark_Hammerhead,Trillodon,Crocodile",
+            "blue=Whale_Humpback,Shark_Hammerhead,Trillodon,Crocodile,Spirit_Manafont",
             "cyan=Horse,Wolf_Black,Rex_Cave",
             "green=Bison,Tiger_Sabertooth,Mosshorn_Plain,Mosshorn,Toad_Rhino,Bear_Grizzly,Moose_Bull",
             "red=Golem_Firesteel,Emberwulf,Toad_Rhino_Magma",
@@ -80,6 +80,7 @@ public class LoreMappingConfig implements ConfigDefaultInjector {
             "Whale_Humpback=SIGNATURE_GROUNDSLAM",
             "Shark_Hammerhead=SIGNATURE_PUMMEL",
             "Trillodon=ON_HIT,0.06,7000,HEAL_AREA_OVER_TIME,1.6,0.08",
+            "Spirit_Manafont=ON_HIT,0.08,4500,RESTORE_MANA,8.0,0.50",
             "Crocodile=SIGNATURE_CAUSTIC_FINALE",
             "Horse=SIGNATURE_VOLLEY",
             "Rex_Cave=SIGNATURE_OMNISLASH",

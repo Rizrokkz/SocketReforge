@@ -1,0 +1,141 @@
+Group #EnemyAffinityHudRoot {
+  Anchor: (Top: 62, Width: 520, Height: 120);
+  LayoutMode: Top;
+
+  Group #EnemyAffinityWrap {
+    LayoutMode: Left;
+    Anchor: (Left: 0);
+
+    Group #EnemyAffinityPanel {
+      LayoutMode: Top;
+      Anchor: (MinWidth: 460);
+      Padding: (Horizontal: 16, Top: 9, Bottom: 10);
+      
+
+      Group #EnemyHeader {
+        LayoutMode: Left;
+        Anchor: (Bottom: 2);
+
+        Label #EnemyName {
+          Anchor: (Width: 318, Height: 22);
+          Style: (FontSize: 15, TextColor: #ffffff, RenderBold: true, VerticalAlignment: Center);
+          Text: "";
+        }
+
+        Group { Anchor: (Width: 26); }
+
+        Label #LastDamage {
+          Anchor: (Width: 100, Height: 22);
+          Style: (FontSize: 15, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center);
+          Text: "";
+        }
+      }
+
+      Group #EnemyHpBarContainerMain {
+        Anchor: (Height: 14, Left: 0, Right: 0, Bottom: 2);
+        Background: #070707(1);
+        
+        ProgressBar #EnemyHpBar {
+            Anchor: (Height: 14);
+            BarTexturePath: "EnemyAffinityHpFill.png";
+          }
+        Group #EnemyHpBarContainer {
+          Anchor: (Height: 14, Left: 0, Right: 0, Bottom: 0);
+          Background: #ffffff(0);
+          
+          ProgressBar #EnemyShieldBar {
+          Anchor: (Height: 16);
+          BarTexturePath: "ElementShield2.png";
+        }
+        }
+        
+        Label #EnemyHpText {
+        Anchor: (Height: 14, Left: 0, Right: 0, Bottom: 6);
+        Style: (FontSize: 11, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center);
+        Text: "";
+        }
+      }
+
+      Group #EnemyAffinityDivider {
+        Anchor: (Height: 1, Left: 0, Right: 0, Bottom: 5);
+        Background: #ffffff(0.12);
+      }
+
+      Group #AffinityRowPrimary {
+        LayoutMode: Left;
+        Anchor: (Bottom: 0);
+        
+        ItemIcon #AffinityFireIcon {
+          ItemId: "Ingredient_Fire_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityFireValue {
+          Anchor: (Width: 36, Height: 20);
+          Padding: (Right: 8);
+          Style: (FontSize: 9, TextColor: #ff8a3d, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+
+        ItemIcon #AffinityIceIcon {
+          ItemId: "Ingredient_Ice_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityIceValue {
+          Anchor: (Width: 36, Height: 20);
+          Padding: (Right: 8);
+          Style: (FontSize: 9, TextColor: #70e4ff, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+
+        ItemIcon #AffinityLightningIcon {
+          ItemId: "Ingredient_Lightning_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityLightningValue {
+          Anchor: (Width: 36, Height: 20);
+          Padding: (Right: 8);
+          Style: (FontSize: 9, TextColor: #ffe45c, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+
+        ItemIcon #AffinityWaterIcon {
+          ItemId: "Ingredient_Water_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityWaterValue {
+          Anchor: (Width: 36, Height: 20);
+          Padding: (Right: 8);
+          Style: (FontSize: 9, TextColor: #4dbbff, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+
+        ItemIcon #AffinityLifeIcon {
+          ItemId: "Ingredient_Life_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityLifeValue {
+          Anchor: (Width: 42, Height: 20);
+          Padding: (Right: 8);
+          Style: (FontSize: 9, TextColor: #55e05a, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+
+        ItemIcon #AffinityVoidIcon {
+          ItemId: "Ingredient_Void_Essence";
+          Anchor: (Width: 20, Height: 20);
+        }
+
+        Label #AffinityVoidValue {
+          Anchor: (Width: 42, Height: 20);
+          Style: (FontSize: 9, TextColor: #a852ff, RenderBold: true, VerticalAlignment: Center);
+          Text: "0%";
+        }
+      }
+    }
+  }
+}

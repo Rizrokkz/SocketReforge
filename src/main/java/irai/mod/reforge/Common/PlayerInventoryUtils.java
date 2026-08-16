@@ -6,6 +6,7 @@ import java.util.function.Predicate;
 
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
@@ -13,8 +14,9 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
  * Shared helpers for reading and updating player inventory state.
  */
 public final class PlayerInventoryUtils {
-    public static final int HOTBAR_SECTION_ID = -1;
+                    public static final int HOTBAR_SECTION_ID = -1;
     public static final int TOOLS_SECTION_ID = -8;
+    public static final int UTILITY_SECTION_ID = InventoryComponent.UTILITY_SECTION_ID; // -5
 
     public static final class HeldItemContext {
         private final int sectionId;
@@ -158,6 +160,21 @@ public final class PlayerInventoryUtils {
         }
 
         return new HeldItemContext(-1, (short) -1, null, null);
+    }
+
+    public static HeldItemContext getUtilityItemContext(Player player) {
+        if (player == null || player.getInventory() == null) {
+            return new HeldItemContext(-1, (short) -1, null, null);
+        }
+        try {
+            Inventory inventory = player.getInventory();
+            ItemContainer utility = inventory.getUtility();
+            short slot = inventory.getActiveUtilitySlot();
+            ItemStack stack = readContainerItem(utility, slot);
+                                                return new HeldItemContext(UTILITY_SECTION_ID, slot, utility, stack);
+        } catch (Exception ignored) {
+            return new HeldItemContext(-1, (short) -1, null, null);
+        }
     }
 
     public static ItemStack findFirstInHotbar(Player player, Predicate<ItemStack> matcher) {

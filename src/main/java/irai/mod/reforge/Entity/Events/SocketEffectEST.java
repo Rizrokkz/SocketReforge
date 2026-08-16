@@ -96,7 +96,9 @@ public class SocketEffectEST extends DamageEventSystem {
             ResonanceSystem.ResonanceType.MULTISHOT_BARRAGE,
             ResonanceSystem.ResonanceType.CROSSBOW_AUTO_RELOAD,
             ResonanceSystem.ResonanceType.PLUNDERING_BLADE,
-            ResonanceSystem.ResonanceType.HEAL_SURGE
+            ResonanceSystem.ResonanceType.HEAL_SURGE,
+            ResonanceSystem.ResonanceType.PRISMATIC_FORCE,
+            ResonanceSystem.ResonanceType.SHIELD_SUNDER
     );
     private static final EnumSet<ResonanceSystem.ResonanceType> ARMOR_RESONANCE_HANDLERS = EnumSet.of(
             ResonanceSystem.ResonanceType.FROST_NOVA_ON_HIT,
@@ -429,14 +431,14 @@ public class SocketEffectEST extends DamageEventSystem {
             }
             case CROSSBOW_AUTO_RELOAD -> {
                 if (!isProjectileDamage(damage)
-                        || !isCrossbowWeapon(weapon)
+                        || !isAmmoReloadWeapon(weapon)
                         || !hasAtLeastFiveSockets(weapon)) {
                     break;
                 }
                 if (ThreadLocalRandom.current().nextDouble() < 0.35
                         && !isResonanceOnCooldown(attacker.getUuid(), "w_crossbow_reload")) {
                     markResonanceCooldown(attacker.getUuid(), "w_crossbow_reload", 450L);
-                    if (refundOneArrow(attacker)) {
+                    if (refundOneAmmo(attacker)) {
                         tryApplyVisualEffect(store, attackerRef, REGEN_EFFECT_IDS);
                     }
                 }
@@ -1147,8 +1149,7 @@ public class SocketEffectEST extends DamageEventSystem {
             }
             String lower = causeId.toLowerCase(Locale.ROOT);
             return lower.contains("projectile")
-                    || lower.contains("arrow")
-                    || lower.contains("bolt");
+                    || containsClockworkAmmoHint(lower);
         } catch (Throwable ignored) {
             return false;
         }
@@ -1177,7 +1178,7 @@ public class SocketEffectEST extends DamageEventSystem {
         return lower.contains("bow") && !lower.contains("crossbow");
     }
 
-    private boolean isCrossbowWeapon(ItemStack weapon) {
+    private boolean isAmmoReloadWeapon(ItemStack weapon) {
         if (weapon == null || weapon.isEmpty()) {
             return false;
         }
@@ -1185,7 +1186,13 @@ public class SocketEffectEST extends DamageEventSystem {
         if (itemId == null || itemId.isBlank()) {
             return false;
         }
-        return itemId.toLowerCase(Locale.ROOT).contains("crossbow");
+        String lower = itemId.toLowerCase(Locale.ROOT);
+        return lower.contains("crossbow")
+                || lower.contains("gun")
+                || lower.contains("rifle")
+                || lower.contains("pistol")
+                || lower.contains("blunderbuss")
+                || lower.contains("firearm");
     }
 
     private boolean isDaggerWeapon(ItemStack weapon) {
@@ -1291,17 +1298,17 @@ public class SocketEffectEST extends DamageEventSystem {
         return false;
     }
 
-    private boolean refundOneArrow(Player player) {
+    private boolean refundOneAmmo(Player player) {
         if (player == null || player.getInventory() == null) {
             return false;
         }
         ItemContainer hotbar = player.getInventory().getHotbar();
         ItemContainer storage = player.getInventory().getStorage();
 
-        if (incrementFirstArrowStack(hotbar)) {
+        if (incrementFirstAmmoStack(hotbar)) {
             return true;
         }
-        if (incrementFirstArrowStack(storage)) {
+        if (incrementFirstAmmoStack(storage)) {
             return true;
         }
 
@@ -1317,13 +1324,13 @@ public class SocketEffectEST extends DamageEventSystem {
         return false;
     }
 
-    private boolean incrementFirstArrowStack(ItemContainer container) {
+    private boolean incrementFirstAmmoStack(ItemContainer container) {
         if (container == null) {
             return false;
         }
         for (short slot = 0; slot < container.getCapacity(); slot++) {
             ItemStack stack = container.getItemStack(slot);
-            if (!isArrowAmmo(stack)) {
+            if (!isRefundableAmmo(stack)) {
                 continue;
             }
             container.setItemStackForSlot(slot, stack.withQuantity(stack.getQuantity() + 1));
@@ -1332,8 +1339,11 @@ public class SocketEffectEST extends DamageEventSystem {
         return false;
     }
 
-    private boolean isArrowAmmo(ItemStack stack) {
+    private boolean isRefundableAmmo(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (ReforgeEquip.isWeapon(stack)) {
             return false;
         }
         String itemId = stack.getItemId();
@@ -1341,7 +1351,23 @@ public class SocketEffectEST extends DamageEventSystem {
             return false;
         }
         String lower = itemId.toLowerCase(Locale.ROOT);
-        return lower.contains("arrow") || lower.contains("bolt");
+        return containsClockworkAmmoHint(lower);
+    }
+
+    private boolean containsClockworkAmmoHint(String lowerItemId) {
+        if (lowerItemId == null || lowerItemId.isBlank()) {
+            return false;
+        }
+        String[] hints = SocketManager.getConfig() == null
+                ? new String[0]
+                : SocketManager.getConfig().getClockworkAmmoItemHints();
+        for (String hint : hints) {
+            String normalized = hint == null ? "" : hint.trim().toLowerCase(Locale.ROOT);
+            if (!normalized.isBlank() && lowerItemId.contains(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void logPlunder(String message) {

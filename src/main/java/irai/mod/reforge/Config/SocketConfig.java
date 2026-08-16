@@ -1,5 +1,6 @@
 package irai.mod.reforge.Config;
 
+import static com.hypixel.hytale.codec.Codec.BOOLEAN;
 import static com.hypixel.hytale.codec.Codec.DOUBLE_ARRAY;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 
@@ -67,6 +68,26 @@ public class SocketConfig implements ConfigDefaultInjector {
                     (cfg, v) -> { if (v != null && v.length > 0) cfg.maxReduceChance = v[0]; },
                     cfg -> new double[]{ cfg.maxReduceChance }
             ).add()
+            .append(
+                    new KeyedCodec<>("WEAPON_AFFINITY_APPEARANCE_PATCHING_ENABLED", BOOLEAN),
+                    (cfg, v) -> cfg.weaponAffinityAppearancePatchingEnabled = Boolean.TRUE.equals(v),
+                    SocketConfig::isWeaponAffinityAppearancePatchingEnabled
+            ).add()
+            .append(
+                    new KeyedCodec<>("RESONANCE_CLASS_MAPPINGS", STRING_ARRAY),
+                    (cfg, v) -> cfg.resonanceClassMappings = v == null ? new String[0] : v,
+                    SocketConfig::getResonanceClassMappings
+            ).add()
+            .append(
+                    new KeyedCodec<>("RESONANCE_WEAPON_CLASS_HINTS", STRING_ARRAY),
+                    (cfg, v) -> cfg.resonanceWeaponClassHints = v == null ? new String[0] : v,
+                    SocketConfig::getResonanceWeaponClassHints
+            ).add()
+            .append(
+                    new KeyedCodec<>("CLOCKWORK_AMMO_ITEM_HINTS", STRING_ARRAY),
+                    (cfg, v) -> cfg.clockworkAmmoItemHints = v == null ? new String[0] : v,
+                    SocketConfig::getClockworkAmmoItemHints
+            ).add()
             .build();
 
     // ══════════════════════════════════════════════════════════════════════════════
@@ -99,6 +120,55 @@ public class SocketConfig implements ConfigDefaultInjector {
     // Chance to reduce max sockets when breaking (separate from break chance)
     private double maxReduceChance = 0.25;
 
+    // Opt-in because this exports model/item appearance overrides at startup.
+    private Boolean weaponAffinityAppearancePatchingEnabled;
+
+    /**
+     * Optional resonance scope overrides.
+     * Format examples:
+     * Kingsbrand=SWORD
+     * Shield Sunder=SWORD,AXE,MACE,DAGGER,BOW,CROSSBOW
+     * Prismatic Force=WEAPON
+     * Tideguard=ARMOR
+     */
+    private String[] resonanceClassMappings = new String[] {
+            "Clockwork Loader=CROSSBOW,GUN"
+    };
+
+    /**
+     * Classifier hints used before the built-in id classifier.
+     * Format examples:
+     * GUN=gun,rifle,pistol
+     * GLAIVE=glaive,glaives
+     */
+    private String[] resonanceWeaponClassHints = new String[] {
+            "GUN=gun,rifle,pistol,blunderbuss,firearm",
+            "GLAIVE=glaive,glaives",
+            "KNUCKLE=knuckle,knuckles,fist,claw,claws"
+    };
+
+    /**
+     * Item-id tokens treated as ammo-like consumables for Clockwork Loader refunds.
+     * These are also excluded from socketable weapon fallback matching.
+     */
+    private String[] clockworkAmmoItemHints = new String[] {
+            "arrow",
+            "bolt",
+            "projectile",
+            "ammo",
+            "ammunition",
+            "bullet",
+            "dart",
+            "cartridge",
+            "round",
+            "shell",
+            "rocket",
+            "missile",
+            "grenade",
+            "slug",
+            "pellet"
+    };
+
     // ── Accessors ─────────────────────────────────────────────────────────────
 
     public int getMaxSocketsWeapon() { return maxSocketsWeapon; }
@@ -126,6 +196,18 @@ public class SocketConfig implements ConfigDefaultInjector {
     public double getEssenceRemovalDestroyChance()  { return essenceRemovalDestroyChance;  }
     public double getBonusSocketChance() { return bonusSocketChance; }
     public double getMaxReduceChance() { return maxReduceChance; }
+    public boolean isWeaponAffinityAppearancePatchingEnabled() {
+        return Boolean.TRUE.equals(weaponAffinityAppearancePatchingEnabled);
+    }
+    public String[] getResonanceClassMappings() {
+        return resonanceClassMappings == null ? new String[0] : resonanceClassMappings;
+    }
+    public String[] getResonanceWeaponClassHints() {
+        return resonanceWeaponClassHints == null ? new String[0] : resonanceWeaponClassHints;
+    }
+    public String[] getClockworkAmmoItemHints() {
+        return clockworkAmmoItemHints == null ? new String[0] : clockworkAmmoItemHints;
+    }
 
     // ── Setters (used by config loader) ───────────────────────────────────────
 
@@ -137,6 +219,18 @@ public class SocketConfig implements ConfigDefaultInjector {
     public void setEssenceRemovalDestroyChance(double v)  { essenceRemovalDestroyChance  = v; }
     public void setBonusSocketChance(double v)            { bonusSocketChance = v; }
     public void setMaxReduceChance(double v)              { maxReduceChance = v; }
+    public void setWeaponAffinityAppearancePatchingEnabled(boolean v) {
+        weaponAffinityAppearancePatchingEnabled = v;
+    }
+    public void setResonanceClassMappings(String[] v) {
+        resonanceClassMappings = v == null ? new String[0] : v;
+    }
+    public void setResonanceWeaponClassHints(String[] v) {
+        resonanceWeaponClassHints = v == null ? new String[0] : v;
+    }
+    public void setClockworkAmmoItemHints(String[] v) {
+        clockworkAmmoItemHints = v == null ? new String[0] : v;
+    }
 
     public void resetToDefaults() {
         SocketConfig defaults = new SocketConfig();
@@ -148,6 +242,10 @@ public class SocketConfig implements ConfigDefaultInjector {
         this.essenceRemovalDestroyChance = defaults.essenceRemovalDestroyChance;
         this.bonusSocketChance = defaults.bonusSocketChance;
         this.maxReduceChance = defaults.maxReduceChance;
+        this.weaponAffinityAppearancePatchingEnabled = Boolean.FALSE;
+        this.resonanceClassMappings = defaults.resonanceClassMappings.clone();
+        this.resonanceWeaponClassHints = defaults.resonanceWeaponClassHints.clone();
+        this.clockworkAmmoItemHints = defaults.clockworkAmmoItemHints.clone();
     }
 
     @Override
@@ -164,6 +262,57 @@ public class SocketConfig implements ConfigDefaultInjector {
         double[] mergedBreakChances = ConfigMergeUtils.extendDoubleArray(punchBreakChances, defaults.punchBreakChances);
         if (!Arrays.equals(punchBreakChances, mergedBreakChances)) {
             this.punchBreakChances = mergedBreakChances;
+            changed = true;
+        }
+
+        if (weaponAffinityAppearancePatchingEnabled == null) {
+            weaponAffinityAppearancePatchingEnabled = Boolean.FALSE;
+            changed = true;
+        }
+
+        if (resonanceClassMappings == null) {
+            resonanceClassMappings = defaults.resonanceClassMappings.clone();
+            changed = true;
+        } else {
+            String[] mergedMappings = ConfigMergeUtils.mergeMissingByKey(resonanceClassMappings, defaults.resonanceClassMappings, '=');
+            if (!Arrays.equals(resonanceClassMappings, mergedMappings)) {
+                resonanceClassMappings = mergedMappings;
+                changed = true;
+            }
+        }
+
+        if (resonanceWeaponClassHints == null) {
+            resonanceWeaponClassHints = defaults.resonanceWeaponClassHints.clone();
+            changed = true;
+        } else {
+            String[] mergedHints = ConfigMergeUtils.mergeMissingByKey(resonanceWeaponClassHints, defaults.resonanceWeaponClassHints, '=');
+            if (!Arrays.equals(resonanceWeaponClassHints, mergedHints)) {
+                resonanceWeaponClassHints = mergedHints;
+                changed = true;
+            }
+        }
+
+        if (clockworkAmmoItemHints == null) {
+            clockworkAmmoItemHints = defaults.clockworkAmmoItemHints.clone();
+            changed = true;
+        } else {
+            String[] mergedAmmoHints = ConfigMergeUtils.mergeUniqueValues(clockworkAmmoItemHints, defaults.clockworkAmmoItemHints);
+            if (!Arrays.equals(clockworkAmmoItemHints, mergedAmmoHints)) {
+                clockworkAmmoItemHints = mergedAmmoHints;
+                changed = true;
+            }
+        }
+
+        if (resonanceClassMappings == null) {
+            resonanceClassMappings = new String[0];
+            changed = true;
+        }
+        if (resonanceWeaponClassHints == null) {
+            resonanceWeaponClassHints = new String[0];
+            changed = true;
+        }
+        if (clockworkAmmoItemHints == null) {
+            clockworkAmmoItemHints = new String[0];
             changed = true;
         }
 

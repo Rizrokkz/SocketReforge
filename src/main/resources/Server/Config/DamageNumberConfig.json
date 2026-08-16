@@ -1,5 +1,9 @@
 {
     "USE_CUSTOM_COMBAT_TEXT":  true,
+    "CULLING_ENABLED":  true,
+    "CULLING_WINDOW_MS":  500,
+    "CULLING_MAX_PER_TARGET":  6,
+    "CULLING_BYPASS_AMOUNT":  75.0,
     "DEFAULTS":  [
                      "format={label} {amount}",
                      "rounding=ROUND",

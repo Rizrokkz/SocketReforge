@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.Essence.Type;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -233,6 +234,10 @@ public class EssenceSocketBench extends SimpleInteraction {
         String itemId = equipment.getItemId();
         socketData.registerTooltips(updatedItem, itemId, isWeapon);
         DynamicTooltipUtils.refreshAllPlayers();
+        // Socketing an essence can change the held weapon's dominant affinity; refresh the
+        // in-world weapon visualization immediately so it doesn't keep showing the previous
+        // affinity (e.g. Fire) for the next held weapon.
+        WeaponAffinityAppearanceState.refresh(player);
         
         // Play success sound
         sfxConfig.playSuccess(player);
@@ -347,6 +352,8 @@ public class EssenceSocketBench extends SimpleInteraction {
         String itemId = equipment.getItemId();
         socketData.registerTooltips(updatedItem, itemId, isArmor);
         DynamicTooltipUtils.refreshAllPlayers();
+        // Refresh the in-world weapon visualization after a socket repair changed an essence slot.
+        WeaponAffinityAppearanceState.refresh(player);
         
         // Play success sound
         sfxConfig.playSuccess(player);

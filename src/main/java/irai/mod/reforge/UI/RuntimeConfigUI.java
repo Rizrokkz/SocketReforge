@@ -28,6 +28,7 @@ import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.RefinementConfig.MaterialTier;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.ReforgePlugin;
+import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Util.LangLoader;
 
 /**
@@ -72,6 +73,11 @@ public final class RuntimeConfigUI {
     private static final String GROUP_AFFINITY_ROLE_RULES = "affinity_role_rules";
     private static final String GROUP_AFFINITY_CUSTOM_RULES = "affinity_custom_role_rules";
     private static final String GROUP_AFFINITY_MULTIPLIERS = "affinity_multipliers";
+    private static final String GROUP_AFFINITY_SHIELDS = "affinity_shields";
+    private static final String GROUP_REFORGE_SUPPORT_MATERIALS = "reforge_support_materials";
+    private static final String GROUP_RESONANCE_CLASS_MAPPINGS = "resonance_class_mappings";
+    private static final String GROUP_RESONANCE_CLASS_HINTS = "resonance_class_hints";
+    private static final String GROUP_CLOCKWORK_AMMO_HINTS = "clockwork_ammo_hints";
     private static final String[] AFFINITY_MODES = {"hint", "role"};
     private static final String[] AFFINITY_ELEMENTS = {"FIRE", "WATER", "ICE", "LIGHTNING", "LIFE", "VOID"};
     private static final String[] LORE_COLORS = {"black", "blue", "cyan", "green", "red", "white", "yellow"};
@@ -97,6 +103,7 @@ public final class RuntimeConfigUI {
             "CHARGE_ATTACK", "OMNISLASH", "OCTASLASH", "PUMMEL", "BLOOD_RUSH",
             "CAUSTIC_FINALE", "SHRAPNEL_FINALE", "BURN_FINALE", "DRAIN_LIFE"
     };
+    private static final String[] REFORGE_SUPPORT_CONSUME_MODES = {"NEVER", "ON_USE", "ON_BLOCK"};
     private static final String[] LORE_STATUS_KEYS = {
             "*", "bleed", "burn", "poison", "freeze", "shock", "slow", "weakness",
             "blind", "root", "stun", "fear", "drain"
@@ -562,6 +569,8 @@ public final class RuntimeConfigUI {
             registerLoreMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
             registerLootInjectionListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
             registerAffinityMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
+            registerReforgeSupportMaterialListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
+            registerResonanceClassMappingListeners(pageBuilder, addListener, activating, valueChanged, activeGroup, finalPlayer, finalState);
 
             pageBuilder = onDismiss.invoke(pageBuilder,
                     (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByServer) ->
@@ -809,6 +818,106 @@ public final class RuntimeConfigUI {
         }
     }
 
+    private static void registerReforgeSupportMaterialListeners(
+            Object pageBuilder,
+            Method addListener,
+            Object activating,
+            Object valueChanged,
+            Object validating,
+            ControlGroup activeGroup,
+            Player player,
+            ViewState state) throws Exception {
+        if (activeGroup == null || !GROUP_REFORGE_SUPPORT_MATERIALS.equals(activeGroup.id)) {
+            return;
+        }
+        String[] entries = refinementConfig().getSupportMaterialEntries();
+        addListener.invoke(pageBuilder, reforgeSupportAddButtonId(), activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddReforgeSupportMaterial(player, state));
+        for (int i = 0; i < entries.length; i++) {
+            int index = i;
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportItemInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportBreakInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportDurabilityInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportAntiInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportConsumeInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportUpgradeGuaranteeInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportJackpotGuaranteeInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportUpgradeWeightInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportJackpotWeightInputId(index), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportDescriptionInputId(index), state);
+            addListener.invoke(pageBuilder, reforgeSupportItemInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportBreakInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportDurabilityInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportAntiInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportUpgradeGuaranteeInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportJackpotGuaranteeInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportUpgradeWeightInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportJackpotWeightInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportDescriptionInputId(index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, reforgeSupportDeleteButtonId(index), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteReforgeSupportMaterial(player, state, index));
+        }
+    }
+
+    private static void registerResonanceClassMappingListeners(Object pageBuilder,
+                                                               Method addListener,
+                                                               Object activating,
+                                                               Object valueChanged,
+                                                               ControlGroup activeGroup,
+                                                               Player player,
+                                                               ViewState state) throws Exception {
+        if (activeGroup == null
+                || (!GROUP_RESONANCE_CLASS_MAPPINGS.equals(activeGroup.id)
+                && !GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)
+                && !GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id))) {
+            return;
+        }
+        if (GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id)) {
+            addListener.invoke(pageBuilder, clockworkAmmoHintAddButtonId(), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddClockworkAmmoHint(player, state));
+            String[] hints = socketConfig().getClockworkAmmoItemHints();
+            for (int i = 0; i < hints.length; i++) {
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, clockworkAmmoHintInputId(i), state);
+                final int index = i;
+                addListener.invoke(pageBuilder, clockworkAmmoHintDeleteButtonId(index), activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteClockworkAmmoHint(player, state, index));
+            }
+            return;
+        }
+        if (GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)) {
+            addListener.invoke(pageBuilder, resonanceHintAddButtonId(), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddResonanceHint(player, state));
+            String[] hints = socketConfig().getResonanceWeaponClassHints();
+            for (int i = 0; i < hints.length; i++) {
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceHintClassInputId(i), state);
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceHintTokensInputId(i), state);
+                final int index = i;
+                addListener.invoke(pageBuilder, resonanceHintDeleteButtonId(index), activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteResonanceHint(player, state, index));
+            }
+            return;
+        }
+        addListener.invoke(pageBuilder, resonanceMappingAddButtonId(), activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddResonanceMapping(player, state));
+        String[] entries = resonanceMappingDisplayEntries();
+        for (int i = 0; i < entries.length; i++) {
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceMappingNameInputId(i), state);
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceMappingClassesInputId(i), state);
+            final int index = i;
+            addListener.invoke(pageBuilder, resonanceMappingDeleteButtonId(index), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteResonanceMapping(player, state, index));
+        }
+    }
+
     private static void registerAffinityMappingListeners(
             Object pageBuilder,
             Method addListener,
@@ -840,23 +949,52 @@ public final class RuntimeConfigUI {
             return;
         }
 
+        if (GROUP_AFFINITY_SHIELDS.equals(activeGroup.id)) {
+            String[] shieldEntries = elementalAffinityConfig().getElementShields();
+            addListener.invoke(pageBuilder, affinityShieldAddButtonId(), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityShield(player, state));
+            for (int i = 0; i < shieldEntries.length; i++) {
+                int index = i;
+                addListener.invoke(pageBuilder, affinityShieldModeSelectId(index), valueChanged,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldTargetInputId(index), state);
+                addListener.invoke(pageBuilder, affinityShieldTargetInputId(index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldValueInputId(index), state);
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldDelayInputId(index), state);
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldRateInputId(index), state);
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldDurationInputId(index), state);
+                addListener.invoke(pageBuilder, affinityShieldValueInputId(index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityShieldDelayInputId(index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityShieldRateInputId(index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityShieldDurationInputId(index), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
+                addListener.invoke(pageBuilder, affinityShieldDeleteButtonId(index), activating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityShield(player, state, index));
+            }
+            return;
+        }
+
         String[] entries = elementalAffinityConfig().getElementMultipliers();
-        addListener.invoke(pageBuilder, affinityMultiplierAddButtonId(), activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityMultiplier(player, state));
+        addListener.invoke(pageBuilder, affinityMultiplierAddButtonId(activeGroup.id), activating,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityMultiplier(player, state, activeGroup.id));
         for (int i = 0; i < entries.length; i++) {
             int index = i;
-            addListener.invoke(pageBuilder, affinityMultiplierModeSelectId(index), valueChanged,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierTargetInputId(index), state);
-            addListener.invoke(pageBuilder, affinityMultiplierTargetInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
+            addListener.invoke(pageBuilder, affinityMultiplierModeSelectId(activeGroup.id, index), valueChanged,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
+            registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierTargetInputId(activeGroup.id, index), state);
+            addListener.invoke(pageBuilder, affinityMultiplierTargetInputId(activeGroup.id, index), validating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
             for (String element : AFFINITY_ELEMENTS) {
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierElementInputId(index, element), state);
-                addListener.invoke(pageBuilder, affinityMultiplierElementInputId(index, element), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, index, ctxObj));
+                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierElementInputId(activeGroup.id, index, element), state);
+                addListener.invoke(pageBuilder, affinityMultiplierElementInputId(activeGroup.id, index, element), validating,
+                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
             }
-            addListener.invoke(pageBuilder, affinityMultiplierDeleteButtonId(index), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityMultiplier(player, state, index));
+            addListener.invoke(pageBuilder, affinityMultiplierDeleteButtonId(activeGroup.id, index), activating,
+                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityMultiplier(player, state, activeGroup.id, index));
         }
     }
 
@@ -1132,6 +1270,53 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
+    private static void handleAddReforgeSupportMaterial(Player player, ViewState state) {
+        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
+        entries.add(formatReforgeSupportEntry(new ReforgeSupportRuleEntry(
+                "Item_ID",
+                "1.0",
+                "0.0",
+                "0.0",
+                "NEVER",
+                "0.0",
+                "0.0",
+                "1.0",
+                "1.0",
+                "Describe what this support does.")));
+        refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteReforgeSupportMaterial(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleReforgeSupportMaterialChange(Player player, ViewState state, int index, Object ctxObj) {
+        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
+        if (index < 0 || index >= entries.size()) {
+            requestReopen(player, state);
+            return;
+        }
+        ReforgeSupportRuleEntry entry = readReforgeSupportEntryFromInputs(state, ctxObj, index, parseReforgeSupportEntry(entries.get(index)));
+        if (!entry.itemId().isBlank()) {
+            entries.set(index, formatReforgeSupportEntry(entry));
+            refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
+        }
+        clearReforgeSupportDrafts(state, index);
+        requestReopen(player, state);
+    }
+
     private static void handleAddAffinityRule(Player player, ViewState state, String groupId) {
         List<String> entries = mutableList(affinityRuleEntries(groupId));
         entries.add("hint:new_npc=" + AFFINITY_ELEMENTS[0]);
@@ -1172,50 +1357,105 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
-    private static void handleAddAffinityMultiplier(Player player, ViewState state) {
-        List<String> entries = mutableList(elementalAffinityConfig().getElementMultipliers());
-        entries.add("hint:new_npc=FIRE:1.0,WATER:1.0,ICE:1.0,LIGHTNING:1.0,LIFE:1.0,VOID:1.0");
-        elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+    private static void handleAddAffinityMultiplier(Player player, ViewState state, String groupId) {
+        List<String> entries = mutableList(affinityMultiplierEntries(groupId));
+        String fallback = GROUP_AFFINITY_SHIELDS.equals(groupId)
+                ? "hint:new_npc=FIRE:0.0,WATER:0.0,ICE:0.0,LIGHTNING:0.0,LIFE:0.0,VOID:0.0"
+                : "hint:new_npc=FIRE:1.0,WATER:1.0,ICE:1.0,LIGHTNING:1.0,LIFE:1.0,VOID:1.0";
+        entries.add(fallback);
+        setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
         plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
         state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
         requestReopen(player, state);
     }
 
-    private static void handleDeleteAffinityMultiplier(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(elementalAffinityConfig().getElementMultipliers());
+    private static void handleDeleteAffinityMultiplier(Player player, ViewState state, String groupId, int index) {
+        List<String> entries = mutableList(affinityMultiplierEntries(groupId));
         if (index >= 0 && index < entries.size()) {
             entries.remove(index);
-            elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+            setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
             plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
             state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
         }
         requestReopen(player, state);
     }
 
-    private static void handleAffinityMultiplierChange(Player player, ViewState state, int index, Object ctxObj) {
-        String[] before = elementalAffinityConfig().getElementMultipliers();
+    private static void handleAffinityMultiplierChange(Player player, ViewState state, String groupId, int index, Object ctxObj) {
+        String[] before = affinityMultiplierEntries(groupId);
         if (index < 0 || index >= before.length) {
             requestReopen(player, state);
             return;
         }
         List<String> entries = mutableList(before);
         AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries.get(index));
-        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(index), entry.mode()));
-        String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(index), entry.target()).trim();
+        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(groupId, index), entry.mode()));
+        String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(groupId, index), entry.target()).trim();
         Map<String, String> multipliers = new LinkedHashMap<>();
         for (String element : AFFINITY_ELEMENTS) {
-            String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(index, element), entry.multipliers().getOrDefault(element, "")).trim();
+            String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(groupId, index, element), entry.multipliers().getOrDefault(element, "")).trim();
             if (!rawValue.isBlank()) {
-                multipliers.put(element, normalizeAffinityMultiplierText(rawValue, "1.0"));
+                multipliers.put(element, normalizeAffinityValueText(groupId, rawValue));
             }
         }
         if (!target.isBlank() && !multipliers.isEmpty()) {
-            entries.set(index, formatAffinityMultiplierEntry(new AffinityMultiplierEntry(mode, target, multipliers)));
-            elementalAffinityConfig().setElementMultipliers(entries.toArray(String[]::new));
+            entries.set(index, formatAffinityMultiplierEntry(groupId, new AffinityMultiplierEntry(mode, target, multipliers)));
+            setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
             plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
             state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
         }
-        clearAffinityMultiplierDrafts(state, index);
+        clearAffinityMultiplierDrafts(state, groupId, index);
+        requestReopen(player, state);
+    }
+
+    private static void handleAddAffinityShield(Player player, ViewState state) {
+        List<String> entries = mutableList(elementalAffinityConfig().getElementShields());
+        entries.add("hint:new_npc=100.0,8.0,0.2,5.0");
+        elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteAffinityShield(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(elementalAffinityConfig().getElementShields());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static void handleAffinityShieldChange(Player player, ViewState state, int index, Object ctxObj) {
+        String[] before = elementalAffinityConfig().getElementShields();
+        if (index < 0 || index >= before.length) {
+            requestReopen(player, state);
+            return;
+        }
+        List<String> entries = mutableList(before);
+        AffinityShieldEntry entry = parseAffinityShieldEntry(entries.get(index));
+        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityShieldModeSelectId(index), entry.mode()));
+        String target = draftOrContextValue(state, ctxObj, affinityShieldTargetInputId(index), entry.target()).trim();
+        String shield = normalizeAffinityShieldText(
+                draftOrContextValue(state, ctxObj, affinityShieldValueInputId(index), entry.shield()),
+                entry.shield());
+        String delay = normalizeAffinityShieldNumberText(
+                draftOrContextValue(state, ctxObj, affinityShieldDelayInputId(index), entry.delay()),
+                entry.delay());
+        String rate = normalizeAffinityShieldNumberText(
+                draftOrContextValue(state, ctxObj, affinityShieldRateInputId(index), entry.rate()),
+                entry.rate());
+        String duration = normalizeAffinityShieldNumberText(
+                draftOrContextValue(state, ctxObj, affinityShieldDurationInputId(index), entry.duration()),
+                entry.duration());
+        if (!target.isBlank()) {
+            entries.set(index, formatAffinityShieldEntry(new AffinityShieldEntry(mode, target, shield, delay, rate, duration)));
+            elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
+        }
+        clearAffinityShieldDrafts(state, index);
         requestReopen(player, state);
     }
 
@@ -1241,7 +1481,144 @@ public final class RuntimeConfigUI {
         if (isAffinityMappingGroup(activeGroup.id)) {
             return applyAffinityMappingInputs(state, activeGroup.id, ctxObj, configsToSave);
         }
+        if (GROUP_REFORGE_SUPPORT_MATERIALS.equals(activeGroup.id)) {
+            return applyReforgeSupportMaterialInputs(state, ctxObj, configsToSave);
+        }
+        if (GROUP_RESONANCE_CLASS_MAPPINGS.equals(activeGroup.id)) {
+            return applyResonanceMappingInputs(state, ctxObj, configsToSave);
+        }
+        if (GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)) {
+            return applyResonanceHintInputs(state, ctxObj, configsToSave);
+        }
+        if (GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id)) {
+            return applyClockworkAmmoHintInputs(state, ctxObj, configsToSave);
+        }
         return 0;
+    }
+
+    private static void handleAddResonanceMapping(Player player, ViewState state) {
+        List<String> entries = mutableList(resonanceMappingDisplayEntries());
+        entries.add("New Resonance=WEAPON");
+        socketConfig().setResonanceClassMappings(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteResonanceMapping(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(resonanceMappingDisplayEntries());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            socketConfig().setResonanceClassMappings(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static int applyResonanceMappingInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+        String[] before = socketConfig().getResonanceClassMappings();
+        String[] display = resonanceMappingDisplayEntries();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < display.length; i++) {
+            ResonanceMappingEntry entry = parseResonanceMappingEntry(display[i]);
+            String name = draftOrContextValue(state, ctxObj, resonanceMappingNameInputId(i), entry.name()).trim();
+            String classes = normalizeResonanceClassText(
+                    draftOrContextValue(state, ctxObj, resonanceMappingClassesInputId(i), entry.classes()));
+            if (!name.isBlank() && !classes.isBlank()) {
+                after.add(formatResonanceMappingEntry(new ResonanceMappingEntry(name, classes)));
+            }
+            state.draftValues.remove(resonanceMappingNameInputId(i));
+            state.draftValues.remove(resonanceMappingClassesInputId(i));
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        socketConfig().setResonanceClassMappings(after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, SOCKET_CONFIG_NAME);
+        return 1;
+    }
+
+    private static void handleAddResonanceHint(Player player, ViewState state) {
+        List<String> entries = mutableList(socketConfig().getResonanceWeaponClassHints());
+        entries.add("GUN=new_hint");
+        socketConfig().setResonanceWeaponClassHints(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteResonanceHint(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(socketConfig().getResonanceWeaponClassHints());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            socketConfig().setResonanceWeaponClassHints(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static int applyResonanceHintInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+        String[] before = socketConfig().getResonanceWeaponClassHints();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < before.length; i++) {
+            ResonanceHintEntry entry = parseResonanceHintEntry(before[i]);
+            String clazz = normalizeResonanceHintClassText(
+                    draftOrContextValue(state, ctxObj, resonanceHintClassInputId(i), entry.weaponClass()));
+            String tokens = normalizeHintTokenText(
+                    draftOrContextValue(state, ctxObj, resonanceHintTokensInputId(i), entry.hints()));
+            if (!clazz.isBlank() && !tokens.isBlank()) {
+                after.add(clazz + "=" + tokens);
+            }
+            state.draftValues.remove(resonanceHintClassInputId(i));
+            state.draftValues.remove(resonanceHintTokensInputId(i));
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        socketConfig().setResonanceWeaponClassHints(after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, SOCKET_CONFIG_NAME);
+        return 1;
+    }
+
+    private static void handleAddClockworkAmmoHint(Player player, ViewState state) {
+        List<String> entries = mutableList(socketConfig().getClockworkAmmoItemHints());
+        entries.add("shell");
+        socketConfig().setClockworkAmmoItemHints(entries.toArray(String[]::new));
+        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
+        requestReopen(player, state);
+    }
+
+    private static void handleDeleteClockworkAmmoHint(Player player, ViewState state, int index) {
+        List<String> entries = mutableList(socketConfig().getClockworkAmmoItemHints());
+        if (index >= 0 && index < entries.size()) {
+            entries.remove(index);
+            socketConfig().setClockworkAmmoItemHints(entries.toArray(String[]::new));
+            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
+            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
+        }
+        requestReopen(player, state);
+    }
+
+    private static int applyClockworkAmmoHintInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+        String[] before = socketConfig().getClockworkAmmoItemHints();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < before.length; i++) {
+            String token = normalizeSingleHintToken(
+                    draftOrContextValue(state, ctxObj, clockworkAmmoHintInputId(i), before[i]));
+            if (!token.isBlank() && !after.contains(token)) {
+                after.add(token);
+            }
+            state.draftValues.remove(clockworkAmmoHintInputId(i));
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        socketConfig().setClockworkAmmoItemHints(after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, SOCKET_CONFIG_NAME);
+        return 1;
     }
 
     private static int applyAffinityMappingInputs(ViewState state, String groupId, Object ctxObj, List<String> configsToSave) {
@@ -1266,28 +1643,64 @@ public final class RuntimeConfigUI {
             return 1;
         }
 
-        String[] before = elementalAffinityConfig().getElementMultipliers();
+        if (GROUP_AFFINITY_SHIELDS.equals(groupId)) {
+            return applyAffinityShieldInputs(state, ctxObj, configsToSave);
+        }
+
+        String[] before = affinityMultiplierEntries(groupId);
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(before[i]);
-            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(i), entry.mode()));
-            String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(i), entry.target()).trim();
+            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(groupId, i), entry.mode()));
+            String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(groupId, i), entry.target()).trim();
             Map<String, String> multipliers = new LinkedHashMap<>();
             for (String element : AFFINITY_ELEMENTS) {
-                String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(i, element), entry.multipliers().getOrDefault(element, "")).trim();
+                String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(groupId, i, element), entry.multipliers().getOrDefault(element, "")).trim();
                 if (!rawValue.isBlank()) {
-                    multipliers.put(element, normalizeAffinityMultiplierText(rawValue, "1.0"));
+                    multipliers.put(element, normalizeAffinityValueText(groupId, rawValue));
                 }
             }
             if (!target.isBlank() && !multipliers.isEmpty()) {
-                after.add(formatAffinityMultiplierEntry(new AffinityMultiplierEntry(mode, target, multipliers)));
+                after.add(formatAffinityMultiplierEntry(groupId, new AffinityMultiplierEntry(mode, target, multipliers)));
             }
-            clearAffinityMultiplierDrafts(state, i);
+            clearAffinityMultiplierDrafts(state, groupId, i);
         }
         if (java.util.Arrays.asList(before).equals(after)) {
             return 0;
         }
-        elementalAffinityConfig().setElementMultipliers(after.toArray(String[]::new));
+        setAffinityMultiplierEntries(groupId, after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, ELEMENTAL_AFFINITY_CONFIG_NAME);
+        return 1;
+    }
+
+    private static int applyAffinityShieldInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+        String[] before = elementalAffinityConfig().getElementShields();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < before.length; i++) {
+            AffinityShieldEntry entry = parseAffinityShieldEntry(before[i]);
+            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityShieldModeSelectId(i), entry.mode()));
+            String target = draftOrContextValue(state, ctxObj, affinityShieldTargetInputId(i), entry.target()).trim();
+            String shield = normalizeAffinityShieldText(
+                    draftOrContextValue(state, ctxObj, affinityShieldValueInputId(i), entry.shield()),
+                    entry.shield());
+            String delay = normalizeAffinityShieldNumberText(
+                    draftOrContextValue(state, ctxObj, affinityShieldDelayInputId(i), entry.delay()),
+                    entry.delay());
+            String rate = normalizeAffinityShieldNumberText(
+                    draftOrContextValue(state, ctxObj, affinityShieldRateInputId(i), entry.rate()),
+                    entry.rate());
+            String duration = normalizeAffinityShieldNumberText(
+                    draftOrContextValue(state, ctxObj, affinityShieldDurationInputId(i), entry.duration()),
+                    entry.duration());
+            if (!target.isBlank()) {
+                after.add(formatAffinityShieldEntry(new AffinityShieldEntry(mode, target, shield, delay, rate, duration)));
+            }
+            clearAffinityShieldDrafts(state, i);
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        elementalAffinityConfig().setElementShields(after.toArray(String[]::new));
         addUniqueConfig(configsToSave, ELEMENTAL_AFFINITY_CONFIG_NAME);
         return 1;
     }
@@ -1322,6 +1735,24 @@ public final class RuntimeConfigUI {
         }
         setLootInjectionEntries(groupId, after.toArray(String[]::new));
         addUniqueConfig(configsToSave, LOOT_CONFIG_NAME);
+        return 1;
+    }
+
+    private static int applyReforgeSupportMaterialInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+        String[] before = refinementConfig().getSupportMaterialEntries();
+        List<String> after = new ArrayList<>();
+        for (int i = 0; i < before.length; i++) {
+            ReforgeSupportRuleEntry entry = readReforgeSupportEntryFromInputs(state, ctxObj, i, parseReforgeSupportEntry(before[i]));
+            if (!entry.itemId().isBlank()) {
+                after.add(formatReforgeSupportEntry(entry));
+            }
+            clearReforgeSupportDrafts(state, i);
+        }
+        if (java.util.Arrays.asList(before).equals(after)) {
+            return 0;
+        }
+        refinementConfig().setSupportMaterialEntries(after.toArray(String[]::new));
+        addUniqueConfig(configsToSave, REFINEMENT_CONFIG_NAME);
         return 1;
     }
 
@@ -1925,6 +2356,14 @@ public final class RuntimeConfigUI {
             sb.append(buildLootInjectionCardsHtml(player, group.id));
         } else if (isAffinityMappingGroup(group.id)) {
             sb.append(buildAffinityMappingCardsHtml(player, group.id));
+        } else if (GROUP_REFORGE_SUPPORT_MATERIALS.equals(group.id)) {
+            sb.append(buildReforgeSupportMaterialCardsHtml(player));
+        } else if (GROUP_RESONANCE_CLASS_MAPPINGS.equals(group.id)) {
+            sb.append(buildResonanceMappingCardsHtml(player));
+        } else if (GROUP_RESONANCE_CLASS_HINTS.equals(group.id)) {
+            sb.append(buildResonanceHintCardsHtml(player));
+        } else if (GROUP_CLOCKWORK_AMMO_HINTS.equals(group.id)) {
+            sb.append(buildClockworkAmmoHintCardsHtml(player));
         } else if ("refine_limits".equals(group.id)) {
             sb.append(buildRefineLimitsWithWeightCardsHtml(player, group, state));
         } else if (group.controls == null || group.controls.isEmpty()) {
@@ -2031,8 +2470,8 @@ public final class RuntimeConfigUI {
         StringBuilder sb = new StringBuilder();
         String[] entries = lootInjectionEntries(groupId);
         boolean npcGroup = isNpcLootInjectionGroup(groupId);
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1060; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1040; anchor-height:30; padding-left:6;\">");
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1260; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1240; anchor-height:30; padding-left:6;\">");
         sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
                 .append(escapeHtml(lootInjectionGroupTitle(player, groupId)))
                 .append("</p>");
@@ -2046,7 +2485,7 @@ public final class RuntimeConfigUI {
         if (npcGroup) {
             sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:190;\">NPC / Role ID</p>");
         }
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:110;\">Chance</p>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:110;\">Chance (0-1)</p>");
         sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:70;\">Min</p>");
         sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:70;\">Max</p>");
         sb.append("</div>");
@@ -2078,6 +2517,200 @@ public final class RuntimeConfigUI {
             sb.append("<button id=\"").append(lootInjectionDeleteButtonId(groupId, i))
                     .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
             sb.append("</div>");
+        }
+        for (int i = 0; i < 4; i++) {
+            sb.append("<div style=\"anchor-width:1040; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildResonanceMappingCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = resonanceMappingDisplayEntries();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
+                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.resonance_mapping_title", "Resonance Class Mapping")))
+                .append("</p>");
+        sb.append("<button id=\"").append(resonanceMappingAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
+                .append(escapeHtml(tOrFallback(player,
+                        "ui.runtime_config.resonance_mapping_help",
+                        "Allowed values: WEAPON, ARMOR, or comma-separated weapon classes: SWORD, AXE, MACE, DAGGER, BOW, CROSSBOW, STAFF, GUN, GLAIVE, KNUCKLE.")))
+                .append("</p>");
+        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:300;\">Resonance</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:420;\">Allowed Class / Scope</p>")
+                .append("</div>");
+        if (entries.length == 0) {
+            sb.append("<p style=\"font-size:10; color:#78849A;\">No resonance mappings available.</p>");
+        }
+        for (int i = 0; i < entries.length; i++) {
+            ResonanceMappingEntry entry = parseResonanceMappingEntry(entries[i]);
+            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
+            sb.append("<input type=\"text\" id=\"").append(resonanceMappingNameInputId(i))
+                    .append("\" style=\"anchor-width:300; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                    .append(escapeHtml(entry.name())).append("\">");
+            sb.append("<input type=\"text\" id=\"").append(resonanceMappingClassesInputId(i))
+                    .append("\" style=\"anchor-width:420; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                    .append(escapeHtml(entry.classes())).append("\">");
+            sb.append("<button id=\"").append(resonanceMappingDeleteButtonId(i))
+                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+            sb.append("</div>");
+        }
+        for (int i = 0; i < 5; i++) {
+            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildResonanceHintCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = socketConfig().getResonanceWeaponClassHints();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">Resonance Class Hints</p>");
+        sb.append("<button id=\"").append(resonanceHintAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
+                .append("Class hints classify item IDs before built-in weapon checks. Example: GLAIVE=glaive,glaives")
+                .append("</p>");
+        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:180;\">Class</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:600;\">Item ID hints</p>")
+                .append("</div>");
+        for (int i = 0; i < entries.length; i++) {
+            ResonanceHintEntry entry = parseResonanceHintEntry(entries[i]);
+            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
+            sb.append("<input type=\"text\" id=\"").append(resonanceHintClassInputId(i))
+                    .append("\" style=\"anchor-width:180; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                    .append(escapeHtml(entry.weaponClass())).append("\">");
+            sb.append("<input type=\"text\" id=\"").append(resonanceHintTokensInputId(i))
+                    .append("\" style=\"anchor-width:600; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                    .append(escapeHtml(entry.hints())).append("\">");
+            sb.append("<button id=\"").append(resonanceHintDeleteButtonId(i))
+                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+            sb.append("</div>");
+        }
+        for (int i = 0; i < 5; i++) {
+            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildClockworkAmmoHintCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = socketConfig().getClockworkAmmoItemHints();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">Clockwork Ammo Hints</p>");
+        sb.append("<button id=\"").append(clockworkAmmoHintAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
+                .append("Item ID tokens treated as ammo-like consumables for Clockwork Loader refunds. Matching items are also excluded from socketable weapon fallback checks.")
+                .append("</p>");
+        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:360;\">Ammo item-id hint</p>")
+                .append("</div>");
+        for (int i = 0; i < entries.length; i++) {
+            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
+            sb.append("<input type=\"text\" id=\"").append(clockworkAmmoHintInputId(i))
+                    .append("\" style=\"anchor-width:360; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                    .append(escapeHtml(entries[i])).append("\">");
+            sb.append("<button id=\"").append(clockworkAmmoHintDeleteButtonId(i))
+                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+            sb.append("</div>");
+        }
+        for (int i = 0; i < 5; i++) {
+            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
+        }
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildReforgeSupportMaterialCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = refinementConfig().getSupportMaterialEntries();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1060; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1040; anchor-height:30; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
+                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.reforge_support_table", "Reforge Support Materials")))
+                .append("</p>");
+        sb.append("<button id=\"").append(reforgeSupportAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8;\">")
+                .append(escapeHtml(tOrFallback(player,
+                        "ui.runtime_config.reforge_support_table_help",
+                        "Break x: 0 = no break, 0.05 = 95% less break chance. Upgrade% and Jackpot% force outcomes after the break check. Upgrade x and Jackpot x boost roll weights.")))
+                .append("</p>");
+        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1040; anchor-height:20; padding-left:8;\">")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:250;\">Item ID</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Break x</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Dur</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Anti</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:95;\">Consume</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Up%</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Jack%</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Up x</p>")
+                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Jack x</p>")
+                .append("</div>");
+        if (entries == null || entries.length == 0) {
+            sb.append("<p style=\"font-size:10; color:#78849A;\">")
+                    .append(escapeHtml(tOrFallback(player, "ui.runtime_config.reforge_support_empty", "No custom reforge supports yet.")))
+                    .append("</p>");
+        } else {
+            for (int i = 0; i < entries.length; i++) {
+                ReforgeSupportRuleEntry entry = parseReforgeSupportEntry(entries[i]);
+                sb.append("<div style=\"layout-mode:Top; spacing:4; anchor-width:1040; anchor-height:78; padding:7; background-color:#172033; border-radius:3;\">");
+                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:30;\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportItemInputId(i))
+                        .append("\" style=\"anchor-width:250; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.itemId())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportBreakInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.breakMultiplier())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportDurabilityInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.durabilityLoss())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportAntiInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.antiDegradeChance())).append("\">");
+                sb.append("<select id=\"").append(reforgeSupportConsumeInputId(i))
+                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
+                        .append(" style=\"anchor-width:95; anchor-height:26; background-color:#1b2332;\">")
+                        .append(buildOptions(REFORGE_SUPPORT_CONSUME_MODES, entry.consumeMode()))
+                        .append("</select>");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportUpgradeGuaranteeInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.upgradeGuarantee())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportJackpotGuaranteeInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.jackpotGuarantee())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportUpgradeWeightInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.upgradeWeight())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportJackpotWeightInputId(i))
+                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.jackpotWeight())).append("\">");
+                sb.append("<button id=\"").append(reforgeSupportDeleteButtonId(i))
+                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+                sb.append("</div>");
+                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:30;\">");
+                sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:80; vertical-align:center;\">Description</p>");
+                sb.append("<input type=\"text\" id=\"").append(reforgeSupportDescriptionInputId(i))
+                        .append("\" style=\"anchor-width:920; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.description())).append("\">");
+                sb.append("</div>");
+                sb.append("</div>");
+            }
         }
         for (int i = 0; i < 4; i++) {
             sb.append("<div style=\"anchor-width:1040; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
@@ -2166,7 +2799,9 @@ public final class RuntimeConfigUI {
         if (isAffinityRuleGroup(groupId)) {
             return buildAffinityRuleCardsHtml(player, groupId);
         }
-        return buildAffinityMultiplierCardsHtml(player);
+        return GROUP_AFFINITY_SHIELDS.equals(groupId)
+                ? buildAffinityShieldCardsHtml(player)
+                : buildAffinityMultiplierCardsHtml(player);
     }
 
     private static String buildAffinityRuleCardsHtml(Player player, String groupId) {
@@ -2211,13 +2846,13 @@ public final class RuntimeConfigUI {
 
     private static String buildAffinityMultiplierCardsHtml(Player player) {
         StringBuilder sb = new StringBuilder();
-        String[] entries = elementalAffinityConfig().getElementMultipliers();
+        String[] entries = affinityMultiplierEntries(GROUP_AFFINITY_MULTIPLIERS);
         sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
         sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
         sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
                 .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_affinity_multiplier_title", "Per-Target Effectiveness")))
                 .append("</p>");
-        sb.append("<button id=\"").append(affinityMultiplierAddButtonId())
+        sb.append("<button id=\"").append(affinityMultiplierAddButtonId(GROUP_AFFINITY_MULTIPLIERS))
                 .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
         sb.append("</div>");
         sb.append("<div style=\"layout-mode:Top; spacing:2; anchor-width:1020; padding:7; background-color:#111b2b; border-radius:3;\">");
@@ -2238,27 +2873,81 @@ public final class RuntimeConfigUI {
             for (int i = 0; i < entries.length; i++) {
                 AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries[i]);
                 sb.append("<div style=\"layout-mode:Left; spacing:5; anchor-width:1020; anchor-height:62; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<select id=\"").append(affinityMultiplierModeSelectId(i))
+                sb.append("<select id=\"").append(affinityMultiplierModeSelectId(GROUP_AFFINITY_MULTIPLIERS, i))
                         .append("\"").append(COMPACT_DROPDOWN_ATTRS)
                         .append(" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332;\">")
                         .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
-                sb.append("<input type=\"text\" id=\"").append(affinityMultiplierTargetInputId(i))
+                sb.append("<input type=\"text\" id=\"").append(affinityMultiplierTargetInputId(GROUP_AFFINITY_MULTIPLIERS, i))
                         .append("\" style=\"anchor-width:230; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
                         .append(escapeHtml(entry.target())).append("\">");
                 for (String element : AFFINITY_ELEMENTS) {
                     sb.append("<div style=\"layout-mode:Top; spacing:1; anchor-width:84;\">");
                     sb.append("<p style=\"font-size:9; color:#9EA8B5; text-align:center;\">").append(escapeHtml(element)).append("</p>");
-                    sb.append("<input type=\"text\" id=\"").append(affinityMultiplierElementInputId(i, element))
+                    sb.append("<input type=\"text\" id=\"").append(affinityMultiplierElementInputId(GROUP_AFFINITY_MULTIPLIERS, i, element))
                             .append("\" style=\"anchor-width:78; anchor-height:24; background-color:#1b2332; padding:4;\" value=\"")
                             .append(escapeHtml(entry.multipliers().getOrDefault(element, ""))).append("\">");
                     sb.append("</div>");
                 }
-                sb.append("<button id=\"").append(affinityMultiplierDeleteButtonId(i))
+                sb.append("<button id=\"").append(affinityMultiplierDeleteButtonId(GROUP_AFFINITY_MULTIPLIERS, i))
                         .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
                 sb.append("</div>");
             }
         }
         appendBlankAffinitySpacerCards(sb, 1020, 62);
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private static String buildAffinityShieldCardsHtml(Player player) {
+        StringBuilder sb = new StringBuilder();
+        String[] entries = elementalAffinityConfig().getElementShields();
+        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
+        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
+                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_affinity_shield_title", "Elemental Shields")))
+                .append("</p>");
+        sb.append("<button id=\"").append(affinityShieldAddButtonId())
+                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
+        sb.append("</div>");
+        sb.append("<div style=\"layout-mode:Top; spacing:2; anchor-width:1020; padding:7; background-color:#111b2b; border-radius:3;\">");
+        sb.append("<p style=\"font-size:11; color:#D8E2F0; white-space:wrap;\">")
+                .append(escapeHtml(tOrFallback(player,
+                        "ui.runtime_config.mapping_affinity_shield_help",
+                        "Shield guide: map one enemy/role to shield HP plus recharge delay, rate, and duration. Recharge only checks after depletion.")))
+                .append("</p>");
+        sb.append("</div>");
+        if (entries == null || entries.length == 0) {
+            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_shields", "No elemental shield cards yet."));
+        } else {
+            for (int i = 0; i < entries.length; i++) {
+                AffinityShieldEntry entry = parseAffinityShieldEntry(entries[i]);
+                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
+                sb.append("<select id=\"").append(affinityShieldModeSelectId(i))
+                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
+                        .append(" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332;\">")
+                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
+                sb.append("<input type=\"text\" id=\"").append(affinityShieldTargetInputId(i))
+                        .append("\" style=\"anchor-width:360; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.target())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(affinityShieldValueInputId(i))
+                        .append("\" style=\"anchor-width:72; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.shield())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(affinityShieldDelayInputId(i))
+                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.delay())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(affinityShieldRateInputId(i))
+                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.rate())).append("\">");
+                sb.append("<input type=\"text\" id=\"").append(affinityShieldDurationInputId(i))
+                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
+                        .append(escapeHtml(entry.duration())).append("\">");
+                sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:230; vertical-align:center;\">HP, delay s, rate/sec, duration s</p>");
+                sb.append("<button id=\"").append(affinityShieldDeleteButtonId(i))
+                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
+                sb.append("</div>");
+            }
+        }
+        appendBlankAffinitySpacerCards(sb, 1020, 42);
         sb.append("</div>");
         return sb.toString();
     }
@@ -2979,6 +3668,21 @@ public final class RuntimeConfigUI {
                 () -> socketConfig().getMaxReduceChance(),
                 delta -> socketConfig().setMaxReduceChance(clampChance(socketConfig().getMaxReduceChance() + delta))));
         groups.add(new ControlGroup("special_rules", "Special Rules", "Additional runtime modifiers used by socket and essence systems.", specialRules));
+        groups.add(new ControlGroup(
+                GROUP_RESONANCE_CLASS_MAPPINGS,
+                "Resonance Class Mapping",
+                "Override which weapon classes or armor can activate each resonance.",
+                List.of()));
+        groups.add(new ControlGroup(
+                GROUP_RESONANCE_CLASS_HINTS,
+                "Resonance Class Hints",
+                "Map custom weapon families such as guns, glaives, and knuckles by item-id hint.",
+                List.of()));
+        groups.add(new ControlGroup(
+                GROUP_CLOCKWORK_AMMO_HINTS,
+                "Clockwork Ammo Hints",
+                "Map custom ammo item-id hints for Clockwork Loader refunds and ammo socket exclusions.",
+                List.of()));
 
         return new CategorySection(
                 CATEGORY_SOCKET,
@@ -3056,6 +3760,12 @@ public final class RuntimeConfigUI {
         if (!tierControls.isEmpty()) {
             groups.add(new ControlGroup("refine_material_tiers", "Refine Material Tiers", "Adjust level thresholds and material costs per tier.", tierControls));
         }
+
+        groups.add(new ControlGroup(
+                GROUP_REFORGE_SUPPORT_MATERIALS,
+                "Reforge Support Materials",
+                "Table format: Item ID, break multiplier, durability loss, anti-degrade chance, consume mode, and description.",
+                List.of()));
 
         List<ControlEntry> weaponMultipliers = new ArrayList<>();
         for (int level = 0; level <= maxLevel; level++) {
@@ -3198,7 +3908,7 @@ public final class RuntimeConfigUI {
         chestRolls.add(chanceControl("loot_chest_resonance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest resonance chance", "Chance for chest loot to roll a fully resonant item.", () -> lootConfig().getChestResonanceChance(), delta -> lootConfig().setChestResonanceChance(clampChance(lootConfig().getChestResonanceChance() + delta))));
         chestRolls.add(chanceControl("loot_chest_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Chest socketed essence chance", "Chance for chest equipment to spawn with filled essences.", () -> lootConfig().getChestSocketedEssenceChance(), delta -> lootConfig().setChestSocketedEssenceChance(clampChance(lootConfig().getChestSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("chest_loot", "Chest Loot", "Socket roll tuning for treasure chests.", chestRolls));
-        groups.add(new ControlGroup(GROUP_LOOT_CHEST_INJECTIONS, "Injected Chest Loot", "Extra item rules injected into generated chest loot. Format per row: item, chance, min, max.", List.of()));
+        groups.add(new ControlGroup(GROUP_LOOT_CHEST_INJECTIONS, "Injected Chest Loot", "Extra item rules injected into generated chest loot. Chance is a fraction: 0.0001 = 0.01% = ~1 in 10,000 rolls.", List.of()));
 
         List<ControlEntry> dropRolls = new ArrayList<>();
         dropRolls.add(chanceControl("loot_drop_three", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop 3-socket chance", "Chance for NPC drops to land at 3 sockets.", () -> lootConfig().getDropThreeSocketChance(), delta -> lootConfig().setDropThreeSocketChance(clampChance(lootConfig().getDropThreeSocketChance() + delta))));
@@ -3208,10 +3918,10 @@ public final class RuntimeConfigUI {
         dropRolls.add(chanceControl("loot_drop_resonance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop resonance chance", "Chance for NPC drops to roll a fully resonant item.", () -> lootConfig().getDropResonanceChance(), delta -> lootConfig().setDropResonanceChance(clampChance(lootConfig().getDropResonanceChance() + delta))));
         dropRolls.add(chanceControl("loot_drop_socketed_essence", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Drop socketed essence chance", "Chance for NPC equipment to spawn with filled essences.", () -> lootConfig().getDropSocketedEssenceChance(), delta -> lootConfig().setDropSocketedEssenceChance(clampChance(lootConfig().getDropSocketedEssenceChance() + delta))));
         groups.add(new ControlGroup("npc_drops", "NPC Drops", "Socket roll tuning for NPC and world drops.", dropRolls));
-        groups.add(new ControlGroup(GROUP_LOOT_NPC_INJECTIONS, "Injected NPC Drops", "Extra item rules injected into every NPC drop list.", List.of()));
-        groups.add(new ControlGroup(GROUP_LOOT_NPC_AQUATIC_INJECTIONS, "Aquatic NPC Drops", "Extra item rules injected when the NPC role breathes in water.", List.of()));
-        groups.add(new ControlGroup(GROUP_LOOT_NPC_FLYING_INJECTIONS, "Flying NPC Drops", "Extra item rules injected when the NPC role matches flying role hints.", List.of()));
-        groups.add(new ControlGroup(GROUP_LOOT_NPC_VOID_INJECTIONS, "Void NPC Drops", "Extra item rules injected when the NPC role matches void spawn hints.", List.of()));
+        groups.add(new ControlGroup(GROUP_LOOT_NPC_INJECTIONS, "Injected NPC Drops", "Extra item rules injected into every NPC drop list. Chance is a fraction: 0.0001 = 0.01% = ~1 in 10,000 rolls.", List.of()));
+        groups.add(new ControlGroup(GROUP_LOOT_NPC_AQUATIC_INJECTIONS, "Aquatic NPC Drops", "Extra item rules injected when the NPC role breathes in water. Chance is a fraction: 0.0001 = 0.01%.", List.of()));
+        groups.add(new ControlGroup(GROUP_LOOT_NPC_FLYING_INJECTIONS, "Flying NPC Drops", "Extra item rules injected when the NPC role matches flying role hints. Chance is a fraction: 0.0001 = 0.01%.", List.of()));
+        groups.add(new ControlGroup(GROUP_LOOT_NPC_VOID_INJECTIONS, "Void NPC Drops", "Extra item rules injected when the NPC role matches void spawn hints. Chance is a fraction: 0.0001 = 0.01%.", List.of()));
 
         List<ControlEntry> essenceFill = new ArrayList<>();
         essenceFill.add(chanceControl("loot_greater_essence_chance", CATEGORY_LOOT, LOOT_CONFIG_NAME, "Greater essence chance", "Chance each filled socket uses a concentrated essence.", () -> lootConfig().getGreaterEssenceChance(), delta -> lootConfig().setGreaterEssenceChance(clampChance(lootConfig().getGreaterEssenceChance() + delta))));
@@ -3284,11 +3994,57 @@ public final class RuntimeConfigUI {
                 () -> elementalAffinityConfig().getResistanceMultiplier(),
                 delta -> elementalAffinityConfig().setResistanceMultiplier(
                         clamp(elementalAffinityConfig().getResistanceMultiplier() + delta, 0.10, 10.0))));
+        core.add(multiplierControl(
+                "affinity_shielded_hp_damage_multiplier",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Shielded HP damage multiplier",
+                "HP damage multiplier while an enemy elemental shield is active. 0.35 means HP takes 35% damage after shield absorption.",
+                () -> elementalAffinityConfig().getShieldedHpDamageMultiplier(),
+                delta -> elementalAffinityConfig().setShieldedHpDamageMultiplier(
+                        clamp(elementalAffinityConfig().getShieldedHpDamageMultiplier() + delta, 0.0, 1.0))));
+        core.add(multiplierControl(
+                "affinity_non_elemental_shield_damage_multiplier",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Non-elemental shield damage",
+                "Shield damage multiplier for hits without elemental damage. 0.10 means plain hits chip shields for 10% damage.",
+                () -> elementalAffinityConfig().getNonElementalShieldDamageMultiplier(),
+                delta -> elementalAffinityConfig().setNonElementalShieldDamageMultiplier(
+                        clamp(elementalAffinityConfig().getNonElementalShieldDamageMultiplier() + delta, 0.0, 1.0))));
+        core.add(multiplierControl(
+                "affinity_shield_recharge_delay_seconds",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Shield recharge delay",
+                "Seconds without damage after shield depletion before lazy recharge can begin.",
+                () -> elementalAffinityConfig().getShieldRechargeDelaySeconds(),
+                delta -> elementalAffinityConfig().setShieldRechargeDelaySeconds(
+                        clamp(elementalAffinityConfig().getShieldRechargeDelaySeconds() + delta, 0.0, 3600.0))));
+        core.add(multiplierControl(
+                "affinity_shield_recharge_rate_per_second",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Shield recharge rate",
+                "Fraction of max shield restored per second after delay. 0.20 means 20% max shield per second.",
+                () -> elementalAffinityConfig().getShieldRechargeRatePerSecond(),
+                delta -> elementalAffinityConfig().setShieldRechargeRatePerSecond(
+                        clamp(elementalAffinityConfig().getShieldRechargeRatePerSecond() + delta, 0.0, 1000.0))));
+        core.add(multiplierControl(
+                "affinity_shield_recharge_duration_seconds",
+                CATEGORY_ELEMENTAL_AFFINITY,
+                ELEMENTAL_AFFINITY_CONFIG_NAME,
+                "Shield recharge duration",
+                "Maximum seconds the depleted shield can recharge during one idle window.",
+                () -> elementalAffinityConfig().getShieldRechargeDurationSeconds(),
+                delta -> elementalAffinityConfig().setShieldRechargeDurationSeconds(
+                        clamp(elementalAffinityConfig().getShieldRechargeDurationSeconds() + delta, 0.0, 3600.0))));
         groups.add(new ControlGroup("affinity_core", "Core Rules", "Global switches and fallback elemental effectiveness values.", core));
 
         groups.add(new ControlGroup(GROUP_AFFINITY_ROLE_RULES, "Default Affinity Rules", "Rules used after custom overrides to resolve an NPC's base affinity.", List.of()));
         groups.add(new ControlGroup(GROUP_AFFINITY_CUSTOM_RULES, "Custom Affinity Overrides", "Server-added NPC rules that win over default rules.", List.of()));
         groups.add(new ControlGroup(GROUP_AFFINITY_MULTIPLIERS, "Per-Target Effectiveness", "Optional damage overrides by target hint or exact NPC role.", List.of()));
+        groups.add(new ControlGroup(GROUP_AFFINITY_SHIELDS, "Elemental Shields", "Optional per-target shield pools that absorb elemental damage before HP.", List.of()));
 
         return new CategorySection(
                 CATEGORY_ELEMENTAL_AFFINITY,
@@ -4554,6 +5310,157 @@ public final class RuntimeConfigUI {
         return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
     }
 
+    private static String normalizeAffinityShieldText(String raw, String fallback) {
+        Double parsed = extractFirstNumber(raw);
+        if (parsed == null) {
+            return fallback;
+        }
+        double value = clamp(parsed, 0.0d, 1_000_000.0d);
+        return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
+    }
+
+    private static String normalizeAffinityShieldNumberText(String raw, String fallback) {
+        Double parsed = extractFirstNumber(raw);
+        if (parsed == null) {
+            return fallback;
+        }
+        double value = Math.max(0.0d, parsed);
+        return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
+    }
+
+    private static String normalizeAffinityValueText(String groupId, String raw) {
+        return GROUP_AFFINITY_SHIELDS.equals(groupId)
+                ? normalizeAffinityShieldText(raw, "0.0")
+                : normalizeAffinityMultiplierText(raw, "1.0");
+    }
+
+    private static String normalizeBoundedDecimalText(String raw, String fallback, double min, double max) {
+        Double parsed = extractFirstNumber(raw);
+        if (parsed == null) {
+            return fallback;
+        }
+        double value = clamp(parsed, min, max);
+        return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
+    }
+
+    private static String normalizeReforgeSupportMode(String raw) {
+        String normalized = raw == null ? "" : raw.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+        return switch (normalized) {
+            case "ON_USE", "USE", "ALWAYS" -> "ON_USE";
+            case "ON_BLOCK", "BLOCK", "ANTI_DEGRADE" -> "ON_BLOCK";
+            default -> "NEVER";
+        };
+    }
+
+    private static ReforgeSupportRuleEntry parseReforgeSupportEntry(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new ReforgeSupportRuleEntry("", "1.0", "0.0", "0.0", "NEVER", "0.0", "0.0", "1.0", "1.0", "");
+        }
+        String[] split = raw.trim().split("=", 2);
+        String itemId = split[0].trim();
+        String[] params = split.length > 1 ? split[1].split(",", 9) : new String[0];
+        String breakMultiplier = params.length > 0 ? normalizeBoundedDecimalText(params[0], "1.0", 0.0d, 10.0d) : "1.0";
+        String durabilityLoss = params.length > 1 ? normalizeBoundedDecimalText(params[1], "0.0", 0.0d, 1.0d) : "0.0";
+        String antiDegradeChance = params.length > 2 ? normalizeBoundedDecimalText(params[2], "0.0", 0.0d, 1.0d) : "0.0";
+        String consumeMode = params.length > 3 ? normalizeReforgeSupportMode(params[3]) : "NEVER";
+        boolean oldDescriptionFormat = params.length > 4 && extractFirstNumber(params[4]) == null;
+        String upgradeGuarantee = !oldDescriptionFormat && params.length > 4 ? normalizeBoundedDecimalText(params[4], "0.0", 0.0d, 1.0d) : "0.0";
+        String jackpotGuarantee = !oldDescriptionFormat && params.length > 5 ? normalizeBoundedDecimalText(params[5], "0.0", 0.0d, 1.0d) : "0.0";
+        String upgradeWeight = !oldDescriptionFormat && params.length > 6 ? normalizeBoundedDecimalText(params[6], "1.0", 0.0d, 10.0d) : "1.0";
+        String jackpotWeight = !oldDescriptionFormat && params.length > 7 ? normalizeBoundedDecimalText(params[7], "1.0", 0.0d, 10.0d) : "1.0";
+        String description = oldDescriptionFormat ? params[4].trim() : params.length > 8 ? params[8].trim() : "";
+        return new ReforgeSupportRuleEntry(itemId, breakMultiplier, durabilityLoss, antiDegradeChance, consumeMode,
+                upgradeGuarantee, jackpotGuarantee, upgradeWeight, jackpotWeight, description);
+    }
+
+    private static ReforgeSupportRuleEntry readReforgeSupportEntryFromInputs(
+            ViewState state,
+            Object ctxObj,
+            int index,
+            ReforgeSupportRuleEntry fallback) {
+        String itemId = draftOrContextValue(state, ctxObj, reforgeSupportItemInputId(index), fallback.itemId()).trim();
+        String breakMultiplier = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportBreakInputId(index), fallback.breakMultiplier()),
+                fallback.breakMultiplier(),
+                0.0d,
+                10.0d);
+        String durabilityLoss = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportDurabilityInputId(index), fallback.durabilityLoss()),
+                fallback.durabilityLoss(),
+                0.0d,
+                1.0d);
+        String antiDegradeChance = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportAntiInputId(index), fallback.antiDegradeChance()),
+                fallback.antiDegradeChance(),
+                0.0d,
+                1.0d);
+        String consumeMode = normalizeReforgeSupportMode(draftOrContextValue(state, ctxObj, reforgeSupportConsumeInputId(index), fallback.consumeMode()));
+        String upgradeGuarantee = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportUpgradeGuaranteeInputId(index), fallback.upgradeGuarantee()),
+                fallback.upgradeGuarantee(),
+                0.0d,
+                1.0d);
+        String jackpotGuarantee = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportJackpotGuaranteeInputId(index), fallback.jackpotGuarantee()),
+                fallback.jackpotGuarantee(),
+                0.0d,
+                1.0d);
+        String upgradeWeight = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportUpgradeWeightInputId(index), fallback.upgradeWeight()),
+                fallback.upgradeWeight(),
+                0.0d,
+                10.0d);
+        String jackpotWeight = normalizeBoundedDecimalText(
+                draftOrContextValue(state, ctxObj, reforgeSupportJackpotWeightInputId(index), fallback.jackpotWeight()),
+                fallback.jackpotWeight(),
+                0.0d,
+                10.0d);
+        String description = draftOrContextValue(state, ctxObj, reforgeSupportDescriptionInputId(index), fallback.description())
+                .replace('\n', ' ')
+                .replace('\r', ' ')
+                .trim();
+        return new ReforgeSupportRuleEntry(itemId, breakMultiplier, durabilityLoss, antiDegradeChance, consumeMode,
+                upgradeGuarantee, jackpotGuarantee, upgradeWeight, jackpotWeight, description);
+    }
+
+    private static String formatReforgeSupportEntry(ReforgeSupportRuleEntry entry) {
+        return (entry.itemId() == null ? "" : entry.itemId().trim())
+                + "="
+                + normalizeBoundedDecimalText(entry.breakMultiplier(), "1.0", 0.0d, 10.0d)
+                + ","
+                + normalizeBoundedDecimalText(entry.durabilityLoss(), "0.0", 0.0d, 1.0d)
+                + ","
+                + normalizeBoundedDecimalText(entry.antiDegradeChance(), "0.0", 0.0d, 1.0d)
+                + ","
+                + normalizeReforgeSupportMode(entry.consumeMode())
+                + ","
+                + normalizeBoundedDecimalText(entry.upgradeGuarantee(), "0.0", 0.0d, 1.0d)
+                + ","
+                + normalizeBoundedDecimalText(entry.jackpotGuarantee(), "0.0", 0.0d, 1.0d)
+                + ","
+                + normalizeBoundedDecimalText(entry.upgradeWeight(), "1.0", 0.0d, 10.0d)
+                + ","
+                + normalizeBoundedDecimalText(entry.jackpotWeight(), "1.0", 0.0d, 10.0d)
+                + ","
+                + (entry.description() == null ? "" : entry.description().replace('\n', ' ').replace('\r', ' ').trim());
+    }
+
+    private static void clearReforgeSupportDrafts(ViewState state, int index) {
+        if (state == null) {
+            return;
+        }
+        state.draftValues.remove(reforgeSupportItemInputId(index));
+        state.draftValues.remove(reforgeSupportBreakInputId(index));
+        state.draftValues.remove(reforgeSupportDurabilityInputId(index));
+        state.draftValues.remove(reforgeSupportAntiInputId(index));
+        state.draftValues.remove(reforgeSupportConsumeInputId(index));
+        state.draftValues.remove(reforgeSupportUpgradeGuaranteeInputId(index));
+        state.draftValues.remove(reforgeSupportJackpotGuaranteeInputId(index));
+        state.draftValues.remove(reforgeSupportUpgradeWeightInputId(index));
+        state.draftValues.remove(reforgeSupportJackpotWeightInputId(index));
+        state.draftValues.remove(reforgeSupportDescriptionInputId(index));
+    }
+
     private static boolean containsOption(String[] values, String selected) {
         if (values == null || selected == null) {
             return false;
@@ -4583,7 +5490,9 @@ public final class RuntimeConfigUI {
     }
 
     private static boolean isAffinityMappingGroup(String groupId) {
-        return isAffinityRuleGroup(groupId) || GROUP_AFFINITY_MULTIPLIERS.equals(groupId);
+        return isAffinityRuleGroup(groupId)
+                || GROUP_AFFINITY_MULTIPLIERS.equals(groupId)
+                || GROUP_AFFINITY_SHIELDS.equals(groupId);
     }
 
     private static boolean isAffinityRuleGroup(String groupId) {
@@ -4605,6 +5514,20 @@ public final class RuntimeConfigUI {
             elementalAffinityConfig().setCustomRoleAffinities(entries);
         } else {
             elementalAffinityConfig().setRoleAffinities(entries);
+        }
+    }
+
+    private static String[] affinityMultiplierEntries(String groupId) {
+        return GROUP_AFFINITY_SHIELDS.equals(groupId)
+                ? elementalAffinityConfig().getElementShields()
+                : elementalAffinityConfig().getElementMultipliers();
+    }
+
+    private static void setAffinityMultiplierEntries(String groupId, String[] entries) {
+        if (GROUP_AFFINITY_SHIELDS.equals(groupId)) {
+            elementalAffinityConfig().setElementShields(entries);
+        } else {
+            elementalAffinityConfig().setElementMultipliers(entries);
         }
     }
 
@@ -4635,6 +5558,44 @@ public final class RuntimeConfigUI {
         return mode + ":" + target + "=" + element;
     }
 
+    private static AffinityShieldEntry parseAffinityShieldEntry(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new AffinityShieldEntry("hint", "", "0.0", "8.0", "0.2", "5.0");
+        }
+        String[] split = raw.trim().split("=", 2);
+        String key = split[0].trim();
+        String[] values = split.length > 1 ? split[1].split(",") : new String[0];
+        String shield = normalizeAffinityShieldText(values.length > 0 ? values[0] : "", "0.0");
+        String delay = normalizeAffinityShieldNumberText(values.length > 1 ? values[1] : "", "8.0");
+        String rate = normalizeAffinityShieldNumberText(values.length > 2 ? values[2] : "", "0.2");
+        String duration = normalizeAffinityShieldNumberText(values.length > 3 ? values[3] : "", "5.0");
+        String mode = "hint";
+        if (key.regionMatches(true, 0, "role:", 0, 5)) {
+            mode = "role";
+            key = key.substring(5).trim();
+        } else if (key.regionMatches(true, 0, "id:", 0, 3)) {
+            mode = "role";
+            key = key.substring(3).trim();
+        } else if (key.regionMatches(true, 0, "hint:", 0, 5)) {
+            key = key.substring(5).trim();
+        }
+        return new AffinityShieldEntry(mode, key, shield, delay, rate, duration);
+    }
+
+    private static String formatAffinityShieldEntry(AffinityShieldEntry entry) {
+        return normalizeAffinityMode(entry.mode())
+                + ":"
+                + (entry.target() == null ? "" : entry.target().trim())
+                + "="
+                + normalizeAffinityShieldText(entry.shield(), "0.0")
+                + ","
+                + normalizeAffinityShieldNumberText(entry.delay(), "8.0")
+                + ","
+                + normalizeAffinityShieldNumberText(entry.rate(), "0.2")
+                + ","
+                + normalizeAffinityShieldNumberText(entry.duration(), "5.0");
+    }
+
     private static AffinityMultiplierEntry parseAffinityMultiplierEntry(String raw) {
         AffinityRuleEntry key = parseAffinityRuleEntry(raw);
         Map<String, String> multipliers = new LinkedHashMap<>();
@@ -4646,8 +5607,7 @@ public final class RuntimeConfigUI {
                     continue;
                 }
                 String element = normalizeAffinityElement(pair[0]);
-                String multiplier = normalizeAffinityMultiplierText(pair[1], "1.0");
-                multipliers.put(element, multiplier);
+                multipliers.put(element, pair[1].trim());
             }
         }
         return new AffinityMultiplierEntry(key.mode(), key.target(), multipliers);
@@ -4674,6 +5634,142 @@ public final class RuntimeConfigUI {
         return sb.toString();
     }
 
+    private static String formatAffinityMultiplierEntry(String groupId, AffinityMultiplierEntry entry) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(normalizeAffinityMode(entry.mode()))
+                .append(":")
+                .append(entry.target() == null ? "" : entry.target().trim())
+                .append("=");
+        boolean first = true;
+        for (String element : AFFINITY_ELEMENTS) {
+            String value = entry.multipliers().get(element);
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append(element).append(":").append(normalizeAffinityValueText(groupId, value));
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    private static String[] resonanceMappingDisplayEntries() {
+        String[] configured = socketConfig().getResonanceClassMappings();
+        Map<String, String> merged = new LinkedHashMap<>();
+        for (String entry : ResonanceSystem.getDefaultResonanceClassMappings()) {
+            ResonanceMappingEntry parsed = parseResonanceMappingEntry(entry);
+            if (!parsed.name().isBlank()) {
+                merged.put(resonanceMappingKey(parsed.name()), formatResonanceMappingEntry(parsed));
+            }
+        }
+        for (String entry : configured) {
+            ResonanceMappingEntry parsed = parseResonanceMappingEntry(entry);
+            if (!parsed.name().isBlank()) {
+                merged.put(resonanceMappingKey(parsed.name()), formatResonanceMappingEntry(parsed));
+            }
+        }
+        return merged.values().toArray(String[]::new);
+    }
+
+    private static String resonanceMappingKey(String name) {
+        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static ResonanceMappingEntry parseResonanceMappingEntry(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new ResonanceMappingEntry("", "WEAPON");
+        }
+        String[] split = raw.split("=", 2);
+        String name = split[0].trim();
+        String classes = split.length > 1 ? normalizeResonanceClassText(split[1]) : "WEAPON";
+        return new ResonanceMappingEntry(name, classes);
+    }
+
+    private static String formatResonanceMappingEntry(ResonanceMappingEntry entry) {
+        return (entry.name() == null ? "" : entry.name().trim())
+                + "="
+                + normalizeResonanceClassText(entry.classes());
+    }
+
+    private static String normalizeResonanceClassText(String value) {
+        if (value == null || value.isBlank()) {
+            return "WEAPON";
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String part : value.split(",")) {
+            String token = part == null ? "" : part.trim().toUpperCase(Locale.ROOT)
+                    .replace('-', '_')
+                    .replace(' ', '_');
+            if (token.isBlank()) {
+                continue;
+            }
+            if ("ANY".equals(token) || "ANY_WEAPON".equals(token) || "GENERIC".equals(token)) {
+                token = "WEAPON";
+            }
+            if ("WEAPON".equals(token) || "ARMOR".equals(token)
+                    || "SWORD".equals(token) || "AXE".equals(token)
+                    || "MACE".equals(token) || "DAGGER".equals(token)
+                    || "BOW".equals(token) || "CROSSBOW".equals(token)
+                    || "STAFF".equals(token) || "GUN".equals(token)
+                    || "GLAIVE".equals(token) || "KNUCKLE".equals(token)) {
+                if (!tokens.contains(token)) {
+                    tokens.add(token);
+                }
+            }
+        }
+        if (tokens.contains("ARMOR")) {
+            return "ARMOR";
+        }
+        if (tokens.contains("WEAPON")) {
+            return "WEAPON";
+        }
+        return tokens.isEmpty() ? "WEAPON" : String.join(",", tokens);
+    }
+
+    private static ResonanceHintEntry parseResonanceHintEntry(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new ResonanceHintEntry("GUN", "");
+        }
+        String[] split = raw.split("=", 2);
+        String clazz = normalizeResonanceHintClassText(split[0]);
+        String hints = split.length > 1 ? normalizeHintTokenText(split[1]) : "";
+        return new ResonanceHintEntry(clazz, hints);
+    }
+
+    private static String normalizeHintTokenText(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        List<String> tokens = new ArrayList<>();
+        for (String part : value.split(",")) {
+            String token = part == null ? "" : part.trim().toLowerCase(Locale.ROOT);
+            if (!token.isBlank() && !tokens.contains(token)) {
+                tokens.add(token);
+            }
+        }
+        return String.join(",", tokens);
+    }
+
+    private static String normalizeSingleHintToken(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeResonanceHintClassText(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        if ("SWORD".equals(normalized) || "AXE".equals(normalized)
+                || "MACE".equals(normalized) || "DAGGER".equals(normalized)
+                || "BOW".equals(normalized) || "CROSSBOW".equals(normalized)
+                || "STAFF".equals(normalized) || "GUN".equals(normalized)
+                || "GLAIVE".equals(normalized) || "KNUCKLE".equals(normalized)) {
+            return normalized;
+        }
+        return "GUN";
+    }
+
     private static String normalizeAffinityMode(String value) {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         return "role".equals(normalized) || "id".equals(normalized) ? "role" : "hint";
@@ -4693,15 +5789,27 @@ public final class RuntimeConfigUI {
         state.draftValues.remove(affinityRuleElementSelectId(groupId, index));
     }
 
-    private static void clearAffinityMultiplierDrafts(ViewState state, int index) {
+    private static void clearAffinityMultiplierDrafts(ViewState state, String groupId, int index) {
         if (state == null) {
             return;
         }
-        state.draftValues.remove(affinityMultiplierModeSelectId(index));
-        state.draftValues.remove(affinityMultiplierTargetInputId(index));
+        state.draftValues.remove(affinityMultiplierModeSelectId(groupId, index));
+        state.draftValues.remove(affinityMultiplierTargetInputId(groupId, index));
         for (String element : AFFINITY_ELEMENTS) {
-            state.draftValues.remove(affinityMultiplierElementInputId(index, element));
+            state.draftValues.remove(affinityMultiplierElementInputId(groupId, index, element));
         }
+    }
+
+    private static void clearAffinityShieldDrafts(ViewState state, int index) {
+        if (state == null) {
+            return;
+        }
+        state.draftValues.remove(affinityShieldModeSelectId(index));
+        state.draftValues.remove(affinityShieldTargetInputId(index));
+        state.draftValues.remove(affinityShieldValueInputId(index));
+        state.draftValues.remove(affinityShieldDelayInputId(index));
+        state.draftValues.remove(affinityShieldRateInputId(index));
+        state.draftValues.remove(affinityShieldDurationInputId(index));
     }
 
     private static String affinityRuleAddButtonId(String groupId) { return "affinityRuleAdd_" + groupId; }
@@ -4709,11 +5817,19 @@ public final class RuntimeConfigUI {
     private static String affinityRuleTargetInputId(String groupId, int index) { return "affinityRuleTarget_" + groupId + "_" + index; }
     private static String affinityRuleElementSelectId(String groupId, int index) { return "affinityRuleElement_" + groupId + "_" + index; }
     private static String affinityRuleDeleteButtonId(String groupId, int index) { return "affinityRuleDelete_" + groupId + "_" + index; }
-    private static String affinityMultiplierAddButtonId() { return "affinityMultiplierAdd"; }
-    private static String affinityMultiplierModeSelectId(int index) { return "affinityMultiplierMode_" + index; }
-    private static String affinityMultiplierTargetInputId(int index) { return "affinityMultiplierTarget_" + index; }
-    private static String affinityMultiplierElementInputId(int index, String element) { return "affinityMultiplier_" + element + "_" + index; }
-    private static String affinityMultiplierDeleteButtonId(int index) { return "affinityMultiplierDelete_" + index; }
+    private static String affinityMultiplierAddButtonId(String groupId) { return "affinityMultiplierAdd_" + groupId; }
+    private static String affinityMultiplierModeSelectId(String groupId, int index) { return "affinityMultiplierMode_" + groupId + "_" + index; }
+    private static String affinityMultiplierTargetInputId(String groupId, int index) { return "affinityMultiplierTarget_" + groupId + "_" + index; }
+    private static String affinityMultiplierElementInputId(String groupId, int index, String element) { return "affinityMultiplier_" + groupId + "_" + element + "_" + index; }
+    private static String affinityMultiplierDeleteButtonId(String groupId, int index) { return "affinityMultiplierDelete_" + groupId + "_" + index; }
+    private static String affinityShieldAddButtonId() { return "affinityShieldAdd"; }
+    private static String affinityShieldModeSelectId(int index) { return "affinityShieldMode_" + index; }
+    private static String affinityShieldTargetInputId(int index) { return "affinityShieldTarget_" + index; }
+    private static String affinityShieldValueInputId(int index) { return "affinityShieldValue_" + index; }
+    private static String affinityShieldDelayInputId(int index) { return "affinityShieldDelay_" + index; }
+    private static String affinityShieldRateInputId(int index) { return "affinityShieldRate_" + index; }
+    private static String affinityShieldDurationInputId(int index) { return "affinityShieldDuration_" + index; }
+    private static String affinityShieldDeleteButtonId(int index) { return "affinityShieldDelete_" + index; }
 
     private static boolean isLootInjectionGroup(String groupId) {
         return GROUP_LOOT_CHEST_INJECTIONS.equals(groupId)
@@ -4901,6 +6017,29 @@ public final class RuntimeConfigUI {
     private static String lootInjectionMinInputId(String groupId, int index) { return "lootInjectMin_" + groupId + "_" + index; }
     private static String lootInjectionMaxInputId(String groupId, int index) { return "lootInjectMax_" + groupId + "_" + index; }
     private static String lootInjectionDeleteButtonId(String groupId, int index) { return "lootInjectDelete_" + groupId + "_" + index; }
+    private static String reforgeSupportAddButtonId() { return "reforgeSupportAdd"; }
+    private static String reforgeSupportItemInputId(int index) { return "reforgeSupportItem_" + index; }
+    private static String reforgeSupportBreakInputId(int index) { return "reforgeSupportBreak_" + index; }
+    private static String reforgeSupportDurabilityInputId(int index) { return "reforgeSupportDurability_" + index; }
+    private static String reforgeSupportAntiInputId(int index) { return "reforgeSupportAnti_" + index; }
+    private static String reforgeSupportConsumeInputId(int index) { return "reforgeSupportConsume_" + index; }
+    private static String reforgeSupportUpgradeGuaranteeInputId(int index) { return "reforgeSupportUpgradeGuarantee_" + index; }
+    private static String reforgeSupportJackpotGuaranteeInputId(int index) { return "reforgeSupportJackpotGuarantee_" + index; }
+    private static String reforgeSupportUpgradeWeightInputId(int index) { return "reforgeSupportUpgradeWeight_" + index; }
+    private static String reforgeSupportJackpotWeightInputId(int index) { return "reforgeSupportJackpotWeight_" + index; }
+    private static String reforgeSupportDescriptionInputId(int index) { return "reforgeSupportDescription_" + index; }
+    private static String reforgeSupportDeleteButtonId(int index) { return "reforgeSupportDelete_" + index; }
+    private static String resonanceMappingAddButtonId() { return "resonanceMappingAdd"; }
+    private static String resonanceMappingNameInputId(int index) { return "resonanceMappingName_" + index; }
+    private static String resonanceMappingClassesInputId(int index) { return "resonanceMappingClasses_" + index; }
+    private static String resonanceMappingDeleteButtonId(int index) { return "resonanceMappingDelete_" + index; }
+    private static String resonanceHintAddButtonId() { return "resonanceHintAdd"; }
+    private static String resonanceHintClassInputId(int index) { return "resonanceHintClass_" + index; }
+    private static String resonanceHintTokensInputId(int index) { return "resonanceHintTokens_" + index; }
+    private static String resonanceHintDeleteButtonId(int index) { return "resonanceHintDelete_" + index; }
+    private static String clockworkAmmoHintAddButtonId() { return "clockworkAmmoHintAdd"; }
+    private static String clockworkAmmoHintInputId(int index) { return "clockworkAmmoHint_" + index; }
+    private static String clockworkAmmoHintDeleteButtonId(int index) { return "clockworkAmmoHintDelete_" + index; }
 
     private record KeyValue(String key, String value) {}
     private record AbilityEntry(
@@ -4948,8 +6087,22 @@ public final class RuntimeConfigUI {
     private record StatusResistanceEntry(String npcId, String status, String value) {}
     private record StatusCounterEntry(String npcId, String status) {}
     private record LootRuleEntry(String itemId, String chance, String min, String max, String targetId) {}
+    private record ReforgeSupportRuleEntry(
+            String itemId,
+            String breakMultiplier,
+            String durabilityLoss,
+            String antiDegradeChance,
+            String consumeMode,
+            String upgradeGuarantee,
+            String jackpotGuarantee,
+            String upgradeWeight,
+            String jackpotWeight,
+            String description) {}
     private record AffinityRuleEntry(String mode, String target, String element) {}
     private record AffinityMultiplierEntry(String mode, String target, Map<String, String> multipliers) {}
+    private record AffinityShieldEntry(String mode, String target, String shield, String delay, String rate, String duration) {}
+    private record ResonanceMappingEntry(String name, String classes) {}
+    private record ResonanceHintEntry(String weaponClass, String hints) {}
 
     private static double computeDelta(DisplayKind kind, double current, double target) {
         if (kind == DisplayKind.TOGGLE) {

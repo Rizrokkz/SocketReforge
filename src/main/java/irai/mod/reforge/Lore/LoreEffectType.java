@@ -42,7 +42,8 @@ public enum LoreEffectType {
     CAUSTIC_FINALE,
     SHRAPNEL_FINALE,
     BURN_FINALE,
-    DRAIN_LIFE;
+    DRAIN_LIFE,
+    RESTORE_MANA;
 
     public static LoreEffectType fromString(String raw, LoreEffectType fallback) {
         if (raw == null || raw.isBlank()) {
@@ -157,6 +158,15 @@ public enum LoreEffectType {
             case "LIFEDRAIN":
             case "VAMPIRIC":
                 return DRAIN_LIFE;
+            case "MANA_REGEN":
+            case "MANA_REGENERATION":
+            case "MANA_RESTORE":
+            case "RESTORE_MANA":
+            case "MANA_REFUND":
+            case "MANA_FEED":
+            case "STAMINA_RESTORE":
+            case "RESTORE_STAMINA":
+                return RESTORE_MANA;
             default:
                 break;
         }

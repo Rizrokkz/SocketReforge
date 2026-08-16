@@ -272,11 +272,47 @@ public final class NPCLootSocketDropEST extends DeathSystems.OnDeathSystem {
         if (normalizedTarget == null || normalizedTarget.isBlank() || field == null || field.isBlank()) {
             return false;
         }
-        return normalizedTarget.equals(normalizeMatchKey(field));
+        String normalizedField = normalizeMatchKey(field);
+        if (normalizedField.isBlank()) {
+            return false;
+        }
+        if (normalizedTarget.equals(normalizedField)) {
+            return true;
+        }
+        String compactTarget = compactMatchKey(normalizedTarget);
+        String compactField = compactMatchKey(normalizedField);
+        if (compactTarget.isBlank() || compactField.isBlank()) {
+            return false;
+        }
+        return compactTarget.equals(compactField)
+                || compactField.endsWith("." + compactTarget)
+                || compactField.endsWith("_" + compactTarget)
+                || compactField.endsWith("/" + compactTarget)
+                || compactField.contains("." + compactTarget + ".")
+                || compactField.contains("_" + compactTarget + "_")
+                || compactField.contains("/" + compactTarget + "/");
     }
 
     private static String normalizeMatchKey(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String compactMatchKey(String value) {
+        String normalized = normalizeMatchKey(value)
+                .replace('\\', '/')
+                .replace(':', '.')
+                .replace('-', '_');
+        if (normalized.startsWith("npcroles.")) {
+            normalized = normalized.substring("npcroles.".length());
+        }
+        if (normalized.endsWith(".name")) {
+            normalized = normalized.substring(0, normalized.length() - ".name".length());
+        }
+        int slash = normalized.lastIndexOf('/');
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            normalized = normalized.substring(slash + 1);
+        }
+        return normalized.trim();
     }
 
     private static boolean isAquaticRole(Role role) {

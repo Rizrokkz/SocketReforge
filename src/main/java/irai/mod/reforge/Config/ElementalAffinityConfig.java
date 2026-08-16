@@ -33,6 +33,31 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
                     cfg -> new double[] {cfg.resistanceMultiplier}
             ).add()
             .append(
+                    new KeyedCodec<>("SHIELDED_HP_DAMAGE_MULTIPLIER", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.shieldedHpDamageMultiplier = v[0]; },
+                    cfg -> new double[] {cfg.shieldedHpDamageMultiplier}
+            ).add()
+            .append(
+                    new KeyedCodec<>("NON_ELEMENTAL_SHIELD_DAMAGE_MULTIPLIER", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.nonElementalShieldDamageMultiplier = v[0]; },
+                    cfg -> new double[] {cfg.nonElementalShieldDamageMultiplier}
+            ).add()
+            .append(
+                    new KeyedCodec<>("SHIELD_RECHARGE_DELAY_SECONDS", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.shieldRechargeDelaySeconds = v[0]; },
+                    cfg -> new double[] {cfg.shieldRechargeDelaySeconds}
+            ).add()
+            .append(
+                    new KeyedCodec<>("SHIELD_RECHARGE_RATE_PER_SECOND", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.shieldRechargeRatePerSecond = v[0]; },
+                    cfg -> new double[] {cfg.shieldRechargeRatePerSecond}
+            ).add()
+            .append(
+                    new KeyedCodec<>("SHIELD_RECHARGE_DURATION_SECONDS", DOUBLE_ARRAY),
+                    (cfg, v) -> { if (v != null && v.length > 0) cfg.shieldRechargeDurationSeconds = v[0]; },
+                    cfg -> new double[] {cfg.shieldRechargeDurationSeconds}
+            ).add()
+            .append(
                     new KeyedCodec<>("ROLE_AFFINITIES", STRING_ARRAY),
                     (cfg, v) -> cfg.roleAffinities = v == null ? new String[0] : v,
                     ElementalAffinityConfig::getRoleAffinities
@@ -47,11 +72,21 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
                     (cfg, v) -> cfg.elementMultipliers = v == null ? new String[0] : v,
                     ElementalAffinityConfig::getElementMultipliers
             ).add()
+            .append(
+                    new KeyedCodec<>("ELEMENT_SHIELDS", STRING_ARRAY),
+                    (cfg, v) -> cfg.elementShields = v == null ? new String[0] : v,
+                    ElementalAffinityConfig::getElementShields
+            ).add()
             .build();
 
     private boolean enabled = true;
     private double weaknessMultiplier = 1.25d;
     private double resistanceMultiplier = 0.15d;
+    private double shieldedHpDamageMultiplier = 0.35d;
+    private double nonElementalShieldDamageMultiplier = 0.10d;
+    private double shieldRechargeDelaySeconds = 8.0d;
+    private double shieldRechargeRatePerSecond = 0.20d;
+    private double shieldRechargeDurationSeconds = 5.0d;
 
     /**
      * Exact or hint rules. Format:
@@ -244,6 +279,17 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
             "hint:scarak=FIRE:1.3,WATER:0.55,ICE:0.45,LIGHTNING:0.5,LIFE:0.2,VOID:0.5"
     };
 
+    /**
+     * Optional elemental shield rules. Format:
+     * hint:partial_role_name=shield_amount,recharge_delay_seconds,recharge_rate_per_second,recharge_duration_seconds
+     * role:Exact_Role_ID=shield_amount,recharge_delay_seconds,recharge_rate_per_second,recharge_duration_seconds
+     * Values are enemy shield HP pools that absorb elemental damage before health.
+     * While a shield is active, health damage is multiplied by SHIELDED_HP_DAMAGE_MULTIPLIER.
+     * Non-elemental damage chips shields by NON_ELEMENTAL_SHIELD_DAMAGE_MULTIPLIER.
+     * Recharge values are optional per rule; omitted values use the global recharge defaults.
+     */
+    private String[] elementShields = new String[0];
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -254,6 +300,26 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
 
     public double getResistanceMultiplier() {
         return resistanceMultiplier;
+    }
+
+    public double getShieldedHpDamageMultiplier() {
+        return shieldedHpDamageMultiplier;
+    }
+
+    public double getNonElementalShieldDamageMultiplier() {
+        return nonElementalShieldDamageMultiplier;
+    }
+
+    public double getShieldRechargeDelaySeconds() {
+        return shieldRechargeDelaySeconds;
+    }
+
+    public double getShieldRechargeRatePerSecond() {
+        return shieldRechargeRatePerSecond;
+    }
+
+    public double getShieldRechargeDurationSeconds() {
+        return shieldRechargeDurationSeconds;
     }
 
     public void setEnabled(boolean enabled) {
@@ -268,6 +334,26 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
         this.resistanceMultiplier = resistanceMultiplier;
     }
 
+    public void setShieldedHpDamageMultiplier(double shieldedHpDamageMultiplier) {
+        this.shieldedHpDamageMultiplier = shieldedHpDamageMultiplier;
+    }
+
+    public void setNonElementalShieldDamageMultiplier(double nonElementalShieldDamageMultiplier) {
+        this.nonElementalShieldDamageMultiplier = nonElementalShieldDamageMultiplier;
+    }
+
+    public void setShieldRechargeDelaySeconds(double shieldRechargeDelaySeconds) {
+        this.shieldRechargeDelaySeconds = shieldRechargeDelaySeconds;
+    }
+
+    public void setShieldRechargeRatePerSecond(double shieldRechargeRatePerSecond) {
+        this.shieldRechargeRatePerSecond = shieldRechargeRatePerSecond;
+    }
+
+    public void setShieldRechargeDurationSeconds(double shieldRechargeDurationSeconds) {
+        this.shieldRechargeDurationSeconds = shieldRechargeDurationSeconds;
+    }
+
     public String[] getRoleAffinities() {
         return roleAffinities == null ? new String[0] : roleAffinities;
     }
@@ -278,6 +364,10 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
 
     public String[] getElementMultipliers() {
         return elementMultipliers == null ? new String[0] : elementMultipliers;
+    }
+
+    public String[] getElementShields() {
+        return elementShields == null ? new String[0] : elementShields;
     }
 
     public void setRoleAffinities(String[] roleAffinities) {
@@ -292,14 +382,24 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
         this.elementMultipliers = elementMultipliers == null ? new String[0] : elementMultipliers;
     }
 
+    public void setElementShields(String[] elementShields) {
+        this.elementShields = elementShields == null ? new String[0] : elementShields;
+    }
+
     public void resetToDefaults() {
         ElementalAffinityConfig defaults = new ElementalAffinityConfig();
         this.enabled = defaults.enabled;
         this.weaknessMultiplier = defaults.weaknessMultiplier;
         this.resistanceMultiplier = defaults.resistanceMultiplier;
+        this.shieldedHpDamageMultiplier = defaults.shieldedHpDamageMultiplier;
+        this.nonElementalShieldDamageMultiplier = defaults.nonElementalShieldDamageMultiplier;
+        this.shieldRechargeDelaySeconds = defaults.shieldRechargeDelaySeconds;
+        this.shieldRechargeRatePerSecond = defaults.shieldRechargeRatePerSecond;
+        this.shieldRechargeDurationSeconds = defaults.shieldRechargeDurationSeconds;
         this.roleAffinities = defaults.roleAffinities.clone();
         this.customRoleAffinities = defaults.customRoleAffinities.clone();
         this.elementMultipliers = defaults.elementMultipliers.clone();
+        this.elementShields = defaults.elementShields.clone();
     }
 
     @Override
@@ -316,6 +416,12 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
         String[] mergedElementMultipliers = ConfigMergeUtils.mergeMissingByKey(elementMultipliers, defaults.elementMultipliers, '=');
         if (!Arrays.equals(elementMultipliers, mergedElementMultipliers)) {
             elementMultipliers = mergedElementMultipliers;
+            changed = true;
+        }
+
+        String[] mergedElementShields = ConfigMergeUtils.mergeMissingByKey(elementShields, defaults.elementShields, '=');
+        if (!Arrays.equals(elementShields, mergedElementShields)) {
+            elementShields = mergedElementShields;
             changed = true;
         }
 

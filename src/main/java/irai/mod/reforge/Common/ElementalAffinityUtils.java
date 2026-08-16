@@ -27,9 +27,15 @@ public final class ElementalAffinityUtils {
     private static volatile boolean enabled = true;
     private static volatile double weaknessMultiplier = DEFAULT_WEAKNESS_MULTIPLIER;
     private static volatile double resistanceMultiplier = DEFAULT_RESISTANCE_MULTIPLIER;
+    private static volatile double shieldedHpDamageMultiplier = 0.01d;
+    private static volatile double nonElementalShieldDamageMultiplier = 0.10d;
+    private static volatile double shieldRechargeDelaySeconds = 8.0d;
+    private static volatile double shieldRechargeRatePerSecond = 0.20d;
+    private static volatile double shieldRechargeDurationSeconds = 5.0d;
     private static volatile List<AffinityRule> affinityRules = List.of();
     private static volatile List<AffinityRule> customAffinityRules = List.of();
     private static volatile List<MultiplierRule> multiplierRules = List.of();
+    private static volatile List<ShieldRule> shieldRules = List.of();
 
     static {
         setConfig(new ElementalAffinityConfig());
@@ -42,9 +48,15 @@ public final class ElementalAffinityUtils {
         enabled = safeConfig.isEnabled();
         weaknessMultiplier = safePositive(safeConfig.getWeaknessMultiplier(), DEFAULT_WEAKNESS_MULTIPLIER);
         resistanceMultiplier = safePositive(safeConfig.getResistanceMultiplier(), DEFAULT_RESISTANCE_MULTIPLIER);
+        shieldedHpDamageMultiplier = clamp(safeConfig.getShieldedHpDamageMultiplier(), 0.0d, 1.0d);
+        nonElementalShieldDamageMultiplier = clamp(safeConfig.getNonElementalShieldDamageMultiplier(), 0.0d, 1.0d);
+        shieldRechargeDelaySeconds = clamp(safeConfig.getShieldRechargeDelaySeconds(), 0.0d, 3600.0d);
+        shieldRechargeRatePerSecond = clamp(safeConfig.getShieldRechargeRatePerSecond(), 0.0d, 1000.0d);
+        shieldRechargeDurationSeconds = clamp(safeConfig.getShieldRechargeDurationSeconds(), 0.0d, 3600.0d);
         affinityRules = parseAffinityRules(safeConfig.getRoleAffinities());
         customAffinityRules = parseAffinityRules(safeConfig.getCustomRoleAffinities());
         multiplierRules = parseMultiplierRules(safeConfig.getElementMultipliers());
+        shieldRules = parseShieldRules(safeConfig.getElementShields());
     }
 
     public static Essence.Type resolveTargetAffinity(Store<EntityStore> store, Ref<EntityStore> targetRef) {
@@ -81,6 +93,52 @@ public final class ElementalAffinityUtils {
             return explicitMultiplier;
         }
         return effectivenessMultiplier(attackType, resolveNpcAffinity(npc));
+    }
+
+    public static Map<Essence.Type, Double> resolveElementMultipliers(Store<EntityStore> store,
+                                                                      Ref<EntityStore> targetRef) {
+        Map<Essence.Type, Double> resolved = new EnumMap<>(Essence.Type.class);
+        for (Essence.Type type : Essence.Type.values()) {
+            resolved.put(type, effectivenessMultiplier(type, store, targetRef));
+        }
+        return resolved;
+    }
+
+    public static double elementShield(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+        ElementShieldProfile profile = elementShieldProfile(store, targetRef);
+        return profile == null ? 0.0d : profile.amount();
+    }
+
+    public static ElementShieldProfile elementShieldProfile(Store<EntityStore> store, Ref<EntityStore> targetRef) {
+        if (!enabled || store == null || targetRef == null || NPCEntity.getComponentType() == null) {
+            return null;
+        }
+        NPCEntity npc = store.getComponent(targetRef, NPCEntity.getComponentType());
+        if (npc == null) {
+            return null;
+        }
+        TargetDescriptor descriptor = describe(npc);
+        return resolveExplicitShield(descriptor);
+    }
+
+    public static double shieldedHpDamageMultiplier() {
+        return enabled ? shieldedHpDamageMultiplier : 1.0d;
+    }
+
+    public static double nonElementalShieldDamageMultiplier() {
+        return enabled ? nonElementalShieldDamageMultiplier : 0.0d;
+    }
+
+    public static double shieldRechargeDelaySeconds() {
+        return enabled ? shieldRechargeDelaySeconds : 0.0d;
+    }
+
+    public static double shieldRechargeRatePerSecond() {
+        return enabled ? shieldRechargeRatePerSecond : 0.0d;
+    }
+
+    public static double shieldRechargeDurationSeconds() {
+        return enabled ? shieldRechargeDurationSeconds : 0.0d;
     }
 
     public static double effectivenessMultiplier(Essence.Type attackType, Essence.Type targetType) {
@@ -141,6 +199,16 @@ public final class ElementalAffinityUtils {
         return multiplier;
     }
 
+    private static ElementShieldProfile resolveExplicitShield(TargetDescriptor descriptor) {
+        ElementShieldProfile shield = null;
+        for (ShieldRule rule : shieldRules) {
+            if (rule.matches(descriptor)) {
+                shield = rule.profile();
+            }
+        }
+        return shield;
+    }
+
     private static List<AffinityRule> parseAffinityRules(String[] entries) {
         List<AffinityRule> rules = new ArrayList<>();
         if (entries == null) {
@@ -183,6 +251,24 @@ public final class ElementalAffinityUtils {
             }
             if (!multipliers.isEmpty()) {
                 rules.add(new MultiplierRule(target.mode(), target.key(), Map.copyOf(multipliers)));
+            }
+        }
+        return List.copyOf(rules);
+    }
+
+    private static List<ShieldRule> parseShieldRules(String[] entries) {
+        List<ShieldRule> rules = new ArrayList<>();
+        if (entries == null) {
+            return rules;
+        }
+        for (String entry : entries) {
+            ParsedRuleTarget target = parseRuleTarget(entry);
+            if (target == null) {
+                continue;
+            }
+            ElementShieldProfile profile = parseShieldProfile(target.value());
+            if (profile != null) {
+                rules.add(new ShieldRule(target.mode(), target.key(), profile));
             }
         }
         return List.copyOf(rules);
@@ -241,6 +327,64 @@ public final class ElementalAffinityUtils {
         return value > 0.0d ? value : fallback;
     }
 
+    private static double clamp(double value, double min, double max) {
+        if (!Double.isFinite(value)) {
+            return min;
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double parseShieldAmount(String value, double fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            double parsed = Double.parseDouble(value.trim());
+            if (!Double.isFinite(parsed)) {
+                return fallback;
+            }
+            return Math.max(0.0d, Math.min(1_000_000.0d, parsed));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static ElementShieldProfile parseShieldProfile(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String[] parts = value.split(",");
+        double amount = parseShieldAmount(parts.length > 0 ? parts[0] : "", Double.NaN);
+        if (Double.isNaN(amount)) {
+            return null;
+        }
+        double delay = parts.length > 1
+                ? parseNonNegativeDouble(parts[1], shieldRechargeDelaySeconds)
+                : shieldRechargeDelaySeconds;
+        double rate = parts.length > 2
+                ? parseNonNegativeDouble(parts[2], shieldRechargeRatePerSecond)
+                : shieldRechargeRatePerSecond;
+        double duration = parts.length > 3
+                ? parseNonNegativeDouble(parts[3], shieldRechargeDurationSeconds)
+                : shieldRechargeDurationSeconds;
+        return new ElementShieldProfile(amount, delay, rate, duration);
+    }
+
+    private static double parseNonNegativeDouble(String value, double fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            double parsed = Double.parseDouble(value.trim());
+            if (!Double.isFinite(parsed)) {
+                return fallback;
+            }
+            return Math.max(0.0d, parsed);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
     private static void addExact(List<String> exactIds, String value) {
         if (value != null && !value.isBlank()) {
             exactIds.add(value.trim().toLowerCase(Locale.ROOT));
@@ -280,6 +424,21 @@ public final class ElementalAffinityUtils {
     }
 
     private record MultiplierRule(RuleMode mode, String key, Map<Essence.Type, Double> multipliers) {
+        boolean matches(TargetDescriptor descriptor) {
+            return switch (mode) {
+                case EXACT -> descriptor.exactIds().contains(key);
+                case HINT -> descriptor.combined().contains(key);
+            };
+        }
+    }
+
+    public record ElementShieldProfile(
+            double amount,
+            double rechargeDelaySeconds,
+            double rechargeRatePerSecond,
+            double rechargeDurationSeconds) {}
+
+    private record ShieldRule(RuleMode mode, String key, ElementShieldProfile profile) {
         boolean matches(TargetDescriptor descriptor) {
             return switch (mode) {
                 case EXACT -> descriptor.exactIds().contains(key);

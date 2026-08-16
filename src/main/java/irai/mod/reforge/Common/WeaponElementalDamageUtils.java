@@ -105,7 +105,7 @@ public final class WeaponElementalDamageUtils {
                     targetRef);
             double matchupDelta = effectivenessMultiplier - ElementalAffinityUtils.DEFAULT_NEUTRAL_MULTIPLIER;
             double elementDelta = elementDamage.damage() * matchupDelta;
-            double adjustedComponentDamage = elementDamage.damage() * effectivenessMultiplier;
+            double adjustedComponentDamage = elementDamage.damage() + elementDelta;
             adjustedElementDamage.put(
                     elementDamage.type(),
                     adjustedElementDamage.getOrDefault(elementDamage.type(), 0.0d) + adjustedComponentDamage);

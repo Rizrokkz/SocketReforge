@@ -1,6 +1,8 @@
 package irai.mod.reforge.Common;
 
 import java.util.Locale;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -101,8 +103,39 @@ public final class ItemTypeUtils {
             "spade",
             "rake"
     };
+    private static volatile String[] nonEquipmentWeaponIdHints = {
+            "arrow",
+            "bolt",
+            "projectile",
+            "ammo",
+            "ammunition",
+            "bullet",
+            "dart",
+            "cartridge",
+            "round",
+            "shell",
+            "rocket",
+            "missile",
+            "grenade",
+            "slug",
+            "pellet"
+    };
 
     private ItemTypeUtils() {}
+
+    public static void setNonEquipmentWeaponIdHints(String[] hints) {
+        List<String> normalized = new ArrayList<>();
+        if (hints != null) {
+            for (String hint : hints) {
+                String token = normalizeHint(hint);
+                if (!token.isBlank() && !normalized.contains(token)) {
+                    normalized.add(token);
+                }
+            }
+        }
+        nonEquipmentWeaponIdHints = normalized.toArray(String[]::new);
+        clearCaches();
+    }
 
     public static boolean isWeapon(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -315,9 +348,13 @@ public final class ItemTypeUtils {
     }
 
     private static boolean isNonEquipmentWeaponIdLower(String lowerItemId) {
-        return containsAny(lowerItemId, "arrow", "bolt", "projectile", "ammo", "ammunition")
+        return containsAny(lowerItemId, nonEquipmentWeaponIdHints)
                 || containsAny(lowerItemId, "_bomb", "bomb_", "_tnt", "tnt_", "_dynamite", "dynamite_", "explosive", "_mine")
                 || containsAny(lowerItemId, "deployable", "placeable", "turret", "trap", "totem", "banner", "flag", "ward");
+    }
+
+    private static String normalizeHint(String hint) {
+        return hint == null ? "" : hint.trim().toLowerCase(Locale.ROOT);
     }
 
     private static boolean isExcludedToolId(String itemId) {
