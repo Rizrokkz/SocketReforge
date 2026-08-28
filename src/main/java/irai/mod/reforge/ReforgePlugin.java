@@ -111,6 +111,7 @@ import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
+import irai.mod.reforge.UI.DamagePopupHudUI;
 import irai.mod.reforge.UI.EnemyAffinityHudUI;
 import irai.mod.reforge.UI.EquipmentStatsUI;
 import irai.mod.reforge.UI.EssenceBenchUI;
@@ -307,6 +308,7 @@ public class ReforgePlugin extends JavaPlugin {
                 flushPendingLoreUpdatesOnDisconnect(event.getPlayerRef());
                 SocketBenchUI.closeForDisconnect(event.getPlayerRef());
                 EnemyAffinityHudUI.closeForDisconnect(event.getPlayerRef());
+                DamagePopupHudUI.closeForDisconnect(event.getPlayerRef());
             }
         });
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
@@ -365,7 +367,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.1");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.2");
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {

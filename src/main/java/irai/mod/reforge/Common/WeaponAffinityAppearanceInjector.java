@@ -315,6 +315,7 @@ public final class WeaponAffinityAppearanceInjector {
                     PARTICLE_SCALE,
                     new Vector3f(0.0f, 0.0f, 0.0f),
                     null,
+                    false,
                     false);
         }
         return particles;

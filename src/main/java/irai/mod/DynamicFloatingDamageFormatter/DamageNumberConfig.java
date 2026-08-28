@@ -3,6 +3,7 @@ package irai.mod.DynamicFloatingDamageFormatter;
 import static com.hypixel.hytale.codec.Codec.BOOLEAN;
 import static com.hypixel.hytale.codec.Codec.DOUBLE;
 import static com.hypixel.hytale.codec.Codec.INTEGER;
+import static com.hypixel.hytale.codec.Codec.STRING;
 import static com.hypixel.hytale.codec.Codec.STRING_ARRAY;
 
 import java.util.Arrays;
@@ -43,6 +44,11 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
                             cfg -> cfg.useCustomCombatText
                     ).add()
                     .append(
+                            new KeyedCodec<>("DAMAGE_NUMBER_RENDER_MODE", STRING),
+                            (cfg, v) -> cfg.damageNumberRenderMode = v,
+                            cfg -> cfg.damageNumberRenderMode
+                    ).add()
+                    .append(
                             new KeyedCodec<>("CULLING_ENABLED", BOOLEAN),
                             (cfg, v) -> cfg.cullingEnabled = v,
                             cfg -> cfg.cullingEnabled
@@ -77,28 +83,28 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
     // Supported keys: label, icon, iconBg, iconOverlay, format, color, ui, uiAlt, vfx,
     // particleFont, particleIcon, particleBackground, dot, rounding, precision, min, style, labelByDefault
     private String[] kindEntries = new String[] {
-            "FLAT|label=|format={amount}|color=#FFFFFF|ui=SocketReforge_CombatText_Flat|particleFont=FloatingDamage",
-            "CRITICAL|label=|color=#FF5555|ui=SocketReforge_CombatText_Critical|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Critical",
-            "ICE|label=|color=#55FFFF|ui=SocketReforge_CombatText_Ice|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Ice",
-            "BURN|label=|color=#FFAA00|ui=SocketReforge_CombatText_Burn|uiAlt=SocketReforge_CombatText_Burn_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Fire",
-            "BLEED|label=|color=#AA55FF|ui=SocketReforge_CombatText_Bleed|uiAlt=SocketReforge_CombatText_Bleed_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Bleed",
-            "POISON|label=|color=#008700|ui=SocketReforge_CombatText_Poison|uiAlt=SocketReforge_CombatText_Poison_Alt|dot=true|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Poison",
+            "FLAT|label=|format={amount}|color=#FFFFFF|ui=SocketReforge_CombatText_Flat|particleFont=FloatingDamage_FLAT",
+            "CRITICAL|label=|format={amount}|color=#FF5555|ui=SocketReforge_CombatText_Critical|particleFont=FloatingDamage_CRITICAL|particleIcon=FloatingDamage_Icon_Critical",
+            "FIRE|label=|format={amount}|color=#FFAA00|ui=SocketReforge_CombatText_Burn|particleFont=FloatingDamage_FIRE|particleIcon=FloatingDamage_Icon_Fire",
+            "ICE|label=|format={amount}|color=#55FFFF|ui=SocketReforge_CombatText_Ice|particleFont=FloatingDamage_ICE|particleIcon=FloatingDamage_Icon_Ice",
+            "BURN|label=|format={amount}|color=#FFAA00|ui=SocketReforge_CombatText_Burn|uiAlt=SocketReforge_CombatText_Burn_Alt|dot=true|particleFont=FloatingDamage_BURN|particleIcon=FloatingDamage_Icon_Fire",
+            "BLEED|label=|format={amount}|color=#AA55FF|ui=SocketReforge_CombatText_Bleed|uiAlt=SocketReforge_CombatText_Bleed_Alt|dot=true|particleFont=FloatingDamage_BLEED|particleIcon=FloatingDamage_Icon_Bleed",
+            "POISON|label=|format={amount}|color=#008700|ui=SocketReforge_CombatText_Poison|uiAlt=SocketReforge_CombatText_Poison_Alt|dot=true|particleFont=FloatingDamage_POISON|particleIcon=FloatingDamage_Icon_Poison",
             "IMMUNE_FIRE|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Fire|min=0|labelByDefault=false",
             "IMMUNE_BLEED|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Bleed|min=0|labelByDefault=false",
             "IMMUNE_POISON|label=|format=|particleIcon=FloatingDamage_Icon_Immune_Poison|min=0|labelByDefault=false",
-            "SHOCK|label=|color=#FFFF55|ui=SocketReforge_CombatText_Shock|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Shock",
-            "WATER|label=|color=#5555FF|ui=SocketReforge_CombatText_Water|particleFont=FloatingDamage",
-            "VOID|label=|color=#8000FF|ui=SocketReforge_CombatText_Void|particleFont=FloatingDamage|particleIcon=FloatingDamage_Icon_Void",
-            "LIFE|label=|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage",
-            "HEAL|label=|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage"
+            "SHOCK|label=|format={amount}|color=#FFFF55|ui=SocketReforge_CombatText_Shock|particleFont=FloatingDamage_SHOCK|particleIcon=FloatingDamage_Icon_Shock",
+            "WATER|label=|format={amount}|color=#5555FF|ui=SocketReforge_CombatText_Water|particleFont=FloatingDamage_WATER",
+            "VOID|label=|format={amount}|color=#8000FF|ui=SocketReforge_CombatText_Void|particleFont=FloatingDamage_VOID|particleIcon=FloatingDamage_Icon_Void",
+            "LIFE|label=|format={amount}|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage_LIFE",
+            "HEAL|label=|format={amount}|color=#55FF55|ui=SocketReforge_CombatText_Heal|particleFont=FloatingDamage_HEAL"
     };
-
     // Format: "alias=KIND"
     private String[] aliasEntries = new String[] {
             "crit=CRITICAL",
             "critical=CRITICAL",
             "burn=BURN",
-            "fire=BURN",
+            "fire=FIRE",
             "poison=POISON",
             "toxic=POISON",
             "bleed=BLEED",
@@ -116,6 +122,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
     };
 
     private boolean useCustomCombatText = true;
+    private String damageNumberRenderMode = "COMBAT_TEXT";
     private boolean cullingEnabled = true;
     private int cullingWindowMs = 500;
     private int cullingMaxPerTarget = 6;
@@ -125,6 +132,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
     public String[] getKindEntries() { return kindEntries; }
     public String[] getAliasEntries() { return aliasEntries; }
     public boolean isUseCustomCombatText() { return useCustomCombatText; }
+    public String getDamageNumberRenderMode() { return damageNumberRenderMode; }
     public boolean isCullingEnabled() { return cullingEnabled; }
     public int getCullingWindowMs() { return cullingWindowMs; }
     public int getCullingMaxPerTarget() { return cullingMaxPerTarget; }
@@ -134,6 +142,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
     public void setKindEntries(String[] v) { this.kindEntries = v; }
     public void setAliasEntries(String[] v) { this.aliasEntries = v; }
     public void setUseCustomCombatText(boolean v) { this.useCustomCombatText = v; }
+    public void setDamageNumberRenderMode(String v) { this.damageNumberRenderMode = v; }
     public void setCullingEnabled(boolean v) { this.cullingEnabled = v; }
     public void setCullingWindowMs(int v) { this.cullingWindowMs = v; }
     public void setCullingMaxPerTarget(int v) { this.cullingMaxPerTarget = v; }
@@ -171,6 +180,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
         this.kindEntries = defaults.kindEntries == null ? null : defaults.kindEntries.clone();
         this.aliasEntries = defaults.aliasEntries == null ? null : defaults.aliasEntries.clone();
         this.useCustomCombatText = defaults.useCustomCombatText;
+        this.damageNumberRenderMode = defaults.damageNumberRenderMode;
         this.cullingEnabled = defaults.cullingEnabled;
         this.cullingWindowMs = defaults.cullingWindowMs;
         this.cullingMaxPerTarget = defaults.cullingMaxPerTarget;

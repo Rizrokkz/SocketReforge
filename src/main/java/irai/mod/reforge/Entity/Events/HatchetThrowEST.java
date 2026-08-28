@@ -612,8 +612,9 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
                 item.getTool(),
                 breakStrength,
                 0,
+                false,
                 chunkRef,
-                commandBuffer,
+                store,
                 chunkStore);
 
         float afterHealth = healthChunk == null ? beforeHealth : healthChunk.getBlockHealth(blockPos);
@@ -686,7 +687,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return;
         }
 
-        double durabilityLoss = BlockHarvestUtils.calculateDurabilityUse(item, blockType);
+        double durabilityLoss = calculateThrownHatchetDurabilityUse(item, blockType);
         if (durabilityLoss <= 0.0d) {
             return;
         }
@@ -702,6 +703,13 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
 
         double nextDurability = Math.max(0.0d, held.getDurability() - durabilityLoss);
         state.thrownItem = held.withDurability(nextDurability);
+    }
+
+    private double calculateThrownHatchetDurabilityUse(Item item, BlockType blockType) {
+        if (item == null || blockType == null || item.getTool() == null) {
+            return 0.0d;
+        }
+        return 1.0d;
     }
 
     private void ensureVisualEntity(CommandBuffer<EntityStore> commandBuffer,

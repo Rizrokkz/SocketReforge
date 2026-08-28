@@ -104,6 +104,7 @@ public final class RuntimeConfigUI {
             "CAUSTIC_FINALE", "SHRAPNEL_FINALE", "BURN_FINALE", "DRAIN_LIFE"
     };
     private static final String[] REFORGE_SUPPORT_CONSUME_MODES = {"NEVER", "ON_USE", "ON_BLOCK"};
+    private static final String[] DAMAGE_NUMBER_RENDER_MODES = {"COMBAT_TEXT", "HUD_POPUP", "PARTICLE_DIGITS", "OFF"};
     private static final String[] LORE_STATUS_KEYS = {
             "*", "bleed", "burn", "poison", "freeze", "shock", "slow", "weakness",
             "blind", "root", "stun", "fear", "drain"
@@ -400,6 +401,56 @@ public final class RuntimeConfigUI {
         }
     }
 
+    private static final class SelectControl implements ControlEntry {
+        final String id;
+        final String categoryId;
+        final String configName;
+        final String label;
+        final String description;
+        final String[] options;
+        final TextSupplier valueSupplier;
+        final TextHandler valueHandler;
+
+        SelectControl(
+                String id,
+                String categoryId,
+                String configName,
+                String label,
+                String description,
+                String[] options,
+                TextSupplier valueSupplier,
+                TextHandler valueHandler) {
+            this.id = id;
+            this.categoryId = categoryId;
+            this.configName = configName;
+            this.label = label;
+            this.description = description;
+            this.options = options == null ? new String[0] : options;
+            this.valueSupplier = valueSupplier;
+            this.valueHandler = valueHandler;
+        }
+
+        String currentValue() {
+            String value = valueSupplier != null ? valueSupplier.get() : null;
+            return value == null ? "" : value;
+        }
+
+        void applyValue(String value) {
+            if (valueHandler != null) {
+                valueHandler.set(value == null ? "" : value);
+            }
+        }
+
+        String inputElementId() {
+            return "input_" + id;
+        }
+
+        @Override
+        public String id() {
+            return id;
+        }
+    }
+
     private static final class ControlGroup {
         final String id;
         final String title;
@@ -564,6 +615,8 @@ public final class RuntimeConfigUI {
                     }
                 } else if (entry instanceof TextControl control) {
                     registerTextListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
+                } else if (entry instanceof SelectControl control) {
+                    registerSelectListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
                 }
             }
             registerLoreMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
@@ -631,6 +684,18 @@ public final class RuntimeConfigUI {
         String inputId = control.inputElementId();
         addListener.invoke(pageBuilder, inputId, validating,
                 (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleTextChange(player, state, control, eventObj, ctxObj));
+    }
+
+    private static void registerSelectListener(
+            Object pageBuilder,
+            Method addListener,
+            Object valueChanged,
+            SelectControl control,
+            Player player,
+            ViewState state) throws Exception {
+        String inputId = control.inputElementId();
+        addListener.invoke(pageBuilder, inputId, valueChanged,
+                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleSelectChange(player, state, control, eventObj, ctxObj));
     }
 
     private static void registerDraftValueListener(
@@ -1125,6 +1190,16 @@ public final class RuntimeConfigUI {
         state.draftValues.put(control.inputElementId(), rawValue);
     }
 
+    private static void handleSelectChange(Player player, ViewState state, SelectControl control, Object eventObj, Object ctxObj) {
+        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
+        if (rawValue == null || rawValue.isBlank()) {
+            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
+        }
+        if (rawValue != null) {
+            state.draftValues.put(control.inputElementId(), rawValue);
+        }
+    }
+
     private static void handleDraftValueChange(ViewState state, String elementId, Object eventObj, Object ctxObj) {
         if (state == null || elementId == null || elementId.isBlank()) {
             return;
@@ -1176,6 +1251,15 @@ public final class RuntimeConfigUI {
                     String before = control.currentValue();
                     control.applyValue(rawValue == null ? "" : rawValue);
                     if (!before.equals(control.currentValue())) {
+                        changed++;
+                        addUniqueConfig(configsToSave, control.configName);
+                    }
+                    state.draftValues.remove(control.inputElementId());
+                } else if (entry instanceof SelectControl control) {
+                    String rawValue = draftOrContextValue(state, ctxObj, control.inputElementId(), control.currentValue());
+                    String before = control.currentValue();
+                    control.applyValue(rawValue == null ? "" : rawValue);
+                    if (!before.equalsIgnoreCase(control.currentValue())) {
                         changed++;
                         addUniqueConfig(configsToSave, control.configName);
                     }
@@ -2375,6 +2459,8 @@ public final class RuntimeConfigUI {
                     sb.append(buildControlCell(player, control, singleColumnWidth, state));
                 } else if (entry instanceof TextControl control) {
                     sb.append(buildTextControlCell(player, control, singleColumnWidth, state));
+                } else if (entry instanceof SelectControl control) {
+                    sb.append(buildSelectControlCell(player, control, singleColumnWidth, state));
                 }
             }
         }
@@ -3304,6 +3390,8 @@ public final class RuntimeConfigUI {
                 sb.append(buildControlCell(player, control, singleColumnWidth, state));
             } else if (entry instanceof TextControl control) {
                 sb.append(buildTextControlCell(player, control, singleColumnWidth, state));
+            } else if (entry instanceof SelectControl control) {
+                sb.append(buildSelectControlCell(player, control, singleColumnWidth, state));
             }
         }
         sb.append("</div>");
@@ -3430,6 +3518,35 @@ public final class RuntimeConfigUI {
         return sb.toString();
     }
 
+    private static String buildSelectControlCell(Player player, SelectControl control, int width, ViewState state) {
+        int dividerWidth = Math.max(60, width - 20);
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"anchor-width:")
+                .append(width)
+                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#0d131d; border-radius:4;\">");
+        sb.append("<div style=\"layout-mode:Top; spacing:2;\">");
+        sb.append("<p><b>").append(escapeHtml(localizedControlLabel(player, control))).append("</b></p>");
+        String controlDescription = localizedControlDescription(player, control);
+        if (!controlDescription.isBlank()) {
+            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
+                    .append(escapeHtml(controlDescription))
+                    .append("</p>");
+        }
+        sb.append("</div>");
+        sb.append("<select id=\"")
+                .append(control.inputElementId())
+                .append("\" style=\"anchor-width:")
+                .append(Math.max(VALUE_WIDTH, 240))
+                .append("; anchor-height:30; background-color:#1b2332; padding:4; border-radius:4;\">")
+                .append(buildOptions(control.options, draftValue(state, control.inputElementId(), control.currentValue())))
+                .append("</select>");
+        sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
+                .append(Math.min(DIVIDER_WIDTH, dividerWidth))
+                .append("; anchor-height: 2;\">");
+        sb.append("</div>");
+        return sb.toString();
+    }
+
     private static String buildRefineLimitsWithWeightCardsHtml(Player player, ControlGroup group, ViewState state) {
         StringBuilder sb = new StringBuilder();
         int width = 1100;
@@ -3438,6 +3555,8 @@ public final class RuntimeConfigUI {
                 sb.append(buildControlCell(player, control, width, state));
             } else if (entry instanceof TextControl control) {
                 sb.append(buildTextControlCell(player, control, width, state));
+            } else if (entry instanceof SelectControl control) {
+                sb.append(buildSelectControlCell(player, control, width, state));
             }
         }
 
@@ -3953,7 +4072,16 @@ public final class RuntimeConfigUI {
                 "Enabled: SocketReforge combat text. Disabled: built-in combat text.",
                 () -> damageNumberConfig().isUseCustomCombatText(),
                 value -> damageNumberConfig().setUseCustomCombatText(value)));
-        groups.add(new ControlGroup("damage_numbers_mode", "Combat Text Mode", "Toggle custom vs built-in combat text rendering.", modeControls));
+        modeControls.add(selectControl(
+                "damage_numbers_render_mode",
+                CATEGORY_DAMAGE_NUMBERS,
+                DAMAGE_NUMBER_CONFIG_NAME,
+                "Render mode",
+                "COMBAT_TEXT uses entity combat text, HUD_POPUP uses the new screen-space popup labels, PARTICLE_DIGITS uses particle digits, OFF hides custom damage numbers.",
+                DAMAGE_NUMBER_RENDER_MODES,
+                () -> normalizeDamageNumberRenderMode(damageNumberConfig().getDamageNumberRenderMode()),
+                value -> damageNumberConfig().setDamageNumberRenderMode(normalizeDamageNumberRenderMode(value))));
+        groups.add(new ControlGroup("damage_numbers_mode", "Combat Text Mode", "Toggle custom vs built-in combat text rendering and choose the custom display mode.", modeControls));
 
         return new CategorySection(
                 CATEGORY_DAMAGE_NUMBERS,
@@ -4259,6 +4387,30 @@ public final class RuntimeConfigUI {
                 () -> joinListValue(supplier == null ? null : supplier.get()),
                 handler,
                 true);
+    }
+
+    private static SelectControl selectControl(String id,
+                                               String categoryId,
+                                               String configName,
+                                               String label,
+                                               String description,
+                                               String[] options,
+                                               TextSupplier supplier,
+                                               TextHandler handler) {
+        return new SelectControl(id, categoryId, configName, label, description, options, supplier, handler);
+    }
+
+    private static String normalizeDamageNumberRenderMode(String value) {
+        if (value == null || value.isBlank()) {
+            return "COMBAT_TEXT";
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "HUD", "HUD_POPUP", "POPUP_HUD", "SCREEN_HUD" -> "HUD_POPUP";
+            case "PARTICLE", "PARTICLES", "PARTICLE_DIGITS", "DIGIT_PARTICLES" -> "PARTICLE_DIGITS";
+            case "OFF", "NONE", "DISABLED" -> "OFF";
+            default -> "COMBAT_TEXT";
+        };
     }
 
     private static NumericControl chanceArrayControl(String id, String categoryId, String configName, String label, String description, ArraySupplier arraySupplier, int index) {
@@ -6293,6 +6445,20 @@ public final class RuntimeConfigUI {
     }
 
     private static String localizedControlDescription(Object player, TextControl control) {
+        if (control == null) {
+            return "";
+        }
+        return tOrFallback(player, "ui.runtime_config.control." + control.id + ".description", safeText(control.description));
+    }
+
+    private static String localizedControlLabel(Object player, SelectControl control) {
+        if (control == null) {
+            return "";
+        }
+        return tOrFallback(player, "ui.runtime_config.control." + control.id + ".label", control.label);
+    }
+
+    private static String localizedControlDescription(Object player, SelectControl control) {
         if (control == null) {
             return "";
         }

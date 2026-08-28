@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.2 Update 6] - 2026-08-28
+
+### Added
+
+- **Damage Numbers HUD Popup Option** - Added an opt-in HUD popup display for damage numbers that shows a fixed-position damage breakdown panel with per-type colored labels and elemental essence icons aiming to optimize the lag inducing particle based CombatText.
+  - **Damage Popup HUD** - Displays incoming damage taken and outgoing damage dealt in a compact HUD layout with separate slots for each damage type (Flat, Critical, Fire, Ice, Lightning, Water, Life, Void, Poison, Shield).
+  - **Particle Limit** - Added a limit for particle based CombatText for performance.
+  - **Elemental Icons** - Each damage type shows its corresponding essence icon alongside the damage value for quick visual identification.
+  - **DoT Tracking** - Dedicated row for damage-over-time effects (Burn, Bleed, Poison, Drain) with separate icon and value display.
+  - **Configurable Render Mode** - Toggle between `COMBAT_TEXT` (default), `HUD_POPUP` (fixed HUD panel),`PARTICLE`(particle based) via `DAMAGE_NUMBER_RENDER_MODE` in `DamageNumberConfig.json` and `/runtimeconfig`command.
+
+---
+
 ## [1.4.1] - 2026-08-15
 
 ### Added
@@ -15,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enemy Affinity HUD** - Added a compact enemy affinity HUD showing target name, HP bar, recent damage, and elemental weakness/resistance values.
   - **Affinity HUD Toggle Command** - Added a non-OP command for players to enable or disable the enemy affinity HUD via `/affinityhud`.
   - **Weapon Affinity Appearance Opt-In** - Added `WEAPON_AFFINITY_APPEARANCE_PATCHING_ENABLED` to `SocketConfig.json`, defaulting to `false` so weapon model/item appearance patching only runs when explicitly enabled.
+- **Damage Number HUD Mode** - Added an opt-in `HUD_POPUP` render mode that shows screen-space damage popups with separate pre-colored labels per damage type to avoid color/style bleed.
 - **Elemental Shield Modifiers** - Added configurable enemy elemental shield pools that absorb elemental damage before HP, reduce HP leak-through while active, and drive the shield layer in the affinity HUD.
   - **Elemental Shield Recharge** - Depleted shields can now lazily recharge after a configurable no-damage delay, with configurable recharge rate and duration.
 - **New Weapon Resonances** - Added `Prismatic Force` for combined physical and elemental damage scaling, and `Shield Sunder` for stronger elemental shield damage with partial HP pierce.

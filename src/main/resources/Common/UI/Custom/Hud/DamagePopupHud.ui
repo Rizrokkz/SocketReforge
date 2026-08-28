@@ -1,0 +1,135 @@
+Group #DamagePopupHudRoot {
+  Anchor: (Top: 300, Left: 640, Width: 760, Height: 190);
+  LayoutMode: Left;
+
+  Group #DamageTakenPanel {
+    LayoutMode: Center;
+    Anchor: (Width: 210, Height: 42);
+    Padding: (Horizontal: 8, Top: 6, Bottom: 6);
+
+    Label #DamageTakenFlat { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #ffdddd, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenCritical { Anchor: (Width: 120, Height: 34); Style: (FontSize: 24, TextColor: #ff5555, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenFire { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenIce { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #55ffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenLightning { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #ffff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenWater { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #5555ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenLife { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenVoid { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenPoison { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    Label #DamageTakenShield { Anchor: (Width: 120, Height: 34); Style: (FontSize: 22, TextColor: #70e4ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+  }
+
+  Group { Anchor: (Width: 210); }
+
+  Group #DamagePopupPanel {
+    LayoutMode: Top;
+    Anchor: (Width: 330);
+    Padding: (Horizontal: 8, Top: 6, Bottom: 6);
+
+    Group #DamagePopupSlot0 {
+      LayoutMode: Center;
+      Anchor: (Height: 22, Bottom: 2);
+
+      ItemIcon #DamagePopupSlot0IconFire { ItemId: "Ingredient_Fire_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      ItemIcon #DamagePopupSlot0IconIce { ItemId: "Ingredient_Ice_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      ItemIcon #DamagePopupSlot0IconLightning { ItemId: "Ingredient_Lightning_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      ItemIcon #DamagePopupSlot0IconWater { ItemId: "Ingredient_Water_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      ItemIcon #DamagePopupSlot0IconLife { ItemId: "Ingredient_Life_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      ItemIcon #DamagePopupSlot0IconVoid { ItemId: "Ingredient_Void_Essence"; Anchor: (Width: 16, Height: 16); Visible: false; }
+      Group { Anchor: (Width: 2); }
+      Label #DamagePopupSlot0Flat { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Critical { Anchor: (Width: 48, Height: 20); Style: (FontSize: 13, TextColor: #ff5555, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Fire { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Ice { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #55ffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Lightning { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #ffff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Water { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #5555ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Life { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Void { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Poison { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot0Shield { Anchor: (Width: 48, Height: 20); Style: (FontSize: 12, TextColor: #70e4ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    }
+
+    Group #DamagePopupSlot1 {
+      LayoutMode: Center;
+      Anchor: (Height: 24, Bottom: 2);
+
+      ItemIcon #DamagePopupSlot1IconFire { ItemId: "Ingredient_Fire_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      ItemIcon #DamagePopupSlot1IconIce { ItemId: "Ingredient_Ice_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      ItemIcon #DamagePopupSlot1IconLightning { ItemId: "Ingredient_Lightning_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      ItemIcon #DamagePopupSlot1IconWater { ItemId: "Ingredient_Water_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      ItemIcon #DamagePopupSlot1IconLife { ItemId: "Ingredient_Life_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      ItemIcon #DamagePopupSlot1IconVoid { ItemId: "Ingredient_Void_Essence"; Anchor: (Width: 18, Height: 18); Visible: false; }
+      Group { Anchor: (Width: 2); }
+      Label #DamagePopupSlot1Flat { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Critical { Anchor: (Width: 54, Height: 22); Style: (FontSize: 15, TextColor: #ff5555, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Fire { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Ice { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #55ffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Lightning { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #ffff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Water { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #5555ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Life { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Void { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Poison { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot1Shield { Anchor: (Width: 54, Height: 22); Style: (FontSize: 14, TextColor: #70e4ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    }
+
+    Group #DamagePopupSlot2 {
+      LayoutMode: Center;
+      Anchor: (Height: 26, Bottom: 2);
+
+      ItemIcon #DamagePopupSlot2IconFire { ItemId: "Ingredient_Fire_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      ItemIcon #DamagePopupSlot2IconIce { ItemId: "Ingredient_Ice_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      ItemIcon #DamagePopupSlot2IconLightning { ItemId: "Ingredient_Lightning_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      ItemIcon #DamagePopupSlot2IconWater { ItemId: "Ingredient_Water_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      ItemIcon #DamagePopupSlot2IconLife { ItemId: "Ingredient_Life_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      ItemIcon #DamagePopupSlot2IconVoid { ItemId: "Ingredient_Void_Essence"; Anchor: (Width: 21, Height: 21); Visible: false; }
+      Group { Anchor: (Width: 2); }
+      Label #DamagePopupSlot2Flat { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Critical { Anchor: (Width: 60, Height: 24); Style: (FontSize: 17, TextColor: #ff5555, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Fire { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Ice { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #55ffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Lightning { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #ffff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Water { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #5555ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Life { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Void { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Poison { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot2Shield { Anchor: (Width: 60, Height: 24); Style: (FontSize: 16, TextColor: #70e4ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    }
+
+    Group #DamagePopupSlot3 {
+      LayoutMode: Center;
+      Anchor: (Height: 36, Bottom: 0);
+
+      ItemIcon #DamagePopupSlot3IconFire { ItemId: "Ingredient_Fire_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      ItemIcon #DamagePopupSlot3IconIce { ItemId: "Ingredient_Ice_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      ItemIcon #DamagePopupSlot3IconLightning { ItemId: "Ingredient_Lightning_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      ItemIcon #DamagePopupSlot3IconWater { ItemId: "Ingredient_Water_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      ItemIcon #DamagePopupSlot3IconLife { ItemId: "Ingredient_Life_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      ItemIcon #DamagePopupSlot3IconVoid { ItemId: "Ingredient_Void_Essence"; Anchor: (Width: 30, Height: 30); Visible: false; }
+      Group { Anchor: (Width: 2); }
+      Label #DamagePopupSlot3Flat { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #ffffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Critical { Anchor: (Width: 82, Height: 34); Style: (FontSize: 26, TextColor: #ff5555, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Fire { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Ice { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #55ffff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Lightning { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #ffff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Water { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #5555ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Life { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Void { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Poison { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Label #DamagePopupSlot3Shield { Anchor: (Width: 82, Height: 34); Style: (FontSize: 24, TextColor: #70e4ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    }
+
+    Group #DamagePopupDotRow {
+      LayoutMode: Center;
+      Anchor: (Height: 34, Bottom: 0);
+
+      Group #DamagePopupDotBurnIcon { Anchor: (Width: 22, Height: 22); Background: "../Icons/CombatText/fire.png"; Visible: false; }
+      Label #DamagePopupDotBurn { Anchor: (Width: 56, Height: 30); Style: (FontSize: 16, TextColor: #ffaa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Group #DamagePopupDotBleedIcon { Anchor: (Width: 22, Height: 22); Background: "../Icons/CombatText/bleed.png"; Visible: false; }
+      Label #DamagePopupDotBleed { Anchor: (Width: 56, Height: 30); Style: (FontSize: 16, TextColor: #aa55ff, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Group #DamagePopupDotPoisonIcon { Anchor: (Width: 22, Height: 22); Background: "../Icons/CombatText/poison.png"; Visible: false; }
+      Label #DamagePopupDotPoison { Anchor: (Width: 56, Height: 30); Style: (FontSize: 16, TextColor: #00aa00, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+      Group #DamagePopupDotDrainIcon { Anchor: (Width: 22, Height: 22); Background: "../Icons/CombatText/bleed.png"; Visible: false; }
+      Label #DamagePopupDotDrain { Anchor: (Width: 56, Height: 30); Style: (FontSize: 16, TextColor: #55ff55, RenderBold: true, Alignment: Center, VerticalAlignment: Center); Text: ""; Visible: false; }
+    }
+  }
+}

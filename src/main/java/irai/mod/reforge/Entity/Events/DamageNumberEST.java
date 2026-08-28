@@ -42,6 +42,7 @@ import com.hypixel.hytale.server.core.modules.entity.tracker.EntityTrackerSystem
 import com.hypixel.hytale.server.core.modules.entityui.EntityUIModule;
 import com.hypixel.hytale.server.core.modules.entityui.UIComponentList;
 import com.hypixel.hytale.server.core.modules.entityui.asset.EntityUIComponent;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -55,6 +56,7 @@ import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Lore.LoreTargetingUtils;
 import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.UI.DamagePopupHudUI;
 import irai.mod.reforge.UI.EnemyAffinityHudUI;
 
 public class DamageNumberEST extends DamageEventSystem {
@@ -80,8 +82,16 @@ public class DamageNumberEST extends DamageEventSystem {
     private static volatile int cullingWindowMs = 500;
     private static volatile int cullingMaxPerTarget = 6;
     private static volatile double cullingBypassAmount = 75.0d;
+    private static volatile RenderMode renderMode = RenderMode.COMBAT_TEXT;
     private static volatile long lastCullCleanupMs = 0L;
     private static final ConcurrentHashMap<String, CullBucket> cullBuckets = new ConcurrentHashMap<>();
+
+    private enum RenderMode {
+        COMBAT_TEXT,
+        HUD_POPUP,
+        PARTICLE_DIGITS,
+        OFF
+    }
 
     static {
         try {
@@ -137,12 +147,28 @@ public class DamageNumberEST extends DamageEventSystem {
             cullingWindowMs = 500;
             cullingMaxPerTarget = 6;
             cullingBypassAmount = 75.0d;
+            renderMode = RenderMode.COMBAT_TEXT;
             return;
         }
         cullingEnabled = config.isCullingEnabled();
         cullingWindowMs = Math.max(50, config.getCullingWindowMs());
         cullingMaxPerTarget = Math.max(0, config.getCullingMaxPerTarget());
         cullingBypassAmount = Math.max(0.0d, config.getCullingBypassAmount());
+        renderMode = parseRenderMode(config.getDamageNumberRenderMode());
+    }
+
+    private static RenderMode parseRenderMode(String value) {
+        if (value == null || value.isBlank()) {
+            return RenderMode.COMBAT_TEXT;
+        }
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (normalized) {
+            case "OFF", "NONE", "DISABLED" -> RenderMode.OFF;
+            case "HUD", "HUD_POPUP", "POPUP_HUD", "SCREEN_HUD" -> RenderMode.HUD_POPUP;
+            case "PARTICLE", "PARTICLES", "PARTICLE_DIGITS", "DIGIT_PARTICLES" -> RenderMode.PARTICLE_DIGITS;
+            case "COMBAT_TEXT", "CUSTOM_COMBAT_TEXT", "NATIVE_COMBAT_TEXT" -> RenderMode.COMBAT_TEXT;
+            default -> RenderMode.COMBAT_TEXT;
+        };
     }
 
     public static void resetCombatTextComponentsForAllViewers() {
@@ -242,8 +268,17 @@ public class DamageNumberEST extends DamageEventSystem {
             debug("[DamageNumberEST] culled floating damage for target=" + targetRef);
             return;
         }
-        applyCombatTextVfx(store, targetRef, attackerRef, visible, kindId);
-        if (trySpawnParticleFloatingDamage(store, targetRef, attackerRef, visible, displayAmount, kindId)) {
+        if (renderMode == RenderMode.OFF) {
+            return;
+        }
+        if (renderMode == RenderMode.HUD_POPUP) {
+            showDamagePopup(store, attackerRef, displayAmount, kindId);
+            showDamageTakenPopup(store, targetRef, attackerRef, displayAmount, kindId);
+            return;
+        }
+        if (renderMode == RenderMode.PARTICLE_DIGITS) {
+            applyCombatTextVfx(store, targetRef, attackerRef, visible, kindId);
+            trySpawnParticleFloatingDamage(store, targetRef, attackerRef, visible, displayAmount, kindId);
             return;
         }
         UIComponentList uiList = null;
@@ -281,6 +316,44 @@ public class DamageNumberEST extends DamageEventSystem {
             }
             queueCombatTextComponentSwap(viewer, targetRef, uiList, kindId);
             viewer.queueUpdate(targetRef, update);
+        }
+    }
+
+    private static void showDamagePopup(Store<EntityStore> store,
+                                        Ref<EntityStore> attackerRef,
+                                        float amount,
+                                        String kindId) {
+        if (store == null || attackerRef == null || amount <= 0f) {
+            return;
+        }
+        try {
+            Player player = store.getComponent(attackerRef, Player.getComponentType());
+            if (player != null) {
+                DamagePopupHudUI.show(player, amount, kindId);
+            }
+        } catch (Throwable ignored) {
+            // HUD popup mode is optional; never let it block combat.
+        }
+    }
+
+    private static void showDamageTakenPopup(Store<EntityStore> store,
+                                             Ref<EntityStore> targetRef,
+                                             Ref<EntityStore> attackerRef,
+                                             float amount,
+                                             String kindId) {
+        if (store == null || targetRef == null || amount <= 0f) {
+            return;
+        }
+        if (attackerRef != null && attackerRef.equals(targetRef)) {
+            return;
+        }
+        try {
+            Player player = store.getComponent(targetRef, Player.getComponentType());
+            if (player != null) {
+                DamagePopupHudUI.showTaken(player, amount, kindId);
+            }
+        } catch (Throwable ignored) {
+            // HUD popup mode is optional; never let it block combat.
         }
     }
 
@@ -840,7 +913,7 @@ public class DamageNumberEST extends DamageEventSystem {
 
     private static String kindIdForElement(Essence.Type type) {
         return switch (type) {
-            case FIRE -> "BURN";
+            case FIRE -> "FIRE";
             case ICE -> "ICE";
             case LIGHTNING -> "SHOCK";
             case WATER -> "WATER";
@@ -902,6 +975,9 @@ public class DamageNumberEST extends DamageEventSystem {
         if (shouldCullFloatingDamage(targetRef, amount)) {
             return;
         }
+        if (renderMode == RenderMode.OFF || renderMode == RenderMode.HUD_POPUP) {
+            return;
+        }
         ComponentType<EntityStore, Visible> visibleType;
         ComponentType<EntityStore, UIComponentList> uiType;
         try {
@@ -920,7 +996,8 @@ public class DamageNumberEST extends DamageEventSystem {
             return;
         }
         Visible visible = store.getComponent(targetRef, visibleType);
-        if (trySpawnParticleFloatingDamage(store, targetRef, null, visible, amount, kindId)) {
+        if (renderMode == RenderMode.PARTICLE_DIGITS) {
+            trySpawnParticleFloatingDamage(store, targetRef, null, visible, amount, kindId);
             return;
         }
         UIComponentList uiList = store.getComponent(targetRef, uiType);

@@ -471,14 +471,14 @@ public final class RuntimeWeaponAffinityPatchHost {
                 {
                   "Group": "irai.mod.reforge.generated",
                   "Name": "Socket Reforge Generated Overrides",
-                  "Version": "1.0.0",
+                  "Version": "1.4.2",
                   "Description": "Generated asset overrides for Socket Reforge runtime weapon affinity visuals.",
                   "Authors": [
                     {
                       "Name": "Socket Reforge"
                     }
                   ],
-                  "ServerVersion": ">=0.5.0 <0.6.0",
+                  "ServerVersion": ">=0.6.0 <1.0.0",
                   "Dependencies": {
                     "irai.mod.reforge:Socket Reforge": "*"
                   },
