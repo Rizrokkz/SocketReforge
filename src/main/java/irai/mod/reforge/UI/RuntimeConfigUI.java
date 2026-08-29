@@ -5463,11 +5463,35 @@ public final class RuntimeConfigUI {
     }
 
     private static String normalizeAffinityShieldText(String raw, String fallback) {
-        Double parsed = extractFirstNumber(raw);
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+            String inner = trimmed.substring(1, trimmed.length() - 1);
+            String[] parts = inner.split(",");
+            if (parts.length == 2) {
+                Double min = extractFirstNumber(parts[0]);
+                Double max = extractFirstNumber(parts[1]);
+                if (min != null && max != null) {
+                    double lo = Math.min(min, max);
+                    double hi = Math.max(min, max);
+                    lo = Math.max(0.0d, Math.min(1_000_000.0d, lo));
+                    hi = Math.max(0.0d, Math.min(1_000_000.0d, hi));
+                    return "(" + formatShieldNumber(lo) + "," + formatShieldNumber(hi) + ")";
+                }
+            }
+            return fallback;
+        }
+        Double parsed = extractFirstNumber(trimmed);
         if (parsed == null) {
             return fallback;
         }
         double value = clamp(parsed, 0.0d, 1_000_000.0d);
+        return formatShieldNumber(value);
+    }
+
+    private static String formatShieldNumber(double value) {
         return String.format(Locale.ROOT, "%.3f", value).replaceAll("0+$", "").replaceAll("\\.$", ".0");
     }
 
@@ -5716,11 +5740,33 @@ public final class RuntimeConfigUI {
         }
         String[] split = raw.trim().split("=", 2);
         String key = split[0].trim();
-        String[] values = split.length > 1 ? split[1].split(",") : new String[0];
-        String shield = normalizeAffinityShieldText(values.length > 0 ? values[0] : "", "0.0");
-        String delay = normalizeAffinityShieldNumberText(values.length > 1 ? values[1] : "", "8.0");
-        String rate = normalizeAffinityShieldNumberText(values.length > 2 ? values[2] : "", "0.2");
-        String duration = normalizeAffinityShieldNumberText(values.length > 3 ? values[3] : "", "5.0");
+        String valuesPart = split.length > 1 ? split[1] : "";
+        String shield;
+        String delay = "8.0";
+        String rate = "0.2";
+        String duration = "5.0";
+        if (valuesPart.startsWith("(")) {
+            int closeParen = valuesPart.indexOf(')');
+            if (closeParen > 0) {
+                shield = valuesPart.substring(0, closeParen + 1);
+                String remaining = valuesPart.substring(closeParen + 1);
+                if (remaining.startsWith(",")) {
+                    String[] rest = remaining.substring(1).split(",");
+                    delay = normalizeAffinityShieldNumberText(rest.length > 0 ? rest[0] : "", "8.0");
+                    rate = normalizeAffinityShieldNumberText(rest.length > 1 ? rest[1] : "", "0.2");
+                    duration = normalizeAffinityShieldNumberText(rest.length > 2 ? rest[2] : "", "5.0");
+                }
+            } else {
+                shield = normalizeAffinityShieldText(valuesPart, "0.0");
+            }
+        } else {
+            String[] values = valuesPart.split(",");
+            shield = normalizeAffinityShieldText(values.length > 0 ? values[0] : "", "0.0");
+            delay = normalizeAffinityShieldNumberText(values.length > 1 ? values[1] : "", "8.0");
+            rate = normalizeAffinityShieldNumberText(values.length > 2 ? values[2] : "", "0.2");
+            duration = normalizeAffinityShieldNumberText(values.length > 3 ? values[3] : "", "5.0");
+        }
+        shield = normalizeAffinityShieldText(shield, "0.0");
         String mode = "hint";
         if (key.regionMatches(true, 0, "role:", 0, 5)) {
             mode = "role";

@@ -823,10 +823,7 @@ public class DamageNumberEST extends DamageEventSystem {
             refs.add(fallbackRef);
             return refs;
         }
-        if (store == null) {
-            return refs;
-        }
-        return collectAllPlayerRefs(store);
+        return refs;
     }
 
     private static boolean isPlayerRef(Store<EntityStore> store, Ref<EntityStore> ref) {
@@ -839,27 +836,6 @@ public class DamageNumberEST extends DamageEventSystem {
         } catch (Throwable ignored) {
             return false;
         }
-    }
-
-    private static List<Ref<EntityStore>> collectAllPlayerRefs(Store<EntityStore> store) {
-        List<Ref<EntityStore>> refs = new ArrayList<>();
-        if (store == null) {
-            return refs;
-        }
-        ComponentType<EntityStore, PlayerRef> playerType = PlayerRef.getComponentType();
-        if (playerType == null) {
-            return refs;
-        }
-        store.forEachChunk(playerType, (chunk, commandBuffer) -> {
-            int size = chunk.size();
-            for (int i = 0; i < size; i++) {
-                Ref<EntityStore> ref = chunk.getReferenceTo(i);
-                if (ref != null && ref.isValid()) {
-                    refs.add(ref);
-                }
-            }
-        });
-        return refs;
     }
 
     private static void addViewerRefs(List<Ref<EntityStore>> refs,

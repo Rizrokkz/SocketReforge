@@ -5,6 +5,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -36,6 +38,7 @@ public final class ElementalAffinityUtils {
     private static volatile List<AffinityRule> customAffinityRules = List.of();
     private static volatile List<MultiplierRule> multiplierRules = List.of();
     private static volatile List<ShieldRule> shieldRules = List.of();
+    private static final Map<String, Double> RESOLVED_SHIELD_AMOUNTS = new ConcurrentHashMap<>();
 
     static {
         setConfig(new ElementalAffinityConfig());
@@ -200,13 +203,18 @@ public final class ElementalAffinityUtils {
     }
 
     private static ElementShieldProfile resolveExplicitShield(TargetDescriptor descriptor) {
-        ElementShieldProfile shield = null;
+        ElementShieldProfile exactShield = null;
+        ElementShieldProfile hintShield = null;
         for (ShieldRule rule : shieldRules) {
             if (rule.matches(descriptor)) {
-                shield = rule.profile();
+                if (rule.mode() == RuleMode.EXACT) {
+                    exactShield = rule.profile();
+                } else if (hintShield == null) {
+                    hintShield = rule.profile();
+                }
             }
         }
-        return shield;
+        return exactShield != null ? exactShield : hintShield;
     }
 
     private static List<AffinityRule> parseAffinityRules(String[] entries) {
@@ -338,8 +346,31 @@ public final class ElementalAffinityUtils {
         if (value == null || value.isBlank()) {
             return fallback;
         }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+            String inner = trimmed.substring(1, trimmed.length() - 1);
+            String[] bounds = inner.split(",");
+            if (bounds.length == 2) {
+                try {
+                    double min = Double.parseDouble(bounds[0].trim());
+                    double max = Double.parseDouble(bounds[1].trim());
+                    if (!Double.isFinite(min) || !Double.isFinite(max)) {
+                        return fallback;
+                    }
+                    double lo = Math.min(min, max);
+                    double hi = Math.max(min, max);
+                    if (lo == hi) {
+                        return Math.max(0.0d, Math.min(1_000_000.0d, lo));
+                    }
+                    return lo + ThreadLocalRandom.current().nextDouble() * (hi - lo);
+                } catch (NumberFormatException ignored) {
+                    return fallback;
+                }
+            }
+            return fallback;
+        }
         try {
-            double parsed = Double.parseDouble(value.trim());
+            double parsed = Double.parseDouble(trimmed);
             if (!Double.isFinite(parsed)) {
                 return fallback;
             }
@@ -349,25 +380,88 @@ public final class ElementalAffinityUtils {
         }
     }
 
+    public static double resolveShieldAmount(String mobKey, ElementShieldProfile profile) {
+        if (profile == null) {
+            return 0.0d;
+        }
+        Double cached = RESOLVED_SHIELD_AMOUNTS.get(mobKey);
+        if (cached != null) {
+            return cached;
+        }
+        double amount = profile.isRange()
+                ? profile.rangeMin() + ThreadLocalRandom.current().nextDouble() * (profile.rangeMax() - profile.rangeMin())
+                : profile.amount();
+        Double existing = RESOLVED_SHIELD_AMOUNTS.putIfAbsent(mobKey, amount);
+        return existing != null ? existing : amount;
+    }
+
+    public static void clearResolvedShieldAmount(String mobKey) {
+        if (mobKey != null) {
+            RESOLVED_SHIELD_AMOUNTS.remove(mobKey);
+        }
+    }
+
+    public static void clearAllResolvedShieldAmounts() {
+        RESOLVED_SHIELD_AMOUNTS.clear();
+    }
+
     private static ElementShieldProfile parseShieldProfile(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String[] parts = value.split(",");
-        double amount = parseShieldAmount(parts.length > 0 ? parts[0] : "", Double.NaN);
-        if (Double.isNaN(amount)) {
-            return null;
+        String trimmed = value.trim();
+        double amount;
+        double rangeMin = 0.0d;
+        double rangeMax = 0.0d;
+        String remaining;
+        if (trimmed.startsWith("(")) {
+            int closeParen = trimmed.indexOf(')');
+            if (closeParen <= 1) {
+                return null;
+            }
+            String rangePart = trimmed.substring(0, closeParen + 1);
+            String inner = rangePart.substring(1, rangePart.length() - 1);
+            String[] bounds = inner.split(",");
+            if (bounds.length == 2) {
+                try {
+                    double min = Double.parseDouble(bounds[0].trim());
+                    double max = Double.parseDouble(bounds[1].trim());
+                    if (Double.isFinite(min) && Double.isFinite(max)) {
+                        rangeMin = Math.max(0.0d, Math.min(1_000_000.0d, Math.min(min, max)));
+                        rangeMax = Math.max(0.0d, Math.min(1_000_000.0d, Math.max(min, max)));
+                        amount = rangeMin;
+                    } else {
+                        return null;
+                    }
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+            remaining = trimmed.substring(closeParen + 1);
+            if (remaining.startsWith(",")) {
+                remaining = remaining.substring(1);
+            }
+        } else {
+            String[] parts = trimmed.split(",", 2);
+            amount = parseShieldAmount(parts.length > 0 ? parts[0] : "", Double.NaN);
+            if (Double.isNaN(amount)) {
+                return null;
+            }
+            remaining = parts.length > 1 ? parts[1] : "";
         }
-        double delay = parts.length > 1
-                ? parseNonNegativeDouble(parts[1], shieldRechargeDelaySeconds)
+        String[] rest = remaining.split(",");
+        double delay = rest.length > 0 && !rest[0].isBlank()
+                ? parseNonNegativeDouble(rest[0], shieldRechargeDelaySeconds)
                 : shieldRechargeDelaySeconds;
-        double rate = parts.length > 2
-                ? parseNonNegativeDouble(parts[2], shieldRechargeRatePerSecond)
+        double rate = rest.length > 1 && !rest[1].isBlank()
+                ? parseNonNegativeDouble(rest[1], shieldRechargeRatePerSecond)
                 : shieldRechargeRatePerSecond;
-        double duration = parts.length > 3
-                ? parseNonNegativeDouble(parts[3], shieldRechargeDurationSeconds)
+        double duration = rest.length > 2 && !rest[2].isBlank()
+                ? parseNonNegativeDouble(rest[2], shieldRechargeDurationSeconds)
                 : shieldRechargeDurationSeconds;
-        return new ElementShieldProfile(amount, delay, rate, duration);
+        return new ElementShieldProfile(amount, delay, rate, duration, rangeMin, rangeMax);
     }
 
     private static double parseNonNegativeDouble(String value, double fallback) {
@@ -436,7 +530,13 @@ public final class ElementalAffinityUtils {
             double amount,
             double rechargeDelaySeconds,
             double rechargeRatePerSecond,
-            double rechargeDurationSeconds) {}
+            double rechargeDurationSeconds,
+            double rangeMin,
+            double rangeMax) {
+        public boolean isRange() {
+            return rangeMax > rangeMin;
+        }
+    }
 
     private record ShieldRule(RuleMode mode, String key, ElementShieldProfile profile) {
         boolean matches(TargetDescriptor descriptor) {

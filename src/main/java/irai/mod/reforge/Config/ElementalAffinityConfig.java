@@ -283,6 +283,8 @@ public class ElementalAffinityConfig implements ConfigDefaultInjector {
      * Optional elemental shield rules. Format:
      * hint:partial_role_name=shield_amount,recharge_delay_seconds,recharge_rate_per_second,recharge_duration_seconds
      * role:Exact_Role_ID=shield_amount,recharge_delay_seconds,recharge_rate_per_second,recharge_duration_seconds
+     * shield_amount supports plain values (e.g. 100) or range format (min,max) for randomized per-mob values.
+     * Example: role:Zombie=(50,150) assigns each Zombie a random shield between 50-150 on spawn.
      * Values are enemy shield HP pools that absorb elemental damage before health.
      * While a shield is active, health damage is multiplied by SHIELDED_HP_DAMAGE_MULTIPLIER.
      * Non-elemental damage chips shields by NON_ELEMENTAL_SHIELD_DAMAGE_MULTIPLIER.

@@ -118,7 +118,37 @@ public final class ItemTypeUtils {
             "missile",
             "grenade",
             "slug",
-            "pellet"
+            "pellet",
+            "tool",
+            "pickaxe",
+            "shovel",
+            "hoe",
+            "spade",
+            "rake",
+            "hatchet",
+            "shears"
+    };
+    private static volatile String[] nonEquipmentArmorIdHints = {
+            "cap",
+            "mushroom",
+            "flower",
+            "plant",
+            "seed",
+            "sapling",
+            "food",
+            "consumable",
+            "potion",
+            "block",
+            "bench",
+            "crafting",
+            "tool",
+            "pickaxe",
+            "shovel",
+            "hoe",
+            "spade",
+            "rake",
+            "hatchet",
+            "shears"
     };
 
     private ItemTypeUtils() {}
@@ -137,6 +167,20 @@ public final class ItemTypeUtils {
         clearCaches();
     }
 
+    public static void setNonEquipmentArmorIdHints(String[] hints) {
+        List<String> normalized = new ArrayList<>();
+        if (hints != null) {
+            for (String hint : hints) {
+                String token = normalizeHint(hint);
+                if (!token.isBlank() && !normalized.contains(token)) {
+                    normalized.add(token);
+                }
+            }
+        }
+        nonEquipmentArmorIdHints = normalized.toArray(String[]::new);
+        clearCaches();
+    }
+
     public static boolean isWeapon(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
             return false;
@@ -144,6 +188,9 @@ public final class ItemTypeUtils {
 
         Item item = stack.getItem();
         if (item != null && item != Item.UNKNOWN) {
+            if (isBlockItem(item)) {
+                return false;
+            }
             if (item.getWeapon() != null) {
                 return !isNonEquipmentWeaponId(stack.getItemId());
             }
@@ -162,6 +209,9 @@ public final class ItemTypeUtils {
 
         Item item = stack.getItem();
         if (item != null && item != Item.UNKNOWN) {
+            if (isBlockItem(item)) {
+                return false;
+            }
             if (item.getArmor() != null) {
                 return true;
             }
@@ -323,6 +373,9 @@ public final class ItemTypeUtils {
             return false;
         }
         String lower = itemId.toLowerCase(Locale.ROOT);
+        if (isNonEquipmentArmorIdLower(lower)) {
+            return false;
+        }
         if (lower.startsWith("armor_")
                 || lower.startsWith("armour_")
                 || lower.contains("armor")
@@ -330,6 +383,25 @@ public final class ItemTypeUtils {
             return true;
         }
         return containsAny(lower, ARMOR_FALLBACK_TOKENS);
+    }
+
+    private static boolean isBlockItem(Item item) {
+        try {
+            return item != null && item.getBlockId() != null && !item.getBlockId().isBlank();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isNonEquipmentArmorId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return false;
+        }
+        return isNonEquipmentArmorIdLower(itemId.toLowerCase(Locale.ROOT));
+    }
+
+    private static boolean isNonEquipmentArmorIdLower(String lowerItemId) {
+        return containsAny(lowerItemId, nonEquipmentArmorIdHints);
     }
 
     private static boolean isToolFallbackId(String itemId) {

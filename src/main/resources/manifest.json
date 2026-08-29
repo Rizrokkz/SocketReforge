@@ -1,8 +1,8 @@
 {
   "Group": "irai.mod.reforge",
   "Name": "Socket Reforge",
-  "Version": "1.4.2",
-  "Description": "",
+  "Version": "1.4.3",
+  "Description": "Equipment Refinement, Gem Socketing, Essence Systems, and Spirit-based Lore abilities. Requires HyUI",
   "Authors": [
     {
       "Name": "iRaiden",

@@ -63,10 +63,11 @@ public final class EnemyElementalShieldUtils {
         }
 
         ElementalAffinityUtils.ElementShieldProfile profile = ElementalAffinityUtils.elementShieldProfile(store, targetRef);
-        double maxShield = profile == null ? 0.0d : profile.amount();
         String key = key(targetRef, npc);
+        double maxShield = profile == null ? 0.0d : ElementalAffinityUtils.resolveShieldAmount(key, profile);
         if (maxShield <= 0.0d) {
             SHIELDS.remove(key);
+            ElementalAffinityUtils.clearResolvedShieldAmount(key);
             return 0.0d;
         }
 
@@ -151,8 +152,7 @@ public final class EnemyElementalShieldUtils {
 
     public static double currentShield(Store<EntityStore> store, Ref<EntityStore> targetRef) {
         ElementalAffinityUtils.ElementShieldProfile profile = ElementalAffinityUtils.elementShieldProfile(store, targetRef);
-        double maxShield = profile == null ? 0.0d : profile.amount();
-        if (maxShield <= 0.0d || targetRef == null) {
+        if (profile == null || targetRef == null) {
             return 0.0d;
         }
         NPCEntity npc = NPCEntity.getComponentType() == null
@@ -161,13 +161,25 @@ public final class EnemyElementalShieldUtils {
         if (npc == null) {
             return 0.0d;
         }
+        double maxShield = ElementalAffinityUtils.resolveShieldAmount(key(targetRef, npc), profile);
+        if (maxShield <= 0.0d) {
+            return 0.0d;
+        }
         ShieldState state = stateFor(key(targetRef, npc), maxShield);
         rechargeIfEligible(state, profile, System.currentTimeMillis());
         return state.current;
     }
 
     public static double shieldRatio(Store<EntityStore> store, Ref<EntityStore> targetRef) {
-        double maxShield = ElementalAffinityUtils.elementShield(store, targetRef);
+        ElementalAffinityUtils.ElementShieldProfile profile = ElementalAffinityUtils.elementShieldProfile(store, targetRef);
+        if (profile == null || targetRef == null || NPCEntity.getComponentType() == null) {
+            return 0.0d;
+        }
+        NPCEntity npc = store.getComponent(targetRef, NPCEntity.getComponentType());
+        if (npc == null) {
+            return 0.0d;
+        }
+        double maxShield = ElementalAffinityUtils.resolveShieldAmount(key(targetRef, npc), profile);
         if (maxShield <= 0.0d) {
             return 0.0d;
         }
@@ -299,6 +311,7 @@ public final class EnemyElementalShieldUtils {
     private static void cleanupIfDead(Store<EntityStore> store, Ref<EntityStore> targetRef, String key) {
         if (LoreDamageUtils.resolveCurrentHealth(store, targetRef) <= 0.0f) {
             SHIELDS.remove(key);
+            ElementalAffinityUtils.clearResolvedShieldAmount(key);
         }
     }
 

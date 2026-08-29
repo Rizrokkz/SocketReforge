@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.3 ] - 2026-08-29
+
+### Changed
+
+- **Particle Damage Numbers Visibility** - Particle-based damage numbers (`PARTICLE` render mode) now only render for the damage dealer instead of broadcasting to all players on the server, reducing network and rendering overhead.
+- **Elemental Shield Range Parser** - Shield amounts in `ELEMENT_SHIELDS` config now support range format `(min,max)` for randomized per-mob shield values.
+  - **Range Format** - Use `(0,100)` to assign a random shield value between 0 and 100 for each individual mob spawn.
+  - **Fixed Value** - Plain values like `100` still work as before, assigning a specific amount.
+  - **Per-Mob Persistence** - Once a mob's shield amount is randomized, it stays consistent for that mob's lifetime (not re-randomized on each damage tick).
+  - **Role Priority** - `role:` and `id:` exact-match rules now always take priority over `hint:` pattern-matching rules.
+  - **RuntimeConfig UI** - The `/runtimeconfig` UI now properly accepts and preserves the `(min,max)` range format in the shield value input field.
+
+### Fixed
+
+- **Equipment Classification** - Fixed mushroom caps, tools, and other non-equipment items incorrectly receiving sockets, and benches being flagged as equipment.
+  - **Block Item Check** - Items with block data (like benches) are now excluded from equipment classification
+  - **Non-Equipment Hints** - Added exclusion patterns for `cap`, `mushroom`, `flower`, `plant`, `food`, `consumable`, `potion`, `block`, `bench`, `crafting`, `tool`, `pickaxe`, `shovel`, `axe`, `shears` to prevent false positive weapon/armor detection
+
+---
+
 ## [1.4.2 Update 6] - 2026-08-28
 
 ### Added
