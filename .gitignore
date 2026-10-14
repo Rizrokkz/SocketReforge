@@ -56,3 +56,5 @@ tools/assetkeyvalidator-override/AssetKeyValidatorOverride.jar
 /org/
 /tmp_*
 /tmp
+/tmp_assets
+/plans
