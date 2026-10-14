@@ -20,6 +20,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.ser
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.combat.DamageCalculator;
 
 import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
@@ -337,6 +338,15 @@ public final class EquipmentDamageTooltipMath {
         return total / damageSamples.size();
     }
 
+    public static double computeBuffedWeaponDamage(String itemId,
+                                                   double baseDamage,
+                                                   int reforgeLevel,
+                                                   SocketData socketData,
+                                                   double partsDamageMultiplier,
+                                                   double softcoreStatMultiplier) {
+        return computeBuffedWeaponDamage(itemId, baseDamage, reforgeLevel, socketData, partsDamageMultiplier, softcoreStatMultiplier, 1.0);
+    }
+
     /**
      * Mirrors deterministic parts of runtime damage math:
      * refinement multiplier + socket damage bonuses + parts multiplier + attack speed multiplier.
@@ -346,7 +356,8 @@ public final class EquipmentDamageTooltipMath {
                                                    int reforgeLevel,
                                                    SocketData socketData,
                                                    double partsDamageMultiplier,
-                                                   double softcoreStatMultiplier) {
+                                                   double softcoreStatMultiplier,
+                                                   double ascensionMultiplier) {
         if (baseDamage <= 0.0) {
             return 0.0;
         }
@@ -377,6 +388,7 @@ public final class EquipmentDamageTooltipMath {
 
         double result = (baseDamage
                 * refinementMultiplier
+                * ascensionMultiplier
                 * clampedSoftcoreMultiplier
                 * socketPercentMultiplier
                 * clampedPartsMultiplier) + socketFlat;
@@ -407,6 +419,18 @@ public final class EquipmentDamageTooltipMath {
                                                    int reforgeLevel,
                                                    SocketData socketData,
                                                    double softcoreStatMultiplier) {
+        return computeBuffedArmorDefense(baseDefense, reforgeLevel, socketData, softcoreStatMultiplier, 1.0);
+    }
+
+    /**
+     * Mirrors deterministic armor tooltip math:
+     * refine multiplier + socket defense bonuses + ascension multiplier.
+     */
+    public static double computeBuffedArmorDefense(double baseDefense,
+                                                   int reforgeLevel,
+                                                   SocketData socketData,
+                                                   double softcoreStatMultiplier,
+                                                   double ascensionMultiplier) {
         if (baseDefense <= 0.0) {
             return 0.0;
         }
@@ -422,7 +446,7 @@ public final class EquipmentDamageTooltipMath {
         double flatDefense = defenseBonus[0];
         double percentMultiplier = 1.0 + (defenseBonus[1] / 100.0);
 
-        double result = (baseDefense * refinementMultiplier * clampedSoftcoreMultiplier * percentMultiplier) + flatDefense;
+        double result = (baseDefense * refinementMultiplier * ascensionMultiplier * clampedSoftcoreMultiplier * percentMultiplier) + flatDefense;
         return Math.max(0.0, result);
     }
 

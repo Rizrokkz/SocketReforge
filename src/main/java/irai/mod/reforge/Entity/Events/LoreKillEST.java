@@ -20,6 +20,7 @@ import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
@@ -149,6 +150,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
             LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, ctx, updated);
+            DynamicTooltipUtils.refreshPlayerTooltips(attacker.getPlayerRef());
         }
     }
 

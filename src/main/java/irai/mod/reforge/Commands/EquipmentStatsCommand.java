@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
@@ -182,13 +183,15 @@ public class EquipmentStatsCommand extends CommandBase {
         }
         sb.append("  Hit Breakdown:").append('\n');
         for (EquipmentDamageTooltipMath.DamageBreakdown breakdown : breakdowns) {
+            double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(weapon);
             double buffed = EquipmentDamageTooltipMath.computeBuffedWeaponDamage(
                     weapon.getItemId(),
                     breakdown.getBaseValue(),
                     level,
                     socketData,
                     partsMultiplier,
-                    softcoreMultiplier);
+                    softcoreMultiplier,
+                    ascensionMultiplier);
             sb.append("    ").append(breakdown.getLabel()).append(": ")
                     .append(format(breakdown.getBaseValue()))
                     .append(" -> ")

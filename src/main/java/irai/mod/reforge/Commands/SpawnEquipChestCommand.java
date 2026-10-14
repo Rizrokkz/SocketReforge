@@ -12,7 +12,6 @@ import javax.annotation.Nonnull;
 
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.component.Store;
 import org.joml.Vector3d;
 import org.joml.Vector3i;
@@ -32,6 +31,7 @@ import com.hypixel.hytale.server.core.modules.item.ItemModule;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Common.WorldBlockUtils;
 import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 
@@ -126,15 +126,14 @@ public class SpawnEquipChestCommand extends CommandBase {
         }
 
         Vector3i target = getPlacementPositionInFront(transform, FRONT_DISTANCE_BLOCKS);
-        long chunkIndex = ChunkUtil.indexChunkFromBlock(target.x, target.z);
 
-        player.getWorld().getChunkAsync(chunkIndex).thenAcceptAsync(chunk -> {
-            if (chunk == null) {
-                context.sendMessage(Message.raw("Target chunk is not loaded."));
+        player.getWorld().getChunkStore().getChunkSectionReferenceAtBlockAsync(target.x, target.y, target.z).thenAcceptAsync(sectionRef -> {
+            if (sectionRef == null || !sectionRef.isValid()) {
+                context.sendMessage(Message.raw("Target chunk section is not loaded."));
                 return;
             }
 
-            boolean placed = chunk.setBlock(target.x, target.y, target.z, chestBlockId);
+            boolean placed = WorldBlockUtils.setBlock(player.getWorld(), target.x, target.y, target.z, chestBlockId);
             if (!placed) {
                 context.sendMessage(Message.raw("Failed to place chest at " + target + "."));
                 return;

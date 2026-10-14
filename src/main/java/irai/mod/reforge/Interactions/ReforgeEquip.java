@@ -9,7 +9,6 @@ import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.protocol.BlockPosition;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
@@ -21,13 +20,14 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ItemTypeUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.SmithyLegacyUtils;
 import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
 import irai.mod.reforge.Common.SmithyLegacyUtils.Legacy;
+import irai.mod.reforge.Common.WorldBlockUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.UI.ReforgeBenchUI;
@@ -138,6 +138,11 @@ public class ReforgeEquip extends SimpleInteraction {
 
         if (!isWeaponItem && !isArmorItem) {
             player.getPlayerRef().sendMessage(Message.raw("This item cannot be reforged"));
+            return;
+        }
+
+        if (CorruptionUtils.isCorrupted(heldItem)) {
+            player.getPlayerRef().sendMessage(Message.raw("Corrupted equipment cannot be refined."));
             return;
         }
 
@@ -644,13 +649,7 @@ public class ReforgeEquip extends SimpleInteraction {
         if (player == null) return false;
         World world = player.getWorld();
         if (world == null) return false;
-        WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunkFromBlock(target.x, target.z));
-        if (chunk == null) {
-            return false;
-        }
-        int localX = ChunkUtil.localCoordinate(target.x);
-        int localZ = ChunkUtil.localCoordinate(target.z);
-        BlockType blockType = chunk.getBlockType(localX, target.y, localZ);
+        BlockType blockType = WorldBlockUtils.getBlockType(world, target.x, target.y, target.z);
         if (blockType == null || blockType.getId() == null) {
             return false;
         }
@@ -1362,7 +1361,7 @@ public class ReforgeEquip extends SimpleInteraction {
         return totalFound >= requiredAmount;
     }
 
-    private static int getMaxUpgradeLevel() {
+    public static int getMaxUpgradeLevel() {
         return Math.max(1, maxUpgradeLevel);
     }
 

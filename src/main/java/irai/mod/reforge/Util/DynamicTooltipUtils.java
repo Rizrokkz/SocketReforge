@@ -31,6 +31,8 @@ import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.ItemTypeUtils;
@@ -79,6 +81,7 @@ public class DynamicTooltipUtils {
     private static final String COLOR_PURPLE = "<color is=\"#FF55FF\">";
     private static final String COLOR_GRAY = "<color is=\"#AAAAAA\">";
     private static final String COLOR_RED = "<color is=\"#ff0000\">";
+    private static final String COLOR_DARK_RED = "<color is=\"#8B0000\">";
     private static final String COLOR_YELLOW = "<color is=\"#FFFF55\">";
     private static final String COLOR_ORANGE = "<color is=\"#FFAA00\">";
     private static final double DEFAULT_SOFTCORE_STAT_LOSS_PER_BREAK = 0.08;
@@ -667,6 +670,16 @@ public class DynamicTooltipUtils {
         String resonanceQuality = extractStringValue(metadata, META_RESONANCE_QUALITY);
         boolean hasResonance = resonanceName != null && !resonanceName.isBlank()
                 && resonanceRecipeName != null && !resonanceRecipeName.isBlank();
+        String corruptionResonanceName = extractStringValue(metadata, MetadataKeys.CORRUPTION_RESONANCE_NAME);
+        String corruptionResonanceEffect = extractStringValue(metadata, MetadataKeys.CORRUPTION_RESONANCE_EFFECT);
+        if ((corruptionResonanceName == null || corruptionResonanceName.isBlank())
+                && resonanceName != null && !resonanceName.isBlank()
+                && (resonanceRecipeName == null || resonanceRecipeName.isBlank())
+                && item != null && CorruptionUtils.isCorrupted(item)) {
+            corruptionResonanceName = resonanceName;
+            corruptionResonanceEffect = resonanceEffect;
+        }
+        boolean hasCorruptionResonance = corruptionResonanceName != null && !corruptionResonanceName.isBlank();
         String recipePattern = extractStringValue(metadata, META_RECIPE_PATTERN);
         boolean hasRecipePattern = recipePattern != null && !recipePattern.isBlank();
         String recipeType = extractStringValue(metadata, META_RECIPE_TYPE);
@@ -697,7 +710,7 @@ public class DynamicTooltipUtils {
         
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
-                && !hasResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
+                && !hasResonance && !hasCorruptionResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
                 && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty) {
             return null;
         }
@@ -708,6 +721,18 @@ public class DynamicTooltipUtils {
         boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
         boolean hasStoredName = metadataName != null && !metadataName.isBlank();
         boolean hasStoredKey = metadataNameKey != null && !metadataNameKey.isBlank();
+
+        int ascensionTier = extractIntValue(metadata, MetadataKeys.ASCENSION_TIER);
+        if (ascensionTier > 0) {
+            String tierColor;
+            switch (ascensionTier) {
+                case 1 -> tierColor = "<color is=\"#FFAA00\">";
+                case 2 -> tierColor = "<color is=\"#FF55FF\">";
+                case 3 -> tierColor = "<color is=\"#55FFFF\">";
+                default -> tierColor = "<color is=\"#FFFFFF\">";
+            }
+            tooltipLines.add(tierColor + AscensionUtils.getTierLabel(ascensionTier));
+        }
 
         boolean isCustomName = false;
         if (!hasStoredKey && hasStoredName && !looksLikeTranslationKey(metadataName)) {
@@ -804,6 +829,19 @@ public class DynamicTooltipUtils {
 
         String damageLabel = tr(langCode, "tooltip.damage_label", "Damage");
         Map<Essence.Type, Double> weaponElementDamageRates = new EnumMap<>(Essence.Type.class);
+
+        boolean isCorrupted = item != null && CorruptionUtils.isCorrupted(item);
+        int corruptionCount = item != null ? CorruptionUtils.getCorruptionCount(item) : 0;
+        if (isCorrupted) {
+            String statusLabel;
+            if (corruptionCount >= 2) {
+                statusLabel = tr(langCode, "tooltip.abyss_tempered", "Abyss Tempered");
+            } else {
+                statusLabel = tr(langCode, "tooltip.abyss_crafted", "Abyss Crafted");
+            }
+            tooltipLines.add(COLOR_DARK_RED + statusLabel);
+        }
+
         if (isEquipmentItem && !isArmorItem) {
             EquipmentDamageTooltipMath.StatSummary summary = EquipmentDamageTooltipMath.computeWeaponDamageSummary(
                     effectiveItemId,
@@ -875,11 +913,13 @@ public class DynamicTooltipUtils {
         }
 
         // Add reforge line if present
-        if (reforgeLevel > 0) {
+        if (reforgeLevel > 0 || extractIntValue(metadata, MetadataKeys.ASCENSION_TIER) > 0) {
             String upgradeName = isArmorItem ? getArmorUpgradeName(reforgeLevel, langCode) : getUpgradeName(reforgeLevel, langCode);
             double multiplier = isArmorItem ? getDefenseMultiplier(reforgeLevel) : getDamageMultiplier(reforgeLevel);
-            int percentBonus = (int) ((multiplier - 1.0) * 100);
-            
+            double ascensionMultiplier = extractDoubleValue(metadata, MetadataKeys.ASCENSION_BASE_MULTIPLIER, 1.0);
+            double totalMultiplier = multiplier * ascensionMultiplier;
+            int percentBonus = (int) ((totalMultiplier - 1.0) * 100);
+
             ReforgeLevel reforgeLevelEnum = ReforgeLevel.fromLevel(reforgeLevel);
             String statType = isArmorItem
                     ? tr(langCode, "tooltip.refine_stat_defense", "defense")
@@ -1044,11 +1084,45 @@ public class DynamicTooltipUtils {
             String resonanceLabel = tr(langCode, "tooltip.resonance_label", "Resonance");
             tooltipLines.add(COLOR_ORANGE + resonanceLabel + ": " + COLOR_WHITE + localizedEffect);
         }
-        if (resonanceQuality != null && !resonanceQuality.isBlank()) {
+        if (hasCorruptionResonance) {
+            String localizedEffect = "";
+            ResonanceSystem.ResonanceResult resonanceResult = ResonanceSystem.getResultForRecipeName(corruptionResonanceName);
+            if (resonanceResult != null && resonanceResult.active()) {
+                resonanceResult = ResonanceSystem.applyGreaterEssenceScaling(resonanceResult, parsedSocketData);
+                localizedEffect = ResonanceSystem.buildDetailedEffect(resonanceResult, !isArmorItem, langCode);
+            }
+            if (localizedEffect == null || localizedEffect.isBlank()) {
+                localizedEffect = ResonanceSystem.getLocalizedEffect(corruptionResonanceName, corruptionResonanceEffect, langCode);
+            }
+            if (localizedEffect == null || localizedEffect.isBlank()) {
+                localizedEffect = corruptionResonanceEffect != null ? corruptionResonanceEffect : corruptionResonanceName;
+            }
+            String resonanceLabel = tr(langCode, "tooltip.corruption_resonance_label", "Abyss Resonance");
+            tooltipLines.add(COLOR_DARK_RED + resonanceLabel + ": " + COLOR_WHITE + localizedEffect);
+        }
+        if (hasResonance && resonanceQuality != null && !resonanceQuality.isBlank()) {
             String qualityLabel = tr(langCode, "tooltip.quality_label", "Quality");
             String qualityText = localizeQuality(resonanceQuality, langCode);
             tooltipLines.add(COLOR_YELLOW + qualityLabel + ": " + COLOR_WHITE + qualityText);
         }
+
+        String[] corruptionStats = extractStringArray(metadata, MetadataKeys.CORRUPTION_BONUS_STATS);
+        String[] corruptionFlat = extractStringArray(metadata, MetadataKeys.CORRUPTION_BONUS_FLAT);
+        String[] corruptionPercent = extractStringArray(metadata, MetadataKeys.CORRUPTION_BONUS_PERCENT);
+
+        java.util.Map<String, double[]> corruptionBonuses = new java.util.HashMap<>();
+        if (corruptionStats != null && corruptionFlat != null && corruptionPercent != null) {
+            int count = Math.min(corruptionStats.length, Math.min(corruptionFlat.length, corruptionPercent.length));
+            for (int i = 0; i < count; i++) {
+                String statName = corruptionStats[i];
+                double flat = parseDoubleOrZero(corruptionFlat[i]);
+                double percent = parseDoubleOrZero(corruptionPercent[i]);
+                corruptionBonuses.put(statName, new double[]{flat, percent});
+            }
+        }
+
+        java.util.Set<String> mergedStats = new java.util.HashSet<>();
+
         if (hasRecipeName && localizedRecipeName != null && !localizedRecipeName.isBlank()) {
             String resonanceLabel = tr(langCode, "tooltip.resonance_label", "Resonance");
             tooltipLines.add(COLOR_ORANGE + resonanceLabel + ": " + COLOR_WHITE + localizedRecipeName);
@@ -1093,7 +1167,32 @@ public class DynamicTooltipUtils {
                         essenceName + " T" + tier,
                         essenceName, tier);
                 String effectDesc = SocketManager.describeEssenceEffect(type, tier, !isArmorItem, parsedSocketData, langCode);
+
+                List<String> essenceStats = getEssenceStatsForType(type, !isArmorItem);
+                StringBuilder abyssSuffix = new StringBuilder();
+                for (String statName : essenceStats) {
+                    double[] corr = corruptionBonuses.get(statName);
+                    if (corr != null && (corr[0] != 0.0 || corr[1] != 0.0)) {
+                        mergedStats.add(statName);
+                        if (abyssSuffix.length() > 0) {
+                            abyssSuffix.append(", ");
+                        }
+                        if (corr[0] != 0.0 && corr[1] != 0.0) {
+                            abyssSuffix.append(COLOR_DARK_RED).append(String.format(java.util.Locale.US, "%+.1f", corr[0])).append(" ");
+                            abyssSuffix.append(String.format(java.util.Locale.US, "%+.1f%%", corr[1]));
+                        } else if (corr[0] != 0.0) {
+                            abyssSuffix.append(COLOR_DARK_RED).append(String.format(java.util.Locale.US, "%+.1f", corr[0]));
+                        } else {
+                            abyssSuffix.append(COLOR_DARK_RED).append(String.format(java.util.Locale.US, "%+.1f%%", corr[1]));
+                        }
+                        abyssSuffix.append(" ").append(statName.replace("_", " "));
+                    }
+                }
+
                 String essenceLine = color + essenceTier + "</color> " + COLOR_GRAY + effectDesc;
+                if (abyssSuffix.length() > 0) {
+                    essenceLine += " " + abyssSuffix;
+                }
                 Double elementDamageRate = !isArmorItem ? weaponElementDamageRates.get(type) : null;
                 if (elementDamageRate != null && elementDamageRate > 0.0d) {
                     String elementLabel = tr(
@@ -1105,6 +1204,31 @@ public class DynamicTooltipUtils {
                             + " " + COLOR_GREEN + formatPercent(elementDamageRate * 100.0d) + "%";
                 }
                 tooltipLines.add(essenceLine);
+            }
+        }
+
+        if (corruptionBonuses != null && !corruptionBonuses.isEmpty()) {
+            for (java.util.Map.Entry<String, double[]> entry : corruptionBonuses.entrySet()) {
+                String statName = entry.getKey();
+                if (mergedStats.contains(statName)) {
+                    continue;
+                }
+                double[] corr = entry.getValue();
+                if (corr[0] == 0.0 && corr[1] == 0.0) {
+                    continue;
+                }
+                String statLabel = statName.replace("_", " ");
+                StringBuilder sb = new StringBuilder();
+                sb.append(COLOR_DARK_RED).append("Abyss: ");
+                if (corr[0] != 0.0) {
+                    sb.append(COLOR_WHITE).append(String.format(java.util.Locale.US, "%+.1f", corr[0])).append(" ");
+                }
+                if (corr[1] != 0.0) {
+                    if (corr[0] != 0.0) sb.append(COLOR_DARK_RED).append("| ");
+                    sb.append(COLOR_WHITE).append(String.format(java.util.Locale.US, "%+.1f%%", corr[1])).append(" ");
+                }
+                sb.append(COLOR_DARK_RED).append(statLabel);
+                tooltipLines.add(sb.toString());
             }
         }
         
@@ -2442,6 +2566,17 @@ public class DynamicTooltipUtils {
         return 0;
     }
 
+    private static double parseDoubleOrZero(String value) {
+        if (value == null || value.isBlank()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException ignored) {
+            return 0.0;
+        }
+    }
+
     private static double resolveSoftcoreStatMultiplierFromBreaks(int breakCount) {
         if (breakCount <= 0) {
             return 1.0;
@@ -3629,6 +3764,32 @@ public class DynamicTooltipUtils {
         if (upper.contains("WATER")) return COLOR_BLUE;        // Blue
         
         return COLOR_WHITE;
+    }
+
+    private static List<String> getEssenceStatsForType(Essence.Type type, boolean isWeapon) {
+        List<String> stats = new ArrayList<>();
+        if (isWeapon) {
+            switch (type) {
+                case FIRE, WATER -> stats.add("DAMAGE");
+                case ICE -> stats.add("DAMAGE");
+                case LIGHTNING -> {
+                    stats.add("ATTACK_SPEED");
+                    stats.add("CRIT_CHANCE");
+                }
+                case LIFE -> stats.add("LIFE_STEAL");
+                case VOID -> stats.add("CRIT_DAMAGE");
+            }
+        } else {
+            switch (type) {
+                case FIRE -> stats.add("BLOCK_CHANCE");
+                case ICE -> stats.add("MOVEMENT_SPEED");
+                case WATER -> stats.add("REGENERATION");
+                case LIGHTNING -> stats.add("EVASION");
+                case LIFE -> stats.add("HEALTH");
+                case VOID -> stats.add("DEFENSE");
+            }
+        }
+        return stats;
     }
 
     private static String getLoreColorTag(String color) {

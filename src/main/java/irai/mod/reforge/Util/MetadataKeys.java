@@ -53,4 +53,20 @@ public final class MetadataKeys {
 
     // Loot tracking
     public static final String LOOT_ROLLED = "SocketReforge.Loot.Rolled";
+
+    // Ascension system
+    public static final String ASCENSION_TIER = "SocketReforge.Ascension.Tier";
+    public static final String ASCENSION_BASE_MULTIPLIER = "SocketReforge.Ascension.BaseMultiplier";
+    // Corruption system
+    public static final String CORRUPTION_COUNT = "SocketReforge.Corruption.Count";
+    public static final String CORRUPTION_MAX = "SocketReforge.Corruption.Max";
+    public static final String CORRUPTED = "SocketReforge.Corrupted";
+    public static final String CORRUPTION_BONUS_STATS = "SocketReforge.Corruption.Bonus.Stats";
+    public static final String CORRUPTION_BONUS_FLAT = "SocketReforge.Corruption.Bonus.Flat";
+    public static final String CORRUPTION_BONUS_PERCENT = "SocketReforge.Corruption.Bonus.Percent";
+    public static final String CORRUPTION_RESONANCE_NAME = "SocketReforge.Corruption.Resonance.Name";
+    public static final String CORRUPTION_RESONANCE_EFFECT = "SocketReforge.Corruption.Resonance.Effect";
+    public static final String CORRUPTION_RESONANCE_TYPE = "SocketReforge.Corruption.Resonance.Type";
+    public static final String CORRUPTION_RESONANCE_QUALITY = "SocketReforge.Corruption.Resonance.Quality";
+
 }

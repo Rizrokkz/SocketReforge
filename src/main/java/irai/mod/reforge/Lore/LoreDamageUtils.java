@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.core.meta.MetaKey;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
@@ -236,8 +237,9 @@ public final class LoreDamageUtils {
         int level = ReforgeEquip.getLevelFromItem(stack);
         double partsMultiplier = resolvePartsDamageMultiplier(stack);
         double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(stack);
+        double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(stack);
         double refined = EquipmentDamageTooltipMath.computeBuffedWeaponDamage(stack.getItemId(),
-                base, level, socketData, partsMultiplier, softcoreMultiplier);
+                base, level, socketData, partsMultiplier, softcoreMultiplier, ascensionMultiplier);
         if (refined <= 0.0d) {
             return fallback;
         }

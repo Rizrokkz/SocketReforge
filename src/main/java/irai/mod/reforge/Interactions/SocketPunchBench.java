@@ -17,6 +17,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -105,6 +106,11 @@ public class SocketPunchBench extends SimpleInteraction {
         
         if (!isWeapon && !isArmor) {
             player.getPlayerRef().sendMessage(Message.raw("This item cannot have sockets"));
+            return;
+        }
+
+        if (CorruptionUtils.isCorrupted(equipment)) {
+            player.getPlayerRef().sendMessage(Message.raw("Corrupted equipment cannot have sockets punched."));
             return;
         }
 

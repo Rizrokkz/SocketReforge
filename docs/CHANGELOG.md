@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] - 2026-10-14
+
+### Added
+
+- **Equipment Ascension System** - Added weapon/armor ascension via `Furniture_Temple_Light_Statue` interaction.
+  - **Ascension Tiers** - Maxed refinement equipment can ascend up to T3
+  - **Configurable Costs** - Each tier requires a configurable material
+  - **Refinement Reset** - Ascension resets refinement to 0 but keeps previous bonus as base
+  - **Tooltip Display** - Ascension tier shown as purple tooltip line (e.g., "[ TIER 1 ]")
+  - **Config Options** - `AscensionConfig.json` with enable/disable, max tier, and per-tier settings
+  - **Ascension Base Multiplier** - Carries over percentage of previous refinement bonus
+  - **Immediate Effect** - Bonus applies immediately upon ascending
+
+- **Corruption System** - Added equipment corruption via `Furniture_Temple_Dark_Statue_Gaia` interaction.
+  - **Abyss Behelit** - Tribute Offering, offer `Void Heart` to Dark Statue,tribute cost `Greater Void Essence x100`, `Ghastly Essence x1`
+  - **Abyss Crafted (1st)** - First corruption applies stat modifications, costs `Ingredient_Voidheart`
+  - **Abyss Tempered (2nd)** - Second corruption with 50% item destruction chance, costs `Ingredient_Abyss_Essence`
+  - **Stat Effects** - 50% chance to apply: Stat Increase (1-3 stats), Stat Decrease, Stat Invert, Stat Remove (2nd only), Add New Stat, Resonant Stat
+  - **Effect Mixing** - Multiple effects may apply simultaneously
+  - **Resonant Stat** - Applies random matching resonance without sockets
+  - **Tooltip Integration** - Bonuses merge into essence lines with dark red color
+  - **Item Lock** - Corrupted items cannot be refined, socketed, or ascended
+
+### Changed
+
+- **Tooltip Refresh** - Immediate refresh on spirit absorption
+
+### Fixed
+
+- **Encoding Issues** - Fixed German and Spanish character encoding in lang files
+
+---
+
 ## [1.4.3 ] - 2026-08-29
 
 ### Changed

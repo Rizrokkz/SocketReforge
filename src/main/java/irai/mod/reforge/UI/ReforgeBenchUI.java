@@ -28,7 +28,9 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Common.UI.HyUIEditUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
@@ -1120,6 +1122,8 @@ public final class ReforgeBenchUI {
         boolean isArmor = !isWeapon && ReforgeEquip.isArmor(current);
         if (!isWeapon && !isArmor) return new ProcessResult(t(player, "ui.reforge.error_item_not_refinable"), 0);
 
+        if (CorruptionUtils.isCorrupted(current)) return new ProcessResult(t(player, "ui.reforge.error_corrupted"), 0);
+
         int level = ReforgeEquip.getLevelFromItem(current);
         if (level >= getMaxUpgradeLevel()) return new ProcessResult(t(player, "ui.reforge.error_max_level"), 100);
 
@@ -1899,6 +1903,7 @@ public final class ReforgeBenchUI {
         SocketData socketData = SocketManager.getSocketData(item);
         double partsMultiplier = partsDamageMultiplier(item);
         double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(item);
+        double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(item);
         if (baseOverride > 0.0) {
             return new EquipmentDamageTooltipMath.StatSummary(
                     baseOverride,
@@ -1908,7 +1913,8 @@ public final class ReforgeBenchUI {
                             level,
                             socketData,
                             partsMultiplier,
-                            softcoreMultiplier));
+                            softcoreMultiplier,
+                            ascensionMultiplier));
         }
         return EquipmentDamageTooltipMath.computeWeaponDamageSummary(
                 item.getItemId(),

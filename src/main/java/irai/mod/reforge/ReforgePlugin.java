@@ -15,7 +15,6 @@ import javax.annotation.Nonnull;
 
 import com.al3x.HStats;
 import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
-import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
 import com.hypixel.hytale.event.EventPriority;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
@@ -59,6 +58,7 @@ import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
 import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
@@ -67,6 +67,7 @@ import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
+import irai.mod.reforge.Config.AscensionConfig;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.ElementalAffinityConfig;
@@ -103,6 +104,11 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
+import irai.mod.reforge.Interactions.CorruptionInteraction;
+import irai.mod.reforge.Common.CorruptionUtils;
+import irai.mod.reforge.Config.CorruptionConfig;
+import irai.mod.reforge.Interactions.StatueInteraction;
+import irai.mod.reforge.Entity.Events.AscensionStatueListener;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -122,6 +128,7 @@ import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.UI.ResonantCompendiumUI;
 import irai.mod.reforge.UI.RuntimeConfigUI;
 import irai.mod.reforge.UI.SocketBenchUI;
+import irai.mod.reforge.UI.StatueConfirmationUI;
 import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
@@ -172,6 +179,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<DamageNumberConfig> damageNumberConfig;
     private final Config<WorldRepairConfig> worldRepairConfig;
     private final Config<ElementalAffinityConfig> elementalAffinityConfig;
+    private final Config<AscensionConfig> ascensionConfig;
+    private final Config<CorruptionConfig> corruptionConfig;
     private final ConfigService configService;
     private boolean customCombatTextEnabled = true;
     private boolean systemsRegistered = false;
@@ -208,6 +217,8 @@ public class ReforgePlugin extends JavaPlugin {
         this.damageNumberConfig = this.withConfig("DamageNumberConfig", DamageNumberConfig.CODEC);
         this.worldRepairConfig = this.withConfig("WorldRepairConfig", WorldRepairConfig.CODEC);
         this.elementalAffinityConfig = this.withConfig("ElementalAffinityConfig", ElementalAffinityConfig.CODEC);
+        this.ascensionConfig = this.withConfig("AscensionConfig", AscensionConfig.CODEC);
+        this.corruptionConfig = this.withConfig("CorruptionConfig", CorruptionConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -253,6 +264,9 @@ public class ReforgePlugin extends JavaPlugin {
         this.configService.register("DamageNumberConfig", this.damageNumberConfig, this::applyDamageNumberConfig);
         this.configService.register("WorldRepairConfig", this.worldRepairConfig, cfg -> {});
         this.configService.register("ElementalAffinityConfig", this.elementalAffinityConfig, ElementalAffinityUtils::setConfig);
+        this.configService.register("AscensionConfig", this.ascensionConfig, AscensionUtils::setConfig);
+        this.configService.register("CorruptionConfig", this.corruptionConfig, CorruptionUtils::setConfig);
+        this.configService.register("AscensionConfig", this.ascensionConfig, AscensionUtils::setConfig);
     }
 
     @Override
@@ -268,6 +282,7 @@ public class ReforgePlugin extends JavaPlugin {
         LoreFeedBenchUI.initialize();
         ReforgeBenchUI.initialize();
         EquipmentStatsUI.initialize();
+        StatueConfirmationUI.initialize();
         EnemyAffinityHudUI.initialize();
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
@@ -294,6 +309,9 @@ public class ReforgePlugin extends JavaPlugin {
         //this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("StatueInteraction", StatueInteraction.class, StatueInteraction.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("CorruptionInteraction", CorruptionInteraction.class, CorruptionInteraction.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("StatueInteraction", StatueInteraction.class, StatueInteraction.CODEC);
         this.getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> {
             if (event != null) {
                 LangLoader.getPlayerLanguage(event.getPlayer());
@@ -320,7 +338,8 @@ public class ReforgePlugin extends JavaPlugin {
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, PlayerInteractEvent.class, hatchetThrowEST::onPlayerInteract);
         //this.getEventRegistry().registerGlobal(EventPriority.FIRST, DrainPlayerFromWorldEvent.class, hatchetThrowEST::onDrainPlayerFromWorld);
         this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, TreasureChestSocketLootListener::onPlayerInteract);
-        this.getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, TreasureChestSocketLootListener::onTreasureChestOpening);
+        this.getEventRegistry().registerGlobal(PlayerInteractEvent.class, AscensionStatueListener::onPlayerInteract);
+        registerOptionalTreasureChestOpeningEvent();
         System.out.println("[SocketReforge] Hatchet throw experimental feature remains disabled unless its interaction assets are present.");
         this.getCommandRegistry().registerCommand(new ToolPartsCommand("toolpartsui", "Open modular tool parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
@@ -367,7 +386,20 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.3");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.4");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void registerOptionalTreasureChestOpeningEvent() {
+        try {
+            Class<?> eventClass = Class.forName(
+                    "com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent");
+            this.getEventRegistry().registerGlobal((Class) eventClass, TreasureChestSocketLootListener::onTreasureChestOpening);
+        } catch (ClassNotFoundException ignored) {
+            System.out.println("[SocketReforge] TreasureChestOpeningEvent unavailable; chest loot uses player interact fallback.");
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to register treasure chest opening hook: " + t.getMessage());
+        }
     }
 
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
@@ -565,6 +597,14 @@ public class ReforgePlugin extends JavaPlugin {
 
     public ElementalAffinityConfig getElementalAffinityRuntimeConfig() {
         return elementalAffinityConfig.get();
+    }
+
+    public AscensionConfig getAscensionRuntimeConfig() {
+        return ascensionConfig.get();
+    }
+
+    public CorruptionConfig getCorruptionRuntimeConfig() {
+        return corruptionConfig.get();
     }
 
     /**

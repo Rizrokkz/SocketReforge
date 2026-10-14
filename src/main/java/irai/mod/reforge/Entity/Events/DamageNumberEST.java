@@ -309,7 +309,7 @@ public class DamageNumberEST extends DamageEventSystem {
         }
         resolvedAngle = normalizeAngle(resolvedAngle);
         String text = DamageNumbers.format(displayAmount, kindId);
-        CombatTextUpdate update = new CombatTextUpdate(resolvedAngle, text);
+        CombatTextUpdate update = new CombatTextUpdate(resolvedAngle, text, WHITE_COLOR);
         for (EntityViewer viewer : viewers) {
             if (viewer == null) {
                 continue;
@@ -998,7 +998,7 @@ public class DamageNumberEST extends DamageEventSystem {
         }
         angle = normalizeAngle(angle);
         String text = DamageNumbers.format(amount, kindId);
-        CombatTextUpdate update = new CombatTextUpdate(angle, text);
+        CombatTextUpdate update = new CombatTextUpdate(angle, text, WHITE_COLOR);
         for (EntityViewer viewer : viewers) {
             if (viewer == null) {
                 continue;

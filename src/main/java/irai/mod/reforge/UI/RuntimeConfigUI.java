@@ -19,6 +19,8 @@ import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.LootInjectionUtils;
+import irai.mod.reforge.Config.AscensionConfig;
+import irai.mod.reforge.Config.CorruptionConfig;
 import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.ElementalAffinityConfig;
 import irai.mod.reforge.Config.LoreConfig;
@@ -52,6 +54,8 @@ public final class RuntimeConfigUI {
     private static final String LORE_MAPPING_CONFIG_NAME = "LoreMappingConfig";
     private static final String DAMAGE_NUMBER_CONFIG_NAME = "DamageNumberConfig";
     private static final String ELEMENTAL_AFFINITY_CONFIG_NAME = "ElementalAffinityConfig";
+    private static final String ASCENSION_CONFIG_NAME = "AscensionConfig";
+    private static final String CORRUPTION_CONFIG_NAME = "CorruptionConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
@@ -61,6 +65,7 @@ public final class RuntimeConfigUI {
     private static final String CATEGORY_LORE_MAPPING = "lore_mapping";
     private static final String CATEGORY_DAMAGE_NUMBERS = "damage_numbers";
     private static final String CATEGORY_ELEMENTAL_AFFINITY = "elemental_affinity";
+    private static final String CATEGORY_ASCENSION = "ascension";
     private static final String GROUP_LORE_MAPPING_GEMS = "lore_mapping_gems";
     private static final String GROUP_LORE_MAPPING_SPIRITS = "lore_mapping_spirits";
     private static final String GROUP_LORE_MAPPING_ABILITIES = "lore_mapping_abilities";
@@ -1132,6 +1137,12 @@ public final class RuntimeConfigUI {
         if (CATEGORY_ELEMENTAL_AFFINITY.equals(categoryId)) {
             elementalAffinityConfig().resetToDefaults();
             plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
+        }
+        if (CATEGORY_ASCENSION.equals(categoryId)) {
+            ascensionConfig().resetToDefaults();
+            corruptionConfig().resetToDefaults();
+            plugin.getConfigService().saveAndApply(ASCENSION_CONFIG_NAME);
+            plugin.getConfigService().saveAndApply(CORRUPTION_CONFIG_NAME);
         }
     }
 
@@ -3716,6 +3727,7 @@ public final class RuntimeConfigUI {
         addCategory(buildLoreCategory());
         addCategory(buildElementalAffinityCategory());
         addCategory(buildDamageNumberCategory());
+        addCategory(buildEndgameCategory());
     }
 
     private static void addCategory(CategorySection category) {
@@ -4183,6 +4195,181 @@ public final class RuntimeConfigUI {
                 "Valid elements: FIRE, WATER, ICE, LIGHTNING, LIFE, VOID. Custom rules are checked before defaults.");
     }
 
+    private static CategorySection buildEndgameCategory() {
+        List<ControlGroup> groups = new ArrayList<>();
+
+        List<ControlEntry> ascensionCore = new ArrayList<>();
+        ascensionCore.add(toggleControl(
+                "ascension_enabled",
+                CATEGORY_ASCENSION,
+                ASCENSION_CONFIG_NAME,
+                "Enable ascension",
+                "Allow players to ascend maxed refinement equipment at the statue.",
+                () -> ascensionConfig().isEnabled(),
+                value -> ascensionConfig().setEnabled(value)));
+        ascensionCore.add(intControl(
+                "ascension_max_tier",
+                CATEGORY_ASCENSION,
+                ASCENSION_CONFIG_NAME,
+                "Max ascension tier",
+                "Maximum ascension tier (1-10).",
+                () -> ascensionConfig().getMaxTier(),
+                delta -> ascensionConfig().setMaxTier(clampInt(ascensionConfig().getMaxTier() + (int) Math.round(delta), 1, 10))));
+
+        int maxTier = ascensionConfig().getMaxTier();
+        for (int tier = 1; tier <= maxTier; tier++) {
+            int currentTier = tier;
+            ascensionCore.add(multiplierControl(
+                    "ascension_carry_over_" + currentTier,
+                    CATEGORY_ASCENSION,
+                    ASCENSION_CONFIG_NAME,
+                    "Tier " + currentTier + " carry over %",
+                    "Fraction of refinement bonus carried to base on T" + currentTier + " ascension.",
+                    () -> ascensionConfig().getTierCarryOver(currentTier),
+                    delta -> ascensionConfig().setTierCarryOver(currentTier,
+                            clamp(ascensionConfig().getTierCarryOver(currentTier) + delta, 0.0, 1.0))));
+        }
+        groups.add(new ControlGroup("ascension_core", "Ascension Settings", "Ascension enable/disable and per-tier carry over.", ascensionCore));
+
+        List<ControlEntry> ascensionCosts = new ArrayList<>();
+        for (int tier = 1; tier <= maxTier; tier++) {
+            int currentTier = tier;
+            ascensionCosts.add(textControl(
+                    "ascension_cost_" + currentTier,
+                    CATEGORY_ASCENSION,
+                    ASCENSION_CONFIG_NAME,
+                    "Tier " + currentTier + " cost",
+                    "Item required to ascend to tier " + currentTier + ".",
+                    () -> ascensionConfig().getTierCost(currentTier),
+                    itemId -> ascensionConfig().setTierCost(currentTier, itemId)));
+        }
+        groups.add(new ControlGroup("ascension_costs", "Ascension Tier Costs", "Items consumed when ascending to each tier.", ascensionCosts));
+
+        List<ControlEntry> corruptionCore = new ArrayList<>();
+        corruptionCore.add(toggleControl(
+                "corruption_enabled",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Enable corruption",
+                "Allow players to corrupt equipment at the dark statue.",
+                () -> corruptionConfig().isEnabled(),
+                value -> corruptionConfig().setEnabled(value)));
+        corruptionCore.add(intControl(
+                "corruption_max",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Max corruptions",
+                "Maximum number of corruptions per item (1-5).",
+                () -> (int) corruptionConfig().getMaxCorruptions(),
+                delta -> corruptionConfig().setMaxCorruptions(clampInt((int) corruptionConfig().getMaxCorruptions() + (int) Math.round(delta), 1, 5))));
+        corruptionCore.add(chanceControl(
+                "corruption_tier2_item_loss",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Tier 2 item loss chance",
+                "Chance to lose the item on second corruption.",
+                () -> corruptionConfig().getTier2ItemLoss(),
+                delta -> corruptionConfig().setTier2ItemLoss(clamp(corruptionConfig().getTier2ItemLoss() + delta, 0.0, 1.0))));
+        groups.add(new ControlGroup("corruption_core", "Corruption Settings", "Corruption enable/disable and core parameters.", corruptionCore));
+
+        List<ControlEntry> corruptionCosts = new ArrayList<>();
+        corruptionCosts.add(textControl(
+                "corruption_tier1_cost",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Tier 1 cost",
+                "Item required for first corruption.",
+                () -> corruptionConfig().getTier1Cost(),
+                itemId -> corruptionConfig().setTier1Cost(itemId)));
+        corruptionCosts.add(textControl(
+                "corruption_tier2_cost",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Tier 2 cost",
+                "Item required for second corruption.",
+                () -> corruptionConfig().getTier2Cost(),
+                itemId -> corruptionConfig().setTier2Cost(itemId)));
+        groups.add(new ControlGroup("corruption_costs", "Corruption Costs", "Items consumed when corrupting equipment.", corruptionCosts));
+
+        List<ControlEntry> corruptionChances = new ArrayList<>();
+        corruptionChances.add(chanceControl(
+                "corruption_stat_increase",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Stat increase chance",
+                "Chance for a stat to be increased.",
+                () -> corruptionConfig().getStatIncreaseChance(),
+                delta -> corruptionConfig().setStatIncreaseChance(clamp(corruptionConfig().getStatIncreaseChance() + delta, 0.0, 1.0))));
+        corruptionChances.add(chanceControl(
+                "corruption_stat_decrease",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Stat decrease chance",
+                "Chance for a stat to be decreased.",
+                () -> corruptionConfig().getStatDecreaseChance(),
+                delta -> corruptionConfig().setStatDecreaseChance(clamp(corruptionConfig().getStatDecreaseChance() + delta, 0.0, 1.0))));
+        corruptionChances.add(chanceControl(
+                "corruption_stat_invert",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Stat invert chance",
+                "Chance for a stat to be inverted.",
+                () -> corruptionConfig().getStatInvertChance(),
+                delta -> corruptionConfig().setStatInvertChance(clamp(corruptionConfig().getStatInvertChance() + delta, 0.0, 1.0))));
+        corruptionChances.add(chanceControl(
+                "corruption_stat_remove",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Stat remove chance",
+                "Chance for a stat to be removed.",
+                () -> corruptionConfig().getStatRemoveChance(),
+                delta -> corruptionConfig().setStatRemoveChance(clamp(corruptionConfig().getStatRemoveChance() + delta, 0.0, 1.0))));
+        corruptionChances.add(chanceControl(
+                "corruption_add_new_stat",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Add new stat chance",
+                "Chance to add a new stat.",
+                () -> corruptionConfig().getAddNewStatChance(),
+                delta -> corruptionConfig().setAddNewStatChance(clamp(corruptionConfig().getAddNewStatChance() + delta, 0.0, 1.0))));
+        corruptionChances.add(chanceControl(
+                "corruption_resonant_stat",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Resonant stat chance",
+                "Chance to add a resonant stat.",
+                () -> corruptionConfig().getResonantStatChance(),
+                delta -> corruptionConfig().setResonantStatChance(clamp(corruptionConfig().getResonantStatChance() + delta, 0.0, 1.0))));
+        groups.add(new ControlGroup("corruption_chances", "Corruption Stat Chances", "Probabilities for each corruption outcome.", corruptionChances));
+
+        List<ControlEntry> corruptionModifiers = new ArrayList<>();
+        corruptionModifiers.add(multiplierControl(
+                "corruption_min_modifier",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Min stat modifier",
+                "Minimum stat change magnitude.",
+                () -> corruptionConfig().getMinStatModifier(),
+                delta -> corruptionConfig().setMinStatModifier(clamp(corruptionConfig().getMinStatModifier() + delta, 0.0, 1.0))));
+        corruptionModifiers.add(multiplierControl(
+                "corruption_max_modifier",
+                CATEGORY_ASCENSION,
+                CORRUPTION_CONFIG_NAME,
+                "Max stat modifier",
+                "Maximum stat change magnitude.",
+                () -> corruptionConfig().getMaxStatModifier(),
+                delta -> corruptionConfig().setMaxStatModifier(clamp(corruptionConfig().getMaxStatModifier() + delta, 0.0, 1.0))));
+        groups.add(new ControlGroup("corruption_modifiers", "Corruption Modifiers", "Stat change magnitude range.", corruptionModifiers));
+
+        return new CategorySection(
+                CATEGORY_ASCENSION,
+                "toggleEndgameCategory",
+                "Endgame System",
+                "Ascension and Corruption systems for maxed refinement equipment.",
+                groups,
+                "Tier configurations update dynamically based on Max Ascension Tier. Corruption allows stat modification at a cost.");
+    }
+
     private static CategorySection buildLoreCategory() {
         List<ControlGroup> groups = new ArrayList<>();
 
@@ -4485,6 +4672,14 @@ public final class RuntimeConfigUI {
 
     private static ElementalAffinityConfig elementalAffinityConfig() {
         return plugin.getElementalAffinityRuntimeConfig();
+    }
+
+    private static AscensionConfig ascensionConfig() {
+        return plugin.getAscensionRuntimeConfig();
+    }
+
+    private static CorruptionConfig corruptionConfig() {
+        return plugin.getCorruptionRuntimeConfig();
     }
 
     private static List<MaterialTier> getMaterialTierSnapshot() {

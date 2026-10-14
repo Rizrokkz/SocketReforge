@@ -577,6 +577,50 @@ public final class ResonanceSystem {
         return ResonanceResult.NONE;
     }
 
+    public static List<String> getAllResonanceNames() {
+        List<String> names = new ArrayList<>();
+        for (Definition definition : getDefinitions()) {
+            if (definition != null && definition.name != null) {
+                names.add(definition.name);
+            }
+        }
+        return names;
+    }
+
+    public static List<ResonanceResult> getAllResonanceResults() {
+        List<ResonanceResult> results = new ArrayList<>();
+        for (Definition definition : getDefinitions()) {
+            if (definition != null) {
+                ResonanceResult result = definition.toResult();
+                if (result != null && result.active()) {
+                    results.add(result);
+                }
+            }
+        }
+        return results;
+    }
+
+    public static List<ResonanceResult> getResonancesByScope(boolean isWeapon) {
+        List<ResonanceResult> results = new ArrayList<>();
+        for (Definition definition : getDefinitions()) {
+            if (definition == null) {
+                continue;
+            }
+            if (isWeapon && definition.scope == Scope.WEAPON) {
+                ResonanceResult result = definition.toResult();
+                if (result != null && result.active()) {
+                    results.add(result);
+                }
+            } else if (!isWeapon && definition.scope == Scope.ARMOR) {
+                ResonanceResult result = definition.toResult();
+                if (result != null && result.active()) {
+                    results.add(result);
+                }
+            }
+        }
+        return results;
+    }
+
     public static String getLocalizedName(String name, Object player) {
         return getLocalizedName(name, LangLoader.getPlayerLanguage(player));
     }

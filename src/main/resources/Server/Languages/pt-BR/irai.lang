@@ -892,6 +892,7 @@ tooltip.lore.effect.blood_rush = Fúria de Sangue: atinge um alvo {0} vezes
 tooltip.lore.effect.charge_attack = Ataque carregado: atinge um alvo {0} vezes
 tooltip.lore.effect.unknown = Habilidade de Lore
 tooltip.resonance_label = Ressonância
+tooltip.corruption_resonance_label = Ressonancia Abissal
 tooltip.quality_label = Qualidade
 tooltip.type_label = Tipo
 tooltip.recipe_label = Receita
@@ -1327,3 +1328,21 @@ ui.essence_bench.material_desc_resonant_mutation = Rerrola a afinidade do soquet
 
 irai.items.Tool_Hammer_Irainium.name = Martelo de Irainium do Construtor
 irai.items.Tool_Hammer_Irainium.description = Um martelo lendário do construtor que reduz drasticamente a chance de quebra no refinamento, consumindo muita durabilidade por uso.
+
+# UI de Confirmacao da Estatua
+statue.confirm_title = Confirmar Ascensao
+statue.confirm_corruption_title = Confirmar Corrupcao
+statue.item_label = Item: {0}
+statue.ascension_voice = Filho mortal, coloque seu aco diante de mim. Eu o elevarei alem da antiga forma, mas sua memoria temperada renascera.
+statue.corruption_voice = Pequeno vaso da fome, ofereca sua arma ao abismo. O poder respondera, mas todo presente da escuridao deixa uma cicatriz.
+statue.ascension_warning = Isso ira ascender o item e resetar seu nivel de refinamento.
+statue.corruption_warning = Isso ira bloquear permanentemente o item de refinamento, sockets e ascensao! AVISO: a 2a corrupcao tem 50% de chance de DESTRUIR seu item!
+corruption.abyss_tribute_missing_title = Tributo Incompleto
+corruption.abyss_tribute_missing = Gaia rejeita a oferta. O tributo requer {0}x Essencia Fantasmal e {1}x Essencia Maior do Vazio.
+corruption.abyss_tribute_hold_voidheart = Segure um Voidheart diante da estatua para oferecer tributo.
+corruption.abyss_tribute_no_space = Voce precisa de espaco no inventario para receber Essencia do Abismo.
+corruption.abyss_tribute_success = Gaia aceita seu tributo. Essencia do Abismo recebida.
+statue.cancel = Cancelar
+statue.ok = OK
+statue.confirm_ascend = Ascender
+statue.confirm_corrupt = Corromper

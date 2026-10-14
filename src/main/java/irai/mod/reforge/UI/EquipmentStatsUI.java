@@ -16,6 +16,7 @@ import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
@@ -247,13 +248,15 @@ public final class EquipmentStatsUI {
         }
         rows.append("<p style=\"font-weight:bold; color:#FFFFFF;\">Per Hit</p>");
         for (EquipmentDamageTooltipMath.DamageBreakdown breakdown : breakdowns) {
+            double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(weapon);
             double buffed = EquipmentDamageTooltipMath.computeBuffedWeaponDamage(
                     weapon.getItemId(),
                     breakdown.getBaseValue(),
                     level,
                     socketData,
                     partsMultiplier,
-                    softcoreMultiplier);
+                    softcoreMultiplier,
+                    ascensionMultiplier);
             rows.append(statRow(breakdown.getLabel(),
                     format(breakdown.getBaseValue()) + " -> " + format(buffed),
                     "#D8DEE9"));

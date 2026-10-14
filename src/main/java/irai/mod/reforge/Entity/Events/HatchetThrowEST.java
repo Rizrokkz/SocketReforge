@@ -17,7 +17,6 @@ import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import org.joml.Vector3d;
@@ -42,15 +41,12 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerMouseButtonEvent
 import com.hypixel.hytale.server.core.inventory.Inventory;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
-import com.hypixel.hytale.server.core.modules.blockhealth.BlockHealthChunk;
-import com.hypixel.hytale.server.core.modules.blockhealth.BlockHealthModule;
 import com.hypixel.hytale.server.core.modules.entity.component.Intangible;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
 import com.hypixel.hytale.server.core.modules.interaction.BlockHarvestUtils;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
@@ -58,6 +54,7 @@ import irai.mod.reforge.Common.ItemTypeUtils;
 import irai.mod.reforge.Common.LeafSaplingDropUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.ToolAbilityUtils;
+import irai.mod.reforge.Common.WorldBlockUtils;
 
 /**
  * Simulates a returning hatchet flight for tools that unlocked the effect through parts.
@@ -578,14 +575,10 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
             return false;
         }
 
-        int chunkX = ChunkUtil.chunkCoordinate(blockPos.x);
-        int chunkZ = ChunkUtil.chunkCoordinate(blockPos.z);
-        long chunkIndex = ChunkUtil.indexChunk(chunkX, chunkZ);
-        Ref<ChunkStore> chunkRef = world.getChunkStore().getChunkReference(chunkIndex);
-        if (chunkRef == null || !chunkRef.isValid()) {
+        Ref<ChunkStore> sectionRef = WorldBlockUtils.getLoadedSectionRef(world, blockPos.x, blockPos.y, blockPos.z);
+        if (sectionRef == null) {
             debug("segment", "failed to resolve chunk section for break at "
-                    + blockPos.x + "," + blockPos.y + "," + blockPos.z
-                    + " (chunkX=" + chunkX + ", chunkZ=" + chunkZ + ", chunkIndex=" + chunkIndex + ")");
+                    + blockPos.x + "," + blockPos.y + "," + blockPos.z);
             return false;
         }
 
@@ -597,10 +590,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
 
         LeafSaplingDropUtils.onExternalTreeTrunkTouched(blockType, "hatchet_throw");
 
-        BlockHealthChunk healthChunk = chunkStore.getComponent(
-                chunkRef,
-                BlockHealthModule.get().getBlockHealthChunkComponentType());
-        float beforeHealth = healthChunk == null ? 1.0f : healthChunk.getBlockHealth(blockPos);
+        float beforeHealth = WorldBlockUtils.getBlockHealth(world, blockPos.x, blockPos.y, blockPos.z);
         float breakStrength = getEffectiveBreakStrength(playerRef, player, store, world, held);
         if (!held.isBroken()) {
             breakStrength *= (float) Math.max(0.0d, state.breakPowerMultiplier);
@@ -613,11 +603,11 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
                 breakStrength,
                 0,
                 false,
-                chunkRef,
+                sectionRef,
                 store,
                 chunkStore);
 
-        float afterHealth = healthChunk == null ? beforeHealth : healthChunk.getBlockHealth(blockPos);
+        float afterHealth = WorldBlockUtils.getBlockHealth(world, blockPos.x, blockPos.y, blockPos.z);
         BlockType afterBlockType = getBlockType(world, blockPos.x, blockPos.y, blockPos.z);
         boolean blockChanged = afterBlockType == null
                 || afterBlockType == BlockType.EMPTY
@@ -1036,16 +1026,7 @@ public final class HatchetThrowEST extends EntityTickingSystem<EntityStore> {
     }
 
     private static BlockType getBlockType(World world, int x, int y, int z) {
-        if (world == null) {
-            return null;
-        }
-        WorldChunk chunk = world.getChunkIfLoaded(ChunkUtil.indexChunkFromBlock(x, z));
-        if (chunk == null) {
-            return null;
-        }
-        int localX = ChunkUtil.localCoordinate(x);
-        int localZ = ChunkUtil.localCoordinate(z);
-        return chunk.getBlockType(localX, y, localZ);
+        return WorldBlockUtils.getBlockType(world, x, y, z);
     }
 
     private static boolean isPassThroughBlock(BlockType blockType) {

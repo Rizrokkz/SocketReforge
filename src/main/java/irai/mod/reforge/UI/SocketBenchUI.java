@@ -29,6 +29,7 @@ import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UISocketVisualUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreSocketData;
@@ -2070,6 +2071,10 @@ public class SocketBenchUI {
         }
         if (!ReforgeEquip.isWeapon(freshEquipment) && !ReforgeEquip.isArmor(freshEquipment)) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_item_not_equipment"), 0);
+        }
+
+        if (CorruptionUtils.isCorrupted(freshEquipment)) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_corrupted"), 0);
         }
 
         SocketData socketData = SocketManager.getSocketData(freshEquipment);

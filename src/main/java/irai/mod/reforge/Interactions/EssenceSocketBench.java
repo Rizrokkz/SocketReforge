@@ -22,6 +22,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.ResonantRecipeUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Socket.Essence;
@@ -131,6 +132,11 @@ public class EssenceSocketBench extends SimpleInteraction {
         
         if (!isWeapon && !isArmor) {
             player.getPlayerRef().sendMessage(Message.raw("This item cannot have sockets"));
+            return;
+        }
+
+        if (CorruptionUtils.isCorrupted(equipment)) {
+            player.getPlayerRef().sendMessage(Message.raw("Corrupted equipment cannot be socketed."));
             return;
         }
 

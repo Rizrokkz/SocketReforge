@@ -8,7 +8,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
-import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -22,6 +23,7 @@ import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.universe.Universe;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.WorldConfig;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
@@ -60,12 +62,8 @@ public final class TreasureChestSocketLootListener {
     };
     private TreasureChestSocketLootListener() {}
 
-    public static void onTreasureChestOpening(TreasureChestOpeningEvent event) {
-        if (event == null || event.getStore() == null || event.getPlayerRef() == null) {
-            return;
-        }
-
-        Player player = event.getStore().getComponent(event.getPlayerRef(), Player.getComponentType());
+    public static void onTreasureChestOpening(Object event) {
+        Player player = resolveTreasureChestOpeningPlayer(event);
         if (player == null) {
             return;
         }
@@ -75,6 +73,26 @@ public final class TreasureChestSocketLootListener {
 
         if (player.getWorld() != null) {
             player.getWorld().execute(() -> applyLootSocketsToOpenTreasureChest(player, "treasure_event_deferred"));
+        }
+    }
+
+    private static Player resolveTreasureChestOpeningPlayer(Object event) {
+        if (event == null) {
+            return null;
+        }
+        try {
+            Object storeObject = event.getClass().getMethod("getStore").invoke(event);
+            Object playerRefObject = event.getClass().getMethod("getPlayerRef").invoke(event);
+            if (!(storeObject instanceof Store<?> store) || !(playerRefObject instanceof Ref<?> playerRef)) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Store<EntityStore> entityStore = (Store<EntityStore>) store;
+            @SuppressWarnings("unchecked")
+            Ref<EntityStore> entityRef = (Ref<EntityStore>) playerRef;
+            return entityStore.getComponent(entityRef, Player.getComponentType());
+        } catch (ReflectiveOperationException | ClassCastException ignored) {
+            return null;
         }
     }
 

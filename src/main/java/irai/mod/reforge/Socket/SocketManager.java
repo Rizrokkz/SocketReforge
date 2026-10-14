@@ -420,11 +420,16 @@ public class SocketManager {
      * Reads a stored essence bonus from metadata.
      * Returns [flatBonus, percentBonus] for the requested stat.
      * Falls back to deterministic recalculation when metadata is missing.
+     * Includes corruption bonuses if present.
      */
     public static double[] getStoredStatBonus(ItemStack item, EssenceEffect.StatType stat) {
         if (item == null || item.isEmpty() || stat == null) {
             return new double[] {0.0, 0.0};
         }
+
+        double essenceFlat = 0.0;
+        double essencePercent = 0.0;
+        boolean hasSocketBonus = false;
 
         // Prefer live deterministic recomputation from current socket layout so gameplay
         // stays in sync even if older metadata was generated with previous formulas.
@@ -434,25 +439,57 @@ public class SocketManager {
             Map<EssenceEffect.StatType, double[]> computed = calculateDeterministicBonuses(item, socketData, isWeapon);
             double[] live = computed.get(stat);
             if (live != null) {
-                return new double[] {live[0], live[1]};
+                essenceFlat = live[0];
+                essencePercent = live[1];
+                hasSocketBonus = true;
             }
-            return new double[] {0.0, 0.0};
         }
 
         // Fallback: if socket parsing is unavailable, use persisted metadata values.
-        String[] statKeys = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_STATS, Codec.STRING_ARRAY);
-        String[] flatValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY);
-        String[] percentValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY);
+        if (!hasSocketBonus) {
+            String[] statKeys = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_STATS, Codec.STRING_ARRAY);
+            String[] flatValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_FLAT, Codec.STRING_ARRAY);
+            String[] percentValues = item.getFromMetadataOrNull(MetadataKeys.ESSENCE_BONUS_PERCENT, Codec.STRING_ARRAY);
+
+            if (statKeys != null && flatValues != null && percentValues != null) {
+                int count = Math.min(statKeys.length, Math.min(flatValues.length, percentValues.length));
+                for (int i = 0; i < count; i++) {
+                    if (!stat.name().equals(statKeys[i])) {
+                        continue;
+                    }
+                    essenceFlat = parseDoubleOrZero(flatValues[i]);
+                    essencePercent = parseDoubleOrZero(percentValues[i]);
+                    hasSocketBonus = true;
+                    break;
+                }
+            }
+        }
+
+        // Add corruption bonuses
+        double[] corruptionBonus = getCorruptionBonus(item, stat);
+        double totalFlat = essenceFlat + corruptionBonus[0];
+        double totalPercent = essencePercent + corruptionBonus[1];
+
+        if (!hasSocketBonus && corruptionBonus[0] == 0.0 && corruptionBonus[1] == 0.0) {
+            return new double[] {0.0, 0.0};
+        }
+
+        return new double[] {totalFlat, totalPercent};
+    }
+
+    private static double[] getCorruptionBonus(ItemStack item, EssenceEffect.StatType stat) {
+        String[] statKeys = item.getFromMetadataOrNull(MetadataKeys.CORRUPTION_BONUS_STATS, Codec.STRING_ARRAY);
+        String[] flatValues = item.getFromMetadataOrNull(MetadataKeys.CORRUPTION_BONUS_FLAT, Codec.STRING_ARRAY);
+        String[] percentValues = item.getFromMetadataOrNull(MetadataKeys.CORRUPTION_BONUS_PERCENT, Codec.STRING_ARRAY);
 
         if (statKeys != null && flatValues != null && percentValues != null) {
             int count = Math.min(statKeys.length, Math.min(flatValues.length, percentValues.length));
             for (int i = 0; i < count; i++) {
-                if (!stat.name().equals(statKeys[i])) {
-                    continue;
+                if (stat.name().equals(statKeys[i])) {
+                    double flat = parseDoubleOrZero(flatValues[i]);
+                    double percent = parseDoubleOrZero(percentValues[i]);
+                    return new double[] {flat, percent};
                 }
-                double flat = parseDoubleOrZero(flatValues[i]);
-                double percent = parseDoubleOrZero(percentValues[i]);
-                return new double[] {flat, percent};
             }
         }
         return new double[] {0.0, 0.0};

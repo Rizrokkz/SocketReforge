@@ -23,6 +23,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
+import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
@@ -145,6 +146,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
                     int clampedLevel = clampLevel(upgradeLevel);
                     double refinementMultiplier = getDamageMultiplier(clampedLevel);
+                    double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(weapon);
                     double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(weapon);
                     double socketMultiplier = calculateSocketDamageBonus(weapon);
                     double socketFlat = calculateSocketFlatDamage(weapon);
@@ -156,6 +158,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
 
                     float newDamage = (float) ((baseDamage
                             * refinementMultiplier
+                            * ascensionMultiplier
                             * softcoreMultiplier
                             * socketMultiplier
                             * partsMultiplier) + socketFlat);
@@ -309,7 +312,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
             if (armorId != null) {
                 int level = ReforgeEquip.getLevelFromItem(armor);
                 int clampedLevel = clampLevel(level);
-                double multiplier = getDefenseMultiplier(clampedLevel) * ReforgeEquip.getSoftcoreStatMultiplier(armor);
+                double multiplier = getDefenseMultiplier(clampedLevel) * AscensionUtils.getAscensionBaseMultiplier(armor) * ReforgeEquip.getSoftcoreStatMultiplier(armor);
                 double armorMultiplier = EquipmentDurabilityPenaltyUtils.armorMultiplier(player, armor);
                 totalMultiplier += 1.0d + ((multiplier - 1.0d) * armorMultiplier);
                 count++;

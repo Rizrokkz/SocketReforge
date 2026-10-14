@@ -53,7 +53,7 @@ public final class UIItemUtils {
         String displayName = NameResolver.getDisplayName(itemStack, langCode);
         String itemIdTranslation = NameResolver.resolveItemIdTranslationNoFallback(itemId, langCode);
         String essenceFallback = resolveEssenceDisplayName(itemId, langCode);
-        if (displayName == null || displayName.isBlank() || UNKNOWN_ITEM.equals(displayName)) {
+        if (displayName == null || displayName.isBlank() || UNKNOWN_ITEM.equals(displayName) || looksLikeLanguageCode(displayName)) {
             if (itemId == null || itemId.isBlank()) {
                 return UNKNOWN_ITEM;
             }
@@ -70,6 +70,7 @@ public final class UIItemUtils {
                 if (essenceFallback != null) {
                     return essenceFallback;
                 }
+                return humanizeItemId(itemId);
             }
             if (itemIdTranslation != null && shouldPreferItemIdTranslation(displayName, itemId, langCode)) {
                 return transferRefinementSuffix(displayName, itemIdTranslation);
@@ -121,6 +122,39 @@ public final class UIItemUtils {
             return true;
         }
         return lower.contains(".items.") || lower.contains(".item.") || lower.contains(".entity.");
+    }
+
+    private static boolean looksLikeLanguageCode(String value) {
+        return value != null && value.trim().matches("(?i)^[a-z]{2}([-_][a-z]{2})?$");
+    }
+
+    private static String humanizeItemId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return UNKNOWN_ITEM;
+        }
+        String cleaned = itemId.trim();
+        int colon = cleaned.indexOf(':');
+        if (colon >= 0 && colon < cleaned.length() - 1) {
+            cleaned = cleaned.substring(colon + 1);
+        }
+        cleaned = cleaned.replace('_', ' ').replaceAll("\\s+", " ").trim();
+        if (cleaned.isBlank()) {
+            return itemId;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : cleaned.split(" ")) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(' ');
+            }
+            sb.append(Character.toUpperCase(part.charAt(0)));
+            if (part.length() > 1) {
+                sb.append(part.substring(1).toLowerCase(Locale.ROOT));
+            }
+        }
+        return sb.isEmpty() ? itemId : sb.toString();
     }
 
     private static String resolveEssenceDisplayName(String itemId, String langCode) {

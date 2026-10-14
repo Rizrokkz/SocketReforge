@@ -20,6 +20,7 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIHtmlUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
@@ -1431,6 +1432,11 @@ public final class LoreSocketBenchUI {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_equipment"));
         }
+
+        if (CorruptionUtils.isCorrupted(equipment.item)) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.error_corrupted"));
+        }
+
         LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
         if (data == null || data.getSocketCount() == 0) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets"));

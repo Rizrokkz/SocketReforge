@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "irai.mod.reforge"
-version = "1.4.3"
+version = "1.4.4"
 
 repositories {
     mavenCentral()

@@ -30,6 +30,7 @@ import irai.mod.reforge.Common.UI.UISocketVisualUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.ResonantRecipeUtils;
 import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -2380,6 +2381,10 @@ public final class EssenceBenchUI {
         boolean isArmor = ReforgeEquip.isArmor(item);
         if (!isWeapon && !isArmor) {
             return new ProcessResult(t(player, "ui.essence_bench.error_item_not_equipment"), 0);
+        }
+
+        if (CorruptionUtils.isCorrupted(item)) {
+            return new ProcessResult(t(player, "ui.essence_bench.error_corrupted"), 0);
         }
 
         SocketData socketData = SocketManager.getSocketData(item);
