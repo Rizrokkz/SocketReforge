@@ -1,6 +1,7 @@
 package irai.mod.reforge.Lore;
 
 import java.util.Iterator;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -41,9 +42,14 @@ import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
+import com.hypixel.hytale.server.core.asset.type.item.config.CoreItemAbility;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.protocol.VelocityThresholdStyle;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
+import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
 import com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
@@ -75,6 +81,7 @@ import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
+import irai.mod.reforge.Socket.RuneDeltaDebug;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.LangLoader;
@@ -260,8 +267,10 @@ public final class LoreProcHandler {
     private static final long SIGNATURE_VERIFY_DELAY_MS = 220L;
     private static final long SIGNATURE_TRACE_DELAY_MS = 80L;
     private static final long SIGNATURE_TRACE_DELAY_2_MS = 180L;
+    private static final InteractionType SOCKETED_RUNE_INTERACTION_TYPE = InteractionType.Ability2;
     private static final Object INTERACTION_BUFFER_LOCK = new Object();
     private static volatile Field interactionManagerCommandBufferField;
+    private static volatile Constructor<InteractionContext> socketedAbilityContextConstructor;
 
     private static final String[] BURN_EFFECT_IDS = {
             "Lore/Lore_Burn",
@@ -2084,6 +2093,140 @@ public final class LoreProcHandler {
         return true;
     }
 
+    public static boolean tryRunSocketedAbility(Store<EntityStore> store,
+                                                CommandBuffer<EntityStore> commandBuffer,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> targetRef,
+                                                String runestoneItemId) {
+        if (store == null || commandBuffer == null || attackerRef == null
+                || targetRef == null || runestoneItemId == null || runestoneItemId.isBlank()) {
+            return false;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null) {
+            return false;
+        }
+        RuneDeltaDebug.logKv(attacker, "ability.attempt", "rune", runestoneItemId);
+        ItemStack runestone = new ItemStack(runestoneItemId, 1);
+        Item item = runestone.getItem();
+        if (item == null || item == Item.UNKNOWN || !(item.getAbility() instanceof CoreItemAbility ability)) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "notCoreRunestone", "rune", runestoneItemId);
+            return false;
+        }
+        String rootId = ability.getCastRootId();
+        if (rootId == null || rootId.isBlank()) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "missingCastRoot", "rune", runestoneItemId);
+            return false;
+        }
+        InteractionModule module = InteractionModule.get();
+        InteractionManager manager = module == null
+                ? null
+                : store.getComponent(attackerRef, module.getInteractionManagerComponent());
+        if (manager == null) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "missingInteractionManager", "root", rootId);
+            return false;
+        }
+        if (hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "ability2AlreadyActive", "root", rootId);
+            return false;
+        }
+        RootInteraction root = RootInteraction.getRootInteractionOrUnknown(rootId);
+        if (root == null) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "unknownCastRoot", "root", rootId);
+            return false;
+        }
+        ensureInteractionCommandBuffer(manager, commandBuffer);
+        InteractionContext context = createSocketedAbilityContext(manager, attackerRef, runestone);
+        if (context == null) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "contextConstructionFailed", "root", rootId);
+            return false;
+        }
+        context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
+        context.getMetaStore().putMetaObject(ImpactModifiers.CAST_SNAPSHOT,
+                new ImpactModifiers(Map.of("Cost", 0f), new String[0]));
+        SignatureEnergySnapshot energySnapshot = captureSignatureEnergy(store, attackerRef);
+        RuneDeltaDebug.logKv(attacker, "ability.launch",
+                "root", rootId,
+                "interaction", SOCKETED_RUNE_INTERACTION_TYPE,
+                "energy", energySnapshot == null ? "unavailable" : energySnapshot.value,
+                "costMultiplier", 0f);
+        boolean started;
+        try {
+            started = manager.tryStartChain(attackerRef, commandBuffer, SOCKETED_RUNE_INTERACTION_TYPE, context, root);
+        } catch (Throwable throwable) {
+            RuneDeltaDebug.logKv(attacker, "ability.error",
+                    "type", throwable.getClass().getSimpleName(),
+                    "message", throwable.getMessage());
+            return false;
+        }
+        RuneDeltaDebug.logKv(attacker, "ability.result", "root", rootId, "started", started);
+        if (!started) {
+            InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
+            if (chain == null) {
+                RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "forcedChainInitFailed", "root", rootId);
+                return false;
+            }
+            boolean rulesPassed = manager.applyRules(
+                    context, chain.getChainData(), SOCKETED_RUNE_INTERACTION_TYPE, root);
+            RuneDeltaDebug.logKv(attacker, "ability.force",
+                    "root", rootId,
+                    "rulesPassed", rulesPassed,
+                    "reason", "normalStartRejected");
+            manager.queueExecuteChain(chain);
+            started = true;
+        }
+        if (started && energySnapshot != null) {
+            UUID playerId = attacker.getUuid();
+            if (playerId != null && energySnapshot.value > 0.01f) {
+                lockSignatureEnergy(store, attackerRef, playerId, energySnapshot.value);
+            }
+            scheduleSignatureEnergyRestore(store, attackerRef, energySnapshot.statIndex, energySnapshot.value);
+            RuneDeltaDebug.logKv(attacker, "energy.restoreScheduled",
+                    "index", energySnapshot.statIndex,
+                    "value", energySnapshot.value);
+        }
+        return started;
+    }
+
+    private static InteractionContext createSocketedAbilityContext(InteractionManager manager,
+                                                                    Ref<EntityStore> attackerRef,
+                                                                    ItemStack runestone) {
+        if (manager == null || attackerRef == null || runestone == null || runestone.isEmpty()) {
+            return null;
+        }
+        Constructor<InteractionContext> constructor = socketedAbilityContextConstructor;
+        if (constructor == null) {
+            synchronized (INTERACTION_BUFFER_LOCK) {
+                constructor = socketedAbilityContextConstructor;
+                if (constructor == null) {
+                    try {
+                        constructor = InteractionContext.class.getDeclaredConstructor(
+                                InteractionManager.class,
+                                Ref.class,
+                                int.class,
+                                ItemContainer.class,
+                                byte.class,
+                                ItemStack.class);
+                        constructor.setAccessible(true);
+                        socketedAbilityContextConstructor = constructor;
+                    } catch (Throwable ignored) {
+                        return null;
+                    }
+                }
+            }
+        }
+        try {
+            // Native Ability2 contexts use an ability-slot container. The temporary container gives
+            // the runestone a valid ItemContext without changing the player's equipped abilities.
+            SimpleItemContainer runestoneContainer = new SimpleItemContainer((short) 1);
+            runestoneContainer.setItemStackForSlot((short) 0, runestone);
+            return constructor.newInstance(manager, attackerRef, InventoryComponent.ABILITIES_SECTION_ID,
+                    runestoneContainer, (byte) 0, runestone);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private static boolean isLoreSignatureStyle(LoreAbility ability) {
         if (ability == null) {
             return false;
@@ -2749,6 +2892,13 @@ public final class LoreProcHandler {
     }
 
     private static boolean hasActiveAbility1Chain(InteractionManager manager) {
+        return hasActiveInteractionChain(manager, InteractionType.Ability1);
+    }
+
+    private static boolean hasActiveInteractionChain(InteractionManager manager, InteractionType interactionType) {
+        if (interactionType == null) {
+            return false;
+        }
         if (manager == null) {
             return false;
         }
@@ -2762,7 +2912,7 @@ public final class LoreProcHandler {
             }
             InteractionType type = chain.getType();
             InteractionType baseType = chain.getBaseType();
-            if (type == InteractionType.Ability1 || baseType == InteractionType.Ability1) {
+            if (type == interactionType || baseType == interactionType) {
                 return true;
             }
         }
@@ -2866,7 +3016,8 @@ public final class LoreProcHandler {
                                                                     LoreAbility ability,
                                                                     boolean selfIsAttacker,
                                                                     boolean primaryProc) {
-        if (!primaryProc || !selfIsAttacker || store == null || attackerRef == null || ability == null) {
+        if (LORE_DISABLE_SIGNATURE_ENERGY || !primaryProc || !selfIsAttacker
+                || store == null || attackerRef == null || ability == null) {
             return SignatureEnergyBonus.NONE;
         }
         if (!shouldSpendSignatureEnergy(ability)) {
@@ -3087,7 +3238,9 @@ public final class LoreProcHandler {
             return;
         }
         float current = value.get();
-        if (Math.abs(current - lock.value) > 0.01f) {
+        // Preserve energy only against an ability cost. Do not overwrite normal
+        // signature-energy gains that happen while a Rune Delta ability is active.
+        if (current + 0.01f < lock.value) {
             setSignatureEnergy(statMap, signatureIndex, lock.value);
         }
     }
@@ -3172,7 +3325,7 @@ public final class LoreProcHandler {
             return;
         }
         float current = value.get();
-        if (Math.abs(current - lock.value) > 0.01f) {
+        if (current + 0.01f < lock.value) {
             setSignatureEnergy(statMap, signatureIndex, lock.value);
         }
     }

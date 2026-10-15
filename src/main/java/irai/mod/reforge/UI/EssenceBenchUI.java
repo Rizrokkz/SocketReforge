@@ -629,18 +629,12 @@ public final class EssenceBenchUI {
     }
 
     private static void applySelectionEdits(Object ctxObj, Player player, Snapshot snapshot, SelectionState nextState) {
-        if (player == null) {
+        if (player == null || player.getWorld() == null) {
             return;
         }
         pendingSelections.put(player.getPlayerRef(), nextState);
-        try {
-            updateSelectionHighlights(ctxObj, snapshot, nextState);
-            updateSelectionDetails(ctxObj, player, snapshot, nextState);
-            HyUIEditUtils.updatePage(ctxObj, false);
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] EssenceBenchUI in-place update failed: " + e.getMessage());
-            player.getWorld().execute(() -> openWithSync(player));
-        }
+        // Card and socket selection changes rebuild the listener tree on the new page.
+        player.getWorld().execute(() -> openWithSync(player));
     }
 
     private static void updateSelectionHighlights(Object ctxObj, Snapshot snapshot, SelectionState state) {
@@ -1779,12 +1773,28 @@ public final class EssenceBenchUI {
                 .append("\" width=\"32\" height=\"32\"/>")
                 .append("<div style=\"layout-mode:top;\"><div style=\"flex-weight:1;\"></div>")
                 .append("<div style=\"layout-mode:left;\"><div style=\"flex-weight:1;\"></div>");
-        if (overlayIcon != null) {
-            sb.append("<img src=\"").append(overlayIcon).append("\" width=\"28\" height=\"28\"/>");
-        }
+        appendCompactLoreSocketOverlayHtml(sb, socket, overlayIcon, 28);
         sb.append("<div style=\"flex-weight:1;\"></div></div>")
                 .append("<div style=\"flex-weight:1;\"></div></div>")
                 .append("</div></button>");
+    }
+
+    private static void appendCompactLoreSocketOverlayHtml(StringBuilder sb,
+                                                           LoreSocketData.LoreSocket socket,
+                                                           String overlayIcon,
+                                                           int size) {
+        if (socket != null && socket.hasRune()) {
+            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
+                    .append(escapeHtml(socket.getRuneItemId()))
+                    .append("\" style=\"anchor-width:").append(size)
+                    .append("; anchor-height:").append(size).append(";\"></span>");
+            return;
+        }
+        if (overlayIcon != null) {
+            sb.append("<img src=\"").append(overlayIcon)
+                    .append("\" width=\"").append(size)
+                    .append("\" height=\"").append(size).append("\"/>");
+        }
     }
 
     private static String buildLoreSocketTooltip(Player player, LoreSocketData.LoreSocket socket) {

@@ -54,6 +54,7 @@ import irai.mod.reforge.Commands.ResonanceListCommand;
 import irai.mod.reforge.Commands.ResonanceRecipeGiveCommand;
 import irai.mod.reforge.Commands.ResonanceWorldScanCommand;
 import irai.mod.reforge.Commands.RuntimeConfigCommand;
+import irai.mod.reforge.Commands.RuneDeltaDebugCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
@@ -360,6 +361,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new ResonanceListCommand("resonancecombos", "List seeded resonance combinations", false));
         this.getCommandRegistry().registerCommand(new ResonanceRecipeGiveCommand("resonancerecipe", "OP: give resonant recipe shards", false));
         this.getCommandRegistry().registerCommand(new ResonanceWorldScanCommand("resonanceworldscan", "Scan main world containers for resonant migrations", false));
+        this.getCommandRegistry().registerCommand(new RuneDeltaDebugCommand("runedeltadebug", "Toggle Rune Delta proc debug logging", false));
         // Register ECS damage systems
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
@@ -386,7 +388,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.4");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

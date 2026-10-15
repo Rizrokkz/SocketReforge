@@ -1,12 +1,15 @@
 package irai.mod.reforge.Lore;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.server.core.asset.type.item.config.CoreItemAbility;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -19,6 +22,9 @@ import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Socket.ResonanceSystem;
+import irai.mod.reforge.Socket.SocketData;
+import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.MetadataKeys;
 
 /**
@@ -128,6 +134,7 @@ public final class LoreSocketManager {
 
         Integer maxFromMeta = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_MAX, Codec.INTEGER);
         String[] values = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_VALUES, Codec.STRING_ARRAY);
+        String[] runes = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_RUNES, Codec.STRING_ARRAY);
         String[] colors = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_COLORS, Codec.STRING_ARRAY);
         String[] spirits = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_SPIRITS, Codec.STRING_ARRAY);
         String[] effects = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_EFFECTS, Codec.STRING_ARRAY);
@@ -136,7 +143,7 @@ public final class LoreSocketManager {
         int[] feedTiers = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_FEED_TIERS, Codec.INT_ARRAY);
         int[] locked = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_LOCKED, Codec.INT_ARRAY);
 
-        int count = maxArrayLength(values, colors, spirits, effects, levels, xp, feedTiers, locked);
+        int count = maxArrayLength(values, runes, colors, spirits, effects, levels, xp, feedTiers, locked);
         int maxSockets = maxFromMeta != null ? Math.max(0, maxFromMeta) : Math.max(0, count);
         int socketCount = Math.max(count, maxSockets);
         if (socketCount == 0) {
@@ -149,6 +156,7 @@ public final class LoreSocketManager {
         for (int i = 0; i < socketCount; i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
             socket.setGemItemId(getString(values, i));
+            socket.setRuneItemId(getString(runes, i));
             socket.setColor(getString(colors, i));
             socket.setSpiritId(getString(spirits, i));
             socket.setEffectOverride(getString(effects, i));
@@ -170,6 +178,7 @@ public final class LoreSocketManager {
         if (socketCount == 0) {
             return item.withMetadata(MetadataKeys.LORE_SOCKET_MAX, Codec.INTEGER, 0)
                     .withMetadata(MetadataKeys.LORE_SOCKET_VALUES, Codec.STRING_ARRAY, new String[0])
+                    .withMetadata(MetadataKeys.LORE_SOCKET_RUNES, Codec.STRING_ARRAY, new String[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_SPIRITS, Codec.STRING_ARRAY, new String[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_COLORS, Codec.STRING_ARRAY, new String[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_EFFECTS, Codec.STRING_ARRAY, new String[0])
@@ -188,6 +197,7 @@ public final class LoreSocketManager {
         }
 
         String[] values = new String[socketCount];
+        String[] runes = new String[socketCount];
         String[] colors = new String[socketCount];
         String[] spirits = new String[socketCount];
         String[] effects = new String[socketCount];
@@ -199,6 +209,7 @@ public final class LoreSocketManager {
         for (int i = 0; i < socketCount; i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
             values[i] = safeString(socket.getGemItemId());
+            runes[i] = safeString(socket.getRuneItemId());
             colors[i] = safeString(socket.getColor());
             spirits[i] = safeString(socket.getSpiritId());
             effects[i] = safeString(socket.getEffectOverride());
@@ -211,6 +222,7 @@ public final class LoreSocketManager {
         return item
                 .withMetadata(MetadataKeys.LORE_SOCKET_MAX, Codec.INTEGER, maxSockets)
                 .withMetadata(MetadataKeys.LORE_SOCKET_VALUES, Codec.STRING_ARRAY, values)
+                .withMetadata(MetadataKeys.LORE_SOCKET_RUNES, Codec.STRING_ARRAY, runes)
                 .withMetadata(MetadataKeys.LORE_SOCKET_SPIRITS, Codec.STRING_ARRAY, spirits)
                 .withMetadata(MetadataKeys.LORE_SOCKET_COLORS, Codec.STRING_ARRAY, colors)
                 .withMetadata(MetadataKeys.LORE_SOCKET_EFFECTS, Codec.STRING_ARRAY, effects)
@@ -324,6 +336,17 @@ public final class LoreSocketManager {
     public static boolean syncSocketColors(ItemStack item, LoreSocketData data) {
         if (item == null || item.isEmpty() || data == null) {
             return false;
+        }
+        if (isRuneDeltaActive(item)) {
+            boolean changed = false;
+            for (int i = 0; i < data.getSocketCount(); i++) {
+                LoreSocketData.LoreSocket socket = data.getSocket(i);
+                if (socket != null && socket.getColor() != null && !socket.getColor().isBlank()) {
+                    socket.setColor("");
+                    changed = true;
+                }
+            }
+            return changed;
         }
         var knownColors = LoreGemRegistry.getKnownColors();
         boolean hasKnown = knownColors != null && !knownColors.isEmpty();
@@ -690,6 +713,7 @@ public final class LoreSocketManager {
             return;
         }
         socket.setGemItemId("");
+        socket.setRuneItemId("");
         socket.setSpiritId("");
         socket.setEffectOverride("");
         socket.setLevel(0);
@@ -840,8 +864,53 @@ public final class LoreSocketManager {
         return getInt(values, index) > 0;
     }
 
-    private static int maxArrayLength(String[] a, String[] b, String[] c, String[] d,
-                                      int[] e, int[] f, int[] g, int[] h) {
+    public static boolean isRuneDeltaActive(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return false;
+        }
+        SocketData socketData = SocketManager.getSocketData(item);
+        ResonanceSystem.ResonanceResult resonance = SocketManager.evaluateAllowedResonance(item, socketData);
+        return resonance != null
+                && resonance.active()
+                && resonance.type() == ResonanceSystem.ResonanceType.RUNE_DELTA;
+    }
+
+    public static boolean isAbilityRunestone(ItemStack item) {
+        if (item == null || item.isEmpty()) {
+            return false;
+        }
+        Item config = item.getItem();
+        if (config == null || config == Item.UNKNOWN || !(config.getAbility() instanceof CoreItemAbility ability)) {
+            return false;
+        }
+        String rootId = ability.getCastRootId();
+        return rootId != null && !rootId.isBlank();
+    }
+
+    public static List<String> getSocketedRunestoneIds(ItemStack item) {
+        if (!isRuneDeltaActive(item)) {
+            return List.of();
+        }
+        LoreSocketData data = getLoreSocketData(item);
+        if (data == null) {
+            return List.of();
+        }
+        List<String> runes = new ArrayList<>();
+        for (int i = 0; i < data.getSocketCount(); i++) {
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            if (socket == null || !socket.hasRune()) {
+                continue;
+            }
+            String runeId = socket.getRuneItemId();
+            if (isAbilityRunestone(new ItemStack(runeId, 1))) {
+                runes.add(runeId);
+            }
+        }
+        return runes;
+    }
+
+    private static int maxArrayLength(String[] a, String[] b, String[] c, String[] d, String[] e,
+                                      int[] f, int[] g, int[] h, int[] i) {
         int max = 0;
         if (a != null) max = Math.max(max, a.length);
         if (b != null) max = Math.max(max, b.length);
@@ -851,6 +920,7 @@ public final class LoreSocketManager {
         if (f != null) max = Math.max(max, f.length);
         if (g != null) max = Math.max(max, g.length);
         if (h != null) max = Math.max(max, h.length);
+        if (i != null) max = Math.max(max, i.length);
         return max;
     }
 }

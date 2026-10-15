@@ -113,21 +113,24 @@ public final class LoreEffectEST extends DamageEventSystem {
         }
 
         boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
+        boolean runeDelta = LoreSocketManager.isRuneDeltaActive(weapon);
         boolean isCrit = rollCrit(weapon);
         boolean isBlocked = isBlocked(damage);
         float beforeLoreProcDamage = damage.getAmount();
         Set<String> used = new HashSet<>();
         LoreProcHandler.ProcState procState = new LoreProcHandler.ProcState();
-        changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
-                damage, data, LoreTrigger.ON_HIT, true, used, procState, commandBuffer);
+        if (!runeDelta) {
+            changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
+                    damage, data, LoreTrigger.ON_HIT, true, used, procState, commandBuffer);
 
-        if (isCrit) {
-            changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
-                    damage, data, LoreTrigger.ON_CRIT, true, used, procState, commandBuffer);
-        }
-        if (isBlocked) {
-            changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
-                    damage, data, LoreTrigger.ON_BLOCKED, true, used, procState, commandBuffer);
+            if (isCrit) {
+                changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
+                        damage, data, LoreTrigger.ON_CRIT, true, used, procState, commandBuffer);
+            }
+            if (isBlocked) {
+                changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
+                        damage, data, LoreTrigger.ON_BLOCKED, true, used, procState, commandBuffer);
+            }
         }
 
         LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, defenderRef,
@@ -182,19 +185,22 @@ public final class LoreEffectEST extends DamageEventSystem {
         }
 
         boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
+        boolean runeDelta = LoreSocketManager.isRuneDeltaActive(weapon);
         boolean nearDeath = isNearDeath(store, defenderRef, damage);
         Set<String> used = new HashSet<>();
         LoreProcHandler.ProcState procState = new LoreProcHandler.ProcState();
 
-        changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
-                damage, data, LoreTrigger.ON_DAMAGED, false, used, procState, commandBuffer);
-        if (isBlocked) {
+        if (!runeDelta) {
             changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
-                    damage, data, LoreTrigger.ON_BLOCK, false, used, procState, commandBuffer);
-        }
-        if (nearDeath) {
-            changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
-                    damage, data, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
+                    damage, data, LoreTrigger.ON_DAMAGED, false, used, procState, commandBuffer);
+            if (isBlocked) {
+                changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
+                        damage, data, LoreTrigger.ON_BLOCK, false, used, procState, commandBuffer);
+            }
+            if (nearDeath) {
+                changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
+                        damage, data, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
+            }
         }
 
         LoreProcHandler.applyAbsorbed(store, defender, defenderRef, attackerRef,

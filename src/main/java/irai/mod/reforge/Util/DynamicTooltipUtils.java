@@ -120,6 +120,7 @@ public class DynamicTooltipUtils {
     private static final String META_REFINEMENT_NAME_KEY = "SocketReforge.Refinement.DisplayNameKey";
     private static final String META_LORE_SOCKET_MAX = "SocketReforge.Lore.Socket.Max";
     private static final String META_LORE_SOCKET_VALUES = "SocketReforge.Lore.Socket.Values";
+    private static final String META_LORE_SOCKET_RUNES = "SocketReforge.Lore.Socket.Runes";
     private static final String META_LORE_SOCKET_SPIRITS = "SocketReforge.Lore.Socket.Spirits";
     private static final String META_LORE_SOCKET_LEVELS = "SocketReforge.Lore.Socket.Levels";
     private static final String META_LORE_SOCKET_FEED_TIERS = "SocketReforge.Lore.Socket.FeedTiers";
@@ -986,6 +987,7 @@ public class DynamicTooltipUtils {
 
         int loreMax = extractLoreSocketMax(metadata);
         String[] loreEntries = extractLoreSocketEntries(metadata);
+        String[] loreRunes = extractLoreSocketRunes(metadata);
         String[] loreColors = extractLoreSocketColors(metadata);
         String[] loreSpirits = extractLoreSocketSpirits(metadata);
         String[] loreEffects = extractLoreSocketEffects(metadata);
@@ -993,6 +995,9 @@ public class DynamicTooltipUtils {
         int[] loreFeedTiers = extractLoreSocketFeedTiers(metadata);
         int[] loreLocked = extractLoreSocketLocked(metadata);
         int loreCount = maxArrayLength(loreEntries, loreColors, loreSpirits, loreEffects, loreLevels, loreFeedTiers, loreLocked);
+        if (loreRunes != null) {
+            loreCount = Math.max(loreCount, loreRunes.length);
+        }
         if (loreMax > loreCount) {
             loreCount = loreMax;
         }
@@ -1002,16 +1007,18 @@ public class DynamicTooltipUtils {
             for (int i = 0; i < loreCount; i++) {
                 boolean isLocked = loreLocked != null && i < loreLocked.length && loreLocked[i] > 0;
                 String entry = loreEntries != null && i < loreEntries.length ? loreEntries[i] : "";
+                String runeId = loreRunes != null && i < loreRunes.length ? loreRunes[i] : "";
                 String color = loreColors != null && i < loreColors.length ? loreColors[i] : "";
                 String spiritId = loreSpirits != null && i < loreSpirits.length ? loreSpirits[i] : "";
                 String resolvedColor = resolveLoreSocketColor(color, entry, spiritId, itemId, i);
-                String colorTag = getLoreColorTag(resolvedColor);
 
                 boolean hasEntry = entry != null && !entry.isBlank();
+                boolean hasRune = runeId != null && !runeId.isBlank();
                 boolean hasSpirit = spiritId != null && !spiritId.isBlank();
                 boolean hasColor = resolvedColor != null && !resolvedColor.isBlank();
+                String colorTag = hasRune ? COLOR_WHITE : getLoreColorTag(resolvedColor);
 
-                if (hasEntry || hasSpirit) {
+                if (hasEntry || hasRune || hasSpirit) {
                     loreDisplay.append(colorTag).append(LORE_SOCKET_FILLED).append("</color>");
                 } else if (isLocked) {
                     loreDisplay.append(COLOR_RED).append(LORE_SOCKET_LOCKED).append("</color>");
@@ -1026,15 +1033,23 @@ public class DynamicTooltipUtils {
             tooltipLines.add(COLOR_PURPLE + loreSocketsLabel + ": " + COLOR_WHITE + loreDisplay.toString());
 
             String loreLabel = tr(langCode, "tooltip.lore_label", "Lore");
+            String runestoneLabel = tr(langCode, "ui.lore_socket.materials_runes", "Ability Runestones");
             String unawakened = tr(langCode, "tooltip.lore_unawakened", "Unawakened");
             String levelLabel = tr(langCode, "tooltip.lore_level_short", "Lv");
             int unawakenedCount = 0;
             for (int i = 0; i < loreCount; i++) {
                 String spiritId = loreSpirits != null && i < loreSpirits.length ? loreSpirits[i] : "";
                 String entry = loreEntries != null && i < loreEntries.length ? loreEntries[i] : "";
+                String runeId = loreRunes != null && i < loreRunes.length ? loreRunes[i] : "";
                 boolean hasSpirit = spiritId != null && !spiritId.isBlank();
                 boolean hasEntry = entry != null && !entry.isBlank();
-                if (!hasSpirit && !hasEntry) {
+                boolean hasRune = runeId != null && !runeId.isBlank();
+                if (!hasSpirit && !hasEntry && !hasRune) {
+                    continue;
+                }
+                if (hasRune) {
+                    tooltipLines.add(COLOR_PURPLE + runestoneLabel + ": " + COLOR_WHITE
+                            + localizeLoreRunestoneName(runeId, langCode));
                     continue;
                 }
                 if (!hasSpirit && hasEntry) {
@@ -1876,6 +1891,11 @@ public class DynamicTooltipUtils {
 
     private static String[] extractLoreSocketEntries(String metadata) {
         String[] entries = extractStringArray(metadata, META_LORE_SOCKET_VALUES);
+        return entries == null ? new String[0] : entries;
+    }
+
+    private static String[] extractLoreSocketRunes(String metadata) {
+        String[] entries = extractStringArray(metadata, META_LORE_SOCKET_RUNES);
         return entries == null ? new String[0] : entries;
     }
 
@@ -3850,6 +3870,19 @@ public class DynamicTooltipUtils {
         }
         String raw = trimmed.contains(".") ? trimmed.substring(trimmed.lastIndexOf('.') + 1) : trimmed;
         return humanizeToken(raw);
+    }
+
+    private static String localizeLoreRunestoneName(String runeId, String langCode) {
+        if (runeId == null || runeId.isBlank()) {
+            return "";
+        }
+        String normalized = runeId.trim();
+        String localized = NameResolver.resolveItemIdTranslationNoFallback(normalized, langCode);
+        if (localized != null && !localized.isBlank()) {
+            return localized;
+        }
+        int namespaceSeparator = normalized.indexOf(':');
+        return humanizeToken(namespaceSeparator >= 0 ? normalized.substring(namespaceSeparator + 1) : normalized);
     }
 
     private static LoreAbility applyEffectOverride(LoreAbility ability, String overrideRaw) {

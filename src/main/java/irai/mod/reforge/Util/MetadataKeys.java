@@ -50,6 +50,7 @@ public final class MetadataKeys {
     public static final String LORE_SOCKET_FEED_TIERS = "SocketReforge.Lore.Socket.FeedTiers";
     public static final String LORE_SOCKET_LOCKED = "SocketReforge.Lore.Socket.Locked";
     public static final String LORE_SOCKET_EFFECTS = "SocketReforge.Lore.Socket.Effects";
+    public static final String LORE_SOCKET_RUNES = "SocketReforge.Lore.Socket.Runes";
 
     // Loot tracking
     public static final String LOOT_ROLLED = "SocketReforge.Loot.Rolled";

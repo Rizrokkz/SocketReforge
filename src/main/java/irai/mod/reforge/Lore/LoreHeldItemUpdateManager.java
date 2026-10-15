@@ -328,6 +328,7 @@ public final class LoreHeldItemUpdateManager {
                 continue;
             }
             dst.setGemItemId(src.getGemItemId());
+            dst.setRuneItemId(src.getRuneItemId());
             dst.setColor(src.getColor());
             dst.setSpiritId(src.getSpiritId());
             dst.setEffectOverride(src.getEffectOverride());

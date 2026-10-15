@@ -76,6 +76,15 @@ public final class UISocketVisualUtils {
         if (socket == null || socket.isEmpty()) {
             return null;
         }
+        if (socket.hasRune()) {
+            String runeIcon = itemIconByItemId(socket.getRuneItemId());
+            if (runeIcon != null) {
+                return runeIcon;
+            }
+            return UITemplateUtils.resolveCustomUiAsset(
+                    "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
+                    "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
+        }
         String byItem = loreGemIconByItemId(socket.getGemItemId());
         if (byItem != null) {
             return byItem;
@@ -260,7 +269,10 @@ public final class UISocketVisualUtils {
     }
 
     public static String iconFromEssenceId(String essenceId) {
-        String itemId = essenceItemId(essenceId);
+        return itemIconByItemId(essenceItemId(essenceId));
+    }
+
+    public static String itemIconByItemId(String itemId) {
         if (itemId == null || itemId.isBlank()) {
             return null;
         }

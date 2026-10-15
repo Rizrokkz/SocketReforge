@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+---
+
+## [1.4.5] - 2026-10-15
+
+### Added
+- **Rune Delta** - Added new resonance for weapons enabling the use of Runes for lore sockets when Rune Delta is active resonance.
+  - Socketed runes will be activated ON HIT procs and can use Ability 1 support runes.
+  
+### Fixed
+- **Socket Punch and Essence Bench UI** - Fixed interaction flags for Socket Punch Bench and Essence Bench UI that prohibits the player to punch sockets and socket essences in said benches.
 
 ---
 

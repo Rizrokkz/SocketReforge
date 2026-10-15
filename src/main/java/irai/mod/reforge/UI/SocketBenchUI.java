@@ -5,7 +5,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -400,17 +399,7 @@ public class SocketBenchUI {
                                                     result.progressValue,
                                                     false));
                                     processingPlayers.remove(finalPlayer.getPlayerRef());
-                                    BenchSnapshot refreshedSnapshot = collectSnapshot(finalPlayer);
-                                    SelectionState completedState = normalizeSelectionState(refreshedSnapshot,
-                                            pendingSelections.get(finalPlayer.getPlayerRef()));
-                                    updateSelectionHighlights(ctxObj, finalSnapshot, activeState, completedState);
-                                    updateCardData(ctxObj, finalPlayer, finalSnapshot);
-                                    updateSelectionDetails(ctxObj, finalPlayer, refreshedSnapshot, completedState, true);
-                                    safeEditProgress(ctxObj, "socketProgress", result.progressValue);
-                                    safeEditText(ctxObj, "statusLabel", result.statusLine);
-                                    safeEditDisabled(ctxObj, "processButton", processDisabled(finalPlayer, refreshedSnapshot, completedState));
-                                    invokeUpdatePage(ctxObj, false);
-                                    updateCardData(ctxObj, finalPlayer, finalSnapshot);
+                                    refreshPageWithPendingSelection(finalPlayer);
                                 } catch (Exception ex) {
                                     processingPlayers.remove(finalPlayer.getPlayerRef());
                                     System.err.println("[SocketReforge] SocketBenchUI delayed process failed: " + ex.getMessage());
@@ -575,18 +564,18 @@ public class SocketBenchUI {
             SelectionState requestedState) {
         SelectionState nextState = normalizeSelectionState(snapshot, requestedState);
         pendingSelections.put(player.getPlayerRef(), nextState);
+        refreshPageWithPendingSelection(player);
+    }
 
-        try {
-            boolean equipmentChanged = !Objects.equals(
-                    previousState != null ? previousState.equipmentKey : null,
-                    nextState.equipmentKey);
-            updateSelectionHighlights(ctxObj, snapshot, previousState, nextState);
-            updateSelectionDetails(ctxObj, player, snapshot, nextState, equipmentChanged);
-            invokeUpdatePage(ctxObj, false);
-            refreshSelectedSocketPreviewFromInventory(ctxObj, player, snapshot, nextState);
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] SocketBenchUI in-place selection update failed: " + e.getMessage());
+    /**
+     * Rebuild after a selection without explicitly closing the active HyUI page.
+     * This preserves the event lifecycle used by the other bench UIs.
+     */
+    private static void refreshPageWithPendingSelection(Player player) {
+        if (player == null || player.getPlayerRef() == null || player.getWorld() == null) {
+            return;
         }
+        player.getWorld().execute(() -> openWithSync(player));
     }
 
     private static void refreshSelectedSocketPreviewFromInventory(
@@ -720,8 +709,11 @@ public class SocketBenchUI {
             safeEditStyle(ctxObj, equipmentCompactLoreSocketWrapId(equipmentIndex, i),
                     compactLoreSocketWrapStyle(colorHex, visible));
             safeEditImage(ctxObj, equipmentCompactLoreSocketBackgroundId(equipmentIndex, i), baseIcon);
-            safeEditImage(ctxObj, equipmentCompactLoreSocketOverlayId(equipmentIndex, i), overlayIcon != null ? overlayIcon : baseIcon);
-            safeEditVisible(ctxObj, equipmentCompactLoreSocketOverlayId(equipmentIndex, i), overlayIcon != null);
+            if (socket == null || !socket.hasRune()) {
+                safeEditImage(ctxObj, equipmentCompactLoreSocketOverlayId(equipmentIndex, i),
+                        overlayIcon != null ? overlayIcon : baseIcon);
+                safeEditVisible(ctxObj, equipmentCompactLoreSocketOverlayId(equipmentIndex, i), overlayIcon != null);
+            }
         }
     }
 
@@ -921,8 +913,10 @@ public class SocketBenchUI {
             for (String[] color : LORE_PREVIEW_COLORS) {
                 String key = color[0];
                 safeEditVisible(ctxObj, lorePreviewColorLayerId(i, key), visible && key.equals(colorKey));
-                safeEditImage(ctxObj, lorePreviewOverlayId(i, key), overlayIcon);
-                safeEditVisible(ctxObj, lorePreviewOverlayId(i, key), filled);
+                if (loreSocket == null || !loreSocket.hasRune()) {
+                    safeEditImage(ctxObj, lorePreviewOverlayId(i, key), overlayIcon);
+                    safeEditVisible(ctxObj, lorePreviewOverlayId(i, key), filled);
+                }
             }
         }
     }
@@ -1401,18 +1395,37 @@ public class SocketBenchUI {
                     .append(baseIcon)
                     .append("\" width=\"32\" height=\"32\"/>")
                     .append("<div style=\"layout-mode:top;\"><div style=\"flex-weight:1;\"></div>")
-                    .append("<div style=\"layout-mode:left;\"><div style=\"flex-weight:1;\"></div>")
-                    .append("<img id=\"")
-                    .append(equipmentCompactLoreSocketOverlayId(equipmentIndex, i))
-                    .append("\" src=\"")
-                    .append(overlayIcon != null ? overlayIcon : baseIcon)
-                    .append("\" width=\"28\" height=\"28\" style=\"visibility:")
-                    .append(overlayIcon != null ? "shown" : "hidden")
-                    .append(";\"/>")
-                    .append("<div style=\"flex-weight:1;\"></div></div>")
+                    .append("<div style=\"layout-mode:left;\"><div style=\"flex-weight:1;\"></div>");
+            appendCompactLoreSocketOverlayHtml(sb, socket,
+                    equipmentCompactLoreSocketOverlayId(equipmentIndex, i), overlayIcon, baseIcon, 28);
+            sb.append("<div style=\"flex-weight:1;\"></div></div>")
                     .append("<div style=\"flex-weight:1;\"></div></div>")
                     .append("</div></div>");
         }
+    }
+
+    private static void appendCompactLoreSocketOverlayHtml(StringBuilder sb,
+                                                           LoreSocketData.LoreSocket socket,
+                                                           String imageId,
+                                                           String overlayIcon,
+                                                           String baseIcon,
+                                                           int size) {
+        if (socket != null && socket.hasRune()) {
+            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
+                    .append(escapeHtml(socket.getRuneItemId()))
+                    .append("\" style=\"anchor-width:").append(size)
+                    .append("; anchor-height:").append(size).append(";\"></span>");
+            return;
+        }
+        sb.append("<img id=\"")
+                .append(imageId)
+                .append("\" src=\"")
+                .append(overlayIcon != null ? overlayIcon : baseIcon)
+                .append("\" width=\"").append(size)
+                .append("\" height=\"").append(size)
+                .append("\" style=\"visibility:")
+                .append(overlayIcon != null ? "shown" : "hidden")
+                .append(";\"/>");
     }
 
     private static String buildPuncherCardsHtml(Player player, List<Entry> punchers, String selectedKey) {
@@ -1986,11 +1999,9 @@ public class SocketBenchUI {
                         .append("<div style=\"").append(tileStyle).append("\">")
                         .append("<div style=\"flex-weight:1;\"></div>")
                         .append("<div style=\"layout-mode:Left;\">")
-                        .append("<div style=\"flex-weight:1;\"></div>")
-                        .append("<img id=\"").append(lorePreviewOverlayId(i, key)).append("\" src=\"")
-                        .append(overlayIcon != null ? overlayIcon : baseIcon)
-                        .append("\" width=\"").append(overlaySize).append("\" height=\"").append(overlaySize)
-                        .append("\" style=\"visibility:").append(overlayIcon != null ? "shown" : "hidden").append(";\"/>")
+                        .append("<div style=\"flex-weight:1;\"></div>");
+                appendLoreSocketPreviewOverlayHtml(sb, socket, lorePreviewOverlayId(i, key), overlayIcon, baseIcon, overlaySize);
+                sb
                         .append("<div style=\"flex-weight:1;\"></div>")
                         .append("</div>")
                         .append("<div style=\"flex-weight:1;\"></div>")
@@ -2003,6 +2014,25 @@ public class SocketBenchUI {
         }
         sb.append("<div style=\"flex-weight:1;\"></div></div>");
         return sb.toString();
+    }
+
+    private static void appendLoreSocketPreviewOverlayHtml(StringBuilder sb,
+                                                           LoreSocketData.LoreSocket socket,
+                                                           String imageId,
+                                                           String overlayIcon,
+                                                           String baseIcon,
+                                                           int size) {
+        if (socket != null && socket.hasRune()) {
+            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
+                    .append(escapeHtml(socket.getRuneItemId()))
+                    .append("\" style=\"anchor-width:").append(size)
+                    .append("; anchor-height:").append(size).append(";\"></span>");
+            return;
+        }
+        sb.append("<img id=\"").append(imageId).append("\" src=\"")
+                .append(overlayIcon != null ? overlayIcon : baseIcon)
+                .append("\" width=\"").append(size).append("\" height=\"").append(size)
+                .append("\" style=\"visibility:").append(overlayIcon != null ? "shown" : "hidden").append(";\"/>");
     }
 
     private static String buildLoreSocketSection(Player player, Entry equipment) {

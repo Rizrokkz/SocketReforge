@@ -46,7 +46,8 @@ public final class ResonanceSystem {
         SHOCK_DODGE,
         AURA_BURN,
         PRISMATIC_FORCE,
-        SHIELD_SUNDER
+        SHIELD_SUNDER,
+        RUNE_DELTA
     }
 
     public record ResonanceRecipe(String name, Essence.Type[] pattern, String appliesTo) {}
@@ -323,6 +324,11 @@ public final class ResonanceSystem {
                     b(EssenceEffect.StatType.DAMAGE, 2, 8),
                     b(EssenceEffect.StatType.CRIT_CHANCE, 0, 4),
                     Essence.Type.LIGHTNING, Essence.Type.FIRE, Essence.Type.VOID, Essence.Type.ICE),
+            def("Rune Delta", "Five colorless lore sockets can hold Ability Runestones that trigger on hit.",
+                    ResonanceType.RUNE_DELTA, Scope.WEAPON, WeaponClass.GENERIC,
+                    b(EssenceEffect.StatType.ATTACK_SPEED, 0, 4),
+                    b(EssenceEffect.StatType.CRIT_CHANCE, 0, 3),
+                    Essence.Type.VOID, Essence.Type.FIRE, Essence.Type.WATER, Essence.Type.ICE, Essence.Type.LIGHTNING),
 
             // Armor
             def("Tideguard", "Max health and regeneration surge.",
@@ -1220,6 +1226,7 @@ public final class ResonanceSystem {
             case AURA_BURN -> "When hit: 20% chance (0.9s cooldown) to burn attacker for 5% of incoming damage (min 1).";
             case PRISMATIC_FORCE -> "Passive: boosts physical damage and the elemental damage derived from it.";
             case SHIELD_SUNDER -> "Passive: +100% damage to elemental shields and 10% HP pierce while shields are active.";
+            case RUNE_DELTA -> "On hit: 12% chance (3.0s cooldown) to cast one socketed Ability Runestone.";
             case NONE -> "";
         };
     }
@@ -1245,6 +1252,7 @@ public final class ResonanceSystem {
             case AURA_BURN -> "resonance.proc.aura_burn";
             case PRISMATIC_FORCE -> "resonance.proc.prismatic_force";
             case SHIELD_SUNDER -> "resonance.proc.shield_sunder";
+            case RUNE_DELTA -> "resonance.proc.rune_delta";
             case NONE -> "";
         };
         if (key.isBlank()) {

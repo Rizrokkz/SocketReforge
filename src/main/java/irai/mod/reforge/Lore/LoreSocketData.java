@@ -10,6 +10,7 @@ public final class LoreSocketData {
     public static final class LoreSocket {
         private final int slotIndex;
         private String gemItemId;
+        private String runeItemId;
         private String color;
         private String spiritId;
         private String effectOverride;
@@ -32,6 +33,14 @@ public final class LoreSocketData {
 
         public void setGemItemId(String gemItemId) {
             this.gemItemId = gemItemId;
+        }
+
+        public String getRuneItemId() {
+            return runeItemId;
+        }
+
+        public void setRuneItemId(String runeItemId) {
+            this.runeItemId = runeItemId;
         }
 
         public String getColor() {
@@ -91,7 +100,12 @@ public final class LoreSocketData {
         }
 
         public boolean isEmpty() {
-            return gemItemId == null || gemItemId.isBlank();
+            return (gemItemId == null || gemItemId.isBlank())
+                    && (runeItemId == null || runeItemId.isBlank());
+        }
+
+        public boolean hasRune() {
+            return runeItemId != null && !runeItemId.isBlank();
         }
 
         public boolean hasSpirit() {

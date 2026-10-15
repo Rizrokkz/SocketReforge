@@ -43,9 +43,11 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreStatusTracker;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.ResonanceSystem;
+import irai.mod.reforge.Socket.RuneDeltaDebug;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DamageNumberFormatter;
@@ -98,7 +100,8 @@ public class SocketEffectEST extends DamageEventSystem {
             ResonanceSystem.ResonanceType.PLUNDERING_BLADE,
             ResonanceSystem.ResonanceType.HEAL_SURGE,
             ResonanceSystem.ResonanceType.PRISMATIC_FORCE,
-            ResonanceSystem.ResonanceType.SHIELD_SUNDER
+            ResonanceSystem.ResonanceType.SHIELD_SUNDER,
+            ResonanceSystem.ResonanceType.RUNE_DELTA
     );
     private static final EnumSet<ResonanceSystem.ResonanceType> ARMOR_RESONANCE_HANDLERS = EnumSet.of(
             ResonanceSystem.ResonanceType.FROST_NOVA_ON_HIT,
@@ -470,6 +473,42 @@ public class SocketEffectEST extends DamageEventSystem {
                     logPlunder("Blocked: resonance cooldown active.");
                 } else {
                     logPlunder("Missed: proc roll did not pass.");
+                }
+            }
+            case RUNE_DELTA -> {
+                double procRoll = ThreadLocalRandom.current().nextDouble();
+                boolean onCooldown = isResonanceOnCooldown(attacker.getUuid(), "w_rune_delta");
+                RuneDeltaDebug.logKv(attacker, "proc.roll",
+                        "weapon", weapon.getItemId(),
+                        "damage", dealt,
+                        "roll", procRoll,
+                        "threshold", 0.12d,
+                        "cooldown", onCooldown);
+                if (procRoll >= 0.12d) {
+                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "roll");
+                    break;
+                }
+                if (onCooldown) {
+                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "cooldown");
+                    break;
+                }
+                List<String> runestoneIds = LoreSocketManager.getSocketedRunestoneIds(weapon);
+                if (runestoneIds.isEmpty()) {
+                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "noSocketedRunestones");
+                    break;
+                }
+                String runestoneId = runestoneIds.get(ThreadLocalRandom.current().nextInt(runestoneIds.size()));
+                RuneDeltaDebug.logKv(attacker, "proc.select",
+                        "rune", runestoneId,
+                        "available", String.join(",", runestoneIds));
+                boolean started = LoreProcHandler.tryRunSocketedAbility(
+                        store, commandBuffer, attackerRef, defenderRef, runestoneId);
+                if (started) {
+                    markResonanceCooldown(attacker.getUuid(), "w_rune_delta", 3000L);
+                    tryApplyVisualEffect(store, attackerRef, SHOCK_EFFECT_IDS);
+                    RuneDeltaDebug.logKv(attacker, "proc.success", "cooldownMs", 3000);
+                } else {
+                    RuneDeltaDebug.logKv(attacker, "proc.failed", "reason", "abilityStartRejected");
                 }
             }
             case HEAL_SURGE -> {
