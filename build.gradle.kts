@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "irai.mod.reforge"
-version = "1.4.5"
+version = "1.4.5-hotfix.1"
 
 repositories {
     mavenCentral()
@@ -16,8 +16,6 @@ dependencies {
     compileOnly(files("libs/HytaleServer.jar"))
     implementation(files("libs/HytaleServer.jar"))
     implementation(files("libs/HyUI-0.9.0-2026.02.19.jar"))
-    // Optional dependency - DynamicTooltipsLib (https://github.com/Herolias/DynamicTooltipsLib)
-    compileOnly(files("libs/DynamicTooltipsLib-1.5.2.jar"))
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

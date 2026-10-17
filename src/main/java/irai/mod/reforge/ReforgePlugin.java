@@ -53,13 +53,14 @@ import irai.mod.reforge.Commands.ReforgeAdminCommand;
 import irai.mod.reforge.Commands.ResonanceListCommand;
 import irai.mod.reforge.Commands.ResonanceRecipeGiveCommand;
 import irai.mod.reforge.Commands.ResonanceWorldScanCommand;
-import irai.mod.reforge.Commands.RuntimeConfigCommand;
 import irai.mod.reforge.Commands.RuneDeltaDebugCommand;
+import irai.mod.reforge.Commands.RuntimeConfigCommand;
 import irai.mod.reforge.Commands.SocketPunchCommand;
 import irai.mod.reforge.Commands.SpawnEquipChestCommand;
 import irai.mod.reforge.Commands.SpawnEquipEnemyCommand;
 import irai.mod.reforge.Commands.ToolPartsCommand;
 import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.CropEssenceDropUtils;
 import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
@@ -70,6 +71,7 @@ import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.AscensionConfig;
 import irai.mod.reforge.Config.ConfigService;
+import irai.mod.reforge.Config.CorruptionConfig;
 import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.ElementalAffinityConfig;
 import irai.mod.reforge.Config.LootSocketRollConfig;
@@ -79,6 +81,7 @@ import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Config.WorldRepairConfig;
+import irai.mod.reforge.Entity.Events.AscensionStatueListener;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.EnemyElementalShieldEST;
@@ -99,17 +102,14 @@ import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryChangeEST;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryEventEST;
+import irai.mod.reforge.Interactions.CorruptionInteraction;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
-import irai.mod.reforge.Interactions.CorruptionInteraction;
-import irai.mod.reforge.Common.CorruptionUtils;
-import irai.mod.reforge.Config.CorruptionConfig;
 import irai.mod.reforge.Interactions.StatueInteraction;
-import irai.mod.reforge.Entity.Events.AscensionStatueListener;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -388,7 +388,7 @@ public class ReforgePlugin extends JavaPlugin {
         systemsRegistered = true;
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5-hotfix.1");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

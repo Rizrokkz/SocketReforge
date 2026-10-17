@@ -17,6 +17,7 @@ import org.bson.BsonValue;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.FormattedMessage;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.item.config.metadata.ItemDisplayMetadata;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -62,6 +63,11 @@ public class DynamicTooltipUtils {
     private static final String MOD_PREFIX = "[SocketReforge]";
     private static final String PROVIDER_ID = "irai:SocketReforge";
     private static final String NATIVE_TOOLTIP_STATE_KEY = "SocketReforgeNativeTooltip";
+    private static final String SIMPLE_ENCHANTMENTS_METADATA_KEY = "Enchantments";
+    private static final String SIMPLE_ENCHANTMENTS_STATE_KEY = "SimpleEnchantingNativeTooltip";
+    private static final String SIMPLE_ENCHANTMENTS_TOOLTIP_KEY = "tooltip.enchantments";
+    private static final String SIMPLE_ENCHANTMENTS_MANAGER_CLASS =
+            "org.herolias.plugin.enchantment.NativeTooltipManager";
     private static final String STATE_BASE_DESCRIPTION = "BaseDescription";
     private static final String STATE_LAST_DESCRIPTION = "LastDescription";
     private static final String STATE_LAST_NAME = "LastName";
@@ -191,6 +197,9 @@ public class DynamicTooltipUtils {
     private static boolean debugMode = false;
     private static String loadedClassName = null;
     private static volatile RefinementConfig refinementConfig;
+    private static volatile Method simpleEnchantmentsApplyMethod;
+    private static volatile boolean simpleEnchantmentsApplyLookupAttempted;
+    private static final Object SIMPLE_ENCHANTMENTS_LOOKUP_LOCK = new Object();
 
     // ==================== Initialization ====================
     
@@ -2884,27 +2893,61 @@ public class DynamicTooltipUtils {
         ItemDisplayMetadata display = item.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
         Message currentName = display == null ? null : display.getName();
         Message currentDescription = display == null ? null : display.getDescription();
+        boolean hasSimpleEnchantments = item.getFromMetadataOrNull(
+                SIMPLE_ENCHANTMENTS_METADATA_KEY, Codec.BSON_DOCUMENT) != null;
+        Method simpleEnchantmentsApply = hasSimpleEnchantments
+                ? getSimpleEnchantmentsApplyMethod()
+                : null;
 
         if (payload == null) {
             if (state == null) {
                 return item;
             }
-            Message baseDescription = cleanBaseDescription(decodeStateMessage(state, STATE_BASE_DESCRIPTION));
-            return writeDisplay(item, currentName, baseDescription)
+            Message baseDescription;
+            if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
+                baseDescription = resolveSimpleEnchantmentsBaseDescription(item, state, currentDescription, locale);
+            } else if (hasSimpleEnchantments) {
+                baseDescription = stripSocketReforgeTooltipBlocks(currentDescription);
+            } else {
+                baseDescription = cleanBaseDescription(decodeStateMessage(state, STATE_BASE_DESCRIPTION));
+            }
+            ItemStack restored = writeDisplay(item, currentName, baseDescription)
                     .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT, null);
+            if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
+                ItemStack refreshed = applySimpleEnchantmentsTooltip(restored, simpleEnchantmentsApply);
+                if (refreshed != null) {
+                    return refreshed;
+                }
+                Message fallbackDescription = stripSocketReforgeTooltipBlocks(currentDescription);
+                return writeDisplay(item, currentName, fallbackDescription)
+                        .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT, null);
+            }
+            return restored;
         }
 
         Message lastDescription = decodeStateMessage(state, STATE_LAST_DESCRIPTION);
         Message baseDescription = decodeStateMessage(state, STATE_BASE_DESCRIPTION);
         Message lastName = decodeStateMessage(state, STATE_LAST_NAME);
-        if (state == null || !messagesEqual(currentDescription, lastDescription)) {
-            if (isGeneratedOrCorruptedDescription(currentDescription)) {
-                baseDescription = cleanBaseDescription(baseDescription);
-            } else {
-                baseDescription = currentDescription;
+        if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
+            baseDescription = resolveSimpleEnchantmentsBaseDescription(item, state, currentDescription, locale);
+        } else if (hasSimpleEnchantments) {
+            baseDescription = stripSocketReforgeTooltipBlocks(currentDescription);
+        } else {
+            if (state == null || !messagesEqual(currentDescription, lastDescription)) {
+                if (isGeneratedOrCorruptedDescription(currentDescription)) {
+                    // Preserve foreign tooltip sections while removing our previous generated block.
+                    Message sourceDescription = state == null
+                            ? currentDescription
+                            : baseDescription;
+                    baseDescription = cleanBaseDescription(sourceDescription);
+                } else {
+                    baseDescription = currentDescription;
+                }
             }
         }
-        baseDescription = cleanBaseDescription(baseDescription);
+        if (!hasSimpleEnchantments) {
+            baseDescription = cleanBaseDescription(baseDescription);
+        }
 
         Message name = currentName;
         Message generatedName = null;
@@ -2922,9 +2965,442 @@ public class DynamicTooltipUtils {
 
         Message tooltipBlock = buildNativeTooltipBlock(payload.lines);
         Message fullDescription = composeDescription(baseDescription, tooltipBlock);
-        return writeDisplay(item, name, fullDescription)
+        ItemStack updated = writeDisplay(item, name, fullDescription)
                 .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
                         encodeState(baseDescription, fullDescription, generatedName));
+        if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
+            ItemStack refreshed = applySimpleEnchantmentsTooltip(updated, simpleEnchantmentsApply);
+            if (refreshed != null) {
+                ItemDisplayMetadata refreshedDisplay = refreshed.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
+                Message refreshedDescription = refreshedDisplay == null ? null : refreshedDisplay.getDescription();
+                return refreshed.withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
+                        encodeState(baseDescription, refreshedDescription, generatedName));
+            }
+
+            // If the optional integration cannot run, retain the latest foreign section found
+            // on the incoming stack rather than dropping SimpleEnchantments' visible text.
+            Message fallbackBase = stripSocketReforgeTooltipBlocks(currentDescription);
+            fullDescription = composeDescription(fallbackBase, tooltipBlock);
+            return writeDisplay(item, name, fullDescription)
+                    .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
+                            encodeState(fallbackBase, fullDescription, generatedName));
+        }
+        return updated;
+    }
+
+    private static Message resolveSimpleEnchantmentsBaseDescription(
+            ItemStack item, BsonDocument socketReforgeState, Message currentDescription, String locale) {
+        BsonDocument simpleState = item.getFromMetadataOrNull(
+                SIMPLE_ENCHANTMENTS_STATE_KEY, Codec.BSON_DOCUMENT);
+        Message simpleBase = decodeStateMessage(simpleState, STATE_BASE_DESCRIPTION);
+        Message socketBase = decodeStateMessage(socketReforgeState, STATE_BASE_DESCRIPTION);
+
+        Message baseDescription;
+        if (!isMessageEmpty(simpleBase) && !isGeneratedOrCorruptedDescription(simpleBase)) {
+            baseDescription = simpleBase;
+        } else if (!isMessageEmpty(socketBase) && !isGeneratedOrCorruptedDescription(socketBase)) {
+            baseDescription = socketBase;
+        } else if (!isMessageEmpty(simpleBase)) {
+            baseDescription = simpleBase;
+        } else if (!isMessageEmpty(socketBase)) {
+            baseDescription = socketBase;
+        } else {
+            baseDescription = currentDescription;
+        }
+        baseDescription = stripUnavailableItemDescriptionTranslation(item, baseDescription, locale);
+        if (isMessageEmpty(baseDescription)) {
+            baseDescription = getDefaultItemDescription(item, locale);
+        }
+        Message cleaned = stripManagedTooltipBlocks(baseDescription, true);
+        cleaned = stripUnavailableItemDescriptionTranslation(item, cleaned, locale);
+        return isMessageEmpty(cleaned) ? getDefaultItemDescription(item, locale) : cleaned;
+    }
+
+    private static Message getDefaultItemDescription(ItemStack item, String locale) {
+        if (item == null || item.getItem() == null) {
+            return null;
+        }
+        String descriptionKey = item.getItem().getDescriptionTranslationKey();
+        if (descriptionKey == null || descriptionKey.isBlank()
+                || !hasItemDescriptionTranslation(descriptionKey, locale)) {
+            return null;
+        }
+        return Message.translation(descriptionKey);
+    }
+
+    private static boolean hasItemDescriptionTranslation(String descriptionKey, String locale) {
+        if (hasItemDescriptionTranslationForLanguage(descriptionKey, locale)) {
+            return true;
+        }
+        return hasItemDescriptionTranslationForLanguage(
+                        descriptionKey, LangLoader.getFallbackLanguage())
+                || hasItemDescriptionTranslationForLanguage(
+                        descriptionKey, LangLoader.getDefaultUILanguage());
+    }
+
+    private static boolean hasItemDescriptionTranslationForLanguage(String descriptionKey, String langCode) {
+        if (langCode == null || langCode.isBlank()) {
+            return false;
+        }
+        String translated = LangLoader.getTranslationExact(descriptionKey, langCode);
+        return translated != null && !translated.isBlank() && !translated.equals(descriptionKey);
+    }
+
+    private static Message stripUnavailableItemDescriptionTranslation(
+            ItemStack item, Message description, String locale) {
+        if (isMessageEmpty(description) || item == null || item.getItem() == null) {
+            return description;
+        }
+        String descriptionKey = item.getItem().getDescriptionTranslationKey();
+        if (descriptionKey == null || descriptionKey.isBlank()
+                || hasItemDescriptionTranslation(descriptionKey, locale)) {
+            return description;
+        }
+
+        FormattedMessage formatted = description.getFormattedMessage().clone();
+        if (!stripUnavailableItemDescriptionTranslation(formatted, descriptionKey)) {
+            return description;
+        }
+        return hasFormattedMessageText(formatted) ? new Message(formatted) : null;
+    }
+
+    private static boolean stripUnavailableItemDescriptionTranslation(
+            FormattedMessage message, String descriptionKey) {
+        if (message == null) {
+            return false;
+        }
+        boolean changed = false;
+        if (descriptionKey.equals(message.messageId)) {
+            message.messageId = null;
+            changed = true;
+        }
+        if (message.rawText != null) {
+            String filtered = stripDescriptionTranslationLines(message.rawText, descriptionKey);
+            if (!filtered.equals(message.rawText)) {
+                message.rawText = filtered;
+                changed = true;
+            }
+        }
+        if (message.children != null && message.children.length > 0) {
+            List<FormattedMessage> children = new ArrayList<>(message.children.length);
+            for (int i = 0; i < message.children.length; i++) {
+                FormattedMessage child = message.children[i];
+                if (isUnavailableItemDescriptionTranslation(child, descriptionKey)) {
+                    changed = true;
+                    if (!children.isEmpty() && isDescriptionSeparator(children.get(children.size() - 1))) {
+                        children.remove(children.size() - 1);
+                    }
+                    if (i + 1 < message.children.length && isDescriptionSeparator(message.children[i + 1])) {
+                        i++;
+                    }
+                    continue;
+                }
+                changed |= stripUnavailableItemDescriptionTranslation(child, descriptionKey);
+                children.add(child);
+            }
+            if (changed) {
+                message.children = children.toArray(FormattedMessage[]::new);
+            }
+        }
+        return changed;
+    }
+
+    private static boolean isUnavailableItemDescriptionTranslation(
+            FormattedMessage message, String descriptionKey) {
+        if (message == null) {
+            return false;
+        }
+        if (descriptionKey.equals(message.messageId)) {
+            return true;
+        }
+        return message.rawText != null
+                && message.rawText.replaceAll("<[^>]*>", "").trim().equals(descriptionKey)
+                && (message.children == null || message.children.length == 0);
+    }
+
+    private static String stripDescriptionTranslationLines(String text, String descriptionKey) {
+        StringBuilder cleaned = new StringBuilder();
+        for (String line : text.split("\\R", -1)) {
+            if (!line.replaceAll("<[^>]*>", "").trim().equals(descriptionKey)) {
+                appendCleanedLine(cleaned, line);
+            }
+        }
+        return cleaned.toString();
+    }
+
+    private static Message stripSocketReforgeTooltipBlocks(Message description) {
+        if (isMessageEmpty(description)) {
+            return null;
+        }
+        FormattedMessage formatted = description.getFormattedMessage().clone();
+        return stripManagedTooltipBlocks(formatted, false) ? new Message(formatted) : description;
+    }
+
+    private static Message stripManagedTooltipBlocks(Message description, boolean removeSimpleEnchantments) {
+        if (isMessageEmpty(description)) {
+            return null;
+        }
+        FormattedMessage formatted = description.getFormattedMessage().clone();
+        if (isSocketReforgeTooltipBlock(formatted) && !hasFormattedMessageId(formatted)) {
+            return null;
+        }
+        if (removeSimpleEnchantments && isSimpleEnchantmentsTooltipBlock(formatted)) {
+            return null;
+        }
+        if (!stripManagedTooltipBlocks(formatted, removeSimpleEnchantments)) {
+            return description;
+        }
+        return hasFormattedMessageText(formatted) ? new Message(formatted) : null;
+    }
+
+    private static boolean stripManagedTooltipBlocks(FormattedMessage message, boolean removeSimpleEnchantments) {
+        if (message == null) {
+            return false;
+        }
+        boolean changed = false;
+        if (message.children != null && message.children.length > 0) {
+            List<FormattedMessage> children = new ArrayList<>(message.children.length);
+            for (int i = 0; i < message.children.length; i++) {
+                FormattedMessage child = message.children[i];
+                if (removeSimpleEnchantments && isTruncatedSimpleEnchantmentsMessage(child)) {
+                    changed = true;
+                    continue;
+                }
+                if (isDescriptionSeparator(child)
+                        && i + 1 < message.children.length
+                        && (isSocketReforgeTooltipBlock(message.children[i + 1])
+                                || removeSimpleEnchantments
+                                        && isSimpleEnchantmentsTooltipBlock(message.children[i + 1]))) {
+                    changed = true;
+                    i++;
+                    continue;
+                }
+                changed |= stripManagedTooltipBlocks(child, removeSimpleEnchantments);
+                children.add(child);
+            }
+            if (changed) {
+                message.children = children.toArray(FormattedMessage[]::new);
+            }
+        }
+        if (message.rawText != null) {
+            String filtered = stripGeneratedTooltipLines(message.rawText, removeSimpleEnchantments);
+            if (!filtered.equals(message.rawText)) {
+                message.rawText = filtered;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static boolean isDescriptionSeparator(FormattedMessage message) {
+        return message != null
+                && "\n\n".equals(message.rawText)
+                && (message.messageId == null || message.messageId.isBlank())
+                && (message.children == null || message.children.length == 0);
+    }
+
+    private static boolean isSocketReforgeTooltipBlock(FormattedMessage message) {
+        if (message == null) {
+            return false;
+        }
+        String text = flattenFormattedRawText(message);
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String firstLine = text.lines().map(String::trim).filter(line -> !line.isEmpty()).findFirst().orElse("");
+        return isSocketReforgeGeneratedLabel(firstLine);
+    }
+
+    private static boolean isSimpleEnchantmentsTooltipBlock(FormattedMessage message) {
+        FormattedMessage firstPart = findFirstTextPart(message);
+        if (firstPart == null) {
+            return false;
+        }
+        String messageId = firstPart.messageId;
+        if (messageId != null && (messageId.equals(SIMPLE_ENCHANTMENTS_TOOLTIP_KEY)
+                || messageId.endsWith("." + SIMPLE_ENCHANTMENTS_TOOLTIP_KEY))) {
+            return true;
+        }
+        return firstPart.rawText != null && isForeignTooltipHeader(firstPart.rawText.trim());
+    }
+
+    private static FormattedMessage findFirstTextPart(FormattedMessage message) {
+        if (message == null) {
+            return null;
+        }
+        if (message.messageId != null && !message.messageId.isBlank()) {
+            return message;
+        }
+        if (message.rawText != null && !message.rawText.isBlank()) {
+            return message;
+        }
+        if (message.children != null) {
+            for (FormattedMessage child : message.children) {
+                FormattedMessage first = findFirstTextPart(child);
+                if (first != null) {
+                    return first;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String flattenFormattedRawText(FormattedMessage message) {
+        StringBuilder text = new StringBuilder();
+        appendFormattedRawText(text, message);
+        return text.toString();
+    }
+
+    private static void appendFormattedRawText(StringBuilder text, FormattedMessage message) {
+        if (message == null) {
+            return;
+        }
+        if (message.rawText != null) {
+            text.append(message.rawText);
+        }
+        if (message.children != null) {
+            for (FormattedMessage child : message.children) {
+                appendFormattedRawText(text, child);
+            }
+        }
+    }
+
+    private static boolean hasFormattedMessageText(FormattedMessage message) {
+        if (message == null) {
+            return false;
+        }
+        if ((message.rawText != null && !message.rawText.isBlank())
+                || (message.messageId != null && !message.messageId.isBlank())) {
+            return true;
+        }
+        if (message.children != null) {
+            for (FormattedMessage child : message.children) {
+                if (hasFormattedMessageText(child)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTruncatedSimpleEnchantmentsMessage(FormattedMessage message) {
+        return message != null
+                && !hasFormattedMessageId(message)
+                && isTruncatedSimpleEnchantmentsLine(flattenFormattedRawText(message));
+    }
+
+    private static boolean hasFormattedMessageId(FormattedMessage message) {
+        if (message == null) {
+            return false;
+        }
+        if (message.messageId != null && !message.messageId.isBlank()) {
+            return true;
+        }
+        if (message.children != null) {
+            for (FormattedMessage child : message.children) {
+                if (hasFormattedMessageId(child)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String stripGeneratedTooltipLines(String text, boolean removeSimpleEnchantments) {
+        if (text == null || text.isEmpty()) {
+            return text == null ? "" : text;
+        }
+        String[] lines = text.split("\\R", -1);
+        StringBuilder cleaned = new StringBuilder();
+        boolean strippingGeneratedBlock = false;
+        boolean strippingSimpleEnchantmentsBlock = false;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (removeSimpleEnchantments && isForeignTooltipHeader(trimmed)) {
+                strippingSimpleEnchantmentsBlock = true;
+                continue;
+            }
+            if (strippingSimpleEnchantmentsBlock) {
+                if (trimmed.isEmpty()) {
+                    strippingSimpleEnchantmentsBlock = false;
+                    continue;
+                }
+                if (!isSocketReforgeGeneratedLabel(trimmed)) {
+                    continue;
+                }
+                strippingSimpleEnchantmentsBlock = false;
+            }
+            if (removeSimpleEnchantments && isTruncatedSimpleEnchantmentsLine(trimmed)) {
+                continue;
+            }
+            if (isSocketReforgeGeneratedLabel(trimmed)) {
+                strippingGeneratedBlock = true;
+                continue;
+            }
+            if (strippingGeneratedBlock) {
+                if (trimmed.isEmpty()) {
+                    strippingGeneratedBlock = false;
+                } else {
+                    continue;
+                }
+            }
+            appendCleanedLine(cleaned, line);
+        }
+        return cleaned.toString();
+    }
+
+    private static boolean isTruncatedSimpleEnchantmentsLine(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        String visibleLine = line.replaceAll("<[^>]*>", "").trim();
+        return visibleLine.matches("^[\\p{P}\\p{S}]+\\s+(?i:IX|IV|V?I{1,3}|X)$");
+    }
+
+    private static Method getSimpleEnchantmentsApplyMethod() {
+        Method applyMethod = simpleEnchantmentsApplyMethod;
+        if (applyMethod != null || simpleEnchantmentsApplyLookupAttempted) {
+            return applyMethod;
+        }
+        synchronized (SIMPLE_ENCHANTMENTS_LOOKUP_LOCK) {
+            if (simpleEnchantmentsApplyMethod != null || simpleEnchantmentsApplyLookupAttempted) {
+                return simpleEnchantmentsApplyMethod;
+            }
+            ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+            ClassLoader pluginLoader = DynamicTooltipUtils.class.getClassLoader();
+            ClassLoader[] loaders = contextLoader == pluginLoader
+                    ? new ClassLoader[]{pluginLoader}
+                    : new ClassLoader[]{contextLoader, pluginLoader};
+            for (ClassLoader loader : loaders) {
+                if (loader == null) {
+                    continue;
+                }
+                try {
+                    Class<?> managerClass = Class.forName(
+                            SIMPLE_ENCHANTMENTS_MANAGER_CLASS, true, loader);
+                    simpleEnchantmentsApplyMethod = managerClass.getMethod("apply", ItemStack.class);
+                    break;
+                } catch (ReflectiveOperationException | LinkageError e) {
+                    if (debugMode) {
+                        logger.warn("Could not resolve SimpleEnchantments tooltip integration: " + e.getMessage());
+                    }
+                }
+            }
+            simpleEnchantmentsApplyLookupAttempted = true;
+            return simpleEnchantmentsApplyMethod;
+        }
+    }
+
+    private static ItemStack applySimpleEnchantmentsTooltip(ItemStack item, Method applyMethod) {
+        try {
+            Object refreshed = applyMethod.invoke(null, item);
+            return refreshed instanceof ItemStack stack ? stack : null;
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
+            if (debugMode) {
+                logger.warn("Could not refresh SimpleEnchantments tooltip: " + e.getMessage());
+            }
+            return null;
+        }
     }
 
     private static void refreshPlayer(PlayerRef playerRef) {
@@ -3213,13 +3689,29 @@ public class DynamicTooltipUtils {
         String[] lines = text.split("\\R", -1);
         StringBuilder cleaned = new StringBuilder();
         boolean strippingSocketBlock = false;
+        boolean preservingForeignTooltipBlock = false;
 
         for (String line : lines) {
             String trimmed = line.trim();
             if (isForeignTooltipHeader(trimmed)) {
                 strippingSocketBlock = false;
+                preservingForeignTooltipBlock = true;
                 appendCleanedLine(cleaned, line);
                 continue;
+            }
+            if (preservingForeignTooltipBlock) {
+                if (trimmed.isEmpty()) {
+                    preservingForeignTooltipBlock = false;
+                    appendCleanedLine(cleaned, line);
+                    continue;
+                }
+                // Enchantment entries can be colored too. Preserve those rows, while still
+                // allowing a following SocketReforge section to be recognized and removed.
+                if (!isSocketReforgeGeneratedLabel(trimmed)) {
+                    appendCleanedLine(cleaned, line);
+                    continue;
+                }
+                preservingForeignTooltipBlock = false;
             }
             if (isSocketReforgeGeneratedStart(trimmed)) {
                 strippingSocketBlock = true;
@@ -3299,9 +3791,6 @@ public class DynamicTooltipUtils {
         if (text == null) {
             return false;
         }
-        if (text.contains("<color") || text.contains("</color>")) {
-            return true;
-        }
         String[] lines = text.split("\\R", -1);
         for (String line : lines) {
             if (isSocketReforgeGeneratedStart(line.trim())) {
@@ -3333,32 +3822,61 @@ public class DynamicTooltipUtils {
     }
 
     private static boolean isForeignTooltipHeader(String line) {
-        return "Enchantments:".equals(line);
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        String visibleLine = line.replaceAll("<[^>]*>", "").trim();
+        if (startsWithTooltipLabel(visibleLine, "Enchantments:")) {
+            return true;
+        }
+        String fallbackLanguage = LangLoader.getFallbackLanguage();
+        if (startsWithTooltipLabel(visibleLine, tr(fallbackLanguage, SIMPLE_ENCHANTMENTS_TOOLTIP_KEY, "Enchantments:"))) {
+            return true;
+        }
+        for (String langCode : LangLoader.getLoadedLanguages()) {
+            if (startsWithTooltipLabel(visibleLine, tr(langCode, SIMPLE_ENCHANTMENTS_TOOLTIP_KEY, "Enchantments:"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isSocketReforgeGeneratedStart(String line) {
+        return isSocketReforgeGeneratedLabel(line);
+    }
+
+    private static boolean isSocketReforgeGeneratedLabel(String line) {
         if (line == null || line.isEmpty()) {
             return false;
         }
-        if (line.contains("<color") || line.contains("</color>")) {
-            return true;
+        String visibleLine = line.replaceAll("<[^>]*>", "").trim();
+        return visibleLine.startsWith("Damage:")
+                || visibleLine.startsWith("Damage :")
+                || visibleLine.startsWith("Refine Grade:")
+                || visibleLine.startsWith("Softcore Wear:")
+                || visibleLine.startsWith("Sockets:")
+                || visibleLine.startsWith("Lore Sockets:")
+                || visibleLine.startsWith("Lore:")
+                || visibleLine.startsWith("Resonance:")
+                || visibleLine.startsWith("Quality:")
+                || visibleLine.startsWith("Type:")
+                || visibleLine.startsWith("Recipe:")
+                || visibleLine.startsWith("Recipe :")
+                || visibleLine.startsWith("Usages:")
+                || isAscensionTierTooltipLine(visibleLine)
+                || startsWithLocalizedTooltipLabel(visibleLine)
+                || startsWithSoftcoreWearLine(visibleLine)
+                || startsWithEssenceTier(visibleLine);
+    }
+
+    private static boolean isAscensionTierTooltipLine(String line) {
+        if (line == null) {
+            return false;
         }
-        return line.startsWith("Damage:")
-                || line.startsWith("Damage :")
-                || line.startsWith("Refine Grade:")
-                || line.startsWith("Softcore Wear:")
-                || line.startsWith("Sockets:")
-                || line.startsWith("Lore Sockets:")
-                || line.startsWith("Lore:")
-                || line.startsWith("Resonance:")
-                || line.startsWith("Quality:")
-                || line.startsWith("Type:")
-                || line.startsWith("Recipe:")
-                || line.startsWith("Recipe :")
-                || line.startsWith("Usages:")
-                || startsWithLocalizedTooltipLabel(line)
-                || startsWithSoftcoreWearLine(line)
-                || startsWithEssenceTier(line);
+        String normalized = line.replaceAll("<[^>]*>", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        return normalized.matches("(?i)\\[\\s*TIER\\s+\\d+\\s*\\]");
     }
 
     private static boolean startsWithLocalizedTooltipLabel(String line) {
@@ -3376,7 +3894,12 @@ public class DynamicTooltipUtils {
                 || startsWithLocalizedTooltipLabel(line, "tooltip.type_label", "Type")
                 || startsWithLocalizedTooltipLabel(line, "tooltip.recipe_label", "Recipe")
                 || startsWithLocalizedTooltipLabel(line, "tooltip.usages_label", "Usages")
-                || startsWithLocalizedTooltipLabel(line, "tooltip.parts_label", "Parts");
+                || startsWithLocalizedTooltipLabel(line, "tooltip.parts_label", "Parts")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.abyss_tempered", "Abyss Tempered")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.abyss_crafted", "Abyss Crafted")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.corruption_resonance_label", "Abyss Resonance")
+                || startsWithLocalizedTooltipLabel(line, "tooltip.smithy_legacy_label", "Smithy Legacy")
+                || startsWithLocalizedTooltipLabel(line, "ui.lore_socket.materials_runes", "Ability Runestones");
     }
 
     private static boolean startsWithLocalizedTooltipLabel(String line, String key, String fallback) {
