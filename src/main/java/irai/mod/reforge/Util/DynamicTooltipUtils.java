@@ -46,6 +46,7 @@ import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketData;
@@ -130,6 +131,8 @@ public class DynamicTooltipUtils {
     private static final String META_LORE_SOCKET_SPIRITS = "SocketReforge.Lore.Socket.Spirits";
     private static final String META_LORE_SOCKET_LEVELS = "SocketReforge.Lore.Socket.Levels";
     private static final String META_LORE_SOCKET_FEED_TIERS = "SocketReforge.Lore.Socket.FeedTiers";
+    private static final String META_LORE_SOCKET_RUNE_DAMAGE_FEEDS = "SocketReforge.Lore.Socket.RuneDamageFeeds";
+    private static final String META_LORE_SOCKET_RUNE_MANA_FEEDS = "SocketReforge.Lore.Socket.RuneManaFeeds";
     private static final String META_LORE_SOCKET_COLORS = "SocketReforge.Lore.Socket.Colors";
     private static final String META_LORE_SOCKET_LOCKED = "SocketReforge.Lore.Socket.Locked";
     private static final String META_LORE_SOCKET_EFFECTS = "SocketReforge.Lore.Socket.Effects";
@@ -1002,6 +1005,8 @@ public class DynamicTooltipUtils {
         String[] loreEffects = extractLoreSocketEffects(metadata);
         int[] loreLevels = extractLoreSocketLevels(metadata);
         int[] loreFeedTiers = extractLoreSocketFeedTiers(metadata);
+        int[] loreRuneDamageFeeds = extractLoreSocketRuneDamageFeeds(metadata);
+        int[] loreRuneManaFeeds = extractLoreSocketRuneManaFeeds(metadata);
         int[] loreLocked = extractLoreSocketLocked(metadata);
         int loreCount = maxArrayLength(loreEntries, loreColors, loreSpirits, loreEffects, loreLevels, loreFeedTiers, loreLocked);
         if (loreRunes != null) {
@@ -1009,6 +1014,12 @@ public class DynamicTooltipUtils {
         }
         if (loreMax > loreCount) {
             loreCount = loreMax;
+        }
+        if (loreRuneDamageFeeds != null) {
+            loreCount = Math.max(loreCount, loreRuneDamageFeeds.length);
+        }
+        if (loreRuneManaFeeds != null) {
+            loreCount = Math.max(loreCount, loreRuneManaFeeds.length);
         }
 
         if (loreCount > 0) {
@@ -1057,8 +1068,14 @@ public class DynamicTooltipUtils {
                     continue;
                 }
                 if (hasRune) {
+                    int damageFeeds = loreRuneDamageFeeds != null && i < loreRuneDamageFeeds.length
+                            ? Math.max(0, loreRuneDamageFeeds[i]) : 0;
+                    int manaFeeds = loreRuneManaFeeds != null && i < loreRuneManaFeeds.length
+                            ? Math.max(0, loreRuneManaFeeds[i]) : 0;
+                    String runestoneName = localizeLoreRunestoneName(runeId, langCode);
                     tooltipLines.add(COLOR_PURPLE + runestoneLabel + ": " + COLOR_WHITE
-                            + localizeLoreRunestoneName(runeId, langCode));
+                            + tr(langCode, "tooltip.rune_delta_level", "{0} Lv.{1}", runestoneName,
+                                    LoreSocketManager.getRuneUpgradeLevel(damageFeeds, manaFeeds)));
                     continue;
                 }
                 if (!hasSpirit && hasEntry) {
@@ -1930,6 +1947,16 @@ public class DynamicTooltipUtils {
 
     private static int[] extractLoreSocketFeedTiers(String metadata) {
         int[] values = extractIntArray(metadata, META_LORE_SOCKET_FEED_TIERS);
+        return values == null ? new int[0] : values;
+    }
+
+    private static int[] extractLoreSocketRuneDamageFeeds(String metadata) {
+        int[] values = extractIntArray(metadata, META_LORE_SOCKET_RUNE_DAMAGE_FEEDS);
+        return values == null ? new int[0] : values;
+    }
+
+    private static int[] extractLoreSocketRuneManaFeeds(String metadata) {
+        int[] values = extractIntArray(metadata, META_LORE_SOCKET_RUNE_MANA_FEEDS);
         return values == null ? new int[0] : values;
     }
 

@@ -17,6 +17,8 @@ public final class LoreSocketData {
         private int level;
         private int xp;
         private int feedTier;
+        private int runeDamageFeeds;
+        private int runeManaFeeds;
         private boolean locked;
 
         private LoreSocket(int slotIndex) {
@@ -89,6 +91,26 @@ public final class LoreSocketData {
 
         public void setFeedTier(int feedTier) {
             this.feedTier = Math.max(0, feedTier);
+        }
+
+        public int getRuneDamageFeeds() {
+            return runeDamageFeeds;
+        }
+
+        public void setRuneDamageFeeds(int runeDamageFeeds) {
+            this.runeDamageFeeds = Math.max(0, runeDamageFeeds);
+        }
+
+        public int getRuneManaFeeds() {
+            return runeManaFeeds;
+        }
+
+        public void setRuneManaFeeds(int runeManaFeeds) {
+            this.runeManaFeeds = Math.max(0, runeManaFeeds);
+        }
+
+        public int getRuneFeedsUsed() {
+            return runeDamageFeeds + runeManaFeeds;
         }
 
         public boolean isLocked() {

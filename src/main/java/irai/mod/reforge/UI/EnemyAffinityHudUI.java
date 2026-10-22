@@ -37,7 +37,7 @@ public final class EnemyAffinityHudUI {
     private static final String HUD_KEY = "socket_reforge_enemy_affinity";
     private static final String HUD_DOCUMENT = "Hud/EnemyAffinityHud.ui";
     private static final long DISPLAY_DURATION_NANOS = 5_000_000_000L;
-    private static final long REFRESH_INTERVAL_MILLIS = 250L;
+    private static final long REFRESH_INTERVAL_MILLIS = 1000L;
     private static final DecimalFormat NUMBER_FORMAT =
             new DecimalFormat("0.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
     private static final DecimalFormat PERCENT_FORMAT =

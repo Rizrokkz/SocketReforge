@@ -51,6 +51,8 @@ public final class MetadataKeys {
     public static final String LORE_SOCKET_LOCKED = "SocketReforge.Lore.Socket.Locked";
     public static final String LORE_SOCKET_EFFECTS = "SocketReforge.Lore.Socket.Effects";
     public static final String LORE_SOCKET_RUNES = "SocketReforge.Lore.Socket.Runes";
+    public static final String LORE_SOCKET_RUNE_DAMAGE_FEEDS = "SocketReforge.Lore.Socket.RuneDamageFeeds";
+    public static final String LORE_SOCKET_RUNE_MANA_FEEDS = "SocketReforge.Lore.Socket.RuneManaFeeds";
 
     // Loot tracking
     public static final String LOOT_ROLLED = "SocketReforge.Loot.Rolled";

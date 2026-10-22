@@ -31,7 +31,14 @@ import irai.mod.reforge.Util.MetadataKeys;
  * Helpers for reading/writing lore socket metadata and leveling.
  */
 public final class LoreSocketManager {
+    public static final String RUNE_DAMAGE_FEED_ITEM_ID = "Ingredient_Gobliterator_Core";
+    public static final String RUNE_MANA_FEED_ITEM_ID = "Ingredient_Enkindled_Resource";
+    private static final float RUNE_DAMAGE_BONUS_PER_FEED = 0.10f;
+    private static final float RUNE_MANA_REDUCTION_PER_FEED = 0.05f;
+    private static final float MIN_RUNE_MANA_COST_MULTIPLIER = 0.40f;
     private static LoreConfig config = new LoreConfig();
+
+    public record SocketedRunestone(String itemId, int slotIndex, int damageFeeds, int manaFeeds) {}
     private static final String[] LORE_WEAPON_EXCLUDE_TOKENS = {
             "shield",
             "buckler",
@@ -141,9 +148,12 @@ public final class LoreSocketManager {
         int[] levels = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_LEVELS, Codec.INT_ARRAY);
         int[] xp = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_XP, Codec.INT_ARRAY);
         int[] feedTiers = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_FEED_TIERS, Codec.INT_ARRAY);
+        int[] runeDamageFeeds = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_RUNE_DAMAGE_FEEDS, Codec.INT_ARRAY);
+        int[] runeManaFeeds = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_RUNE_MANA_FEEDS, Codec.INT_ARRAY);
         int[] locked = item.getFromMetadataOrNull(MetadataKeys.LORE_SOCKET_LOCKED, Codec.INT_ARRAY);
 
-        int count = maxArrayLength(values, runes, colors, spirits, effects, levels, xp, feedTiers, locked);
+        int count = maxArrayLength(values, runes, colors, spirits, effects, levels, xp, feedTiers,
+                runeDamageFeeds, runeManaFeeds, locked);
         int maxSockets = maxFromMeta != null ? Math.max(0, maxFromMeta) : Math.max(0, count);
         int socketCount = Math.max(count, maxSockets);
         if (socketCount == 0) {
@@ -163,6 +173,8 @@ public final class LoreSocketManager {
             socket.setLevel(getInt(levels, i));
             socket.setXp(getInt(xp, i));
             socket.setFeedTier(getInt(feedTiers, i));
+            socket.setRuneDamageFeeds(getInt(runeDamageFeeds, i));
+            socket.setRuneManaFeeds(getInt(runeManaFeeds, i));
             socket.setLocked(getBool(locked, i));
         }
         return data;
@@ -185,6 +197,8 @@ public final class LoreSocketManager {
                     .withMetadata(MetadataKeys.LORE_SOCKET_LEVELS, Codec.INT_ARRAY, new int[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_XP, Codec.INT_ARRAY, new int[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_FEED_TIERS, Codec.INT_ARRAY, new int[0])
+                    .withMetadata(MetadataKeys.LORE_SOCKET_RUNE_DAMAGE_FEEDS, Codec.INT_ARRAY, new int[0])
+                    .withMetadata(MetadataKeys.LORE_SOCKET_RUNE_MANA_FEEDS, Codec.INT_ARRAY, new int[0])
                     .withMetadata(MetadataKeys.LORE_SOCKET_LOCKED, Codec.INT_ARRAY, new int[0]);
         }
 
@@ -204,6 +218,8 @@ public final class LoreSocketManager {
         int[] levels = new int[socketCount];
         int[] xp = new int[socketCount];
         int[] feedTiers = new int[socketCount];
+        int[] runeDamageFeeds = new int[socketCount];
+        int[] runeManaFeeds = new int[socketCount];
         int[] locked = new int[socketCount];
 
         for (int i = 0; i < socketCount; i++) {
@@ -216,6 +232,8 @@ public final class LoreSocketManager {
             levels[i] = Math.max(0, socket.getLevel());
             xp[i] = Math.max(0, socket.getXp());
             feedTiers[i] = Math.max(0, socket.getFeedTier());
+            runeDamageFeeds[i] = Math.max(0, socket.getRuneDamageFeeds());
+            runeManaFeeds[i] = Math.max(0, socket.getRuneManaFeeds());
             locked[i] = socket.isLocked() ? 1 : 0;
         }
 
@@ -229,6 +247,8 @@ public final class LoreSocketManager {
                 .withMetadata(MetadataKeys.LORE_SOCKET_LEVELS, Codec.INT_ARRAY, levels)
                 .withMetadata(MetadataKeys.LORE_SOCKET_XP, Codec.INT_ARRAY, xp)
                 .withMetadata(MetadataKeys.LORE_SOCKET_FEED_TIERS, Codec.INT_ARRAY, feedTiers)
+                .withMetadata(MetadataKeys.LORE_SOCKET_RUNE_DAMAGE_FEEDS, Codec.INT_ARRAY, runeDamageFeeds)
+                .withMetadata(MetadataKeys.LORE_SOCKET_RUNE_MANA_FEEDS, Codec.INT_ARRAY, runeManaFeeds)
                 .withMetadata(MetadataKeys.LORE_SOCKET_LOCKED, Codec.INT_ARRAY, locked);
     }
 
@@ -645,6 +665,66 @@ public final class LoreSocketManager {
         return true;
     }
 
+    public static int getMaxRuneFeedThresholds() {
+        int maxLevel = Math.max(1, config.getMaxLevel());
+        int interval = Math.max(1, config.getFeedInterval());
+        return Math.max(0, (maxLevel - 1) / interval);
+    }
+
+    public static boolean needsRuneFeed(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasRune()
+                && socket.getRuneFeedsUsed() < getMaxRuneFeedThresholds();
+    }
+
+    public static boolean tryFeedRune(Player player,
+                                      LoreSocketData.LoreSocket socket,
+                                      String feedItemId) {
+        if (player == null || socket == null || !needsRuneFeed(socket)) {
+            return false;
+        }
+        boolean damageFeed = matchesAnyId(feedItemId, new String[]{RUNE_DAMAGE_FEED_ITEM_ID});
+        boolean manaFeed = matchesAnyId(feedItemId, new String[]{RUNE_MANA_FEED_ITEM_ID});
+        if ((!damageFeed && !manaFeed)
+                || !consumeFromInventory(player, new String[]{feedItemId}, 1)) {
+            return false;
+        }
+        if (damageFeed) {
+            socket.setRuneDamageFeeds(socket.getRuneDamageFeeds() + 1);
+        } else {
+            socket.setRuneManaFeeds(socket.getRuneManaFeeds() + 1);
+        }
+        return true;
+    }
+
+    public static int getRuneDamageBonusPercent(int feeds) {
+        return Math.max(0, Math.min(getMaxRuneFeedThresholds(), feeds))
+                * Math.round(RUNE_DAMAGE_BONUS_PER_FEED * 100f);
+    }
+
+    public static int getRuneManaCostReductionPercent(int feeds) {
+        return Math.max(0, Math.min(getMaxRuneFeedThresholds(), feeds))
+                * Math.round(RUNE_MANA_REDUCTION_PER_FEED * 100f);
+    }
+
+    public static int getRuneUpgradeLevel(LoreSocketData.LoreSocket socket) {
+        return socket == null ? 0 : getRuneUpgradeLevel(socket.getRuneDamageFeeds(), socket.getRuneManaFeeds());
+    }
+
+    public static int getRuneUpgradeLevel(int damageFeeds, int manaFeeds) {
+        long totalFeeds = (long) Math.max(0, damageFeeds) + Math.max(0, manaFeeds);
+        return (int) Math.min(getMaxRuneFeedThresholds(), totalFeeds);
+    }
+
+    public static float getRuneDamageMultiplier(int feeds) {
+        int tier = Math.max(0, Math.min(getMaxRuneFeedThresholds(), feeds));
+        return 1.0f + (RUNE_DAMAGE_BONUS_PER_FEED * tier);
+    }
+
+    public static float getRuneManaCostMultiplier(int feeds) {
+        int tier = Math.max(0, Math.min(getMaxRuneFeedThresholds(), feeds));
+        return Math.max(MIN_RUNE_MANA_COST_MULTIPLIER, 1.0f - (RUNE_MANA_REDUCTION_PER_FEED * tier));
+    }
+
     private static String[] feedItemIdsExcludingClearItems() {
         String[] feedIds = config.getFeedItemIds();
         if (feedIds == null || feedIds.length == 0) {
@@ -719,6 +799,8 @@ public final class LoreSocketManager {
         socket.setLevel(0);
         socket.setXp(0);
         socket.setFeedTier(0);
+        socket.setRuneDamageFeeds(0);
+        socket.setRuneManaFeeds(0);
         socket.setLocked(false);
     }
 
@@ -887,7 +969,7 @@ public final class LoreSocketManager {
         return rootId != null && !rootId.isBlank();
     }
 
-    public static List<String> getSocketedRunestoneIds(ItemStack item) {
+    public static List<SocketedRunestone> getSocketedRunestones(ItemStack item) {
         if (!isRuneDeltaActive(item)) {
             return List.of();
         }
@@ -895,7 +977,7 @@ public final class LoreSocketManager {
         if (data == null) {
             return List.of();
         }
-        List<String> runes = new ArrayList<>();
+        List<SocketedRunestone> runes = new ArrayList<>();
         for (int i = 0; i < data.getSocketCount(); i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
             if (socket == null || !socket.hasRune()) {
@@ -903,14 +985,22 @@ public final class LoreSocketManager {
             }
             String runeId = socket.getRuneItemId();
             if (isAbilityRunestone(new ItemStack(runeId, 1))) {
-                runes.add(runeId);
+                runes.add(new SocketedRunestone(
+                        runeId,
+                        i,
+                        socket.getRuneDamageFeeds(),
+                        socket.getRuneManaFeeds()));
             }
         }
         return runes;
     }
 
+    public static List<String> getSocketedRunestoneIds(ItemStack item) {
+        return getSocketedRunestones(item).stream().map(SocketedRunestone::itemId).toList();
+    }
+
     private static int maxArrayLength(String[] a, String[] b, String[] c, String[] d, String[] e,
-                                      int[] f, int[] g, int[] h, int[] i) {
+                                      int[] f, int[] g, int[] h, int[] i, int[] j, int[] k) {
         int max = 0;
         if (a != null) max = Math.max(max, a.length);
         if (b != null) max = Math.max(max, b.length);
@@ -921,6 +1011,8 @@ public final class LoreSocketManager {
         if (g != null) max = Math.max(max, g.length);
         if (h != null) max = Math.max(max, h.length);
         if (i != null) max = Math.max(max, i.length);
+        if (j != null) max = Math.max(max, j.length);
+        if (k != null) max = Math.max(max, k.length);
         return max;
     }
 }

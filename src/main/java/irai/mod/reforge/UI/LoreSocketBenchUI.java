@@ -252,11 +252,16 @@ public final class LoreSocketBenchUI {
         if (itemId == null || itemId.isBlank()) {
             return false;
         }
-        if (itemId.equalsIgnoreCase(SUPPORT_REROLL_ITEM_ID)) {
+        if (itemId.equalsIgnoreCase(SUPPORT_REROLL_ITEM_ID) || isRuneFeedItem(itemId)) {
             return true;
         }
         return matchesAnyId(itemId, LoreSocketManager.getConfig().getFeedItemIds())
                 || matchesAnyId(itemId, LoreSocketManager.getConfig().getClearItemIds());
+    }
+
+    private static boolean isRuneFeedItem(String itemId) {
+        return itemId != null && (itemId.equalsIgnoreCase(LoreSocketManager.RUNE_DAMAGE_FEED_ITEM_ID)
+                || itemId.equalsIgnoreCase(LoreSocketManager.RUNE_MANA_FEED_ITEM_ID));
     }
 
     private static boolean matchesAnyId(String itemId, String[] ids) {
@@ -533,12 +538,13 @@ public final class LoreSocketBenchUI {
         }
     }
 
-    private static String buildEquipmentSocketSummary(Player player, LoreSocketData data) {
+    private static String buildEquipmentSocketSummary(Player player, LoreSocketData data, boolean runeDelta) {
         if (data == null || data.getSocketCount() == 0) {
             return LangLoader.getUITranslation(player, "ui.lore_socket.metadata_no_sockets");
         }
         int filled = 0;
         int spirits = 0;
+        int runes = 0;
         int feedReady = 0;
         for (int i = 0; i < data.getSocketCount(); i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
@@ -551,12 +557,20 @@ public final class LoreSocketBenchUI {
             if (socket.hasSpirit()) {
                 spirits++;
             }
+            if (socket.hasRune()) {
+                runes++;
+            }
             if (socket.hasSpirit() && LoreSocketManager.needsFeed(socket)) {
+                feedReady++;
+            } else if (LoreSocketManager.needsRuneFeed(socket)) {
                 feedReady++;
             }
         }
-        return LangLoader.getUITranslation(player, "ui.lore_socket.card_summary",
-                data.getSocketCount(), filled, spirits, feedReady);
+        return runeDelta
+                ? LangLoader.getUITranslation(player, "ui.lore_socket.card_summary_runes",
+                        data.getSocketCount(), filled, runes, feedReady)
+                : LangLoader.getUITranslation(player, "ui.lore_socket.card_summary",
+                        data.getSocketCount(), filled, spirits, feedReady);
     }
 
     private static String buildMaterialsCardsHtml(Player player, Snapshot snapshot, SelectionState state, Entry selectedEquipment) {
@@ -758,7 +772,7 @@ public final class LoreSocketBenchUI {
         for (int i = 0; i < data.getSocketCount(); i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
             String key = String.valueOf(i);
-            String label = buildSlotLabel(player, socket, i + 1, gemColor);
+            String label = buildSlotLabel(player, socket, i + 1, gemColor, isRuneDeltaEquipment(equipment));
             sb.append("<option value=\"").append(key).append("\"");
             if (key.equals(selectedKey)) {
                 sb.append(" selected=\"true\"");
@@ -768,17 +782,21 @@ public final class LoreSocketBenchUI {
         return sb.toString();
     }
 
-    private static String buildSlotLabel(Player player, LoreSocketData.LoreSocket socket, int index, String gemColor) {
+    private static String buildSlotLabel(Player player,
+                                         LoreSocketData.LoreSocket socket,
+                                         int index,
+                                         String gemColor,
+                                         boolean runeDelta) {
         if (socket == null) {
             return LangLoader.getUITranslation(player, "ui.lore_socket.slot_unavailable", index);
         }
         String color = socket.getColor();
-        String colorLabel = displaySocketColor(player, socket);
+        String colorLabel = displaySocketColor(player, socket, runeDelta);
         String labelKey;
         if (socket.isLocked()) {
             labelKey = "ui.lore_socket.slot_locked";
         } else if (socket.isEmpty()) {
-            labelKey = "ui.lore_socket.slot_empty";
+            labelKey = runeDelta ? "ui.lore_socket.slot_empty_rune" : "ui.lore_socket.slot_empty";
         } else {
             labelKey = "ui.lore_socket.slot_filled";
         }
@@ -864,7 +882,8 @@ public final class LoreSocketBenchUI {
         if (socket == null) {
             return LangLoader.getUITranslation(player, "ui.lore_socket.slot_none_selected");
         }
-        return buildSlotLabel(player, socket, socket.getSlotIndex() + 1, null);
+        return buildSlotLabel(player, socket, socket.getSlotIndex() + 1, null,
+                isRuneDeltaEquipment(equipment));
     }
 
     private static String buildSelectedSlotSummaryHtml(Player player, Entry equipment, String slotKey) {
@@ -872,14 +891,14 @@ public final class LoreSocketBenchUI {
         if (socket == null) {
             return detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_click_slot"));
         }
-        return buildSlotDetailHtml(player, socket);
+        return buildSlotDetailHtml(player, socket, isRuneDeltaEquipment(equipment));
     }
 
-    private static String buildSlotDetailHtml(Player player, LoreSocketData.LoreSocket socket) {
+    private static String buildSlotDetailHtml(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
         if (socket == null) {
             return detailText(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_socket"));
         }
-        String color = displaySocketColor(player, socket);
+        String color = displaySocketColor(player, socket, runeDelta);
         StringBuilder sb = new StringBuilder();
         sb.append("<div style=\"anchor-width:860; layout-mode:top; spacing:5;\">")
                 .append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_socket_section")))
@@ -889,7 +908,15 @@ public final class LoreSocketBenchUI {
 
         if (socket.hasRune()) {
             sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")))
-                    .append(detailText(resolveRunestoneName(player, socket)));
+                    .append(detailText(formatRunestoneNameWithLevel(player, socket)));
+            if (socket.getRuneDamageFeeds() > 0) {
+                sb.append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.rune_damage_feed_bonus",
+                        LoreSocketManager.getRuneDamageBonusPercent(socket.getRuneDamageFeeds()))));
+            }
+            if (socket.getRuneManaFeeds() > 0) {
+                sb.append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.rune_mana_feed_bonus",
+                        LoreSocketManager.getRuneManaCostReductionPercent(socket.getRuneManaFeeds()))));
+            }
         } else if (socket.hasSpirit()) {
             String spiritName = localizeSpiritName(player, socket.getSpiritId());
             int needed = Math.max(1, LoreSocketManager.getXpRequiredForLevel(Math.max(1, socket.getLevel())));
@@ -916,6 +943,10 @@ public final class LoreSocketBenchUI {
                     sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_effect_label"), effect));
                 }
             }
+        } else if (runeDelta) {
+            sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")))
+                    .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_rune")))
+                    .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible_runes")));
         } else {
             sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_section")))
                     .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty")))
@@ -997,6 +1028,12 @@ public final class LoreSocketBenchUI {
                     ? LangLoader.getUITranslation(player, "ui.lore_socket.material_gem_desc")
                     : LangLoader.getUITranslation(player, "ui.lore_socket.material_gem_color_desc", color);
         }
+        if (entry.itemId != null && entry.itemId.equalsIgnoreCase(LoreSocketManager.RUNE_DAMAGE_FEED_ITEM_ID)) {
+            return LangLoader.getUITranslation(player, "ui.lore_socket.material_rune_damage_feed_desc");
+        }
+        if (entry.itemId != null && entry.itemId.equalsIgnoreCase(LoreSocketManager.RUNE_MANA_FEED_ITEM_ID)) {
+            return LangLoader.getUITranslation(player, "ui.lore_socket.material_rune_mana_feed_desc");
+        }
         MaterialKind kind = materialKind(entry);
         return switch (kind) {
             case FEED -> LangLoader.getUITranslation(player, "ui.lore_socket.material_feed_desc");
@@ -1008,6 +1045,14 @@ public final class LoreSocketBenchUI {
 
     private static String resolveProcessButtonLabel(Player player, Entry equipment, Entry gem, Entry support, String slotKey) {
         if (support != null) {
+            if (isRuneDeltaEquipment(equipment) && support.itemId != null
+                    && support.itemId.equalsIgnoreCase(LoreSocketManager.RUNE_DAMAGE_FEED_ITEM_ID)) {
+                return LangLoader.getUITranslation(player, "ui.lore_socket.process_rune_damage_feed_button");
+            }
+            if (isRuneDeltaEquipment(equipment) && support.itemId != null
+                    && support.itemId.equalsIgnoreCase(LoreSocketManager.RUNE_MANA_FEED_ITEM_ID)) {
+                return LangLoader.getUITranslation(player, "ui.lore_socket.process_rune_mana_feed_button");
+            }
             return switch (materialKind(support)) {
                 case FEED -> LangLoader.getUITranslation(player, "ui.lore_socket.process_feed_button");
                 case CLEAR -> LangLoader.getUITranslation(player, "ui.lore_socket.process_clear_button");
@@ -1041,7 +1086,8 @@ public final class LoreSocketBenchUI {
                 || matchesAnyId(entry.itemId, LoreSocketManager.getConfig().getClearItemIds())) {
             return MaterialKind.CLEAR;
         }
-        if (matchesAnyId(entry.itemId, LoreSocketManager.getConfig().getFeedItemIds())) {
+        if (isRuneFeedItem(entry.itemId)
+                || matchesAnyId(entry.itemId, LoreSocketManager.getConfig().getFeedItemIds())) {
             return MaterialKind.FEED;
         }
         return MaterialKind.UNKNOWN;
@@ -1299,12 +1345,24 @@ public final class LoreSocketBenchUI {
             lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_socket"));
             return lines;
         }
-        String color = displaySocketColor(player, socket);
+        boolean runeDelta = isRuneDeltaEquipment(equipment);
+        String color = displaySocketColor(player, socket, runeDelta);
         lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_slot", socket.getSlotIndex() + 1));
         lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_color", color));
         if (socket.hasRune()) {
             lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")
-                    + ": " + resolveRunestoneName(player, socket));
+                    + ": " + formatRunestoneNameWithLevel(player, socket));
+            if (socket.getRuneDamageFeeds() > 0) {
+                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_damage_feed_bonus",
+                        LoreSocketManager.getRuneDamageBonusPercent(socket.getRuneDamageFeeds())));
+            }
+            if (socket.getRuneManaFeeds() > 0) {
+                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_mana_feed_bonus",
+                        LoreSocketManager.getRuneManaCostReductionPercent(socket.getRuneManaFeeds())));
+            }
+            if (!LoreSocketManager.needsRuneFeed(socket)) {
+                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_feed_maxed"));
+            }
         } else if (socket.hasSpirit()) {
             String spiritName = localizeSpiritName(player, socket.getSpiritId());
             lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.spirit_label", spiritName));
@@ -1325,6 +1383,9 @@ public final class LoreSocketBenchUI {
                     lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.preview_effect", effect));
                 }
             }
+        } else if (runeDelta) {
+            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_rune"));
+            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible_runes"));
         } else {
             lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty"));
             lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible"));
@@ -1355,6 +1416,11 @@ public final class LoreSocketBenchUI {
 
     private static String resolveRunestoneName(Player player, LoreSocketData.LoreSocket socket) {
         return UIItemUtils.displayNameOrItemId(new ItemStack(socket.getRuneItemId(), 1), player);
+    }
+
+    private static String formatRunestoneNameWithLevel(Player player, LoreSocketData.LoreSocket socket) {
+        return LangLoader.getUITranslation(player, "ui.lore_socket.rune_level",
+                resolveRunestoneName(player, socket), LoreSocketManager.getRuneUpgradeLevel(socket));
     }
 
     private static String localizeSpiritName(Player player, String spiritId) {
@@ -1434,14 +1500,14 @@ public final class LoreSocketBenchUI {
         sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_header_sockets")).append("\n");
         for (int i = 0; i < data.getSocketCount(); i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
-            String state = socketStateLabel(player, socket);
+            String state = socketStateLabel(player, socket, isRuneDeltaEquipment(equipment));
             sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_socket_line", i + 1, state))
                     .append("\n");
         }
         return sb.toString().trim();
     }
 
-    private static String socketStateLabel(Player player, LoreSocketData.LoreSocket socket) {
+    private static String socketStateLabel(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
         if (socket == null) {
             return LangLoader.getUITranslation(player, "ui.lore_socket.socket_empty");
         }
@@ -1449,19 +1515,20 @@ public final class LoreSocketBenchUI {
         if (socket.isLocked()) {
             base = LangLoader.getUITranslation(player, "ui.lore_socket.socket_locked");
         } else if (socket.isEmpty()) {
-            base = LangLoader.getUITranslation(player, "ui.lore_socket.socket_empty");
+            base = LangLoader.getUITranslation(player,
+                    runeDelta ? "ui.lore_socket.slot_empty_rune_state" : "ui.lore_socket.socket_empty");
         } else {
             base = LangLoader.getUITranslation(player, "ui.lore_socket.socket_filled");
         }
-        String color = displaySocketColor(player, socket);
+        String color = displaySocketColor(player, socket, runeDelta);
         return base + " (" + color + ")";
     }
 
-    private static String displaySocketColor(Player player, LoreSocketData.LoreSocket socket) {
+    private static String displaySocketColor(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
         if (socket != null && socket.getColor() != null && !socket.getColor().isBlank()) {
             return socket.getColor();
         }
-        return socket != null && socket.hasRune()
+        return runeDelta || (socket != null && socket.hasRune())
                 ? LangLoader.getUITranslation(player, "ui.lore_socket.colorless")
                 : LangLoader.getUITranslation(player, "ui.lore_socket.color_unknown");
     }
@@ -1501,6 +1568,9 @@ public final class LoreSocketBenchUI {
         if (support != null && support.item != null && !support.item.isEmpty()) {
             MaterialKind kind = materialKind(support);
             if (kind == MaterialKind.FEED) {
+                if (runeDelta && isRuneFeedItem(support.itemId)) {
+                    return processRuneFeed(player, equipment, slotKey, support.itemId);
+                }
                 return processFeed(player, equipment, slotKey);
             }
             if (kind == MaterialKind.CLEAR) {
@@ -1589,6 +1659,8 @@ public final class LoreSocketBenchUI {
             }
             socket.setRuneItemId(gem.itemId);
             socket.setColor("");
+            socket.setRuneDamageFeeds(0);
+            socket.setRuneManaFeeds(0);
             saveEquipment(player, equipment, data);
 
             ItemContainer runeContainer = getContainer(player, gem.kind);
@@ -1627,6 +1699,8 @@ public final class LoreSocketBenchUI {
         }
 
         socket.setGemItemId(gem.itemId);
+        socket.setRuneDamageFeeds(0);
+        socket.setRuneManaFeeds(0);
         if (socketColor == null || socketColor.isBlank()) {
             socket.setColor(gemColor.toLowerCase(Locale.ROOT));
         }
@@ -1666,6 +1740,82 @@ public final class LoreSocketBenchUI {
         }
         saveEquipment(player, equipment, data);
         return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_done"));
+    }
+
+    private static ProcessResult processRuneFeed(Player player, Entry equipment, String slotKey, String feedItemId) {
+        if (player == null) {
+            return new ProcessResult("Player not found.");
+        }
+        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_equipment"));
+        }
+        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
+        if (!LoreSocketManager.isRuneDeltaActive(equipmentItem)) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_requires_delta"));
+        }
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
+        int slotIndex = resolveRuneFeedSlotIndex(data, slotKey);
+        if (slotIndex < 0 || data == null || slotIndex >= data.getSocketCount()) {
+            if (data != null && (slotKey == null || slotKey.isBlank() || "auto".equalsIgnoreCase(slotKey))) {
+                for (int i = 0; i < data.getSocketCount(); i++) {
+                    LoreSocketData.LoreSocket candidate = data.getSocket(i);
+                    if (candidate != null && candidate.hasRune()) {
+                        return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_maxed"));
+                    }
+                }
+            }
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (socket == null || !socket.hasRune()) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_no_rune"));
+        }
+        if (!LoreSocketManager.needsRuneFeed(socket)) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_maxed"));
+        }
+        if (!LoreSocketManager.tryFeedRune(player, socket, feedItemId)) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_no_material"));
+        }
+        saveEquipment(player, equipment, data);
+        return new ProcessResult(formatRuneFeedStatus(player, socket));
+    }
+
+    private static String formatRuneFeedStatus(Player player, LoreSocketData.LoreSocket socket) {
+        int level = LoreSocketManager.getRuneUpgradeLevel(socket);
+        int damageFeeds = socket == null ? 0 : socket.getRuneDamageFeeds();
+        int manaFeeds = socket == null ? 0 : socket.getRuneManaFeeds();
+        if (damageFeeds > 0 && manaFeeds > 0) {
+            return LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_done_both",
+                    level,
+                    LoreSocketManager.getRuneDamageBonusPercent(damageFeeds),
+                    LoreSocketManager.getRuneManaCostReductionPercent(manaFeeds));
+        }
+        if (manaFeeds > 0) {
+            return LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_done_mana",
+                    level, LoreSocketManager.getRuneManaCostReductionPercent(manaFeeds));
+        }
+        return LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_done_damage",
+                level, LoreSocketManager.getRuneDamageBonusPercent(damageFeeds));
+    }
+
+    private static int resolveRuneFeedSlotIndex(LoreSocketData data, String slotKey) {
+        if (data == null || data.getSocketCount() == 0) {
+            return -1;
+        }
+        String key = slotKey == null ? "" : slotKey.trim().toLowerCase(Locale.ROOT);
+        if (key.isEmpty() || "auto".equals(key)) {
+            for (int i = 0; i < data.getSocketCount(); i++) {
+                if (LoreSocketManager.needsRuneFeed(data.getSocket(i))) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+        try {
+            return Integer.parseInt(key);
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
     }
 
     private static ProcessResult processClear(Player player, Entry equipment, String slotKey) {

@@ -49,7 +49,6 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
-import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
 import com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
@@ -79,6 +78,7 @@ import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
+import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.RuneDeltaDebug;
@@ -267,7 +267,8 @@ public final class LoreProcHandler {
     private static final long SIGNATURE_VERIFY_DELAY_MS = 220L;
     private static final long SIGNATURE_TRACE_DELAY_MS = 80L;
     private static final long SIGNATURE_TRACE_DELAY_2_MS = 180L;
-    private static final InteractionType SOCKETED_RUNE_INTERACTION_TYPE = InteractionType.Ability2;
+    // Rune Delta is a passive proc, so it must not occupy the player's Ability 2 channel.
+    private static final InteractionType SOCKETED_RUNE_INTERACTION_TYPE = InteractionType.EntityStatEffect;
     private static final Object INTERACTION_BUFFER_LOCK = new Object();
     private static volatile Field interactionManagerCommandBufferField;
     private static volatile Constructor<InteractionContext> socketedAbilityContextConstructor;
@@ -2097,7 +2098,9 @@ public final class LoreProcHandler {
                                                 CommandBuffer<EntityStore> commandBuffer,
                                                 Ref<EntityStore> attackerRef,
                                                 Ref<EntityStore> targetRef,
-                                                String runestoneItemId) {
+                                                String runestoneItemId,
+                                                int damageFeeds,
+                                                int manaFeeds) {
         if (store == null || commandBuffer == null || attackerRef == null
                 || targetRef == null || runestoneItemId == null || runestoneItemId.isBlank()) {
             return false;
@@ -2127,7 +2130,7 @@ public final class LoreProcHandler {
             return false;
         }
         if (hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
-            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "ability2AlreadyActive", "root", rootId);
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "runeProcAlreadyActive", "root", rootId);
             return false;
         }
         RootInteraction root = RootInteraction.getRootInteractionOrUnknown(rootId);
@@ -2135,57 +2138,92 @@ public final class LoreProcHandler {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "unknownCastRoot", "root", rootId);
             return false;
         }
-        ensureInteractionCommandBuffer(manager, commandBuffer);
+        // Do not start a new interaction chain inside the active damage callback. The
+        // current damage interaction is still merging its command buffer here; starting
+        // a Rune Delta chain in the same buffer can wedge the world's interaction tick.
+        String resolvedRootId = rootId;
+        return LoreWorldTasks.queue(store, () -> startSocketedAbilityAfterDamage(
+                store, attackerRef, targetRef, runestone, resolvedRootId, damageFeeds, manaFeeds));
+    }
+
+    public static long getSocketedAbilityCooldownMillis(String runestoneItemId) {
+        if (runestoneItemId == null || runestoneItemId.isBlank()) {
+            return 0L;
+        }
+        try {
+            ItemStack runestone = new ItemStack(runestoneItemId, 1);
+            Item item = runestone.getItem();
+            if (item == null || item == Item.UNKNOWN
+                    || !(item.getAbility() instanceof CoreItemAbility ability)) {
+                return 0L;
+            }
+            float cooldownSeconds = ability.getCooldownS();
+            if (cooldownSeconds <= 0f) {
+                RootInteraction root = RootInteraction.getRootInteractionOrUnknown(ability.getCastRootId());
+                com.hypixel.hytale.protocol.InteractionCooldown rootCooldown =
+                        root == null ? null : root.getCooldown();
+                if (rootCooldown != null) {
+                    cooldownSeconds = rootCooldown.cooldown;
+                }
+            }
+            if (!Float.isFinite(cooldownSeconds) || cooldownSeconds <= 0f) {
+                return 0L;
+            }
+            return (long) Math.ceil(cooldownSeconds * 1000.0d);
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    private static void startSocketedAbilityAfterDamage(Store<EntityStore> store,
+                                                        Ref<EntityStore> attackerRef,
+                                                        Ref<EntityStore> targetRef,
+                                                        ItemStack runestone,
+                                                        String rootId,
+                                                        int damageFeeds,
+                                                        int manaFeeds) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || targetRef == null || !targetRef.isValid() || runestone == null || runestone.isEmpty()) {
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null || attacker.getUuid() == null) {
+            return;
+        }
+        InteractionModule module = InteractionModule.get();
+        InteractionManager manager = module == null
+                ? null
+                : store.getComponent(attackerRef, module.getInteractionManagerComponent());
+        if (manager == null || hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
+            return;
+        }
+        RootInteraction root = RootInteraction.getRootInteractionOrUnknown(rootId);
+        if (root == null) {
+            return;
+        }
         InteractionContext context = createSocketedAbilityContext(manager, attackerRef, runestone);
         if (context == null) {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "contextConstructionFailed", "root", rootId);
-            return false;
+            return;
         }
         context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
-        context.getMetaStore().putMetaObject(ImpactModifiers.CAST_SNAPSHOT,
-                new ImpactModifiers(Map.of("Cost", 0f), new String[0]));
-        SignatureEnergySnapshot energySnapshot = captureSignatureEnergy(store, attackerRef);
+        float damageMultiplier = LoreSocketManager.getRuneDamageMultiplier(damageFeeds);
+        float manaCostMultiplier = LoreSocketManager.getRuneManaCostMultiplier(manaFeeds);
+        RuneDeltaCastSnapshotEST.setRuneDeltaMultipliers(context, damageMultiplier, manaCostMultiplier);
+        InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
+        if (chain == null) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "forcedChainInitFailed", "root", rootId);
+            return;
+        }
+        boolean rulesPassed = manager.applyRules(
+                context, chain.getChainData(), SOCKETED_RUNE_INTERACTION_TYPE, root);
         RuneDeltaDebug.logKv(attacker, "ability.launch",
                 "root", rootId,
                 "interaction", SOCKETED_RUNE_INTERACTION_TYPE,
-                "energy", energySnapshot == null ? "unavailable" : energySnapshot.value,
-                "costMultiplier", 0f);
-        boolean started;
-        try {
-            started = manager.tryStartChain(attackerRef, commandBuffer, SOCKETED_RUNE_INTERACTION_TYPE, context, root);
-        } catch (Throwable throwable) {
-            RuneDeltaDebug.logKv(attacker, "ability.error",
-                    "type", throwable.getClass().getSimpleName(),
-                    "message", throwable.getMessage());
-            return false;
-        }
-        RuneDeltaDebug.logKv(attacker, "ability.result", "root", rootId, "started", started);
-        if (!started) {
-            InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
-            if (chain == null) {
-                RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "forcedChainInitFailed", "root", rootId);
-                return false;
-            }
-            boolean rulesPassed = manager.applyRules(
-                    context, chain.getChainData(), SOCKETED_RUNE_INTERACTION_TYPE, root);
-            RuneDeltaDebug.logKv(attacker, "ability.force",
-                    "root", rootId,
-                    "rulesPassed", rulesPassed,
-                    "reason", "normalStartRejected");
-            manager.queueExecuteChain(chain);
-            started = true;
-        }
-        if (started && energySnapshot != null) {
-            UUID playerId = attacker.getUuid();
-            if (playerId != null && energySnapshot.value > 0.01f) {
-                lockSignatureEnergy(store, attackerRef, playerId, energySnapshot.value);
-            }
-            scheduleSignatureEnergyRestore(store, attackerRef, energySnapshot.statIndex, energySnapshot.value);
-            RuneDeltaDebug.logKv(attacker, "energy.restoreScheduled",
-                    "index", energySnapshot.statIndex,
-                    "value", energySnapshot.value);
-        }
-        return started;
+                "damageMultiplier", damageMultiplier,
+                "costMultiplier", manaCostMultiplier,
+                "rulesPassed", rulesPassed);
+        manager.queueExecuteChain(chain);
     }
 
     private static InteractionContext createSocketedAbilityContext(InteractionManager manager,
@@ -2216,8 +2254,7 @@ public final class LoreProcHandler {
             }
         }
         try {
-            // Native Ability2 contexts use an ability-slot container. The temporary container gives
-            // the runestone a valid ItemContext without changing the player's equipped abilities.
+            // The temporary container keeps this cast independent of the player's inventory.
             SimpleItemContainer runestoneContainer = new SimpleItemContainer((short) 1);
             runestoneContainer.setItemStackForSlot((short) 0, runestone);
             return constructor.newInstance(manager, attackerRef, InventoryComponent.ABILITIES_SECTION_ID,
@@ -3281,7 +3318,7 @@ public final class LoreProcHandler {
         for (int i = 0; i <= ticks; i++) {
             long delay = i * SIGNATURE_LOCK_TICK_MS;
             OMNISLASH_SCHEDULER.schedule(
-                    () -> queueSignatureEnergyLockTick(store, attackerRef, playerId),
+                    () -> queueSignatureEnergyLockTick(store, attackerRef, playerId, lock),
                     delay,
                     TimeUnit.MILLISECONDS
             );
@@ -3290,26 +3327,35 @@ public final class LoreProcHandler {
 
     private static void queueSignatureEnergyLockTick(Store<EntityStore> store,
                                                      Ref<EntityStore> attackerRef,
-                                                     UUID playerId) {
-        if (store == null || attackerRef == null || playerId == null || store.isShutdown()) {
+                                                     UUID playerId,
+                                                     SignatureEnergyLock scheduledLock) {
+        if (store == null || attackerRef == null || playerId == null || scheduledLock == null || store.isShutdown()) {
             return;
         }
-        LoreWorldTasks.queue(store, () -> applySignatureEnergyLockTick(store, attackerRef, playerId));
+        LoreWorldTasks.queue(store,
+                () -> applySignatureEnergyLockTick(store, attackerRef, playerId, scheduledLock));
     }
 
     private static void applySignatureEnergyLockTick(Store<EntityStore> store,
                                                      Ref<EntityStore> attackerRef,
-                                                     UUID playerId) {
+                                                     UUID playerId,
+                                                     SignatureEnergyLock scheduledLock) {
         if (store == null || attackerRef == null || playerId == null || store.isShutdown()) {
             return;
         }
         SignatureEnergyLock lock = SIGNATURE_ENERGY_LOCKS.get(playerId);
-        if (lock == null) {
+        if (lock == null || lock != scheduledLock) {
             return;
         }
         long now = System.currentTimeMillis();
         if (now > lock.until) {
-            SIGNATURE_ENERGY_LOCKS.remove(playerId);
+            SIGNATURE_ENERGY_LOCKS.remove(playerId, lock);
+            return;
+        }
+        if (!attackerRef.isValid()) {
+            // Delayed ticks can outlive the entity (for example, after a player disconnects).
+            // Retire only this lock so an older queued callback cannot clear a newer one.
+            SIGNATURE_ENERGY_LOCKS.remove(playerId, lock);
             return;
         }
         EntityStatMap statMap = store.getComponent(attackerRef, EntityStatMap.getComponentType());

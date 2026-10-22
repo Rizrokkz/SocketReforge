@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
+## [1.4.5-hotfix.2] - 2026-10-23
+
+### Added
+- **Goblin Lab resonant recipe crafting** - Craft a `Dummy_Resonant_Recipe` from a Resonant Recipe, Resonant Essence, Voidtaken Grizzly Hide, and Enkindled Resource at the Goblin Lab Workbench; rolls are 25% complete, while incomplete recipes reveal only one or two slots.
+- **Rune Delta runestone feeding** - Feed Gobliterator Cores for +10% proc damage or Enkindled Resources for 5% lower proc mana cost. Each runestone has a shared feed threshold, so each feed can improve only one benefit.
+
+### Fixed
+- **Resonant Compendium** - Include backpack contents when absorbing recipe shards.
+- **Rune Delta combat proc** - Queue socketed ability chains after damage processing completes instead of starting them inside the active damage command buffer.
+- **Rune Delta cooldown** - Track the selected rune's configured cooldown on the weapon and execute the proc outside the player's Ability channel.
+- **Enemy affinity HUD** - Reduce periodic HUD refresh frequency to lower world-thread work during combat which caused server crash upon hitting multiple enemies while Rune Delta is active.
+---
 ## [1.4.5-hotfix.1] - 2026-10-17
 
 ### Fixed
@@ -17,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Rune Delta** - Added new resonance for weapons enabling the use of Runes for lore sockets when Rune Delta is active resonance.
-  - Socketed runes will be activated ON HIT procs and can use Ability 1 support runes.
+  - Socketed runes are activated as passive on-hit procs and can use support runes.
   
 ### Fixed
 - **Socket Punch and Essence Bench UI** - Fixed interaction flags for Socket Punch Bench and Essence Bench UI that prohibits the player to punch sockets and socket essences in said benches.

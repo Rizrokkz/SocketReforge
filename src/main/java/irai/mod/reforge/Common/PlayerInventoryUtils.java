@@ -178,6 +178,11 @@ public final class PlayerInventoryUtils {
     }
 
     public static ItemStack findFirstInHotbar(Player player, Predicate<ItemStack> matcher) {
+        HeldItemContext context = findFirstInHotbarContext(player, matcher);
+        return context == null ? null : context.getItemStack();
+    }
+
+    public static HeldItemContext findFirstInHotbarContext(Player player, Predicate<ItemStack> matcher) {
         if (player == null || matcher == null || player.getInventory() == null) {
             return null;
         }
@@ -197,7 +202,7 @@ public final class PlayerInventoryUtils {
             try {
                 ItemStack selectedItem = hotbar.getItemStack(selectedSlot);
                 if (isMatching(selectedItem, matcher)) {
-                    return selectedItem;
+                    return new HeldItemContext(HOTBAR_SECTION_ID, selectedSlot, hotbar, selectedItem);
                 }
             } catch (Exception ignored) {
                 // Fall through to full hotbar scan.
@@ -211,7 +216,7 @@ public final class PlayerInventoryUtils {
             try {
                 ItemStack stack = hotbar.getItemStack(slot);
                 if (isMatching(stack, matcher)) {
-                    return stack;
+                    return new HeldItemContext(HOTBAR_SECTION_ID, slot, hotbar, stack);
                 }
             } catch (Exception ignored) {
                 // Continue scanning remaining slots.

@@ -95,6 +95,8 @@ import irai.mod.reforge.Entity.Events.LorePlayerStateEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
+import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
+import irai.mod.reforge.Entity.Events.ResonantRecipeCraftingEST;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
@@ -155,6 +157,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
     private final NPCLootSocketDropEST npcLootSocketDropEST;
     private final NativeTooltipInventoryEventEST nativeTooltipInventoryEventEST;
+    private final RuneDeltaCastSnapshotEST runeDeltaCastSnapshotEST;
+    private final ResonantRecipeCraftingEST resonantRecipeCraftingEST;
     private final WeaponAffinityAppearanceInventoryEventEST weaponAffinityAppearanceInventoryEventEST;
     private final WeaponAffinityAppearanceInventoryChangeEST weaponAffinityAppearanceInventoryChangeEST;
     private ReforgeEquip reforgeEquip;
@@ -205,6 +209,8 @@ public class ReforgePlugin extends JavaPlugin {
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
         npcLootSocketDropEST = new NPCLootSocketDropEST();
         nativeTooltipInventoryEventEST = new NativeTooltipInventoryEventEST();
+        runeDeltaCastSnapshotEST = new RuneDeltaCastSnapshotEST();
+        resonantRecipeCraftingEST = new ResonantRecipeCraftingEST();
         weaponAffinityAppearanceInventoryEventEST = new WeaponAffinityAppearanceInventoryEventEST();
         weaponAffinityAppearanceInventoryChangeEST = new WeaponAffinityAppearanceInventoryChangeEST();
         this.configService = new ConfigService("ReforgePlugin");
@@ -382,13 +388,16 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
         this.getEntityStoreRegistry().registerSystem(nativeTooltipInventoryEventEST);
+        this.getEntityStoreRegistry().registerSystem(runeDeltaCastSnapshotEST);
+        this.getEntityStoreRegistry().registerSystem(resonantRecipeCraftingEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryEventEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryChangeEST);
 
         systemsRegistered = true;
+        disableUnsafeBuiltinHitAnimation();
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5-hotfix.1");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5-hotfix.2");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -438,6 +447,24 @@ public class ReforgePlugin extends JavaPlugin {
             }
         } catch (Throwable t) {
             System.out.println("[SocketReforge] Unable to disable built-in combat text system: " + t.getMessage());
+        }
+    }
+
+    private void disableUnsafeBuiltinHitAnimation() {
+        try {
+            Object registry = resolveComponentRegistry();
+            if (registry == null) {
+                return;
+            }
+            Class<?> systemClass = Class.forName(
+                    "com.hypixel.hytale.server.core.modules.entity.damage.DamageSystems$HitAnimation");
+            if (!hasSystemClassReflective(registry, systemClass)) {
+                return;
+            }
+            unregisterSystemReflective(registry, systemClass);
+            System.out.println("[SocketReforge] Disabled built-in hit animation broadcasts to avoid reentrant store writes.");
+        } catch (Throwable t) {
+            System.out.println("[SocketReforge] Unable to disable built-in hit animation system: " + t.getMessage());
         }
     }
 

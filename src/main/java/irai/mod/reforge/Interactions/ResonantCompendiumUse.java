@@ -66,6 +66,7 @@ public class ResonantCompendiumUse extends SimpleInteraction {
 
         absorbed += absorbFromContainer(player.getInventory().getHotbar(), data);
         absorbed += absorbFromContainer(player.getInventory().getStorage(), data);
+        absorbed += absorbFromContainer(player.getInventory().getBackpack(), data);
 
         if (absorbed > 0) {
             ItemStack updated = ResonantCompendiumUtils.saveCompendiumData(compendium, data);

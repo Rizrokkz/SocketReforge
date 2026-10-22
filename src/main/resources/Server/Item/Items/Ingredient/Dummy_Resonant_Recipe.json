@@ -1,0 +1,63 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Resonant_Recipe.name",
+    "Description": "irai.items.Resonant_Recipe.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Recipe_Page.png",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Consumables/Recipes/Recipe.blockymodel",
+  "Texture": "Items/Consumables/Recipes/Recipe_Texture.png",
+  "PlayerAnimationsId": "Item",
+  "IconProperties": {
+    "Scale": 0.76,
+    "Rotation": [
+      135,
+      135,
+      0
+    ],
+    "Translation": [
+      -1,
+      5
+    ]
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  },
+  "Recipe": {
+    "TimeSeconds": 4,
+    "Input": [
+      {
+        "ItemId": "Resonant_Recipe",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Resonant_Essence",
+        "Quantity": 1
+      },
+      {
+        "ItemId": "Ingredient_Voidtaken_Grizzly_Hide",
+        "Quantity": 3
+      },
+      {
+        "ItemId": "Ingredient_Enkindled_Resource",
+        "Quantity": 3
+      }
+    ],
+    "BenchRequirement": [
+      {
+        "Type": "Crafting",
+        "Id": "GoblinLab_Workbench",
+        "Categories": [
+          "GoblinLab_Fragments"
+        ]
+      }
+    ],
+    "OutputQuantity": 1
+  },
+  "DropOnDeath": true,
+  "MaxStack": 1
+}
