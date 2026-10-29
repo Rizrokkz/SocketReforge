@@ -79,6 +79,15 @@ public final class LoreGemRegistry {
             return null;
         }
         String lower = itemId.toLowerCase(Locale.ROOT);
+        String infusedPrefix = "soulstone_infused_";
+        if (lower.startsWith(infusedPrefix)) {
+            String stoneColor = lower.substring(infusedPrefix.length());
+            for (String knownColor : knownColors) {
+                if (knownColor != null && knownColor.equalsIgnoreCase(stoneColor)) {
+                    return knownColor;
+                }
+            }
+        }
         for (GemColorRule rule : gemRules) {
             if (rule == null || rule.token == null) {
                 continue;

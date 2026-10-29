@@ -2,7 +2,9 @@
   "Duration": 3.0,
   "RemovalBehavior": "Duration",
   "OverlapBehavior": "Extend",
+  "Debuff": true,
   "ApplicationEffects": {
+    "HorizontalSpeedMultiplier": 0.65,
     "EntityBottomTint": "#00324d",
     "EntityTopTint": "#66ccff"
   }

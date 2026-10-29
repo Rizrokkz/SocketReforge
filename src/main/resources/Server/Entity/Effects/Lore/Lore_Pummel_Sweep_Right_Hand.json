@@ -1,0 +1,13 @@
+{
+  "Duration": 0.18,
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Daggers_Signature_Sweep",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "R-Hand"
+      }
+    ]
+  }
+}

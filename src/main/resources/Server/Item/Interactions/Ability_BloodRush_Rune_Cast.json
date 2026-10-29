@@ -1,0 +1,29 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Serial",
+          "Interactions": [
+            {"Type": "BloodRushRune"},
+            "Ability_BloodRush_Rune_Slash_01",
+            "Ability_BloodRush_Rune_Slash_02",
+            "Ability_BloodRush_Rune_Slash_03",
+            "Ability_BloodRush_Rune_Slash_04",
+            "Ability_BloodRush_Rune_Slash_05",
+            "Ability_BloodRush_Rune_Slash_06"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

@@ -139,16 +139,16 @@ public final class LoreAbilityRegistry {
                     LoreTrigger.ON_CRIT, 0.06d, 5000L, LoreEffectType.DAMAGE_TARGET, 3.4d, 0.18d),
             new SignatureAbility("SIGNATURE_OMNISLASH",
                     "tooltip.lore.technique.omnislash", "Omnislash",
-                    LoreTrigger.ON_HIT, 0.05d, 180000L, LoreEffectType.OMNISLASH, 0.35d, 0.012d),
+                    LoreTrigger.ON_HIT, 0.05d, 30000L, LoreEffectType.OMNISLASH, 0.35d, 0.012d),
             new SignatureAbility("SIGNATURE_OCTASLASH",
                     "tooltip.lore.technique.octaslash", "Octaslash",
-                    LoreTrigger.ON_HIT, 0.05d, 180000L, LoreEffectType.OCTASLASH, 0.32d, 0.010d),
+                    LoreTrigger.ON_HIT, 0.10d, 30000L, LoreEffectType.RUNE_OCTASLASH, 0.32d, 0.010d),
             new SignatureAbility("SIGNATURE_PUMMEL",
                     "tooltip.lore.technique.pummel", "Pummel",
                     LoreTrigger.ON_HIT, 0.08d, 60000L, LoreEffectType.PUMMEL, 0.28d, 0.010d),
             new SignatureAbility("SIGNATURE_BLOOD_RUSH",
                     "tooltip.lore.technique.blood_rush", "Blood Rush",
-                    LoreTrigger.ON_HIT, 0.06d, 120000L, LoreEffectType.BLOOD_RUSH, 0.30d, 0.012d),
+                    LoreTrigger.ON_HIT, 0.06d, 30000L, LoreEffectType.BLOOD_RUSH, 0.30d, 0.012d),
             new SignatureAbility("SIGNATURE_CHARGE_ATTACK",
                     "tooltip.lore.technique.charge_attack", "Charge Attack",
                     LoreTrigger.ON_HIT, 0.07d, 7000L, LoreEffectType.CHARGE_ATTACK, 0.40d, 0.015d),
@@ -338,7 +338,7 @@ public final class LoreAbilityRegistry {
                 spiritId,
                 LoreTrigger.ON_HIT,
                 0.12d,
-                60000L,
+                30000L,
                 LoreEffectType.SUMMON_WOLF_PACK,
                 1.0d,
                 0.0d,
@@ -644,7 +644,7 @@ public final class LoreAbilityRegistry {
             case DAMAGE_TARGET, DAMAGE_ATTACKER, APPLY_BLEED, APPLY_POISON, DRAIN_LIFE -> 3;
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> 4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
-                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
+                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, RUNE_OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> 5;
         };
     }

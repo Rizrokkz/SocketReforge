@@ -1,6 +1,7 @@
 package irai.mod.reforge.Lore;
 
 import java.util.Iterator;
+import java.util.HashSet;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayDeque;
@@ -20,12 +21,14 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
+import com.hypixel.hytale.server.core.asset.type.model.config.Model;
 import com.hypixel.hytale.server.core.entity.Frozen;
 import com.hypixel.hytale.server.core.entity.AnimationUtils;
 import com.hypixel.hytale.server.core.entity.InteractionChain;
@@ -33,8 +36,13 @@ import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.InteractionManager;
 import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
+import com.hypixel.hytale.server.core.modules.entity.component.ActiveAnimationComponent;
+import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
+import com.hypixel.hytale.server.core.modules.entity.player.PlayerSettings;
+import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
@@ -44,6 +52,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.asset.type.item.config.CoreItemAbility;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.protocol.VelocityThresholdStyle;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
@@ -65,6 +74,9 @@ import com.hypixel.hytale.server.core.modules.projectile.interaction.ProjectileI
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
+import com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport;
+import com.hypixel.hytale.server.flock.FlockMembershipSystems;
+import com.hypixel.hytale.server.flock.FlockPlugin;
 import com.hypixel.hytale.protocol.AnimationSlot;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.InteractionType;
@@ -79,6 +91,7 @@ import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
+import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.RuneDeltaDebug;
@@ -97,6 +110,10 @@ public final class LoreProcHandler {
     private static final Map<String, Long> READY_NOTIFICATION_AT = new ConcurrentHashMap<>();
     private static final long READY_NOTIFICATION_MIN_COOLDOWN_MS = 1500L;
     private static final Map<String, Set<Ref<EntityStore>>> WOLF_SUMMONS = new ConcurrentHashMap<>();
+    private static final Set<String> WOLF_SPAWN_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
+    private static final Set<String> WOLF_FLOCK_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
+    private static final Map<String, Long> WOLF_CREATIVE_NOTICE_AT = new ConcurrentHashMap<>();
+    private static final long WOLF_CREATIVE_NOTICE_COOLDOWN_MS = 5000L;
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
@@ -107,6 +124,14 @@ public final class LoreProcHandler {
     private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_REAPPLY_STAGE =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BURN_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, OmnislashSequence> ACTIVE_OMNISLASH_RUNE_SEQUENCES =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, BloodRushSequence> ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, PummelSequence> ACTIVE_PUMMEL_RUNE_SEQUENCES =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, OmnislashRuneChain> ACTIVE_OMNISLASH_RUNE_CHAINS =
+            new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> POISON_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Integer> POISON_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> DRAIN_DOT_UNTIL = new ConcurrentHashMap<>();
@@ -126,6 +151,7 @@ public final class LoreProcHandler {
     private static final long LORE_QUEUE_RETRY_MS = 150L;
     private static final long LORE_QUEUE_MIN_DELAY_MS = 120L;
     private static final int WOLF_SUMMON_MAX_ATTEMPTS = 6;
+    private static final String WOLF_SUMMON_ROLE = "Wolf_Soulstone_Summon";
     private static final double WOLF_SUMMON_MIN_RADIUS = 1.2d;
     private static final double WOLF_SUMMON_MAX_RADIUS = 2.8d;
     private static final double HEAL_AREA_RADIUS = LoreAbility.BASE_HEAL_AREA_RADIUS;
@@ -162,23 +188,62 @@ public final class LoreProcHandler {
     private static final int STATUS_BOSS_NEARBY_PLAYER_MAX_CHECKS = 96;
     private static final double STATUS_BOSS_EXTRA_PLAYER_REAPPLY_BONUS = 0.25d;
     private static final long MULTIHIT_HIT_DELAY_MS = 250L;
-    private static final int OMNISLASH_BASE_HITS = 2;
-    private static final int OMNISLASH_MAX_HITS = 8;
     private static final int OCTASLASH_BASE_HITS = 2;
     private static final int OCTASLASH_MAX_HITS = 8;
-    private static final int PUMMEL_BASE_HITS = 2;
-    private static final int PUMMEL_MAX_HITS = 3;
-    private static final int BLOOD_RUSH_BASE_HITS = 3;
-    private static final int BLOOD_RUSH_MAX_HITS = 6;
+    private static final String OCTASLASH_RUNE_ITEM_ID = "Rune_Octaslash";
+    private static final int BLOOD_RUSH_RUNE_HITS = 6;
+    private static final long BLOOD_RUSH_RUNE_HIT_INTERVAL_MS = 350L;
+    private static final long BLOOD_RUSH_RUNE_TIMEOUT_MS = 10000L;
+    private static final int PUMMEL_RUNE_HITS = 5;
+    private static final long PUMMEL_RUNE_TIMEOUT_MS = 8000L;
+    private static final long PUMMEL_RUNE_SEQUENCE_GUARD_MS = 900L;
+    private static final long PUMMEL_RUNE_STUN_MS = 1200L;
+    private static final double PUMMEL_RUNE_TARGET_RADIUS = 8.0d;
+    private static final double PUMMEL_RUNE_KNOCKBACK_FORCE = 7.0d;
+    private static final double BLOOD_RUSH_TARGET_RADIUS = 8.0d;
+    private static final float BLOOD_RUSH_BASE_DAMAGE_PER_HIT = 0.30f;
+    private static final float BLOOD_RUSH_MISSING_HEALTH_BONUS_PER_HIT = 0.30f;
+    private static final double BLOOD_RUSH_SELF_BLEED_CHANCE = 0.25d;
+    private static final double BLOOD_RUSH_SELF_HEAL_CHANCE = 0.25d;
+    private static final float BLOOD_RUSH_SELF_HEAL_DAMAGE_FRACTION = 0.25f;
+    private static final String BLOOD_RUSH_RUNE_ITEM_ID = LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
+    private static final String PUMMEL_RUNE_ITEM_ID = LoreSocketManager.PUMMEL_RUNE_ITEM_ID;
+    private static final String[] PUMMEL_RUNE_HIT_PARTICLE_IDS = {"Impact_Unarmed"};
+    private static final String BLOOD_RUSH_SWEEP_EFFECT_ID = "Lore_BloodRush_Sweep_Weapon";
+    private static final String[] PUMMEL_SWEEP_EFFECT_IDS_BY_HIT = {
+            "Lore_Pummel_Sweep_Left_Hand",
+            "Lore_Pummel_Sweep_Right_Hand",
+            "Lore_Pummel_Sweep_Right_Foot",
+            "Lore_Pummel_Sweep_Right_Foot",
+            "Lore_Pummel_Sweep_Left_Foot"
+    };
+    private static final String[] BLOOD_RUSH_HIT_PARTICLE_IDS = {
+            "Combat/Mace/Signature/Impact_Mace_Signature",
+            "Impact_Mace_Signature"
+    };
     private static final int CHARGE_ATTACK_BASE_HITS = 1;
     private static final int CHARGE_ATTACK_MAX_HITS = 3;
     private static final int OMNISLASH_MAX_TARGETS = 8;
     private static final int OMNISLASH_MAX_NPC_CHECKS = 160;
     private static final double OMNISLASH_RADIUS = LoreAbility.BASE_OMNISLASH_RADIUS;
+    private static final double OMNISLASH_TELEPORT_STANDOFF = 1.5d;
+    private static final long OMNISLASH_AFTERIMAGE_LIFETIME_MS = 360L;
+    private static final String OMNISLASH_AFTERIMAGE_EFFECT_ID = "Lore_Omnislash_Afterimage";
+    private static final int OMNISLASH_MAX_RUNE_HITS = 12;
+    private static final double OMNISLASH_LOWER_RUNE_CHAIN_CHANCE = 0.25d;
+    private static final long OMNISLASH_LOWER_RUNE_CHAIN_DELAY_MS = 800L;
+    private static final long OMNISLASH_LOWER_RUNE_CHAIN_RETRY_MS = 250L;
+    private static final int OMNISLASH_LOWER_RUNE_CHAIN_MAX_RETRIES = 12;
+    private static final long OMNISLASH_LOWER_RUNE_CHAIN_TIMEOUT_MS = 45000L;
+    private static final double OMNISLASH_AFTERIMAGE_EXPLOSION_RADIUS = 5.0d;
+    private static final float OMNISLASH_AFTERIMAGE_EXPLOSION_DAMAGE_MULTIPLIER = 0.35f;
     private static final long OMNISLASH_HIT_DELAY_MS = 500L;
     private static final float OMNISLASH_FINAL_MULTIPLIER = 3.0f;
     private static final float OCTASLASH_FINAL_MULTIPLIER = 3.0f;
     private static final double OMNISLASH_RAMP_PER_HIT = 0.10d;
+    private static final String OMNISLASH_RUNE_3_ITEM_ID = "Rune_Omnislash_3";
+    private static final String OMNISLASH_RUNE_6_ITEM_ID = "Rune_Omnislash_6";
+    private static final String OMNISLASH_RUNE_8_ITEM_ID = "Rune_Omnislash_8";
     private static final double OCTASLASH_RAMP_PER_HIT = 0.10d;
     private static final double SYNERGY_PROC_BONUS = 0.25d;
     private static final double SYNERGY_PROC_MAX = 0.85d;
@@ -477,6 +542,11 @@ public final class LoreProcHandler {
             "Explosion_Big",
             "Explosion_Small"
     };
+    private static final String[] OMNISLASH_AFTERIMAGE_EXPLOSION_PARTICLE_IDS = {
+            "Explosion_Medium",
+            "Impact_Explosion",
+            "Explosion_Small"
+    };
     private static final String[] FINALE_SOUND_IDS = {
             "SFX_Goblin_Lobber_Bomb_Death",
             "SFX_Goblin_Lobber_Bomb_Death_Local"
@@ -505,6 +575,12 @@ public final class LoreProcHandler {
             "Combat/Mace/Signature/Mace_Signature_Slash",
             "Mace_Signature_Slash"
     };
+    private static final String[] OMNISLASH_LUNGE_TRAIL_PARTICLE_IDS = {
+            "Combat/Daggers/Signature/Daggers_Lunge_Trail",
+            "Daggers_Lunge_Trail"
+    };
+    private static final int OMNISLASH_LUNGE_TRAIL_MAX_BURSTS = 5;
+    private static final double OMNISLASH_LUNGE_TRAIL_BURST_SPACING = 2.0d;
     private static final String[] BLEED_PARTICLE_IDS = {
             "Combat/Daggers/Basic/Impact_Dagger_Slash",
             "Impact_Dagger_Slash",
@@ -525,28 +601,8 @@ public final class LoreProcHandler {
             "Daggers_Signature_Slash"
     };
     private static final String[] OMNISLASH_TRAIL_EFFECT_IDS = {
-            "Lore/Lore_Pummel_Trail",
-            "Lore_Pummel_Trail"
-    };
-    private static final String[] BLOOD_RUSH_TRAIL_EFFECT_IDS = {
-            "Lore/Lore_BloodRush_Trail",
-            "Lore_BloodRush_Trail"
-    };
-    private static final String[] BLOOD_RUSH_TRAIL_PARTICLE_IDS = {
-            "Combat/Sword/Charged/Sword_Charged_Trail_Praetorian",
-            "Sword_Charged_Trail_Praetorian",
-            "Combat/Sword/Charged/Sword_Charged_Trail_Blade_Praetorian",
-            "Sword_Charged_Trail_Blade_Praetorian"
-    };
-    private static final String[] PUMMEL_TRAIL_EFFECT_IDS = {
-            "Lore/Lore_Pummel_Trail",
-            "Lore_Pummel_Trail"
-    };
-    private static final String[] PUMMEL_TRAIL_PARTICLE_IDS = {
-            "Lore/Lore_Pummel_Trail",
-            "Lore_Pummel_Trail",
-            "Combat/Sword/Charged/Sword_Charged_Trail",
-            "Sword_Charged_Trail"
+            "Lore/Lore_Omnislash_Trail",
+            "Lore_Omnislash_Trail"
     };
     private static final double GROUNDSLAM_AUGMENT_CHANCE_MULTIPLIER = 3.0d;
     private static final Map<UUID, GroundslamContext> GROUNDSLAM_CONTEXTS = new ConcurrentHashMap<>();
@@ -734,6 +790,9 @@ public final class LoreProcHandler {
         final String slashParticleId;
         final float finalMultiplier;
         final int feedTier;
+        final long initialIntervalMs;
+        final long minimumIntervalMs;
+        final long intervalReductionMs;
         int hitsApplied;
 
         OmnislashSequence(Store<EntityStore> store,
@@ -746,6 +805,24 @@ public final class LoreProcHandler {
                           String slashParticleId,
                           float finalMultiplier,
                           int feedTier) {
+            this(store, attackerRef, targets, perHit, teleportAttacker, skipRefine, totalHits,
+                    slashParticleId, finalMultiplier, feedTier,
+                    OMNISLASH_HIT_DELAY_MS, OMNISLASH_HIT_DELAY_MS, 0L);
+        }
+
+        OmnislashSequence(Store<EntityStore> store,
+                          Ref<EntityStore> attackerRef,
+                          List<Ref<EntityStore>> targets,
+                          float perHit,
+                          boolean teleportAttacker,
+                          boolean skipRefine,
+                          int totalHits,
+                          String slashParticleId,
+                          float finalMultiplier,
+                          int feedTier,
+                          long initialIntervalMs,
+                          long minimumIntervalMs,
+                          long intervalReductionMs) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.targets = targets;
@@ -756,6 +833,61 @@ public final class LoreProcHandler {
             this.slashParticleId = slashParticleId;
             this.finalMultiplier = finalMultiplier <= 0f ? 1.0f : finalMultiplier;
             this.feedTier = Math.max(0, feedTier);
+            this.initialIntervalMs = Math.max(1L, initialIntervalMs);
+            this.minimumIntervalMs = Math.max(1L, Math.min(this.initialIntervalMs, minimumIntervalMs));
+            this.intervalReductionMs = Math.max(0L, intervalReductionMs);
+        }
+    }
+
+    private static final class OmnislashRuneChain {
+        final List<Integer> remainingHitCounts;
+        Ref<EntityStore> lastTargetRef;
+
+        OmnislashRuneChain(List<Integer> remainingHitCounts, Ref<EntityStore> initialTargetRef) {
+            this.remainingHitCounts = new ArrayList<>(remainingHitCounts);
+            this.lastTargetRef = initialTargetRef;
+        }
+    }
+
+    private static final class BloodRushSequence {
+        final Store<EntityStore> store;
+        final Ref<EntityStore> attackerRef;
+        final Ref<EntityStore> targetRef;
+        final float baseDamage;
+        final boolean skipRefine;
+        int hitsApplied;
+
+        BloodRushSequence(Store<EntityStore> store,
+                          Ref<EntityStore> attackerRef,
+                          Ref<EntityStore> targetRef,
+                          float baseDamage,
+                          boolean skipRefine) {
+            this.store = store;
+            this.attackerRef = attackerRef;
+            this.targetRef = targetRef;
+            this.baseDamage = Math.max(0f, baseDamage);
+            this.skipRefine = skipRefine;
+        }
+    }
+
+    private static final class PummelSequence {
+        final Store<EntityStore> store;
+        final Ref<EntityStore> attackerRef;
+        final Ref<EntityStore> targetRef;
+        final float baseDamage;
+        final boolean skipRefine;
+        int hitsApplied;
+
+        PummelSequence(Store<EntityStore> store,
+                       Ref<EntityStore> attackerRef,
+                       Ref<EntityStore> targetRef,
+                       float baseDamage,
+                       boolean skipRefine) {
+            this.store = store;
+            this.attackerRef = attackerRef;
+            this.targetRef = targetRef;
+            this.baseDamage = Math.max(0f, baseDamage);
+            this.skipRefine = skipRefine;
         }
     }
 
@@ -787,7 +919,7 @@ public final class LoreProcHandler {
                                            boolean selfIsAttacker,
                                            Set<String> usedSpirits) {
         return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger, selfIsAttacker,
-                usedSpirits, null, null);
+                usedSpirits, null, null, false);
     }
 
     public static boolean applyLoreSockets(Store<EntityStore> store,
@@ -801,7 +933,7 @@ public final class LoreProcHandler {
                                            Set<String> usedSpirits,
                                            ProcState procState) {
         return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger, selfIsAttacker,
-                usedSpirits, procState, null);
+                usedSpirits, procState, null, false);
     }
 
     public static boolean applyLoreSockets(Store<EntityStore> store,
@@ -816,7 +948,20 @@ public final class LoreProcHandler {
                                            ProcState procState,
                                            CommandBuffer<EntityStore> commandBuffer) {
         return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger, selfIsAttacker,
-                usedSpirits, procState, commandBuffer);
+                usedSpirits, procState, commandBuffer, false);
+    }
+
+    /** Applies lore socket effects on weapon ability use; infused soulstones can trigger here. */
+    public static boolean applyLoreSkillUseSockets(Store<EntityStore> store,
+                                                   Player self,
+                                                   Ref<EntityStore> selfRef,
+                                                   Ref<EntityStore> targetRef,
+                                                   LoreSocketData data,
+                                                   Set<String> usedSpirits,
+                                                   ProcState procState,
+                                                   CommandBuffer<EntityStore> commandBuffer) {
+        return applyLoreSocketsInternal(store, self, selfRef, targetRef, null, data,
+                LoreTrigger.ON_SKILL_USE, true, usedSpirits, procState, commandBuffer, true);
     }
 
     private static boolean applyLoreSocketsInternal(Store<EntityStore> store,
@@ -829,12 +974,13 @@ public final class LoreProcHandler {
                                                     boolean selfIsAttacker,
                                                     Set<String> usedSpirits,
                                                     ProcState procState,
-                                                    CommandBuffer<EntityStore> commandBuffer) {
+                                                    CommandBuffer<EntityStore> commandBuffer,
+                                                    boolean allowDuringAbility1) {
         if (store == null || self == null || data == null || trigger == null) {
             return false;
         }
         ProcCollectResult result = collectSocketProcs(store, self, selfRef, otherRef, damage, data, trigger,
-                selfIsAttacker, usedSpirits, procState);
+                selfIsAttacker, usedSpirits, procState, allowDuringAbility1);
         if (result == null || result.pending.isEmpty()) {
             return false;
         }
@@ -855,7 +1001,8 @@ public final class LoreProcHandler {
                                                         LoreTrigger trigger,
                                                         boolean selfIsAttacker,
                                                         Set<String> usedSpirits,
-                                                        ProcState procState) {
+                                                        ProcState procState,
+                                                        boolean allowDuringAbility1) {
         if (store == null || self == null || data == null || trigger == null) {
             return null;
         }
@@ -864,8 +1011,11 @@ public final class LoreProcHandler {
             return null;
         }
         boolean ability1Active = isAbility1Active(store, selfRef);
-        ProcCollectResult result = new ProcCollectResult(playerId, ability1Active);
-        if (ability1Active) {
+        boolean onHitDuringAbility1 = trigger == LoreTrigger.ON_HIT;
+        boolean blockLoreDuringAbility1 = ability1Active && !allowDuringAbility1
+                && !onHitDuringAbility1;
+        ProcCollectResult result = new ProcCollectResult(playerId, blockLoreDuringAbility1);
+        if (blockLoreDuringAbility1) {
             LoreDebug.logKv("proc.skip", "reason", "Ability1Active", "player", playerId);
             return result;
         }
@@ -885,11 +1035,32 @@ public final class LoreProcHandler {
             }
 
             LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
-            if (ability == null || ability.getTrigger() != trigger) {
+            LoreAbility triggerAbility = resolveSocketAbilityForTrigger(socket, ability, trigger);
+            if (triggerAbility == null) {
                 continue;
             }
-            LoreAbility resolved = applyEffectOverride(ability, socket.getEffectOverride());
+            LoreAbility resolved = applyEffectOverride(triggerAbility, socket.getEffectOverride());
             if (resolved == null || resolved.getTrigger() != trigger) {
+                continue;
+            }
+            // Omnislash rune strikes are routed back through the weapon hit-lore path.
+            // Prevent the same Omnislash lore from starting a second sequence while
+            // the equipped or lore-triggered Omnislash sequence is still in progress.
+            if (resolved.getEffectType() == LoreEffectType.OMNISLASH
+                    && selfRef != null
+                    && ACTIVE_OMNISLASH_RUNE_SEQUENCES.containsKey(selfRef)) {
+                LoreDebug.logKv("proc.skip", "reason", "OmnislashAlreadyActive", "spirit", spiritId);
+                continue;
+            }
+            if (resolved.getEffectType() == LoreEffectType.BLOOD_RUSH
+                    && selfRef != null
+                    && ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.containsKey(selfRef)) {
+                LoreDebug.logKv("proc.skip", "reason", "BloodRushAlreadyActive", "spirit", spiritId);
+                continue;
+            }
+            if (ability1Active && !allowDuringAbility1
+                    && trigger != LoreTrigger.ON_HIT
+                    && resolved.getEffectType() != LoreEffectType.RUNE_OCTASLASH) {
                 continue;
             }
             if (ability1Active && shouldBlockLoreDuringAbility1(resolved)) {
@@ -897,7 +1068,9 @@ public final class LoreProcHandler {
                         "spirit", spiritId);
                 continue;
             }
-            if (isCoreEffectType(resolved.getEffectType()) && !isCoreColorForSpirit(spiritId)) {
+            if (isCoreEffectType(resolved.getEffectType())
+                    && resolved.getEffectType() != LoreEffectType.OMNISLASH
+                    && !isCoreColorForSpirit(spiritId)) {
                 LoreDebug.logKv("proc.skip", "reason", "NonCoreColor", "effect", resolveLogEffectLabel(resolved),
                         "spirit", spiritId);
                 continue;
@@ -924,6 +1097,24 @@ public final class LoreProcHandler {
         }
 
         return result;
+    }
+
+    private static LoreAbility resolveSocketAbilityForTrigger(LoreSocketData.LoreSocket socket,
+                                                               LoreAbility ability,
+                                                               LoreTrigger trigger) {
+        if (ability == null || trigger == null) {
+            return null;
+        }
+        if (ability.getTrigger() == trigger) {
+            return ability;
+        }
+        if ((trigger != LoreTrigger.ON_HIT && trigger != LoreTrigger.ON_SKILL_USE) || socket == null
+                || !LoreSoulstoneUtils.isInfusedSoulstoneId(socket.getGemItemId())) {
+            return null;
+        }
+        return new LoreAbility(ability.getSpiritId(), trigger, ability.getProcChance(), ability.getCooldownMs(),
+                ability.getEffectType(), ability.getBaseValue(), ability.getPerLevel(),
+                ability.getAbilityNameKey(), ability.getAbilityNameFallback());
     }
 
     private static void extendSynergyChainProcs(ProcCollectResult result,
@@ -1012,7 +1203,7 @@ public final class LoreProcHandler {
                     coreProcs, augmentProcs, forcedAugments, modifierProcs, groundslam,
                     durationMs, damage, commandBuffer, true);
             for (PendingLoreProc core : coreProcs) {
-                int coreHits = resolveCoreHitCount(core.ability, core.feedTier);
+                int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
                 if (selfIsAttacker && groundslam != null) {
                     armGroundslamAugment(result.playerId, groundslam, coreHits);
                     changed |= applyProcXp(data, groundslam, maxLevel, self, xpAwarded);
@@ -1163,7 +1354,7 @@ public final class LoreProcHandler {
         }
         if (batch.coreProcs != null && !batch.coreProcs.isEmpty()) {
             for (PendingLoreProc core : batch.coreProcs) {
-                int coreHits = resolveCoreHitCount(core.ability, core.feedTier);
+                int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
                 if (batch.selfIsAttacker && batch.groundslam != null) {
                     armGroundslamAugment(batch.playerId, batch.groundslam, coreHits);
                 }
@@ -1345,7 +1536,7 @@ public final class LoreProcHandler {
         boolean changed = false;
         if (data != null) {
             changed = applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data,
-                    LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer);
+                    LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer, false);
         }
         applyAbsorbedInternal(store, self, selfRef, otherRef, damage,
                 LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer);
@@ -1374,11 +1565,12 @@ public final class LoreProcHandler {
             case DAMAGE_TARGET, APPLY_SHOCK, APPLY_SLOW, APPLY_WEAKNESS, APPLY_BLIND,
                     APPLY_ROOT, APPLY_FEAR, VORTEXSTRIKE, MULTI_HIT, CRIT_CHARGE,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE, CHARGE_ATTACK,
-                    OMNISLASH, OCTASLASH, PUMMEL, BLOOD_RUSH -> opponentRef != null;
+                    OMNISLASH, OCTASLASH, RUNE_OCTASLASH, PUMMEL, BLOOD_RUSH -> opponentRef != null;
             case DAMAGE_ATTACKER -> attackerRef != null;
             case HEAL_SELF, HEAL_SELF_OVER_TIME, HEAL_AREA, HEAL_AREA_OVER_TIME,
                     LIFESTEAL, APPLY_HASTE, APPLY_INVISIBLE, APPLY_SHIELD,
-                    SUMMON_WOLF_PACK, RESTORE_MANA -> selfRef != null;
+                    RESTORE_MANA -> selfRef != null;
+            case SUMMON_WOLF_PACK -> selfRef != null && feedTier >= 1;
             case HEAL_DEFENDER -> defenderRef != null;
             case APPLY_BURN -> opponentRef != null
                     && resolveNpcAilmentMultiplier(store, opponentRef, "burn") > 0.0d
@@ -1406,7 +1598,7 @@ public final class LoreProcHandler {
                 yield opponentRef != null
                         && resolveNpcAilmentMultiplier(store, opponentRef, "bleed") > 0.0d
                         && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "bleed")
-                        && calculateElementalEssenceBleedDamage(store, bleedSource, opponentRef, bleedDamageBase, safeFeedTier) > 0f;
+                        && calculateBleedDamagePerTick(store, bleedSource, opponentRef, bleedDamageBase, safeFeedTier) > 0f;
             }
             case DOUBLE_CAST -> opponentRef != null;
             case BERSERK -> true;
@@ -1433,7 +1625,7 @@ public final class LoreProcHandler {
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return false;
         }
-        long cooldownMs = Math.max(0L, LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier));
+        long cooldownMs = Math.max(0L, ability.getScaledCooldownMs(feedTier));
         if (cooldownMs > 0L) {
             COOLDOWNS.put(key, now + cooldownMs);
         }
@@ -1450,7 +1642,7 @@ public final class LoreProcHandler {
         if (until != null && now < until) {
             return false;
         }
-        long cooldownMs = Math.max(0L, LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier));
+        long cooldownMs = Math.max(0L, ability.getScaledCooldownMs(feedTier));
         if (cooldownMs > 0L) {
             COOLDOWNS.put(key, now + cooldownMs);
         }
@@ -1479,7 +1671,7 @@ public final class LoreProcHandler {
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return false;
         }
-        long cooldownMs = Math.max(0L, LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier));
+        long cooldownMs = Math.max(0L, ability.getScaledCooldownMs(feedTier));
         if (cooldownMs > 0L) {
             COOLDOWNS.put(key, now + cooldownMs);
         }
@@ -1921,51 +2113,43 @@ public final class LoreProcHandler {
                         damageMultiplier, commandBuffer);
             }
             case OMNISLASH -> {
-                LoreDamageUtils.DamageBaseResult baseResult =
-                        LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, selfIsAttacker, damage, amount);
-                float base = baseResult.amount * damageMultiplier;
-                double scaledValue = LoreAbility.scaleEffectValue(value, safeFeedTier);
-                double pct = clampPercentDamage(scaledValue, 0.15d, 0.60d);
-                float perHit = (float) (base * pct);
-                boolean canTeleport = selfIsAttacker && attackerRef != null;
-                int hits = resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, safeFeedTier);
-                double radius = LoreAbility.scaleRadius(OMNISLASH_RADIUS, safeFeedTier);
-                applyOmnislash(store, attackerRef, opponentRef, perHit, canTeleport, baseResult.skipRefine, hits, radius,
-                        OMNISLASH_FINAL_MULTIPLIER, safeFeedTier);
+                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null) {
+                    String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(level, safeFeedTier);
+                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef, runeItemId, 0, 0);
+                }
             }
             case OCTASLASH -> applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
                     LoreAbility.scaleEffectValue(value, safeFeedTier),
                     resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, safeFeedTier), 0.12d, 0.55d,
                     OMNISLASH_SLASH_PARTICLE_IDS, OCTASLASH_FINAL_MULTIPLIER, OCTASLASH_RAMP_PER_HIT,
                     damageMultiplier, safeFeedTier);
-            case PUMMEL -> {
-                int hits = resolveFeedScaledHits(PUMMEL_BASE_HITS, PUMMEL_MAX_HITS, safeFeedTier);
-                Ref<EntityStore> trailRef = attackerRef != null ? attackerRef : selfRef;
-                if (trailRef != null) {
-                    long trailDurationMs = Math.max(250L, (long) hits * MULTIHIT_HIT_DELAY_MS + 200L);
-                    LoreVisuals.tryApplyTimedVisualEffectOverride(store, trailRef, trailDurationMs,
-                            PUMMEL_TRAIL_EFFECT_IDS);
-                    scheduleTrailParticles(store, trailRef, PUMMEL_TRAIL_PARTICLE_IDS, hits, MULTIHIT_HIT_DELAY_MS);
+            case RUNE_OCTASLASH -> {
+                if (primaryProc && attackerRef != null && opponentRef != null) {
+                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
+                            OCTASLASH_RUNE_ITEM_ID, 0, 0);
                 }
-                applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
-                        value, hits, 0.20d, 0.70d, null, 1.0f, 0.0d, damageMultiplier, safeFeedTier);
+            }
+            case PUMMEL -> {
+                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null
+                        && !ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
+                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
+                            PUMMEL_RUNE_ITEM_ID, 0, 0);
+                }
             }
             case BLOOD_RUSH -> {
-                int hits = resolveFeedScaledHits(BLOOD_RUSH_BASE_HITS, BLOOD_RUSH_MAX_HITS, safeFeedTier);
-                Ref<EntityStore> trailRef = attackerRef != null ? attackerRef : selfRef;
-                if (trailRef != null) {
-                    long trailDurationMs = Math.max(250L, (long) hits * MULTIHIT_HIT_DELAY_MS + 200L);
-                    LoreVisuals.tryApplyTimedVisualEffectOverride(store, trailRef, trailDurationMs,
-                            BLOOD_RUSH_TRAIL_EFFECT_IDS);
-                    scheduleTrailParticles(store, trailRef, BLOOD_RUSH_TRAIL_PARTICLE_IDS, hits, MULTIHIT_HIT_DELAY_MS);
+                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null) {
+                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
+                            BLOOD_RUSH_RUNE_ITEM_ID, 0, 0);
                 }
-                applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
-                        value, hits, 0.15d, 0.60d, null, 1.0f, 0.0d, damageMultiplier, safeFeedTier);
             }
-            case SUMMON_WOLF_PACK -> trySummonWolfPack(store, attackerOrSelfRef, playerId, spiritId, level, safeFeedTier);
-                default -> {
-                    // no-op
+            case SUMMON_WOLF_PACK -> LoreWorldTasks.queue(store, () -> {
+                if (!store.isShutdown() && attackerOrSelfRef != null && attackerOrSelfRef.isValid()) {
+                    trySummonWolfPack(store, attackerOrSelfRef, playerId, safeFeedTier, opponentRef);
                 }
+            });
+            default -> {
+                // no-op
+            }
             }
             return !ranSignature;
         } finally {
@@ -2129,7 +2313,11 @@ public final class LoreProcHandler {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "missingInteractionManager", "root", rootId);
             return false;
         }
-        if (hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
+        // The max-rune Ability1 chain can still be finishing its last slash when this
+        // delayed handoff runs. Wait for both channels to drain before starting a
+        // lower-rune cast, otherwise the interaction manager may cancel the handoff.
+        if (hasActiveAbility1Chain(manager)
+                || hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "runeProcAlreadyActive", "root", rootId);
             return false;
         }
@@ -2209,7 +2397,11 @@ public final class LoreProcHandler {
         context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
         float damageMultiplier = LoreSocketManager.getRuneDamageMultiplier(damageFeeds);
         float manaCostMultiplier = LoreSocketManager.getRuneManaCostMultiplier(manaFeeds);
-        RuneDeltaCastSnapshotEST.setRuneDeltaMultipliers(context, damageMultiplier, manaCostMultiplier);
+        float weaponDamageBonus = SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.getItemId())
+                ? LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 0.0f) * 0.30f
+                : 0.0f;
+        RuneDeltaCastSnapshotEST.setRuneDeltaMultipliers(
+                context, damageMultiplier, manaCostMultiplier, weaponDamageBonus);
         InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
         if (chain == null) {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "forcedChainInitFailed", "root", rootId);
@@ -2221,6 +2413,7 @@ public final class LoreProcHandler {
                 "root", rootId,
                 "interaction", SOCKETED_RUNE_INTERACTION_TYPE,
                 "damageMultiplier", damageMultiplier,
+                "weaponDamageBonus", weaponDamageBonus,
                 "costMultiplier", manaCostMultiplier,
                 "rulesPassed", rulesPassed);
         manager.queueExecuteChain(chain);
@@ -3460,7 +3653,7 @@ public final class LoreProcHandler {
             return;
         }
         double chance = LoreAbility.scaleProcChance(ability.getProcChance(), feedTier) * 100.0d;
-        long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
+        long cooldownMs = ability.getScaledCooldownMs(feedTier);
         String trigger = ability.getTrigger() == null ? "UNKNOWN" : ability.getTrigger().name();
         String effect = resolveLogEffectLabel(ability);
         double value = ability.getValueForLevel(Math.max(0, level));
@@ -3524,20 +3717,22 @@ public final class LoreProcHandler {
         if (store == null || playerRef == null || playerId == null || spiritId == null || ability == null) {
             return;
         }
-        long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
+        long cooldownMs = ability.getScaledCooldownMs(feedTier);
         if (cooldownMs < READY_NOTIFICATION_MIN_COOLDOWN_MS) {
             return;
         }
-        long readyAt = System.currentTimeMillis() + cooldownMs;
         String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
-        long updated = READY_NOTIFICATION_AT.merge(key, readyAt, Math::max);
-        if (updated != readyAt) {
-            readyAt = updated;
-        }
-        long delay = Math.max(1L, readyAt - System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        Long cooldownUntil = COOLDOWNS.get(key);
+        long readyAt = cooldownUntil == null ? now + cooldownMs : Math.max(now, cooldownUntil);
+        // The lore proc may be executed later from the async batch queue. Anchor its
+        // ready notification to the cooldown started by tryProc(), instead of starting
+        // a second full cooldown when the queued effect finally runs.
+        READY_NOTIFICATION_AT.put(key, readyAt);
+        long delay = Math.max(1L, readyAt - now);
         long finalReadyAt = readyAt;
         OMNISLASH_SCHEDULER.schedule(
-                () -> queueReadyNotification(store, playerRef, playerId, spiritId, ability, feedTier, finalReadyAt),
+                () -> queueReadyNotification(store, playerRef, playerId, spiritId, finalReadyAt),
                 delay,
                 TimeUnit.MILLISECONDS
         );
@@ -3547,24 +3742,20 @@ public final class LoreProcHandler {
                                                Ref<EntityStore> playerRef,
                                                UUID playerId,
                                                String spiritId,
-                                               LoreAbility ability,
-                                               int feedTier,
                                                long expectedReadyAt) {
         if (store == null || playerRef == null || store.isShutdown()) {
             return;
         }
         LoreWorldTasks.queue(store, () -> sendReadyNotification(store, playerRef, playerId, spiritId,
-                ability, feedTier, expectedReadyAt));
+                expectedReadyAt));
     }
 
     private static void sendReadyNotification(Store<EntityStore> store,
                                               Ref<EntityStore> playerRef,
                                               UUID playerId,
                                               String spiritId,
-                                              LoreAbility ability,
-                                              int feedTier,
                                               long expectedReadyAt) {
-        if (store == null || playerRef == null || playerId == null || spiritId == null || ability == null) {
+        if (store == null || playerRef == null || playerId == null || spiritId == null) {
             return;
         }
         String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
@@ -3578,7 +3769,7 @@ public final class LoreProcHandler {
             long delay = Math.max(1L, cooldownUntil - now);
             READY_NOTIFICATION_AT.put(key, cooldownUntil);
             OMNISLASH_SCHEDULER.schedule(
-                    () -> queueReadyNotification(store, playerRef, playerId, spiritId, ability, feedTier, cooldownUntil),
+                    () -> queueReadyNotification(store, playerRef, playerId, spiritId, cooldownUntil),
                     delay,
                     TimeUnit.MILLISECONDS
             );
@@ -3615,11 +3806,11 @@ public final class LoreProcHandler {
         if (bodyTemplate == null || bodyTemplate.isBlank() || bodyTemplate.equals("notification.lore_ready.body")) {
             bodyTemplate = "{0} is ready.";
         }
-        String abilityName = resolveAbilityDisplayName(ability, lang);
-        if (abilityName == null || abilityName.isBlank()) {
-            abilityName = "Lore Ability";
+        String loreName = resolveLoreDisplayName(spiritId, lang);
+        if (loreName == null || loreName.isBlank()) {
+            loreName = "Lore";
         }
-        String body = bodyTemplate.replace("{0}", abilityName);
+        String body = bodyTemplate.replace("{0}", loreName);
         var handler = resolved.getPacketHandler();
         if (handler == null) {
             return;
@@ -3628,23 +3819,25 @@ public final class LoreProcHandler {
         LoreVisuals.tryApplyTimedVisualEffectOverride(store, playerRef, 900L, READY_WEAPON_EFFECT_IDS);
     }
 
-    private static String resolveAbilityDisplayName(LoreAbility ability, String langCode) {
-        if (ability == null) {
+    private static String resolveLoreDisplayName(String spiritId, String langCode) {
+        if (spiritId == null || spiritId.isBlank()) {
             return null;
         }
-        String resolved = ability.resolveAbilityName(langCode);
-        if (resolved != null && !resolved.isBlank()) {
-            return resolved;
+        String trimmed = spiritId.trim();
+        String[] translationKeys = {
+                "npcRoles." + trimmed + ".name",
+                "npc." + trimmed + ".name",
+                "spirit." + trimmed + ".name",
+                trimmed
+        };
+        for (String key : translationKeys) {
+            String translated = LangLoader.getTranslationForLanguage(key, langCode);
+            if (translated != null && !translated.isBlank() && !translated.equals(key)) {
+                return translated;
+            }
         }
-        LoreEffectType effect = ability.getEffectType();
-        if (effect == null) {
-            return null;
-        }
-        String raw = effect.name();
-        if (raw.startsWith("APPLY_") && raw.length() > "APPLY_".length()) {
-            raw = raw.substring("APPLY_".length());
-        }
-        return toTitleCase(raw.replace('_', ' '));
+        String raw = trimmed.contains(".") ? trimmed.substring(trimmed.lastIndexOf('.') + 1) : trimmed;
+        return toTitleCase(raw.replace('_', ' ').replace('-', ' '));
     }
 
     private static String toTitleCase(String raw) {
@@ -3795,16 +3988,16 @@ public final class LoreProcHandler {
                 return Math.max(1, 1 + extraHits);
             }
             case OMNISLASH -> {
-                return resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, feedTier);
+                return LoreSocketManager.resolveOmnislashRuneHitCount(proc.level, feedTier);
             }
             case OCTASLASH -> {
                 return resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, feedTier);
             }
             case PUMMEL -> {
-                return resolveFeedScaledHits(PUMMEL_BASE_HITS, PUMMEL_MAX_HITS, feedTier);
+                return PUMMEL_RUNE_HITS;
             }
             case BLOOD_RUSH -> {
-                return resolveFeedScaledHits(BLOOD_RUSH_BASE_HITS, BLOOD_RUSH_MAX_HITS, feedTier);
+                return BLOOD_RUSH_RUNE_HITS;
             }
             case CHARGE_ATTACK -> {
                 return resolveFeedScaledHits(CHARGE_ATTACK_BASE_HITS, CHARGE_ATTACK_MAX_HITS, feedTier);
@@ -3852,10 +4045,16 @@ public final class LoreProcHandler {
         int hits = resolveSynergyHitsForProc(proc);
         switch (type) {
             case OMNISLASH -> {
-                return (long) hits * OMNISLASH_HIT_DELAY_MS + 200L;
+                return estimateAcceleratingOmnislashDurationMs(hits);
             }
-            case OCTASLASH, BLOOD_RUSH, PUMMEL -> {
+            case OCTASLASH -> {
                 return (long) hits * MULTIHIT_HIT_DELAY_MS + 150L;
+            }
+            case PUMMEL -> {
+                return (long) PUMMEL_RUNE_HITS * MULTIHIT_HIT_DELAY_MS + 200L;
+            }
+            case BLOOD_RUSH -> {
+                return (long) BLOOD_RUSH_RUNE_HITS * BLOOD_RUSH_RUNE_HIT_INTERVAL_MS + 200L;
             }
             case CHARGE_ATTACK -> {
                 return (long) hits * CHARGE_ATTACK_HIT_DELAY_MS + 150L;
@@ -3886,7 +4085,7 @@ public final class LoreProcHandler {
         if (!isCoreEffectType(type)) {
             return false;
         }
-        if (type == LoreEffectType.SUMMON_WOLF_PACK) {
+        if (type == LoreEffectType.SUMMON_WOLF_PACK || type == LoreEffectType.OMNISLASH) {
             return true;
         }
         return isCoreColorForSpirit(proc.spiritId);
@@ -3897,7 +4096,7 @@ public final class LoreProcHandler {
             return false;
         }
         return switch (type) {
-            case OMNISLASH, OCTASLASH, CHARGE_ATTACK, SUMMON_WOLF_PACK,
+            case OMNISLASH, OCTASLASH, RUNE_OCTASLASH, CHARGE_ATTACK, SUMMON_WOLF_PACK,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> true;
             default -> false;
         };
@@ -4014,7 +4213,7 @@ public final class LoreProcHandler {
         return best;
     }
 
-    private static int resolveCoreHitCount(LoreAbility ability, int feedTier) {
+    private static int resolveCoreHitCount(LoreAbility ability, int level, int feedTier) {
         if (ability == null) {
             return 1;
         }
@@ -4023,12 +4222,22 @@ public final class LoreProcHandler {
             return 1;
         }
         return switch (type) {
-            case OMNISLASH -> resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, feedTier);
+            case OMNISLASH -> LoreSocketManager.resolveOmnislashRuneHitCount(level, feedTier);
             case OCTASLASH -> resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, feedTier);
             case CHARGE_ATTACK -> resolveFeedScaledHits(CHARGE_ATTACK_BASE_HITS, CHARGE_ATTACK_MAX_HITS, feedTier);
             case SUMMON_WOLF_PACK -> 1;
             default -> 1;
         };
+    }
+
+    private static long estimateAcceleratingOmnislashDurationMs(int hits) {
+        long duration = 200L;
+        int strikeCount = Math.max(1, Math.min(12, hits));
+        for (int completedHits = 1; completedHits < strikeCount; completedHits++) {
+            long interval = Math.max(200L, 650L - (long) (completedHits - 1) * 50L);
+            duration += interval;
+        }
+        return duration;
     }
 
     private static void armGroundslamAugment(UUID playerId, PendingLoreProc proc, int hits) {
@@ -4093,8 +4302,13 @@ public final class LoreProcHandler {
         boolean changed = LoreSocketManager.addProcXp(data, proc.socketIndex);
         LoreSocketData.LoreSocket socket = data.getSocket(proc.socketIndex);
         if (socket != null && socket.getLevel() >= maxLevel) {
-            absorbSpirit(self, socket);
-            changed = true;
+            // Keep extractable Lore socketed at max level; Ghastly Essence extracts its rune.
+            if (!LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())
+                    && !LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())
+                    && !LoreSocketManager.isBloodRushSpirit(socket.getSpiritId())) {
+                absorbSpirit(self, socket);
+                changed = true;
+            }
         }
         return changed;
     }
@@ -4112,7 +4326,7 @@ public final class LoreProcHandler {
             return false;
         }
         return switch (type) {
-            case MULTI_HIT, OMNISLASH, OCTASLASH, PUMMEL, BLOOD_RUSH, CHARGE_ATTACK -> true;
+            case MULTI_HIT, OCTASLASH, PUMMEL, CHARGE_ATTACK -> true;
             default -> false;
         };
     }
@@ -4214,7 +4428,7 @@ public final class LoreProcHandler {
         if (ThreadLocalRandom.current().nextDouble() >= boosted) {
             return false;
         }
-        long cooldownMs = Math.max(0L, LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier));
+        long cooldownMs = Math.max(0L, ability.getScaledCooldownMs(feedTier));
         if (cooldownMs > 0L) {
             COOLDOWNS.put(key, now + cooldownMs);
         }
@@ -4261,10 +4475,7 @@ public final class LoreProcHandler {
         if (targets.isEmpty()) {
             return;
         }
-        if (attackerRef != null) {
-            long trailDurationMs = Math.max(250L, (long) totalHits * OMNISLASH_HIT_DELAY_MS + 200L);
-            LoreVisuals.tryApplyTimedVisualEffectOverride(store, attackerRef, trailDurationMs, OMNISLASH_TRAIL_EFFECT_IDS);
-        }
+        LoreVisuals.tryApplyVisualEffect(store, attackerRef, OMNISLASH_TRAIL_EFFECT_IDS);
         String slashParticleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
         OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, teleportAttacker,
                 skipRefine, totalHits, slashParticleId, finalMultiplier, feedTier);
@@ -4275,10 +4486,7 @@ public final class LoreProcHandler {
         if (sequence == null) {
             return;
         }
-        for (int i = 0; i < sequence.totalHits; i++) {
-            long delay = i * OMNISLASH_HIT_DELAY_MS;
-            OMNISLASH_SCHEDULER.schedule(() -> queueOmnislashHit(sequence), delay, TimeUnit.MILLISECONDS);
-        }
+        queueOmnislashHit(sequence);
     }
 
     private static void queueOmnislashHit(OmnislashSequence sequence) {
@@ -4297,6 +4505,7 @@ public final class LoreProcHandler {
             return;
         }
         if (sequence.hitsApplied >= sequence.totalHits) {
+            removeOmnislashTrail(sequence.store, sequence.attackerRef);
             return;
         }
         Store<EntityStore> store = sequence.store;
@@ -4306,6 +4515,7 @@ public final class LoreProcHandler {
         Ref<EntityStore> targetRef = selectOmnislashTarget(store, sequence);
         if (targetRef == null) {
             sequence.hitsApplied = sequence.totalHits;
+            removeOmnislashTrail(store, sequence.attackerRef);
             return;
         }
         if (sequence.teleportAttacker) {
@@ -4328,8 +4538,646 @@ public final class LoreProcHandler {
         float actualPerHit = sequence.perHit * multiplier;
         LoreDamageUtils.applyLoreDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine,
                 sequence.feedTier);
+        queueAbilityHitWeaponLores(store, sequence.attackerRef, targetRef);
         tryApplyGroundslamAugment(store, sequence.attackerRef, targetRef);
         sequence.hitsApplied++;
+        if (sequence.hitsApplied < sequence.totalHits) {
+            long interval = Math.max(sequence.minimumIntervalMs,
+                    sequence.initialIntervalMs - (long) (sequence.hitsApplied - 1) * sequence.intervalReductionMs);
+            OMNISLASH_SCHEDULER.schedule(() -> queueOmnislashHit(sequence), interval, TimeUnit.MILLISECONDS);
+        } else {
+            removeOmnislashTrail(store, sequence.attackerRef);
+        }
+    }
+
+    /** Starts the six-strike Blood Rush combo from a rune interaction. */
+    public static void startBloodRushRune(Store<EntityStore> store,
+                                          Ref<EntityStore> attackerRef,
+                                          Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.containsKey(attackerRef)) {
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null) {
+            return;
+        }
+        if (targetRef != null && !targetRef.isValid()) {
+            targetRef = null;
+        }
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, targetRef, BLOOD_RUSH_TARGET_RADIUS,
+                BLOOD_RUSH_TARGET_RADIUS * BLOOD_RUSH_TARGET_RADIUS, "bloodrush.rune",
+                DEBUG_LORE_PROCS, 1, OMNISLASH_MAX_NPC_CHECKS);
+        if (targets.isEmpty()) {
+            return;
+        }
+
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
+        if (baseResult.amount <= 0f) {
+            return;
+        }
+        BloodRushSequence sequence = new BloodRushSequence(store, attackerRef, targets.get(0),
+                baseResult.amount, baseResult.skipRefine);
+        if (ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.remove(attackerRef, sequence),
+                BLOOD_RUSH_RUNE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Applies one configured Blood Rush strike on the world thread. */
+    public static void applyBloodRushRuneStep(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> applyBloodRushRuneStepOnWorldThread(store, attackerRef));
+    }
+
+    private static void applyBloodRushRuneStepOnWorldThread(Store<EntityStore> store,
+                                                             Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        BloodRushSequence sequence = ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.get(attackerRef);
+        if (sequence == null) {
+            return;
+        }
+        if (sequence.hitsApplied >= BLOOD_RUSH_RUNE_HITS
+                || sequence.targetRef == null || !sequence.targetRef.isValid()
+                || LoreDamageUtils.resolveCurrentHealth(store, sequence.targetRef) <= 0f) {
+            finishBloodRushRuneSequence(attackerRef, sequence);
+            return;
+        }
+
+        float maxHealth = LoreDamageUtils.resolveMaxHealth(store, attackerRef);
+        float currentHealth = LoreDamageUtils.resolveCurrentHealth(store, attackerRef);
+        float missingHealthRatio = maxHealth > 0f
+                ? Math.max(0f, Math.min(1f, (maxHealth - currentHealth) / maxHealth))
+                : 0f;
+        float damageScale = BLOOD_RUSH_BASE_DAMAGE_PER_HIT
+                + BLOOD_RUSH_MISSING_HEALTH_BONUS_PER_HIT * missingHealthRatio;
+        float hitDamage = sequence.baseDamage * damageScale;
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, sequence.targetRef, hitDamage, sequence.skipRefine);
+        LoreAnimationUtils.playSwingAnimation(store, attackerRef, sequence.hitsApplied);
+        String impactParticleId = LoreVisuals.resolveParticleEffectId(BLOOD_RUSH_HIT_PARTICLE_IDS);
+        if (impactParticleId != null) {
+            LoreVisuals.spawnSlashParticles(store, attackerRef, sequence.targetRef, impactParticleId, 1.15f);
+        }
+        LoreVisuals.tryApplyVisualEffect(store, attackerRef, BLOOD_RUSH_SWEEP_EFFECT_ID);
+        applyBloodRushSelfEffect(store, attackerRef, hitDamage);
+        queueAbilityHitWeaponLores(store, attackerRef, sequence.targetRef);
+        sequence.hitsApplied++;
+        if (sequence.hitsApplied >= BLOOD_RUSH_RUNE_HITS) {
+            finishBloodRushRuneSequence(attackerRef, sequence);
+        }
+    }
+
+    private static void applyBloodRushSelfEffect(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                float hitDamage) {
+        if (store == null || attackerRef == null || !attackerRef.isValid() || hitDamage <= 0f) {
+            return;
+        }
+        double roll = ThreadLocalRandom.current().nextDouble();
+        if (roll < BLOOD_RUSH_SELF_BLEED_CHANCE) {
+            double ailmentMultiplier = resolveNpcAilmentMultiplier(store, attackerRef, "bleed");
+            if (applyBleedOverTime(store, attackerRef, attackerRef, hitDamage, 0, ailmentMultiplier)) {
+                LoreVisuals.tryApplyVisualEffect(store, attackerRef, BLEED_EFFECT_IDS);
+            }
+            return;
+        }
+        if (roll < BLOOD_RUSH_SELF_BLEED_CHANCE + BLOOD_RUSH_SELF_HEAL_CHANCE) {
+            LoreDamageUtils.applyHeal(store, attackerRef,
+                    hitDamage * BLOOD_RUSH_SELF_HEAL_DAMAGE_FRACTION);
+        }
+    }
+
+    private static void finishBloodRushRuneSequence(Ref<EntityStore> attackerRef, BloodRushSequence sequence) {
+        if (attackerRef == null || sequence == null) {
+            return;
+        }
+        // Keep the guard briefly so the final deferred hit-lore callback cannot
+        // immediately start another Blood Rush from this rune's own slash.
+        OMNISLASH_SCHEDULER.schedule(
+                () -> ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.remove(attackerRef, sequence),
+                BLOOD_RUSH_RUNE_HIT_INTERVAL_MS * 3L, TimeUnit.MILLISECONDS);
+    }
+
+    /** Starts the five-strike native-animation Pummel combination. */
+    public static void startPummelRune(Store<EntityStore> store,
+                                       Ref<EntityStore> attackerRef,
+                                       Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
+            return;
+        }
+        if (store.getComponent(attackerRef, Player.getComponentType()) == null) {
+            return;
+        }
+        if (targetRef != null && !targetRef.isValid()) {
+            targetRef = null;
+        }
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, targetRef, PUMMEL_RUNE_TARGET_RADIUS,
+                PUMMEL_RUNE_TARGET_RADIUS * PUMMEL_RUNE_TARGET_RADIUS, "pummel.rune",
+                DEBUG_LORE_PROCS, 1, OMNISLASH_MAX_NPC_CHECKS);
+        if (targets.isEmpty()) {
+            return;
+        }
+
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
+        if (baseResult.amount <= 0f) {
+            return;
+        }
+        PummelSequence sequence = new PummelSequence(store, attackerRef, targets.get(0),
+                baseResult.amount, baseResult.skipRefine);
+        if (ACTIVE_PUMMEL_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> ACTIVE_PUMMEL_RUNE_SEQUENCES.remove(attackerRef, sequence),
+                PUMMEL_RUNE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Applies one JSON-configured Pummel strike from the world task queue. */
+    public static void applyPummelRuneStep(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> applyPummelRuneStepOnWorldThread(store, attackerRef));
+    }
+
+    /** Summons the pack tier represented by an equipped Soulstone Wolf rune. */
+    public static void startWolfPackRune(Store<EntityStore> store,
+                                         Ref<EntityStore> ownerRef,
+                                         Ref<EntityStore> targetRef,
+                                         int tier) {
+        if (store == null || store.isShutdown() || ownerRef == null || !ownerRef.isValid()) {
+            return;
+        }
+        Player owner = store.getComponent(ownerRef, Player.getComponentType());
+        if (owner == null || owner.getUuid() == null) {
+            return;
+        }
+        UUID ownerId = owner.getUuid();
+        LoreWorldTasks.queue(store, () -> {
+            if (store.isShutdown() || !ownerRef.isValid()) {
+                return;
+            }
+            if (targetRef != null && targetRef.isValid()
+                    && store.getComponent(targetRef, NPCEntity.getComponentType()) != null) {
+                commandSummonedWolvesToAttackOnWorldThread(store, ownerId, targetRef);
+            }
+            trySummonWolfPack(store, ownerRef, ownerId, tier, targetRef);
+        });
+    }
+
+    /** Retargets an owner's active Soulstone wolves to the NPC the player just hit. */
+    public static void commandSummonedWolvesToAttack(Store<EntityStore> store,
+                                                     Ref<EntityStore> ownerRef,
+                                                     Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || ownerRef == null || !ownerRef.isValid()
+                || targetRef == null || !targetRef.isValid()) {
+            return;
+        }
+        Player owner = store.getComponent(ownerRef, Player.getComponentType());
+        NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
+        if (owner == null || owner.getUuid() == null || target == null || target.isReservedBy(owner.getUuid())) {
+            return;
+        }
+        UUID ownerId = owner.getUuid();
+        Set<Ref<EntityStore>> activeWolves = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
+        if (activeWolves == null || activeWolves.isEmpty()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> commandSummonedWolvesToAttackOnWorldThread(store, ownerId, targetRef));
+    }
+
+    private static void commandSummonedWolvesToAttackOnWorldThread(Store<EntityStore> store,
+                                                                    UUID ownerId,
+                                                                    Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || ownerId == null || targetRef == null
+                || !targetRef.isValid() || store.getComponent(targetRef, NPCEntity.getComponentType()) == null) {
+            return;
+        }
+        NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
+        if (target == null || target.isReservedBy(ownerId)) {
+            return;
+        }
+        Set<Ref<EntityStore>> summons = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
+        if (summons == null || summons.isEmpty()) {
+            return;
+        }
+        for (Ref<EntityStore> wolfRef : summons) {
+            if (wolfRef == null || !wolfRef.isValid()) {
+                summons.remove(wolfRef);
+                continue;
+            }
+            NPCEntity wolf = store.getComponent(wolfRef, NPCEntity.getComponentType());
+            if (wolf == null || wolf.getRole() == null) {
+                summons.remove(wolfRef);
+                continue;
+            }
+            try {
+                wolf.onFlockSetTarget(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
+            } catch (Throwable ignored) {
+                // A role without a marked-target slot simply keeps following its AI.
+            }
+        }
+    }
+
+    private static void applyPummelRuneStepOnWorldThread(Store<EntityStore> store,
+                                                          Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        PummelSequence sequence = ACTIVE_PUMMEL_RUNE_SEQUENCES.get(attackerRef);
+        if (sequence == null || sequence.hitsApplied >= PUMMEL_RUNE_HITS
+                || sequence.targetRef == null || !isEntityAlive(store, sequence.targetRef)) {
+            finishPummelRuneSequence(attackerRef, sequence);
+            return;
+        }
+
+        int hitIndex = sequence.hitsApplied;
+        float damageScale = hitIndex == PUMMEL_RUNE_HITS - 1 ? 0.80f : 0.30f;
+        float hitDamage = sequence.baseDamage * damageScale;
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, sequence.targetRef,
+                hitDamage, sequence.skipRefine);
+        String impactParticleId = LoreVisuals.resolveParticleEffectId(PUMMEL_RUNE_HIT_PARTICLE_IDS);
+        if (impactParticleId != null) {
+            LoreVisuals.spawnSlashParticles(store, attackerRef, sequence.targetRef, impactParticleId, 0.95f);
+        }
+        if (hitIndex >= 0 && hitIndex < PUMMEL_SWEEP_EFFECT_IDS_BY_HIT.length) {
+            LoreVisuals.tryApplyVisualEffect(store, attackerRef, PUMMEL_SWEEP_EFFECT_IDS_BY_HIT[hitIndex]);
+        }
+        queueAbilityHitWeaponLores(store, attackerRef, sequence.targetRef);
+
+        sequence.hitsApplied++;
+        if (sequence.hitsApplied >= PUMMEL_RUNE_HITS) {
+            applyPummelFinalKnockback(store, attackerRef, sequence.targetRef);
+            if (!isNpcAilmentImmune(store, sequence.targetRef, "stun")
+                    && canApplyBossCounterAilment(store, sequence.targetRef, "stun")) {
+                applyStunForDuration(store, sequence.targetRef, PUMMEL_RUNE_STUN_MS);
+                onBossCounterAilmentApplied(store, sequence.targetRef, "stun");
+                spawnStunParticles(store, sequence.targetRef, attackerRef);
+            }
+            finishPummelRuneSequence(attackerRef, sequence);
+        }
+    }
+
+    private static void applyPummelFinalKnockback(Store<EntityStore> store,
+                                                  Ref<EntityStore> attackerRef,
+                                                  Ref<EntityStore> targetRef) {
+        if (store == null || attackerRef == null || targetRef == null) {
+            return;
+        }
+        TransformComponent attackerTransform = store.getComponent(attackerRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = store.getComponent(targetRef, TransformComponent.getComponentType());
+        if (attackerTransform == null || targetTransform == null
+                || attackerTransform.getPosition() == null || targetTransform.getPosition() == null) {
+            return;
+        }
+        Vector3d direction = new Vector3d(targetTransform.getPosition())
+                .sub(attackerTransform.getPosition());
+        direction.set(direction.x, 0.0d, direction.z);
+        if (direction.lengthSquared() <= 1.0e-6d) {
+            return;
+        }
+        direction.normalize().mul(PUMMEL_RUNE_KNOCKBACK_FORCE).add(0.0d, 2.0d, 0.0d);
+        Velocity velocity = store.ensureAndGetComponent(targetRef, Velocity.getComponentType());
+        if (velocity != null) {
+            velocity.addInstruction(direction, VORTEXSTRIKE_LUNGE_CONFIG,
+                    com.hypixel.hytale.protocol.ChangeVelocityType.Add);
+        }
+    }
+
+    private static void finishPummelRuneSequence(Ref<EntityStore> attackerRef, PummelSequence sequence) {
+        if (attackerRef == null || sequence == null) {
+            return;
+        }
+        // Keep the in-flight guard while deferred weapon-lore hit callbacks drain.
+        OMNISLASH_SCHEDULER.schedule(
+                () -> ACTIVE_PUMMEL_RUNE_SEQUENCES.remove(attackerRef, sequence),
+                PUMMEL_RUNE_SEQUENCE_GUARD_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Starts the reusable Omnislash combo from a rune interaction. */
+    public static void startOmnislashRune(Store<EntityStore> store,
+                                          Ref<EntityStore> attackerRef,
+                                          Ref<EntityStore> targetRef,
+                                          int totalHits) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OmnislashSequence previousSequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.remove(attackerRef);
+        if (previousSequence != null) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef);
+            queueRemoveOmnislashTrail(store, attackerRef);
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null) {
+            return;
+        }
+
+        LoreDamageUtils.DamageBaseResult baseResult =
+                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
+        float perHit = Math.max(0f, baseResult.amount * 0.35f);
+        if (perHit <= 0f) {
+            return;
+        }
+
+        double radius = OMNISLASH_RADIUS;
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, targetRef, radius, radius * radius, "omnislash.rune",
+                DEBUG_LORE_PROCS, OMNISLASH_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS);
+        if (targets.isEmpty()) {
+            return;
+        }
+
+        int hits = Math.max(1, Math.min(12, totalHits));
+        OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
+        if (runeChain == null && hits >= OMNISLASH_MAX_RUNE_HITS
+                && ThreadLocalRandom.current().nextDouble() < OMNISLASH_LOWER_RUNE_CHAIN_CHANCE) {
+            List<Integer> lowerHitCounts = new ArrayList<>(List.of(3, 6, 8));
+            for (int i = lowerHitCounts.size() - 1; i > 0; i--) {
+                int swapIndex = ThreadLocalRandom.current().nextInt(i + 1);
+                Integer value = lowerHitCounts.get(i);
+                lowerHitCounts.set(i, lowerHitCounts.get(swapIndex));
+                lowerHitCounts.set(swapIndex, value);
+            }
+            runeChain = new OmnislashRuneChain(lowerHitCounts, targetRef);
+            ACTIVE_OMNISLASH_RUNE_CHAINS.put(attackerRef, runeChain);
+            OmnislashRuneChain expiringChain = runeChain;
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, expiringChain),
+                    OMNISLASH_LOWER_RUNE_CHAIN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            LoreDebug.logKv("omnislash.rune.chain.start",
+                    "chance", OMNISLASH_LOWER_RUNE_CHAIN_CHANCE,
+                    "levels", lowerHitCounts);
+        } else if (runeChain != null && targetRef != null && targetRef.isValid()) {
+            runeChain.lastTargetRef = targetRef;
+        }
+        long initialIntervalMs = 650L;
+        long minimumIntervalMs = 200L;
+        long intervalReductionMs = 50L;
+        OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, true,
+                baseResult.skipRefine, hits, LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS),
+                OMNISLASH_FINAL_MULTIPLIER, 0, initialIntervalMs, minimumIntervalMs, intervalReductionMs);
+        ACTIVE_OMNISLASH_RUNE_SEQUENCES.put(attackerRef, sequence);
+        LoreVisuals.tryApplyVisualEffect(store, attackerRef, OMNISLASH_TRAIL_EFFECT_IDS);
+        long cleanupDelay = estimateAcceleratingOmnislashDurationMs(hits) + 5000L;
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(store, () -> finishOmnislashRuneSequence(store, attackerRef, sequence)),
+                cleanupDelay, TimeUnit.MILLISECONDS);
+    }
+
+    /** Applies one configured JSON strike, then advances its target for the next strike. */
+    public static void applyOmnislashRuneStep(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        // This entry point is called from an interaction tick. Defer every component
+        // read/write and damage operation until the world task queue runs.
+        LoreWorldTasks.queue(store, () -> applyOmnislashRuneStepOnWorldThread(store, attackerRef));
+    }
+
+    private static void applyOmnislashRuneStepOnWorldThread(Store<EntityStore> store,
+                                                             Ref<EntityStore> attackerRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OmnislashSequence sequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.get(attackerRef);
+        if (sequence == null) {
+            return;
+        }
+        if (sequence.hitsApplied >= sequence.totalHits) {
+            finishOmnislashRuneSequence(store, attackerRef, sequence);
+            return;
+        }
+        Ref<EntityStore> targetRef = selectOmnislashTarget(store, sequence);
+        if (targetRef == null) {
+            finishOmnislashRuneSequence(store, attackerRef, sequence);
+            return;
+        }
+        OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
+        if (runeChain != null) {
+            runeChain.lastTargetRef = targetRef;
+        }
+
+        int hitIndex = sequence.hitsApplied;
+        float multiplier = 1.0f + (float) (OMNISLASH_RAMP_PER_HIT * hitIndex);
+        if (sequence.totalHits > 1 && hitIndex >= sequence.totalHits - 1) {
+            multiplier *= sequence.finalMultiplier;
+        }
+        float actualPerHit = sequence.perHit * multiplier;
+        float afterimageExplosionDamage = sequence.totalHits >= OMNISLASH_MAX_RUNE_HITS
+                ? actualPerHit * OMNISLASH_AFTERIMAGE_EXPLOSION_DAMAGE_MULTIPLIER
+                : 0f;
+        teleportToTarget(store, attackerRef, targetRef, afterimageExplosionDamage,
+                sequence.skipRefine, sequence.feedTier, resolveOmnislashRuneSlashAnimationId(hitIndex));
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef,
+                actualPerHit, sequence.skipRefine, sequence.feedTier);
+        queueAbilityHitWeaponLores(store, attackerRef, targetRef);
+        tryApplyGroundslamAugment(store, attackerRef, targetRef);
+        sequence.hitsApplied++;
+        if (sequence.hitsApplied >= sequence.totalHits) {
+            finishOmnislashRuneSequence(store, attackerRef, sequence);
+        }
+    }
+
+    /**
+     * Runs socketed weapon ON_HIT procs for an ability strike on a later world task.
+     * Lore damage normally skips the damage-event proc handler to prevent recursive
+     * lore damage from repeatedly triggering itself. Omnislash is an actual sequence
+     * of attacks, so its strikes explicitly enter the weapon ON_HIT path here.
+     */
+    private static void queueAbilityHitWeaponLores(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || targetRef == null || !targetRef.isValid()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> applyAbilityHitWeaponLores(store, attackerRef, targetRef));
+    }
+
+    private static void applyAbilityHitWeaponLores(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || targetRef == null || !targetRef.isValid()) {
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null || attacker.getUuid() == null) {
+            return;
+        }
+        PlayerInventoryUtils.HeldItemContext context = PlayerInventoryUtils.getHeldItemContext(attacker);
+        if (context == null || !context.isValid()) {
+            return;
+        }
+        ItemStack weapon = LoreHeldItemUpdateManager.resolveHeldItem(attacker, context);
+        if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
+            return;
+        }
+        LoreSocketData data = LoreSocketManager.getLoreSocketData(weapon);
+        if (data == null) {
+            return;
+        }
+
+        boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
+        Set<String> used = new HashSet<>();
+        ProcState procState = new ProcState();
+        // This opt-in permits ordinary ON_HIT lores during the slash sequence. The
+        // collector still rejects nested multi-hit abilities while Ability1 is active.
+        changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
+                LoreTrigger.ON_HIT, true, used, procState, null, true);
+        if (procState.hasTriggered()) {
+            changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
+                    LoreTrigger.ON_LORE_PROC, true, used, null, null, true);
+        }
+
+        if (changed) {
+            ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
+            LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, context, updated);
+        }
+    }
+
+    private static void finishOmnislashRuneSequence(Store<EntityStore> store,
+                                                     Ref<EntityStore> attackerRef,
+                                                     OmnislashSequence sequence) {
+        if (store == null || attackerRef == null || sequence == null) {
+            return;
+        }
+        if (ACTIVE_OMNISLASH_RUNE_SEQUENCES.remove(attackerRef, sequence)) {
+            removeOmnislashTrail(store, attackerRef);
+            OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
+            if (runeChain == null) {
+                return;
+            }
+            if (sequence.hitsApplied < sequence.totalHits) {
+                ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+                return;
+            }
+            scheduleOmnislashLowerRuneChain(store, attackerRef, runeChain,
+                    OMNISLASH_LOWER_RUNE_CHAIN_DELAY_MS, 0);
+        }
+    }
+
+    private static void scheduleOmnislashLowerRuneChain(Store<EntityStore> store,
+                                                         Ref<EntityStore> attackerRef,
+                                                         OmnislashRuneChain runeChain,
+                                                         long delayMs,
+                                                         int retryCount) {
+        if (store == null || store.isShutdown() || attackerRef == null || runeChain == null
+                || ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef) != runeChain) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(store, () -> startOmnislashLowerRuneChain(
+                        store, attackerRef, runeChain, retryCount)),
+                Math.max(1L, delayMs), TimeUnit.MILLISECONDS);
+    }
+
+    private static void startOmnislashLowerRuneChain(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      OmnislashRuneChain runeChain,
+                                                      int retryCount) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || runeChain == null || ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef) != runeChain) {
+            if (attackerRef != null && runeChain != null) {
+                ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            }
+            return;
+        }
+        if (runeChain.remainingHitCounts.isEmpty()) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            LoreDebug.log("omnislash.rune.chain.complete", "all lower rune levels used");
+            return;
+        }
+
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        InteractionModule module = InteractionModule.get();
+        InteractionManager manager = module == null
+                ? null
+                : store.getComponent(attackerRef, module.getInteractionManagerComponent());
+        if (attacker == null || manager == null) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            return;
+        }
+        if (hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
+            if (retryCount >= OMNISLASH_LOWER_RUNE_CHAIN_MAX_RETRIES) {
+                ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+                LoreDebug.log("omnislash.rune.chain.stop", "lower rune interaction channel stayed busy");
+                return;
+            }
+            scheduleOmnislashLowerRuneChain(store, attackerRef, runeChain,
+                    OMNISLASH_LOWER_RUNE_CHAIN_RETRY_MS, retryCount + 1);
+            return;
+        }
+
+        int hitCount = runeChain.remainingHitCounts.get(0);
+        String itemId = resolveOmnislashRuneItemIdForHits(hitCount);
+        ItemStack runestone = new ItemStack(itemId, 1);
+        Item item = runestone.getItem();
+        if (item == null || item == Item.UNKNOWN || !(item.getAbility() instanceof CoreItemAbility ability)) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            return;
+        }
+        String rootId = ability.getCastRootId();
+        RootInteraction root = rootId == null || rootId.isBlank()
+                ? null
+                : RootInteraction.getRootInteractionOrUnknown(rootId);
+        if (root == null) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            return;
+        }
+        InteractionContext context = createSocketedAbilityContext(manager, attackerRef, runestone);
+        if (context == null) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            return;
+        }
+        Ref<EntityStore> targetRef = runeChain.lastTargetRef;
+        if (targetRef != null && targetRef.isValid()) {
+            context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
+        }
+        InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
+        if (chain == null) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            return;
+        }
+        manager.applyRules(context, chain.getChainData(), SOCKETED_RUNE_INTERACTION_TYPE, root);
+        manager.queueExecuteChain(chain);
+        runeChain.remainingHitCounts.remove(0);
+        LoreDebug.logKv("omnislash.rune.chain.next",
+                "item", itemId,
+                "remaining", runeChain.remainingHitCounts);
+    }
+
+    private static String resolveOmnislashRuneItemIdForHits(int hitCount) {
+        return switch (hitCount) {
+            case 8 -> OMNISLASH_RUNE_8_ITEM_ID;
+            case 6 -> OMNISLASH_RUNE_6_ITEM_ID;
+            default -> OMNISLASH_RUNE_3_ITEM_ID;
+        };
+    }
+
+    private static void queueRemoveOmnislashTrail(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || attackerRef == null) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> removeOmnislashTrail(store, attackerRef));
+    }
+
+    private static void removeOmnislashTrail(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        if (store == null || attackerRef == null || store.isShutdown() || !attackerRef.isValid()) {
+            return;
+        }
+        LoreVisuals.tryRemoveVisualEffectsById(store, attackerRef, OMNISLASH_TRAIL_EFFECT_IDS);
     }
 
     private static void scheduleSingleTargetHits(Store<EntityStore> store,
@@ -4923,6 +5771,16 @@ public final class LoreProcHandler {
     private static void teleportToTarget(Store<EntityStore> store,
                                          Ref<EntityStore> attackerRef,
                                          Ref<EntityStore> targetRef) {
+        teleportToTarget(store, attackerRef, targetRef, 0f, true, 0, null);
+    }
+
+    private static void teleportToTarget(Store<EntityStore> store,
+                                         Ref<EntityStore> attackerRef,
+                                         Ref<EntityStore> targetRef,
+                                         float afterimageExplosionDamage,
+                                         boolean skipRefine,
+                                         int feedTier,
+                                         String afterimageAnimationId) {
         if (store == null || attackerRef == null || targetRef == null) {
             return;
         }
@@ -4931,24 +5789,190 @@ public final class LoreProcHandler {
         if (attackerTransform == null || targetTransform == null) {
             return;
         }
+        spawnOmnislashAfterimage(store, attackerRef, attackerTransform,
+                afterimageExplosionDamage, skipRefine, feedTier, afterimageAnimationId);
         Vector3d targetPos = targetTransform.getPosition();
         if (targetPos == null) {
             return;
         }
         Vector3d dest = new Vector3d(targetPos);
-        Vector3d attackerPos = attackerTransform.getPosition();
-        if (attackerPos != null) {
-            Vector3d offset = new Vector3d(attackerPos).sub(targetPos);
-            if (offset.length() < 0.01d) {
-                offset.set(1.0d, 0.0d, 0.0d);
-            }
-            offset.normalize().mul(0.6d);
-            dest.add(offset);
+        double standOff = OMNISLASH_TELEPORT_STANDOFF;
+        switch (ThreadLocalRandom.current().nextInt(4)) {
+            case 0 -> dest.add(0.0d, 0.0d, -standOff); // north
+            case 1 -> dest.add(standOff, 0.0d, 0.0d);  // east
+            case 2 -> dest.add(0.0d, 0.0d, standOff);  // south
+            default -> dest.add(-standOff, 0.0d, 0.0d); // west
         }
-        Rotation3f rotation = attackerTransform.getRotation() != null
-                ? attackerTransform.getRotation().clone()
-                : new Rotation3f(0f, 0f, 0f);
-        queueTeleport(store, attackerRef, dest, rotation);
+        Vector3d startPos = attackerTransform.getPosition();
+        if (startPos != null) {
+            spawnOmnislashLungeTrail(store, startPos, dest);
+        }
+        Vector3d lookDirection = new Vector3d(targetPos).sub(dest);
+        lookDirection.set(lookDirection.x, 0.0d, lookDirection.z);
+        Rotation3f rotation = Rotation3f.lookAt(lookDirection);
+        if (rotation == null) {
+            rotation = attackerTransform.getRotation() != null
+                    ? attackerTransform.getRotation().clone()
+                    : new Rotation3f(0f, 0f, 0f);
+        }
+        rotation.setPitch(0f);
+        rotation.setRoll(0f);
+        // Callers execute on the world task queue, where Store component writes are safe.
+        applyTeleportInternal(store, attackerRef, dest, rotation);
+    }
+
+    private static void spawnOmnislashLungeTrail(Store<EntityStore> store,
+                                                  Vector3d startPosition,
+                                                  Vector3d destination) {
+        if (store == null || startPosition == null || destination == null) {
+            return;
+        }
+        String particleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_LUNGE_TRAIL_PARTICLE_IDS);
+        if (particleId == null) {
+            return;
+        }
+
+        double dx = destination.x - startPosition.x;
+        double dy = destination.y - startPosition.y;
+        double dz = destination.z - startPosition.z;
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        int burstCount = Math.max(2, Math.min(OMNISLASH_LUNGE_TRAIL_MAX_BURSTS,
+                (int) Math.ceil(distance / OMNISLASH_LUNGE_TRAIL_BURST_SPACING) + 1));
+        for (int i = 0; i < burstCount; i++) {
+            double t = (double) i / (double) (burstCount - 1);
+            Vector3d burstPosition = new Vector3d(
+                    startPosition.x + dx * t,
+                    startPosition.y + dy * t,
+                    startPosition.z + dz * t);
+            LoreVisuals.spawnScaledParticle(store, particleId, burstPosition, 0.65f);
+        }
+    }
+
+    private static void spawnOmnislashAfterimage(Store<EntityStore> store,
+                                                  Ref<EntityStore> sourceRef,
+                                                  TransformComponent sourceTransform,
+                                                  float explosionDamage,
+                                                  boolean skipRefine,
+                                                  int feedTier,
+                                                  String animationId) {
+        if (store == null || sourceRef == null || sourceTransform == null || !sourceRef.isValid()) {
+            return;
+        }
+        try {
+            ModelComponent modelComponent = store.getComponent(sourceRef, ModelComponent.getComponentType());
+            Model sourceModel = modelComponent == null ? null : modelComponent.getModel();
+            Vector3d currentSourcePosition = sourceTransform.getPosition();
+            if (sourceModel == null || currentSourcePosition == null) {
+                return;
+            }
+            Vector3d sourcePosition = new Vector3d(currentSourcePosition);
+
+            EntityStore entityStore = store.getExternalData();
+            World world = entityStore == null ? null : entityStore.getWorld();
+            if (world == null) {
+                return;
+            }
+
+            ActiveAnimationComponent animation = store.getComponent(
+                    sourceRef, ActiveAnimationComponent.getComponentType());
+            MovementStatesComponent movement = store.getComponent(
+                    sourceRef, MovementStatesComponent.getComponentType());
+            PlayerSkinComponent skin = store.getComponent(sourceRef, PlayerSkinComponent.getComponentType());
+            PlayerSettings playerSettings = store.getComponent(sourceRef, PlayerSettings.getComponentType());
+            InventoryComponent.Armor armor = store.getComponent(
+                    sourceRef, InventoryComponent.Armor.getComponentType());
+            InventoryComponent.Hotbar hotbar = store.getComponent(
+                    sourceRef, InventoryComponent.Hotbar.getComponentType());
+            InventoryComponent.Utility utility = store.getComponent(
+                    sourceRef, InventoryComponent.Utility.getComponentType());
+            Rotation3f sourceRotation = sourceTransform.getRotation();
+            OmnislashAfterimageEntity afterimage = new OmnislashAfterimageEntity(
+                    world, sourceModel, animation, movement, skin, playerSettings, armor, hotbar, utility);
+            world.spawnEntity(afterimage, new Vector3d(sourcePosition),
+                    sourceRotation == null ? new Rotation3f() : sourceRotation.clone());
+
+            Ref<EntityStore> afterimageRef = afterimage.getReference();
+            try {
+                if (afterimageRef != null && afterimageRef.isValid()) {
+                    if (animationId != null && !animationId.isBlank()) {
+                        AnimationUtils.playAnimation(afterimageRef, AnimationSlot.Action,
+                                "SwordX", animationId, true, store);
+                    }
+                    EntityEffect effect = resolveOmnislashAfterimageEffect();
+                    if (effect != null) {
+                        EffectControllerComponent controller = store.ensureAndGetComponent(
+                                afterimageRef, EffectControllerComponent.getComponentType());
+                        if (controller != null) {
+                            controller.addEffect(afterimageRef, effect, store);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+                // A missing tint should not prevent cleanup or the max-rune burst.
+            }
+
+            world.scheduleAfter(() -> {
+                try {
+                    if (!afterimage.wasRemoved()) {
+                        afterimage.remove();
+                    }
+                } catch (Throwable ignored) {
+                    // The afterimage is visual-only; cleanup must not affect the combo.
+                }
+                if (explosionDamage > 0f) {
+                    LoreWorldTasks.queue(store, () -> explodeOmnislashAfterimage(
+                            store, sourceRef, sourcePosition, explosionDamage, skipRefine, feedTier));
+                }
+            }, OMNISLASH_AFTERIMAGE_LIFETIME_MS, TimeUnit.MILLISECONDS);
+        } catch (Throwable ignored) {
+            // Keep a missing or unsupported visual from interrupting Omnislash.
+        }
+    }
+
+    private static String resolveOmnislashRuneSlashAnimationId(int hitIndex) {
+        return hitIndex % 2 == 0 ? "SwingLeftRapdly" : "SwingRightRapdly";
+    }
+
+    private static void explodeOmnislashAfterimage(Store<EntityStore> store,
+                                                    Ref<EntityStore> sourceRef,
+                                                    Vector3d position,
+                                                    float damage,
+                                                    boolean skipRefine,
+                                                    int feedTier) {
+        if (store == null || store.isShutdown() || sourceRef == null || !sourceRef.isValid()
+                || position == null || damage <= 0f) {
+            return;
+        }
+
+        String particleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_AFTERIMAGE_EXPLOSION_PARTICLE_IDS);
+        if (particleId != null) {
+            Vector3d particlePosition = new Vector3d(position).add(0.0d, 0.8d, 0.0d);
+            LoreVisuals.spawnScaledParticle(store, particleId, particlePosition, 1.5f);
+        }
+
+        double radius = OMNISLASH_AFTERIMAGE_EXPLOSION_RADIUS;
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, sourceRef, position, radius, radius * radius,
+                "omnislash.afterimage.explosion", DEBUG_LORE_PROCS, 32, OMNISLASH_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || sourceRef.equals(target) || isEntityDeadOrDying(store, target)) {
+                continue;
+            }
+            LoreDamageUtils.applyLoreDamage(store, sourceRef, target, damage, skipRefine, feedTier);
+        }
+    }
+
+    private static EntityEffect resolveOmnislashAfterimageEffect() {
+        try {
+            var assetMap = EntityEffect.getAssetMap();
+            if (assetMap == null) {
+                return null;
+            }
+            int index = assetMap.getIndexOrDefault(OMNISLASH_AFTERIMAGE_EFFECT_ID, -1);
+            return index < 0 ? null : assetMap.getAsset(index);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     private static void lungeTowardTarget(Store<EntityStore> store,
@@ -5068,14 +6092,23 @@ public final class LoreProcHandler {
             Pair<Ref<EntityStore>, INonPlayerCharacter> pair =
                     npcPlugin.spawnNPC(store, roleName, null, new Vector3d(position), rotation.clone());
             if (pair == null || pair.first() == null) {
+                logWolfSpawnFailure(roleName, "NPC plugin returned no entity");
                 return null;
             }
             if (pair.second() instanceof NPCEntity npc && ownerId != null) {
                 npc.addReservation(ownerId);
             }
             return pair.first();
-        } catch (Throwable ignored) {
+        } catch (Throwable error) {
+            logWolfSpawnFailure(roleName, error.toString());
             return null;
+        }
+    }
+
+    private static void logWolfSpawnFailure(String roleName, String reason) {
+        if (WOLF_SPAWN_FAILURES_LOGGED.add(roleName)) {
+            System.err.println("[SocketReforge] Could not spawn Soulstone wolf using role '"
+                    + roleName + "': " + reason);
         }
     }
 
@@ -5797,14 +6830,20 @@ public final class LoreProcHandler {
     private static void trySummonWolfPack(Store<EntityStore> store,
                                           Ref<EntityStore> summonerRef,
                                           UUID playerId,
-                                          String spiritId,
-                                          int level,
-                                          int feedTier) {
+                                          int feedTier,
+                                          Ref<EntityStore> targetRef) {
         if (store == null || summonerRef == null || playerId == null) {
             return;
         }
-        int cap = Math.max(1, level + Math.max(0, feedTier));
-        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId == null ? "wolf" : spiritId);
+        Player summoner = store.getComponent(summonerRef, Player.getComponentType());
+        if (summoner != null
+                && summoner.getGameMode() == com.hypixel.hytale.protocol.GameMode.Creative) {
+            notifyWolfPackCreativeRestriction(summoner, playerId);
+            return;
+        }
+        int cap = LoreAbility.resolveWolfPackCount(feedTier);
+        long lifetimeMs = LoreAbility.resolveWolfPackLifetimeMs(feedTier);
+        String key = wolfSummonKey(playerId);
         Set<Ref<EntityStore>> summons = WOLF_SUMMONS.computeIfAbsent(key, k -> ConcurrentHashMap.newKeySet());
         int active = pruneSummons(store, summons);
         if (active >= cap) {
@@ -5828,23 +6867,171 @@ public final class LoreProcHandler {
                 ? transform.getRotation().clone()
                 : new Rotation3f(0f, 0f, 0f);
 
-        String primaryRole = resolveWolfRoleName(spiritId);
-        String fallbackRole = "Wolf_Black";
-
-        for (int attempt = 0; attempt < WOLF_SUMMON_MAX_ATTEMPTS; attempt++) {
-            Vector3d spawnPos = buildWolfSpawnPosition(basePos, attempt);
-            Ref<EntityStore> spawned = spawnWolf(npcPlugin, store, primaryRole, spawnPos, rotation, playerId);
-            if (spawned == null && fallbackRole != null
-                    && (primaryRole == null || !fallbackRole.equalsIgnoreCase(primaryRole))) {
-                spawned = spawnWolf(npcPlugin, store, fallbackRole, spawnPos, rotation, playerId);
+        for (int wolfIndex = active; wolfIndex < cap; wolfIndex++) {
+            Ref<EntityStore> spawned = null;
+            for (int attempt = 0; attempt < WOLF_SUMMON_MAX_ATTEMPTS; attempt++) {
+                Vector3d spawnPos = buildWolfSpawnPosition(basePos, attempt + wolfIndex);
+                spawned = spawnWolf(npcPlugin, store, WOLF_SUMMON_ROLE, spawnPos, rotation, playerId);
+                if (spawned != null) {
+                    break;
+                }
             }
-            if (spawned != null) {
-                summons.add(spawned);
+            if (spawned == null) {
                 break;
+            }
+            joinSummonedWolfToOwnerFlock(store, summonerRef, spawned);
+            summons.add(spawned);
+            scheduleWolfDespawn(store, key, spawned, lifetimeMs);
+            if (targetRef != null && targetRef.isValid()) {
+                NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
+                NPCEntity wolf = store.getComponent(spawned, NPCEntity.getComponentType());
+                if (target != null && !target.isReservedBy(playerId) && wolf != null) {
+                    try {
+                        wolf.onFlockSetTarget(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
+                    } catch (Throwable ignored) {
+                        // Target will be assigned again when its owner lands a hit.
+                    }
+                }
             }
         }
 
         cleanupSummonKey(key, summons);
+    }
+
+    private static void notifyWolfPackCreativeRestriction(Player summoner, UUID playerId) {
+        if (summoner == null || playerId == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        boolean[] shouldNotify = { false };
+        WOLF_CREATIVE_NOTICE_AT.compute(playerId.toString(), (key, lastSent) -> {
+            if (lastSent == null || now - lastSent >= WOLF_CREATIVE_NOTICE_COOLDOWN_MS) {
+                shouldNotify[0] = true;
+                return now;
+            }
+            return lastSent;
+        });
+        if (!shouldNotify[0]) {
+            return;
+        }
+
+        try {
+            PlayerRef playerRef = summoner.getPlayerRef();
+            if (playerRef == null) {
+                return;
+            }
+            String language = playerRef.getLanguage();
+            if (language == null || language.isBlank()) {
+                language = "en-US";
+            }
+            String key = "notification.wolfpack.creative_rejected";
+            String message = LangLoader.getTranslationForLanguage(key, language);
+            if (message == null || message.isBlank() || message.equals(key)) {
+                message = "Wolf Pack summons are unavailable in Creative mode.";
+            }
+            playerRef.sendMessage(Message.raw(message));
+        } catch (Throwable ignored) {
+            // The notice is informational; do not interrupt the summon guard.
+        }
+    }
+
+    /** Joins the summoned ally to the owner flock required by Template_Summoned_Ally. */
+    private static boolean joinSummonedWolfToOwnerFlock(Store<EntityStore> store,
+                                                        Ref<EntityStore> ownerRef,
+                                                        Ref<EntityStore> wolfRef) {
+        if (store == null || ownerRef == null || !ownerRef.isValid()
+                || wolfRef == null || !wolfRef.isValid()) {
+            logWolfFlockFailure("owner or summoned wolf reference was invalid during flock setup");
+            return false;
+        }
+
+        NPCEntity wolf = store.getComponent(wolfRef, NPCEntity.getComponentType());
+        Role wolfRole = wolf == null ? null : wolf.getRole();
+
+        try {
+            Ref<EntityStore> ownerFlock = FlockPlugin.getFlockReference(ownerRef, store);
+            Ref<EntityStore> wolfFlock = FlockPlugin.getFlockReference(wolfRef, store);
+            Ref<EntityStore> flockRef = isValidRef(ownerFlock) ? ownerFlock
+                    : isValidRef(wolfFlock) ? wolfFlock : null;
+            if (flockRef == null || !flockRef.isValid()) {
+                if (wolfRole != null) {
+                    flockRef = FlockPlugin.createFlock(store, wolfRole);
+                }
+                if (!isValidRef(flockRef)) {
+                    flockRef = FlockPlugin.createFlock(store, null, new String[] { WOLF_SUMMON_ROLE });
+                }
+            }
+            if (!isValidRef(flockRef)) {
+                logWolfFlockFailure("could not create a flock for the summoned wolf");
+                return false;
+            }
+
+            ownerFlock = FlockPlugin.getFlockReference(ownerRef, store);
+            if (!sameEntityRef(flockRef, ownerFlock)) {
+                FlockMembershipSystems.join(ownerRef, flockRef, store);
+            }
+            wolfFlock = FlockPlugin.getFlockReference(wolfRef, store);
+            if (!sameEntityRef(flockRef, wolfFlock)) {
+                FlockMembershipSystems.join(wolfRef, flockRef, store);
+            }
+            ownerFlock = FlockPlugin.getFlockReference(ownerRef, store);
+            wolfFlock = FlockPlugin.getFlockReference(wolfRef, store);
+            boolean joined = sameEntityRef(flockRef, ownerFlock) && sameEntityRef(flockRef, wolfFlock);
+            if (!joined) {
+                logWolfFlockFailure("flock membership did not resolve to the same owner and wolf flock");
+            }
+            return joined;
+        } catch (Throwable error) {
+            if (WOLF_FLOCK_FAILURES_LOGGED.add("join")) {
+                System.err.println("[SocketReforge] Could not join Soulstone wolves to their owner flock: "
+                        + error);
+            }
+            return false;
+        }
+    }
+
+    private static boolean isValidRef(Ref<EntityStore> ref) {
+        return ref != null && ref.isValid();
+    }
+
+    private static boolean sameEntityRef(Ref<EntityStore> first, Ref<EntityStore> second) {
+        return isValidRef(first) && isValidRef(second)
+                && first.getStore() == second.getStore()
+                && first.getIndex() == second.getIndex();
+    }
+
+    private static void logWolfFlockFailure(String reason) {
+        if (WOLF_FLOCK_FAILURES_LOGGED.add(reason)) {
+            System.err.println("[SocketReforge] Soulstone wolf flock setup failed: " + reason);
+        }
+    }
+
+    private static String wolfSummonKey(UUID ownerId) {
+        return ownerId + "|soulstone_wolf_pack";
+    }
+
+    private static void scheduleWolfDespawn(Store<EntityStore> store,
+                                            String key,
+                                            Ref<EntityStore> wolfRef,
+                                            long lifetimeMs) {
+        if (store == null || key == null || wolfRef == null || lifetimeMs <= 0L) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+            try {
+                if (!store.isShutdown() && wolfRef.isValid() && isEntityAlive(store, wolfRef)) {
+                    store.removeEntity(wolfRef, RemoveReason.REMOVE);
+                }
+            } catch (Throwable ignored) {
+                // The wolf may already have died or the world may be unloading.
+            } finally {
+                Set<Ref<EntityStore>> summons = WOLF_SUMMONS.get(key);
+                if (summons != null) {
+                    summons.remove(wolfRef);
+                    cleanupSummonKey(key, summons);
+                }
+            }
+        }), lifetimeMs, TimeUnit.MILLISECONDS);
     }
 
     private static void applyHealOverTime(Store<EntityStore> store,
@@ -5905,8 +7092,8 @@ public final class LoreProcHandler {
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
 
-        float elementalBleedPerTick = calculateElementalEssenceBleedDamage(store, sourceRef, targetRef, damageOutput, feedTier);
-        float totalBleed = elementalBleedPerTick * ticks;
+        float bleedPerTick = calculateBleedDamagePerTick(store, sourceRef, targetRef, damageOutput, feedTier);
+        float totalBleed = bleedPerTick * ticks;
         totalBleed *= (float) ailmentMultiplier;
         if (totalBleed <= 0f) {
             return false;
@@ -5949,11 +7136,11 @@ public final class LoreProcHandler {
         return true;
     }
 
-    private static float calculateElementalEssenceBleedDamage(Store<EntityStore> store,
-                                                              Ref<EntityStore> sourceRef,
-                                                              Ref<EntityStore> targetRef,
-                                                              float damageOutput,
-                                                              int feedTier) {
+    private static float calculateBleedDamagePerTick(Store<EntityStore> store,
+                                                     Ref<EntityStore> sourceRef,
+                                                     Ref<EntityStore> targetRef,
+                                                     float damageOutput,
+                                                     int feedTier) {
         if (store == null || sourceRef == null) {
             return 0f;
         }
@@ -5965,10 +7152,6 @@ public final class LoreProcHandler {
         if (weapon == null || weapon.isEmpty() || !ReforgeEquip.isWeapon(weapon)) {
             return 0f;
         }
-        SocketData socketData = SocketManager.getSocketData(weapon);
-        if (socketData == null || socketData.getSockets().isEmpty()) {
-            return 0f;
-        }
 
         float weaponDamageOutput = damageOutput > 0f
                 ? damageOutput
@@ -5977,6 +7160,7 @@ public final class LoreProcHandler {
             return 0f;
         }
 
+        SocketData socketData = SocketManager.getSocketData(weapon);
         double elementalDamage = 0.0d;
         for (WeaponElementalDamageUtils.ElementDamage elementDamage :
                 WeaponElementalDamageUtils.calculateElementDamage(socketData, weaponDamageOutput)) {
@@ -5989,10 +7173,11 @@ public final class LoreProcHandler {
                     targetRef);
             elementalDamage += elementDamage.damage() * effectivenessMultiplier;
         }
-        if (elementalDamage <= 0.0d) {
-            return 0f;
-        }
-        double perTickDamage = elementalDamage * BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER;
+        // Elemental sockets keep their affinity-scaled bleed. Purely physical weapons
+        // should still be able to apply bleed, so use their base damage in that case.
+        double perTickDamage = elementalDamage > 0.0d
+                ? elementalDamage * BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER
+                : weaponDamageOutput * WeaponElementalDamageUtils.DAMAGE_RATE_PER_SOCKET_WEIGHT;
         return (float) LoreAbility.scaleEffectValue(perTickDamage, feedTier);
     }
 

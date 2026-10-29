@@ -38,14 +38,8 @@ import irai.mod.reforge.Util.LangLoader;
 public final class LoreFeedBenchUI {
     private LoreFeedBenchUI() {}
 
-    private static final int OMNISLASH_BASE_HITS = 2;
-    private static final int OMNISLASH_MAX_HITS = 8;
     private static final int OCTASLASH_BASE_HITS = 2;
     private static final int OCTASLASH_MAX_HITS = 8;
-    private static final int PUMMEL_BASE_HITS = 2;
-    private static final int PUMMEL_MAX_HITS = 3;
-    private static final int BLOOD_RUSH_BASE_HITS = 3;
-    private static final int BLOOD_RUSH_MAX_HITS = 6;
     private static final int CHARGE_ATTACK_BASE_HITS = 1;
     private static final int CHARGE_ATTACK_MAX_HITS = 3;
 
@@ -635,8 +629,8 @@ public final class LoreFeedBenchUI {
         appendPreviewLine(sb, player, "ui.lore_feed.preview_chance",
                 formatPercent(chanceCur) + "%", formatPercent(chanceNext) + "%");
 
-        long cooldownCur = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
-        long cooldownNext = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), nextFeedTier);
+        long cooldownCur = ability.getScaledCooldownMs(feedTier);
+        long cooldownNext = ability.getScaledCooldownMs(nextFeedTier);
         appendPreviewLine(sb, player, "ui.lore_feed.preview_cooldown",
                 formatSeconds(cooldownCur) + "s", formatSeconds(cooldownNext) + "s");
 
@@ -678,8 +672,8 @@ public final class LoreFeedBenchUI {
             }
 
             if (effectType == LoreEffectType.SUMMON_WOLF_PACK) {
-                int capCur = Math.max(1, level + feedTier);
-                int capNext = Math.max(1, level + nextFeedTier);
+                int capCur = LoreAbility.resolveWolfPackCount(feedTier);
+                int capNext = LoreAbility.resolveWolfPackCount(nextFeedTier);
                 appendPreviewLine(sb, player, "ui.lore_feed.preview_cap",
                         String.valueOf(capCur), String.valueOf(capNext));
             }
@@ -700,9 +694,9 @@ public final class LoreFeedBenchUI {
                         formatSeconds(durationCur) + "s", formatSeconds(durationNext) + "s");
             }
 
-            int hitsCur = resolvePreviewHits(effectType, ability.getValueForLevel(level), feedTier);
+            int hitsCur = resolvePreviewHits(effectType, ability.getValueForLevel(level), feedTier, level);
             if (hitsCur > 0) {
-                int hitsNext = resolvePreviewHits(effectType, ability.getValueForLevel(level), nextFeedTier);
+                int hitsNext = resolvePreviewHits(effectType, ability.getValueForLevel(level), nextFeedTier, level);
                 appendPreviewLine(sb, player, "ui.lore_feed.preview_hits",
                         String.valueOf(hitsCur), String.valueOf(hitsNext));
             }
@@ -725,16 +719,16 @@ public final class LoreFeedBenchUI {
         sb.append(LangLoader.getUITranslation(player, "ui.lore_feed.preview_next", next)).append("\n");
     }
 
-    private static int resolvePreviewHits(LoreEffectType effectType, double value, int feedTier) {
+    private static int resolvePreviewHits(LoreEffectType effectType, double value, int feedTier, int level) {
         if (effectType == null) {
             return 0;
         }
         int tier = Math.max(0, feedTier);
         return switch (effectType) {
-            case OMNISLASH -> resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, tier);
+            case OMNISLASH -> LoreSocketManager.resolveOmnislashRuneHitCount(level, tier);
             case OCTASLASH -> resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, tier);
-            case PUMMEL -> resolveFeedScaledHits(PUMMEL_BASE_HITS, PUMMEL_MAX_HITS, tier);
-            case BLOOD_RUSH -> resolveFeedScaledHits(BLOOD_RUSH_BASE_HITS, BLOOD_RUSH_MAX_HITS, tier);
+            case PUMMEL -> 5;
+            case BLOOD_RUSH -> 6;
             case CHARGE_ATTACK -> resolveFeedScaledHits(CHARGE_ATTACK_BASE_HITS, CHARGE_ATTACK_MAX_HITS, tier);
             case MULTI_HIT -> {
                 int extraHits = Math.max(1, Math.min(3, calcExtraHits(value) + tier));
@@ -981,7 +975,7 @@ public final class LoreFeedBenchUI {
         int level = Math.max(1, socket.getLevel());
         int feedTier = Math.max(0, socket.getFeedTier());
         double chance = LoreAbility.scaleProcChance(ability.getProcChance(), feedTier) * 100.0d;
-        long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
+        long cooldownMs = ability.getScaledCooldownMs(feedTier);
 
         String header = LangLoader.getUITranslation(player, "ui.lore_feed.scaling_header");
         sb.append(header).append("\n");
@@ -1019,7 +1013,7 @@ public final class LoreFeedBenchUI {
         }
 
         if (effectType == LoreEffectType.SUMMON_WOLF_PACK) {
-            int cap = Math.max(1, level + feedTier);
+            int cap = LoreAbility.resolveWolfPackCount(feedTier);
             sb.append(LangLoader.getUITranslation(player, "ui.lore_feed.scaling_cap", cap)).append("\n");
         }
 

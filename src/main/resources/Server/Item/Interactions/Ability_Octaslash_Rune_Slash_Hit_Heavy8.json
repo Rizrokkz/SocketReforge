@@ -1,0 +1,35 @@
+{
+  "$Comment": "Final hit is 75% of the first seven slashes: (5 x 12 + 24 + 30) x 0.75 = 85.5 Wind damage.",
+  "Parent": "DamageEntityParent_Hit_Interrupt",
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Wind": 85.5
+    }
+  },
+  "DamageAttribute": "Damage",
+  "DamageEffects": {
+    "Knockback": {
+      "Type": "Force",
+      "VelocityConfig": {
+        "AirResistance": 0.97,
+        "AirResistanceMax": 0.96,
+        "GroundResistance": 0.94,
+        "GroundResistanceMax": 0.3,
+        "Threshold": 3,
+        "Style": "Exp"
+      },
+      "Direction": {
+        "X": 0,
+        "Y": 1.2,
+        "Z": -1
+      },
+      "Force": 6,
+      "VelocityType": "Add"
+    },
+    "WorldParticles": [
+      {
+        "SystemId": "Impact_Sword_Basic"
+      }
+    ]
+  }
+}

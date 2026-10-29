@@ -9,6 +9,7 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
@@ -30,6 +31,8 @@ import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Lore.LoreSoulstoneUtils;
+import irai.mod.reforge.Lore.SoulReaperTracker;
 import irai.mod.reforge.Lore.LoreTrigger;
 
 /**
@@ -119,6 +122,28 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
 
         String descriptor = resolveSpiritDescriptor(store, ref, deathComponent);
         String npcRoleId = resolveNpcRoleId(store, ref);
+        if (npcRoleId != null && !npcRoleId.isBlank()
+                && SoulReaperTracker.isArmedFor(attacker.getUuid(), ref)) {
+            ItemStack soulstone = LoreSoulstoneUtils.createInfusedSoulstone(npcRoleId);
+            SoulReaperTracker.consume(attacker.getUuid(), ref);
+            if (soulstone == null) {
+                attacker.getPlayerRef().sendMessage(Message.raw(
+                        "This NPC's spirit has no compatible soulstone color."));
+            } else {
+                LoreSoulstoneUtils.InfusionResult result =
+                        LoreSoulstoneUtils.infuseWithRawSoulstone(attacker, soulstone);
+                if (result == LoreSoulstoneUtils.InfusionResult.SUCCESS) {
+                    attacker.getPlayerRef().sendMessage(Message.raw(
+                            "Soul reaped: " + npcRoleId + " became an Infused Soulstone."));
+                } else if (result == LoreSoulstoneUtils.InfusionResult.MISSING_MATCHING_RAW_SOULSTONE) {
+                    attacker.getPlayerRef().sendMessage(Message.raw(
+                            "You need a Raw Soulstone matching this spirit's color to capture its soul."));
+                } else {
+                    attacker.getPlayerRef().sendMessage(Message.raw(
+                            "The soul could not be captured. Make room in your inventory."));
+                }
+            }
+        }
         WorldMapTracker tracker = attacker.getWorldMapTracker();
         WorldMapTracker.ZoneDiscoveryInfo zoneInfo = tracker == null ? null : tracker.getCurrentZone();
         String zoneName = zoneInfo == null ? null : zoneInfo.zoneName();
@@ -491,7 +516,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
             case DAMAGE_TARGET, DAMAGE_ATTACKER, APPLY_BLEED, APPLY_POISON, DRAIN_LIFE -> EFFECT_TIER_3;
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> EFFECT_TIER_4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
-                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
+                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, RUNE_OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> EFFECT_TIER_5;
         };
     }

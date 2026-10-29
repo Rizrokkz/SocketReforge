@@ -1,0 +1,30 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Serial",
+          "Interactions": [
+            "Ability_Octaslash_Rune_Slash_Left",
+            "Ability_Octaslash_Rune_Slash_Right",
+            "Ability_Octaslash_Rune_Slash_Left",
+            "Ability_Octaslash_Rune_Slash_Right",
+            "Ability_Octaslash_Rune_Slash_Left",
+            "Ability_Octaslash_Rune_Slash_Heavy6",
+            "Ability_Octaslash_Rune_Slash_Heavy7",
+            "Ability_Octaslash_Rune_Slash_Heavy8"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

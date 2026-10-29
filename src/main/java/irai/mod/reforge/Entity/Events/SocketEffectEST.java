@@ -45,6 +45,7 @@ import irai.mod.reforge.Lore.LoreStatusTracker;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Lore.SoulReaperTracker;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.ResonanceSystem;
@@ -313,6 +314,10 @@ public class SocketEffectEST extends DamageEventSystem {
                             + " final=" + damage.getAmount());
                 }
             }
+            if (attacker != null && damage.getAmount() > 0f
+                    && store.getComponent(targetRef, NPCEntity.getComponentType()) != null) {
+                LoreProcHandler.commandSummonedWolvesToAttack(store, attackerRef, targetRef);
+            }
             LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.after");
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketEffectEST handle error: " + t.getMessage());
@@ -508,6 +513,10 @@ public class SocketEffectEST extends DamageEventSystem {
                 LoreSocketManager.SocketedRunestone runestone = runestones.get(
                         ThreadLocalRandom.current().nextInt(runestones.size()));
                 long runeCooldownMillis = LoreProcHandler.getSocketedAbilityCooldownMillis(runestone.itemId());
+                if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())
+                        && runeCooldownMillis <= 0L) {
+                    runeCooldownMillis = 8_000L;
+                }
                 RuneDeltaDebug.logKv(attacker, "proc.select",
                         "rune", runestone.itemId(),
                         "damageFeeds", runestone.damageFeeds(),
@@ -519,11 +528,13 @@ public class SocketEffectEST extends DamageEventSystem {
                         store, commandBuffer, attackerRef, defenderRef, runestone.itemId(),
                         runestone.damageFeeds(), runestone.manaFeeds());
                 if (started) {
-                    boolean cooldownStored = storeRuneDeltaCooldown(weaponContext, runeCooldownMillis);
-                    if (!cooldownStored) {
-                        // Keep the proc throttled if the inventory slot cannot be updated.
-                        markResonanceCooldown(attacker.getUuid(), "w_rune_delta", runeCooldownMillis);
+                    if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())) {
+                        SoulReaperTracker.clear(attacker.getUuid());
                     }
+                    boolean cooldownStored = storeRuneDeltaCooldown(weaponContext, runeCooldownMillis);
+                    // Keep the proc throttled even if the weapon metadata update is not visible
+                    // to the next damage event immediately.
+                    markResonanceCooldown(attacker.getUuid(), "w_rune_delta", runeCooldownMillis);
                     tryApplyVisualEffect(store, attackerRef, SHOCK_EFFECT_IDS);
                     RuneDeltaDebug.logKv(attacker, "proc.success",
                             "cooldownMs", runeCooldownMillis,

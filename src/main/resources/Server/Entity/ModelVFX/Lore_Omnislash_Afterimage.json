@@ -1,0 +1,10 @@
+{
+  "SwitchTo": "AlphaTransparency",
+  "EffectDirection": "FromCenter",
+  "AnimationDuration": 0.36,
+  "LoopOption": "PlayOnce",
+  "CurveType": "QuartOut",
+  "PostColor": "#3D73FF",
+  "PostColorOpacity": 0.72,
+  "Opacity": 0.5
+}

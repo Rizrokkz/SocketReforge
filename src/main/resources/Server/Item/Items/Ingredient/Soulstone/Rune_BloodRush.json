@@ -1,0 +1,25 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_BloodRush.name",
+    "Description": "irai.items.Rune_BloodRush.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_BloodRush.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": ["Items.Ingredients"],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_BloodRush.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 20,
+    "Tags": ["mechanic.melee"],
+    "AbilityKeywords": ["Damage", "Melee"],
+    "Cooldown": 30,
+    "Cast": "Root_Ability_BloodRush_Rune",
+    "CostType": "Stamina"
+  },
+  "Tags": {"Type": ["Ingredient"]}
+}

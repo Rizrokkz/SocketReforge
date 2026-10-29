@@ -1,0 +1,75 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "Simple",
+      "RunTime": 0.24,
+      "Effects": {
+        "ItemPlayerAnimationsId": "SwordX",
+        "ItemAnimationId": "SwingRightRapdly",
+        "WorldSoundEventId": "SFX_Ability_Wind_Strike_Slash"
+      }
+    },
+    {
+      "Type": "Parallel",
+      "Interactions": [
+        {
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_Octaslash_Slash_VFX_0",
+              "Scale": 1.0,
+              "Pierce": true,
+              "Distance": 8,
+              "ScaleAttribute": "AoeScale",
+              "SpeedAttribute": "Speed",
+              "Lifetime": 3.5
+            }
+          ]
+        },
+        {
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_Octaslash_Slash_VFX",
+              "Scale": 1.0,
+              "Pierce": true,
+              "Distance": 8,
+              "ScaleAttribute": "AoeScale",
+              "SpeedAttribute": "Speed",
+              "Lifetime": 3.5
+            }
+          ]
+        },
+        {
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_Octaslash_Slash_VFX_90",
+              "Scale": 1.0,
+              "Pierce": true,
+              "Distance": 8,
+              "ScaleAttribute": "AoeScale",
+              "SpeedAttribute": "Speed",
+              "Lifetime": 3.5
+            }
+          ]
+        },
+        {
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_Octaslash_Slash_Heavy8",
+              "Scale": 1.75,
+              "Pierce": true,
+              "Distance": 8,
+              "ScaleAttribute": "AoeScale",
+              "SpeedAttribute": "Speed",
+              "Lifetime": 3.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

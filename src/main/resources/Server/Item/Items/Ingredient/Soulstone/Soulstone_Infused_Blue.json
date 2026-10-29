@@ -1,0 +1,26 @@
+{
+    "TranslationProperties":  {
+                                  "Name":  "irai.items.Soulstone_Infused_Blue.name",
+                                  "Description":  "irai.items.Soulstone_Infused_Blue.description"
+                              },
+    "Icon":  "Icons/ItemsGenerated/Rock_Gem_Sapphire.png",
+    "ItemLevel":  1,
+    "Quality":  "Legendary",
+    "Categories":  [
+                       "Items.Ingredients"
+                   ],
+    "Model":  "Resources/Ingredients/Abyss_Behelit.blockymodel",
+    "Texture":  "Resources/Ingredients/Abyss_Behelit_Texture.png",
+    "PlayerAnimationsId":  "Item",
+    "ItemSoundSetId":  "ISS_Items_Gems",
+    "ItemEntity":  {
+                       "ParticleSystemId":  null
+                   },
+    "Scale":  0.8,
+    "MaxStack":  1,
+    "Tags":  {
+                 "Type":  [
+                              "Ingredient"
+                          ]
+             }
+}

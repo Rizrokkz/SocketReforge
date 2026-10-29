@@ -1,0 +1,33 @@
+{
+  "Model": "Wind_Strike",
+  "Physics": {
+    "Type": "Standard",
+    "Gravity": 0,
+    "TerminalVelocityAir": 20,
+    "TerminalVelocityWater": 5,
+    "RotationMode": "Velocity",
+    "ComputePitch": false,
+    "Bounciness": 0
+  },
+  "LaunchForce": 14,
+  "DirectionalHitBox": {
+    "Width": 2.4,
+    "Depth": 0.8
+  },
+  "SpawnOffset": {
+    "X": 0,
+    "Z": -0.5
+  },
+  "SpawnRotationOffset": {
+    "Pitch": 0,
+    "Yaw": 0,
+    "Roll": 135
+  },
+  "Interactions": {
+    "ProjectileHit": {
+      "Interactions": [
+        "Ability_Octaslash_Rune_Slash_Hit_Heavy8"
+      ]
+    }
+  }
+}

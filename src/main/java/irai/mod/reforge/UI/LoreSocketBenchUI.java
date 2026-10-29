@@ -32,6 +32,7 @@ import irai.mod.reforge.Lore.LoreGemRegistry;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Lore.LoreSoulstoneUtils;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -942,6 +943,23 @@ public final class LoreSocketBenchUI {
                 if (effect != null && !effect.isBlank()) {
                     sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_effect_label"), effect));
                 }
+                if (LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())) {
+                    String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(
+                            socket.getLevel(), socket.getFeedTier());
+                    String runeName = LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name");
+                    sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.omnislash_rune_stage"),
+                            runeName));
+                }
+                if (LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())) {
+                    String runeItemId = LoreSocketManager.resolveWolfPackRuneItemId(socket.getFeedTier());
+                    String runeName = LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name");
+                    sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.wolfpack_rune_stage"),
+                            runeName));
+                }
+                if (LoreSoulstoneUtils.isInfusedSoulstoneId(socket.getGemItemId())) {
+                    sb.append(detailText(LangLoader.getUITranslation(
+                            player, "ui.lore_socket.infused_soulstone_hit_roll")));
+                }
             }
         } else if (runeDelta) {
             sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")))
@@ -1052,6 +1070,43 @@ public final class LoreSocketBenchUI {
             if (isRuneDeltaEquipment(equipment) && support.itemId != null
                     && support.itemId.equalsIgnoreCase(LoreSocketManager.RUNE_MANA_FEED_ITEM_ID)) {
                 return LangLoader.getUITranslation(player, "ui.lore_socket.process_rune_mana_feed_button");
+            }
+            if (materialKind(support) == MaterialKind.CLEAR) {
+                LoreSocketData.LoreSocket socket = resolveSelectedSocket(equipment, slotKey);
+                if (socket != null && LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelOctaslashLore(socket)
+                            ? "ui.lore_socket.process_octaslash_extract_button"
+                            : "ui.lore_socket.process_octaslash_max_required_button";
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelOmnislashLore(socket)
+                            ? "ui.lore_socket.process_omnislash_extract_button"
+                            : "ui.lore_socket.process_omnislash_max_required_button";
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isBloodRushSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelBloodRushLore(socket)
+                            ? "ui.lore_socket.process_bloodrush_extract_button"
+                            : "ui.lore_socket.process_bloodrush_max_required_button";
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isPummelSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelPummelLore(socket)
+                            ? "ui.lore_socket.process_pummel_extract_button"
+                            : "ui.lore_socket.process_pummel_max_required_button";
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelWolfPackLore(socket)
+                            ? "ui.lore_socket.process_wolfpack_extract_button"
+                            : "ui.lore_socket.process_wolfpack_max_required_button";
+                    if (socket.getLevel() >= LoreSocketManager.getConfig().getMaxLevel()
+                            && socket.getFeedTier() < 1) {
+                        actionKey = "ui.lore_socket.process_wolfpack_feed_required_button";
+                    }
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
             }
             return switch (materialKind(support)) {
                 case FEED -> LangLoader.getUITranslation(player, "ui.lore_socket.process_feed_button");
@@ -1574,7 +1629,7 @@ public final class LoreSocketBenchUI {
                 return processFeed(player, equipment, slotKey);
             }
             if (kind == MaterialKind.CLEAR) {
-                return processClear(player, equipment, slotKey);
+                return processClear(player, equipment, support.itemId, slotKey);
             }
             if (kind != MaterialKind.REROLL) {
                 return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_invalid_support"));
@@ -1678,7 +1733,14 @@ public final class LoreSocketBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_missing_color"));
         }
 
-        int slotIndex = resolveSlotIndex(data, slotKey, gemColor);
+        String infusedSpiritId = LoreSoulstoneUtils.getSpiritId(gem.item);
+        boolean infusedSoulstone = infusedSpiritId != null;
+        if (LoreSoulstoneUtils.isInfusedSoulstone(gem.item) && !infusedSoulstone) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_invalid_soulstone"));
+        }
+        int slotIndex = infusedSoulstone
+                ? resolveInfusedSoulstoneSlotIndex(data, slotKey, gemColor)
+                : resolveSlotIndex(data, slotKey, gemColor);
         if (slotIndex < 0 || slotIndex >= data.getSocketCount()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_socket"));
         }
@@ -1690,12 +1752,40 @@ public final class LoreSocketBenchUI {
         if (socket.isLocked()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_slot_locked"));
         }
-        if (!socket.isEmpty()) {
-            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_slot_full"));
-        }
         String socketColor = socket.getColor();
+        String existingGemColor = LoreGemRegistry.resolveColor(socket.getGemItemId());
+        if ((socketColor == null || socketColor.isBlank()) && existingGemColor != null) {
+            socketColor = existingGemColor;
+        }
         if (socketColor != null && !socketColor.isBlank() && !socketColor.equalsIgnoreCase(gemColor)) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_color_mismatch"));
+        }
+
+        if (infusedSoulstone) {
+            if (socket.hasSpirit() || socket.hasRune()) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_slot_full"));
+            }
+            socket.setGemItemId(gem.itemId);
+            socket.setSpiritId(infusedSpiritId);
+            socket.setEffectOverride("");
+            socket.setColor(gemColor.toLowerCase(Locale.ROOT));
+            socket.setLevel(1);
+            socket.setXp(0);
+            socket.setFeedTier(0);
+            socket.setRuneDamageFeeds(0);
+            socket.setRuneManaFeeds(0);
+            socket.setLocked(true);
+
+            saveEquipment(player, equipment, data);
+            ItemContainer stoneContainer = getContainer(player, gem.kind);
+            if (stoneContainer != null) {
+                stoneContainer.removeItemStackFromSlot(gem.slot, 1, false, false);
+            }
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_soulstone_done"));
+        }
+
+        if (!socket.isEmpty()) {
+            return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_slot_full"));
         }
 
         socket.setGemItemId(gem.itemId);
@@ -1818,7 +1908,7 @@ public final class LoreSocketBenchUI {
         }
     }
 
-    private static ProcessResult processClear(Player player, Entry equipment, String slotKey) {
+    private static ProcessResult processClear(Player player, Entry equipment, String supportItemId, String slotKey) {
         if (player == null) {
             return new ProcessResult("Player not found.");
         }
@@ -1835,6 +1925,116 @@ public final class LoreSocketBenchUI {
         if (socket == null || socket.isEmpty()) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
         }
+
+        if (LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelOctaslashLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_octaslash_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_octaslash_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractOctaslashRune(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_octaslash_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_octaslash_extracted"));
+        }
+
+        if (LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelOmnislashLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_omnislash_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_omnislash_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractOmnislashRune(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_omnislash_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_omnislash_extracted"));
+        }
+
+        if (LoreSocketManager.isBloodRushSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelBloodRushLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_bloodrush_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_bloodrush_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractBloodRushRune(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_bloodrush_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_bloodrush_extracted"));
+        }
+
+        if (LoreSocketManager.isPummelSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelPummelLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_pummel_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_pummel_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractPummelRune(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_pummel_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_pummel_extracted"));
+        }
+
+        if (LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelWolfPackLore(socket)) {
+                String statusKey = socket.getLevel() >= LoreSocketManager.getConfig().getMaxLevel()
+                        && socket.getFeedTier() < 1
+                        ? "ui.lore_feed.status_wolfpack_feed_required"
+                        : "ui.lore_feed.status_wolfpack_max_required";
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        statusKey));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_wolfpack_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractWolfPackRune(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_wolfpack_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_wolfpack_extracted"));
+        }
+
         if (!LoreSocketManager.tryClearSpirit(player, data, slotIndex, true)) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
         }
@@ -1880,6 +2080,42 @@ public final class LoreSocketBenchUI {
         } catch (NumberFormatException ignored) {
             return -1;
         }
+    }
+
+    private static int resolveInfusedSoulstoneSlotIndex(LoreSocketData data, String slotKey, String stoneColor) {
+        if (data == null || data.getSocketCount() == 0) {
+            return -1;
+        }
+        String key = slotKey == null ? "" : slotKey.trim().toLowerCase(Locale.ROOT);
+        if (key.isEmpty() || "auto".equals(key)) {
+            for (int i = 0; i < data.getSocketCount(); i++) {
+                LoreSocketData.LoreSocket socket = data.getSocket(i);
+                if (isCompatibleEmptySoulstoneSocket(socket, stoneColor)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+        try {
+            int index = Integer.parseInt(key);
+            if (index < 0 || index >= data.getSocketCount()) {
+                return -1;
+            }
+            return isCompatibleEmptySoulstoneSocket(data.getSocket(index), stoneColor) ? index : -1;
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
+    private static boolean isCompatibleEmptySoulstoneSocket(LoreSocketData.LoreSocket socket, String stoneColor) {
+        if (socket == null || socket.isLocked() || socket.hasSpirit() || socket.hasRune()) {
+            return false;
+        }
+        String color = socket.getColor();
+        if (color == null || color.isBlank()) {
+            color = LoreGemRegistry.resolveColor(socket.getGemItemId());
+        }
+        return color == null || color.isBlank() || color.equalsIgnoreCase(stoneColor);
     }
 
     private static boolean rerollSocketColor(LoreSocketData.LoreSocket socket, Random rng) {

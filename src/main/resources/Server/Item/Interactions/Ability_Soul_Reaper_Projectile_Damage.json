@@ -1,0 +1,10 @@
+{
+    "Parent": "DamageEntityParent_Hit_Interrupt",
+    "DamageCalculator": {
+        "BaseDamage": {
+            "Physical": 18
+        },
+        "RandomPercentageModifier": 0.05
+    },
+    "DamageAttribute": "Damage"
+}

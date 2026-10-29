@@ -1,6 +1,8 @@
 {
   "Duration": 0.8,
+  "Debuff": true,
   "ApplicationEffects": {
+    "MovementEffects": { "DisableAll": true },
     "Particles": [
       {
         "SystemId": "IceBall_Explosion",

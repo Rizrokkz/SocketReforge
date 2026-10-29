@@ -1,0 +1,38 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    {"Type": "OmnislashRuneStep", "RunTime": 0.05},
+    {
+      "Type": "Parallel",
+      "Interactions": [
+        {
+          "Interactions": [
+            {
+              "Type": "Simple",
+              "RunTime": 0.6,
+              "Effects": {
+                "ItemPlayerAnimationsId": "SwordX",
+                "ItemAnimationId": "SwingRightRapdly",
+                "WorldSoundEventId": "SFX_Ability_Wind_Strike_Slash"
+              }
+            }
+          ]
+        },
+        {
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_Omnislash_Slash_90",
+              "Scale": 0.9,
+              "Pierce": true,
+              "Distance": 8,
+              "ScaleAttribute": "AoeScale",
+              "SpeedAttribute": "Speed",
+              "Lifetime": 3.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

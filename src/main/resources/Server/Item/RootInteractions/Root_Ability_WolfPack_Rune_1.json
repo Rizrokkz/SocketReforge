@@ -1,0 +1,5 @@
+{
+  "Interactions": ["Ability_WolfPack_Rune_Cast_1"],
+  "RequireNewClick": false,
+  "Tags": {"Attack": ["Melee"]}
+}

@@ -719,16 +719,23 @@ public class DynamicTooltipUtils {
         boolean isSmithyChest = SmithyLegacyUtils.isSmithyChestId(effectiveItemId);
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
         boolean isRecipeItem = "Resonant_Recipe".equalsIgnoreCase(effectiveItemId);
+        String soulstoneSpiritId = extractStringValue(metadata, MetadataKeys.LORE_SOULSTONE_SPIRIT);
+        boolean hasSoulstoneSpirit = soulstoneSpiritId != null && !soulstoneSpiritId.isBlank();
         boolean hasSoftcorePenalty = softcoreBreakCount > 0 || softcoreStatMultiplier < 0.9999;
         
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
                 && !hasResonance && !hasCorruptionResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
-                && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty) {
+                && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty && !hasSoulstoneSpirit) {
             return null;
         }
         
         List<String> tooltipLines = new ArrayList<>();
+        if (hasSoulstoneSpirit) {
+            String label = tr(langCode, "tooltip.lore_soulstone_spirit", "Infused Spirit");
+            tooltipLines.add(COLOR_PURPLE + label + ": " + COLOR_WHITE
+                    + localizeLoreSpiritName(soulstoneSpiritId, langCode));
+        }
         String metadataName = extractDisplayName(metadata);
         String metadataNameKey = extractDisplayNameKey(metadata);
         boolean shouldBloodPrefix = shouldPrefixBloodPact(itemId, baseItemId, metadata);
@@ -2063,7 +2070,7 @@ public class DynamicTooltipUtils {
         String berserkTemplate = tr(langCode, "ui.lore_feed.scaling_berserk", "Berserk Bonus: {0}%");
 
         double chance = LoreAbility.scaleProcChance(ability.getProcChance(), feedTier) * 100.0d;
-        long cooldownMs = LoreAbility.scaleCooldownMs(ability.getCooldownMs(), feedTier);
+        long cooldownMs = ability.getScaledCooldownMs(feedTier);
         tooltipLines.add(COLOR_GRAY + chanceTemplate.replace("{0}", formatPercent(chance)));
         tooltipLines.add(COLOR_GRAY + cooldownTemplate.replace("{0}", formatSeconds(cooldownMs)));
 
@@ -2100,7 +2107,7 @@ public class DynamicTooltipUtils {
         }
 
         if (effectType == LoreEffectType.SUMMON_WOLF_PACK) {
-            int cap = Math.max(1, level + Math.max(0, feedTier));
+            int cap = LoreAbility.resolveWolfPackCount(feedTier);
             tooltipLines.add(COLOR_GRAY + capTemplate.replace("{0}", String.valueOf(cap)));
         }
 

@@ -14,6 +14,7 @@ import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.interaction.InteractionModule;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
@@ -121,16 +122,57 @@ public final class LoreHeldItemUpdateManager {
             return;
         }
 
-        Player player = null;
+        Ref<EntityStore> playerEntityRef = null;
+        Store<EntityStore> store = null;
+        World world = null;
         try {
-            player = playerRef.getComponent(Player.getComponentType());
+            playerEntityRef = playerRef.getReference();
+            if (playerEntityRef != null) {
+                store = playerEntityRef.getStore();
+                EntityStore entityStore = store == null ? null : store.getExternalData();
+                world = entityStore == null ? null : entityStore.getWorld();
+            }
         } catch (Throwable ignored) {
         }
-        if (player != null) {
-            writePending(player, pending);
+
+        if (playerEntityRef == null || store == null || world == null || !playerEntityRef.isValid()) {
+            PENDING.remove(playerId);
+            RECENT_BLOCKING_UNTIL.remove(playerId);
+            return;
         }
-        PENDING.remove(playerId);
-        RECENT_BLOCKING_UNTIL.remove(playerId);
+
+        Ref<EntityStore> finalPlayerEntityRef = playerEntityRef;
+        Store<EntityStore> finalStore = store;
+        Runnable flush = () -> {
+            PendingHeldItemUpdate latest = PENDING.get(playerId);
+            try {
+                if (latest != null && latest.data != null && finalPlayerEntityRef.isValid()) {
+                    Player player = finalStore.getComponent(finalPlayerEntityRef, Player.getComponentType());
+                    if (player != null) {
+                        writePending(player, latest);
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            if (latest != null) {
+                PENDING.remove(playerId, latest);
+            }
+            RECENT_BLOCKING_UNTIL.remove(playerId);
+        };
+
+        if (world.isInThread()) {
+            flush.run();
+            return;
+        }
+
+        try {
+            // PlayerDisconnectEvent is dispatched before Universe queues the player's removal.
+            // Queue the inventory write first so it runs safely on the owning world thread.
+            world.execute(flush);
+        } catch (Throwable ignored) {
+            PENDING.remove(playerId);
+            RECENT_BLOCKING_UNTIL.remove(playerId);
+        }
     }
 
     public static void clearPending(Player player, int sectionId, short slot, ItemStack itemStack) {

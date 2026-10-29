@@ -1,0 +1,40 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Octaslash.name",
+    "Description": "irai.items.Rune_Octaslash.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 0,
+    "Tags": [
+      "mechanic.melee",
+      "mechanic.aoe"
+    ],
+    "AbilityKeywords": [
+      "Damage",
+      "Elemental",
+      "Wind",
+      "Melee",
+      "Aoe"
+    ],
+    "Cooldown": 30,
+    "Cast": "Root_Ability_Octaslash_Rune",
+    "CostType": "Mana"
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

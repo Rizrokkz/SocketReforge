@@ -17,11 +17,13 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreSoulstoneUtils;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
@@ -33,6 +35,17 @@ import irai.mod.reforge.Util.MetadataKeys;
 public final class LoreSocketManager {
     public static final String RUNE_DAMAGE_FEED_ITEM_ID = "Ingredient_Gobliterator_Core";
     public static final String RUNE_MANA_FEED_ITEM_ID = "Ingredient_Enkindled_Resource";
+    public static final String OCTASLASH_RUNE_ITEM_ID = "Rune_Octaslash";
+    public static final String BLOOD_RUSH_RUNE_ITEM_ID = "Rune_BloodRush";
+    public static final String PUMMEL_RUNE_ITEM_ID = "Rune_Pummel";
+    public static final String WOLF_PACK_RUNE_1_ITEM_ID = "Rune_WolfPack_1";
+    public static final String WOLF_PACK_RUNE_2_ITEM_ID = "Rune_WolfPack_2";
+    public static final String WOLF_PACK_RUNE_3_ITEM_ID = "Rune_WolfPack_3";
+    public static final String OMNISLASH_RUNE_3_ITEM_ID = "Rune_Omnislash_3";
+    public static final String OMNISLASH_RUNE_6_ITEM_ID = "Rune_Omnislash_6";
+    public static final String OMNISLASH_RUNE_8_ITEM_ID = "Rune_Omnislash_8";
+    public static final String OMNISLASH_RUNE_12_ITEM_ID = "Rune_Omnislash_12";
+    public static final String GHASTLY_ESSENCE_ITEM_ID = "Ingredient_Ghastly_Essence";
     private static final float RUNE_DAMAGE_BONUS_PER_FEED = 0.10f;
     private static final float RUNE_MANA_REDUCTION_PER_FEED = 0.05f;
     private static final float MIN_RUNE_MANA_COST_MULTIPLIER = 0.40f;
@@ -517,7 +530,7 @@ public final class LoreSocketManager {
             case DAMAGE_TARGET, DAMAGE_ATTACKER, APPLY_BLEED, APPLY_POISON, DRAIN_LIFE -> EFFECT_TIER_3;
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> EFFECT_TIER_4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
-                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
+                    SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, RUNE_OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> EFFECT_TIER_5;
         };
     }
@@ -584,6 +597,242 @@ public final class LoreSocketManager {
 
         boolean leveled = applyStoredXp(socket);
         return leveled || socket.getXp() != beforeXp || socket.getLevel() != beforeLevel;
+    }
+
+    public static boolean isOctaslashSpirit(String spiritId) {
+        LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+        return ability != null && ability.getEffectType() == LoreEffectType.RUNE_OCTASLASH;
+    }
+
+    public static boolean isMaxLevelOctaslashLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isOctaslashSpirit(socket.getSpiritId());
+    }
+
+    public static boolean isOmnislashSpirit(String spiritId) {
+        LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+        return ability != null && ability.getEffectType() == LoreEffectType.OMNISLASH;
+    }
+
+    public static boolean isMaxLevelOmnislashLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isOmnislashSpirit(socket.getSpiritId());
+    }
+
+    public static boolean isBloodRushSpirit(String spiritId) {
+        LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+        return ability != null && ability.getEffectType() == LoreEffectType.BLOOD_RUSH;
+    }
+
+    public static boolean isMaxLevelBloodRushLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isBloodRushSpirit(socket.getSpiritId());
+    }
+
+    public static boolean isPummelSpirit(String spiritId) {
+        LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+        return ability != null && ability.getEffectType() == LoreEffectType.PUMMEL;
+    }
+
+    public static boolean isMaxLevelPummelLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isPummelSpirit(socket.getSpiritId());
+    }
+
+    public static boolean isWolfPackSpirit(String spiritId) {
+        LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
+        return ability != null && ability.getEffectType() == LoreEffectType.SUMMON_WOLF_PACK;
+    }
+
+    public static boolean isMaxLevelWolfPackLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && socket.getFeedTier() >= 1
+                && isWolfPackSpirit(socket.getSpiritId());
+    }
+
+    public static String resolveWolfPackRuneItemId(int feedTier) {
+        return switch (LoreAbility.resolveWolfPackTier(feedTier)) {
+            case 2 -> WOLF_PACK_RUNE_2_ITEM_ID;
+            case 3 -> WOLF_PACK_RUNE_3_ITEM_ID;
+            default -> WOLF_PACK_RUNE_1_ITEM_ID;
+        };
+    }
+
+    /** Returns the current feed-stage rune; max-level Omnislash upgrades to twelve slashes. */
+    public static String resolveOmnislashRuneItemId(int level, int feedTier) {
+        if (level >= Math.max(1, config.getMaxLevel())) {
+            return OMNISLASH_RUNE_12_ITEM_ID;
+        }
+        int maxThresholds = getMaxRuneFeedThresholds();
+        if (maxThresholds <= 0) {
+            return OMNISLASH_RUNE_3_ITEM_ID;
+        }
+        int firstUpgrade = Math.max(1, (maxThresholds + 2) / 3);
+        int secondUpgrade = Math.max(firstUpgrade + 1, (2 * maxThresholds + 2) / 3);
+        int tier = Math.max(0, feedTier);
+        if (tier < firstUpgrade) {
+            return OMNISLASH_RUNE_3_ITEM_ID;
+        }
+        if (tier < secondUpgrade) {
+            return OMNISLASH_RUNE_6_ITEM_ID;
+        }
+        return OMNISLASH_RUNE_8_ITEM_ID;
+    }
+
+    public static int resolveOmnislashRuneHitCount(int level, int feedTier) {
+        return switch (resolveOmnislashRuneItemId(level, feedTier)) {
+            case OMNISLASH_RUNE_6_ITEM_ID -> 6;
+            case OMNISLASH_RUNE_8_ITEM_ID -> 8;
+            case OMNISLASH_RUNE_12_ITEM_ID -> 12;
+            default -> 3;
+        };
+    }
+
+    /** Consumes Ghastly Essence, clears a max-level Octaslash Lore, and grants its ability rune. */
+    public static boolean tryExtractOctaslashRune(Player player,
+                                                  LoreSocketData data,
+                                                  int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelOctaslashLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        String[] essenceId = {GHASTLY_ESSENCE_ITEM_ID};
+        if (!consumeFromInventory(player, essenceId, 1)) {
+            return false;
+        }
+
+        ItemStack rune = new ItemStack(OCTASLASH_RUNE_ITEM_ID, 1);
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            // Consuming the essence freed stack capacity or a slot, so this restores the cost.
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Consumes Ghastly Essence, clears a max-level Omnislash Lore, and grants its final rune. */
+    public static boolean tryExtractOmnislashRune(Player player,
+                                                  LoreSocketData data,
+                                                  int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelOmnislashLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+
+        ItemStack rune = new ItemStack(OMNISLASH_RUNE_12_ITEM_ID, 1);
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Consumes Ghastly Essence, clears a max-level Blood Rush Lore, and grants its ability rune. */
+    public static boolean tryExtractBloodRushRune(Player player,
+                                                  LoreSocketData data,
+                                                  int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelBloodRushLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+
+        ItemStack rune = new ItemStack(BLOOD_RUSH_RUNE_ITEM_ID, 1);
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Consumes Ghastly Essence, clears a max-level Pummel Lore, and grants its ability rune. */
+    public static boolean tryExtractPummelRune(Player player,
+                                               LoreSocketData data,
+                                               int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelPummelLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+
+        ItemStack rune = new ItemStack(PUMMEL_RUNE_ITEM_ID, 1);
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Consumes Ghastly Essence and extracts the wolf rune matching the Lore's feed tier. */
+    public static boolean tryExtractWolfPackRune(Player player,
+                                                 LoreSocketData data,
+                                                 int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelWolfPackLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        String runeItemId = resolveWolfPackRuneItemId(socket.getFeedTier());
+        if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+
+        if (!UIInventoryUtils.addItemToInventory(player, new ItemStack(runeItemId, 1))) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
     }
 
     public static boolean applyStoredXp(LoreSocketData.LoreSocket socket) {
@@ -958,7 +1207,7 @@ public final class LoreSocketManager {
     }
 
     public static boolean isAbilityRunestone(ItemStack item) {
-        if (item == null || item.isEmpty()) {
+        if (item == null || item.isEmpty() || LoreSoulstoneUtils.isInfusedSoulstone(item)) {
             return false;
         }
         Item config = item.getItem();

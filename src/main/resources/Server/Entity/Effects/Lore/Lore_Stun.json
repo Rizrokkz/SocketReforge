@@ -2,7 +2,9 @@
   "Duration": 2.5,
   "RemovalBehavior": "Duration",
   "OverlapBehavior": "Extend",
+  "Debuff": true,
   "ApplicationEffects": {
+    "MovementEffects": { "DisableAll": true },
     "EntityBottomTint": "#3b3300",
     "EntityTopTint": "#ffd45a",
     "Particles": [

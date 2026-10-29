@@ -29,6 +29,11 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
     private static final MetaKey<Float> RUNE_COST_MULTIPLIER =
             Interaction.CONTEXT_META_REGISTRY.registerMetaObject(
                     context -> 1.0f, false, "socketreforge:rune_delta_cost_multiplier", Codec.FLOAT);
+    private static final MetaKey<Float> RUNE_WEAPON_DAMAGE_BONUS =
+            Interaction.CONTEXT_META_REGISTRY.registerMetaObject(
+                    context -> 0.0f, false, "socketreforge:rune_delta_weapon_damage_bonus", Codec.FLOAT);
+    // Keep this aligned with Ability_Soul_Reaper_Projectile_Damage.json.
+    private static final float SOUL_REAPER_BASE_DAMAGE = 18.0f;
 
     public RuneDeltaCastSnapshotEST() {
         super(InteractionChainStartEvent.class);
@@ -37,11 +42,20 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
     public static void setRuneDeltaMultipliers(InteractionContext context,
                                                 float damageMultiplier,
                                                 float costMultiplier) {
+        setRuneDeltaMultipliers(context, damageMultiplier, costMultiplier, 0.0f);
+    }
+
+    public static void setRuneDeltaMultipliers(InteractionContext context,
+                                                float damageMultiplier,
+                                                float costMultiplier,
+                                                float weaponDamageBonus) {
         if (context == null) {
             return;
         }
         context.getMetaStore().putMetaObject(RUNE_DAMAGE_MULTIPLIER, sanitize(damageMultiplier));
         context.getMetaStore().putMetaObject(RUNE_COST_MULTIPLIER, sanitize(costMultiplier));
+        context.getMetaStore().putMetaObject(RUNE_WEAPON_DAMAGE_BONUS,
+                Float.isFinite(weaponDamageBonus) && weaponDamageBonus > 0.0f ? weaponDamageBonus : 0.0f);
     }
 
     @Override
@@ -67,7 +81,8 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
         InteractionContext context = event.getContext();
         Float damageMultiplier = context.getMetaStore().getIfPresentMetaObject(RUNE_DAMAGE_MULTIPLIER);
         Float costMultiplier = context.getMetaStore().getIfPresentMetaObject(RUNE_COST_MULTIPLIER);
-        if (damageMultiplier == null && costMultiplier == null) {
+        Float weaponDamageBonus = context.getMetaStore().getIfPresentMetaObject(RUNE_WEAPON_DAMAGE_BONUS);
+        if (damageMultiplier == null && costMultiplier == null && weaponDamageBonus == null) {
             return;
         }
 
@@ -77,7 +92,11 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
                 : new HashMap<>(base.getAttributes());
         float damageScale = damageMultiplier == null ? 1.0f : sanitize(damageMultiplier);
         float costScale = costMultiplier == null ? 1.0f : sanitize(costMultiplier);
-        attributes.put("Damage", (base == null ? 1.0f : base.getAttribute("Damage", 1.0f)) * damageScale);
+        float baseDamageAttribute = base == null ? 1.0f : base.getAttribute("Damage", 1.0f);
+        float weaponDamageAttributeBonus = weaponDamageBonus == null || weaponDamageBonus <= 0.0f
+                ? 0.0f
+                : weaponDamageBonus / SOUL_REAPER_BASE_DAMAGE;
+        attributes.put("Damage", (baseDamageAttribute + weaponDamageAttributeBonus) * damageScale);
         attributes.put("Cost", (base == null ? 1.0f : base.getAttribute("Cost", 1.0f)) * costScale);
 
         context.getMetaStore().putMetaObject(ImpactModifiers.CAST_SNAPSHOT,
@@ -87,6 +106,7 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
                         base == null ? null : base.getElementalCauseId()));
         context.getMetaStore().removeMetaObject(RUNE_DAMAGE_MULTIPLIER);
         context.getMetaStore().removeMetaObject(RUNE_COST_MULTIPLIER);
+        context.getMetaStore().removeMetaObject(RUNE_WEAPON_DAMAGE_BONUS);
     }
 
     private static float sanitize(float multiplier) {

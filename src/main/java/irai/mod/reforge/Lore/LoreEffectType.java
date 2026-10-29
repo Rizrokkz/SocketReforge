@@ -37,6 +37,7 @@ public enum LoreEffectType {
     CHARGE_ATTACK,
     OMNISLASH,
     OCTASLASH,
+    RUNE_OCTASLASH,
     PUMMEL,
     BLOOD_RUSH,
     CAUSTIC_FINALE,

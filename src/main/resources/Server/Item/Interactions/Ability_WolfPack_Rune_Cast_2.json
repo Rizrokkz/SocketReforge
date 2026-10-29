@@ -1,0 +1,13 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [{"Type": "WolfPackRune2"}]
+    },
+    {
+      "Interactions": [
+        {"Type": "TriggerCooldown", "UseAbilityCooldown": true}
+      ]
+    }
+  ]
+}

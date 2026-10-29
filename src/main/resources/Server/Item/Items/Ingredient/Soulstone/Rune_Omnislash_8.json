@@ -1,0 +1,25 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Omnislash_8.name",
+    "Description": "irai.items.Rune_Omnislash_8.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_OmniSlash.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": ["Items.Ingredients"],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_OmniSlash.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 55,
+    "Tags": ["mechanic.melee", "mechanic.movement", "mechanic.aoe"],
+    "AbilityKeywords": ["Damage", "Melee", "Aoe"],
+    "Cooldown": 30,
+    "Cast": "Root_Ability_Omnislash_Rune_8",
+    "CostType": "Mana"
+  },
+  "Tags": {"Type": ["Ingredient"]}
+}

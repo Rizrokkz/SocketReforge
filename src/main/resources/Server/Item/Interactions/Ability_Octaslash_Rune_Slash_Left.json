@@ -1,0 +1,23 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "Simple",
+      "RunTime": 0.11,
+      "Effects": {
+        "ItemPlayerAnimationsId": "SwordX",
+        "ItemAnimationId": "SwingLeftRapdly",
+        "WorldSoundEventId": "SFX_Ability_Wind_Strike_Slash"
+      }
+    },
+    {
+      "Type": "LaunchAbilityProjectile",
+      "Projectile": "Projectile_Config_Octaslash_Slash_Light",
+      "Pierce": true,
+      "Distance": 8,
+      "ScaleAttribute": "AoeScale",
+      "SpeedAttribute": "Speed",
+      "Lifetime": 3.5
+    }
+  ]
+}

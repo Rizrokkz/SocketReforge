@@ -1,5 +1,10 @@
 {
   "Duration": 3.0,
+  "DamageCalculatorCooldown": 1.0,
+  "DamageCalculator": {
+    "BaseDamage": { "Fire": 1.5 }
+  },
+  "Debuff": true,
   "RemovalBehavior": "Duration",
   "OverlapBehavior": "Extend",
   "ApplicationEffects": {

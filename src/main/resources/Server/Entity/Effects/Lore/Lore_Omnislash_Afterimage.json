@@ -1,0 +1,8 @@
+{
+  "Duration": 0.36,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Overwrite",
+  "ApplicationEffects": {
+    "ModelVFXId": "Lore_Omnislash_Afterimage"
+  }
+}

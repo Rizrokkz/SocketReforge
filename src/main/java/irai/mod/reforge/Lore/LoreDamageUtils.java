@@ -172,6 +172,10 @@ public final class LoreDamageUtils {
             LoreDebug.logKv("damage.skip", "reason", "invalid", "rawDamage", rawDamage);
             return;
         }
+        if (isLoreDamage && sourceRef != null
+                && store.getComponent(targetRef, com.hypixel.hytale.server.npc.entities.NPCEntity.getComponentType()) != null) {
+            LoreProcHandler.commandSummonedWolvesToAttack(store, sourceRef, targetRef);
+        }
         if (applyDamageEvent(store, sourceRef, targetRef, adjustedDamage, skipRefine, useEntitySource, isLoreDamage,
                 kind, skipCombatText)) {
             return;

@@ -9,16 +9,14 @@ import irai.mod.reforge.Util.LangLoader;
  * Represents a lore ability bound to a spirit.
  */
 public final class LoreAbility {
-    private static final int OMNISLASH_BASE_HITS = 2;
-    private static final int OMNISLASH_MAX_HITS = 8;
     private static final int OCTASLASH_BASE_HITS = 2;
     private static final int OCTASLASH_MAX_HITS = 8;
-    private static final int PUMMEL_BASE_HITS = 2;
-    private static final int PUMMEL_MAX_HITS = 3;
-    private static final int BLOOD_RUSH_BASE_HITS = 3;
-    private static final int BLOOD_RUSH_MAX_HITS = 6;
     private static final int CHARGE_ATTACK_BASE_HITS = 1;
     private static final int CHARGE_ATTACK_MAX_HITS = 3;
+    private static final long OMNISLASH_RUNE_COOLDOWN_MS = 30000L;
+    private static final long BLOOD_RUSH_COOLDOWN_MS = 30000L;
+    private static final long[] WOLF_PACK_COOLDOWNS_MS = {30000L, 40000L, 45000L};
+    private static final long[] WOLF_PACK_LIFETIMES_MS = {15000L, 20000L, 30000L};
     public static final double BASE_HEAL_AREA_RADIUS = 6.0d;
     public static final double BASE_OMNISLASH_RADIUS = 12.0d;
     public static final double BASE_VORTEXSTRIKE_RADIUS = 3.5d;
@@ -38,6 +36,7 @@ public final class LoreAbility {
     private static final double STUN_MAX_SECONDS = 4.0d;
     private static final double FEED_CHANCE_BONUS_PER_TIER = 0.10d;
     private static final double FEED_COOLDOWN_REDUCTION_PER_TIER = 0.05d;
+    private static final double OCTASLASH_FEED_COOLDOWN_REDUCTION_PER_TIER = 0.01d;
     private static final double FEED_RADIUS_BONUS_PER_TIER = 0.10d;
     private static final double FEED_DURATION_BONUS_PER_TIER = 0.15d;
     private static final double FEED_VALUE_BONUS_PER_TIER = 0.10d;
@@ -102,6 +101,22 @@ public final class LoreAbility {
         return cooldownMs;
     }
 
+    public long getScaledCooldownMs(int feedTier) {
+        if (effectType == LoreEffectType.OMNISLASH) {
+            return OMNISLASH_RUNE_COOLDOWN_MS;
+        }
+        if (effectType == LoreEffectType.BLOOD_RUSH) {
+            return BLOOD_RUSH_COOLDOWN_MS;
+        }
+        if (effectType == LoreEffectType.SUMMON_WOLF_PACK) {
+            return resolveWolfPackCooldownMs(feedTier);
+        }
+        double reductionPerTier = effectType == LoreEffectType.RUNE_OCTASLASH
+                ? OCTASLASH_FEED_COOLDOWN_REDUCTION_PER_TIER
+                : FEED_COOLDOWN_REDUCTION_PER_TIER;
+        return scaleCooldownMs(cooldownMs, feedTier, reductionPerTier);
+    }
+
     public LoreEffectType getEffectType() {
         return effectType;
     }
@@ -137,11 +152,15 @@ public final class LoreAbility {
     }
 
     public static long scaleCooldownMs(long baseCooldownMs, int feedTier) {
+        return scaleCooldownMs(baseCooldownMs, feedTier, FEED_COOLDOWN_REDUCTION_PER_TIER);
+    }
+
+    private static long scaleCooldownMs(long baseCooldownMs, int feedTier, double reductionPerTier) {
         if (baseCooldownMs <= 0L) {
             return 0L;
         }
         int tier = Math.max(0, feedTier);
-        double factor = 1.0d - (FEED_COOLDOWN_REDUCTION_PER_TIER * tier);
+        double factor = 1.0d - (Math.max(0.0d, reductionPerTier) * tier);
         factor = Math.max(MIN_COOLDOWN_FACTOR, factor);
         long scaled = Math.round(baseCooldownMs * factor);
         return Math.max(MIN_COOLDOWN_MS, scaled);
@@ -168,6 +187,22 @@ public final class LoreAbility {
         double factor = scaleDurationFactor(feedTier);
         long scaled = Math.round(baseDurationMs * factor);
         return Math.max(1L, scaled);
+    }
+
+    public static int resolveWolfPackTier(int feedTier) {
+        return Math.max(1, Math.min(WOLF_PACK_COOLDOWNS_MS.length, feedTier));
+    }
+
+    public static int resolveWolfPackCount(int feedTier) {
+        return resolveWolfPackTier(feedTier);
+    }
+
+    public static long resolveWolfPackCooldownMs(int feedTier) {
+        return WOLF_PACK_COOLDOWNS_MS[resolveWolfPackTier(feedTier) - 1];
+    }
+
+    public static long resolveWolfPackLifetimeMs(int feedTier) {
+        return WOLF_PACK_LIFETIMES_MS[resolveWolfPackTier(feedTier) - 1];
     }
 
     public static int resolveHotTicks(int feedTier) {
@@ -235,7 +270,7 @@ public final class LoreAbility {
 
     public String describeProcDetails(String langCode, int feedTier) {
         String chance = formatPercent(scaleProcChance(procChance, feedTier) * 100.0);
-        String cooldown = formatSeconds(scaleCooldownMs(cooldownMs, feedTier));
+        String cooldown = formatSeconds(getScaledCooldownMs(feedTier));
         String procTemplate = LangLoader.getTranslationForLanguage(
                 "tooltip.lore.proc",
                 langCode
@@ -516,9 +551,9 @@ public final class LoreAbility {
                 return formatEffect(langCode, key, fallback, formatSeconds(durationMs));
             }
             case SUMMON_WOLF_PACK -> {
-                int cap = Math.max(1, level + safeFeedTier);
+                int cap = resolveWolfPackCount(safeFeedTier);
                 key = "tooltip.lore.effect.summon_wolf_pack";
-                fallback = "Summons a wolf pack (max {0})";
+                fallback = "Summons {0} friendly wolf(s)";
                 return formatEffect(langCode, key, fallback, String.valueOf(cap));
             }
             case CHARGE_ATTACK -> {
@@ -529,8 +564,8 @@ public final class LoreAbility {
             }
             case OMNISLASH -> {
                 key = "tooltip.lore.effect.omnislash";
-                fallback = "Omnislash: strikes nearby enemies {0} times";
-                int hits = resolveFeedScaledHits(OMNISLASH_BASE_HITS, OMNISLASH_MAX_HITS, safeFeedTier);
+                fallback = "Omnislash: teleports between nearby enemies for {0} slashes";
+                int hits = LoreSocketManager.resolveOmnislashRuneHitCount(level, safeFeedTier);
                 String effect = formatEffect(langCode, key, fallback, String.valueOf(hits));
                 double radius = scaleRadius(BASE_OMNISLASH_RADIUS, safeFeedTier);
                 return effect + " (" + formatRadiusSuffix(langCode, radius) + ")";
@@ -541,17 +576,20 @@ public final class LoreAbility {
                 int hits = resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, safeFeedTier);
                 return formatEffect(langCode, key, fallback, String.valueOf(hits));
             }
+            case RUNE_OCTASLASH -> {
+                key = "tooltip.lore.effect.octaslash";
+                fallback = "Octaslash: casts the eight-slash rune";
+                return formatEffect(langCode, key, fallback, "8");
+            }
             case PUMMEL -> {
                 key = "tooltip.lore.effect.pummel";
-                fallback = "Pummel: strikes a target {0} times";
-                int hits = resolveFeedScaledHits(PUMMEL_BASE_HITS, PUMMEL_MAX_HITS, safeFeedTier);
-                return formatEffect(langCode, key, fallback, String.valueOf(hits));
+                fallback = "Pummel: five-hit unarmed combo";
+                return formatEffect(langCode, key, fallback, "5");
             }
             case BLOOD_RUSH -> {
                 key = "tooltip.lore.effect.blood_rush";
-                fallback = "Blood Rush: strikes a target {0} times";
-                int hits = resolveFeedScaledHits(BLOOD_RUSH_BASE_HITS, BLOOD_RUSH_MAX_HITS, safeFeedTier);
-                return formatEffect(langCode, key, fallback, String.valueOf(hits));
+                fallback = "Blood Rush: six strikes, each grows stronger as your health drops";
+                return formatEffect(langCode, key, fallback, "6");
             }
             case CAUSTIC_FINALE -> {
                 key = "tooltip.lore.effect.caustic_finale";

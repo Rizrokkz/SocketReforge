@@ -1,0 +1,41 @@
+{
+    "Type": "Parallel",
+    "Interactions": [
+        {
+            "Interactions": [
+                {
+                    "Type": "Simple",
+                    "RunTime": 0.87,
+                    "HorizontalSpeedMultiplier": 0.6,
+                    "Effects": {
+                        "ItemPlayerAnimationsId": "Sword",
+                        "ItemAnimationId": "StabDashCharging",
+                        "WaitForAnimationToFinish": false,
+                        "ClearAnimationOnFinish": true
+                    }
+                },
+                {
+                    "Type": "LaunchAbilityProjectile",
+                    "Projectile": "Projectile_Config_Soul_Reaper",
+                    "Scale": 1.0,
+                    "ScaleAttribute": "ProjectileSize",
+                    "SpeedAttribute": "Speed",
+                    "Effects": {
+                        "ItemPlayerAnimationsId": "Sword",
+                        "ItemAnimationId": "StabDashCharged",
+                        "WorldSoundEventId": "SFX_Staff_Flame_Fireball_Launch",
+                        "LocalSoundEventId": "SFX_Staff_Flame_Fireball_Launch_Local"
+                    }
+                }
+            ]
+        },
+        {
+            "Interactions": [
+                {
+                    "Type": "TriggerCooldown",
+                    "UseAbilityCooldown": true
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,36 @@
+{
+    "Model": "Skeleton_Mage_Corruption_Orb",
+    "UseModelScale": true,
+    "Physics": {
+        "Type": "Standard",
+        "Gravity": 0,
+        "TerminalVelocityAir": 48,
+        "TerminalVelocityWater": 20,
+        "RotationMode": "Velocity",
+        "Bounciness": 0
+    },
+    "LaunchForce": 24,
+    "DirectionalHitBox": {
+        "Width": 1.0,
+        "Depth": 0.8
+    },
+    "SpawnOffset": {
+        "X": 0,
+        "Y": 0.2,
+        "Z": -0.5
+    },
+    "Interactions": {
+        "ProjectileHit": {
+            "Interactions": [
+                "SoulReaperRune",
+                "Ability_Soul_Reaper_Projectile_Damage",
+                "Weapon_Stick_Fire_Projectile_Despawn"
+            ]
+        },
+        "ProjectileMiss": {
+            "Interactions": [
+                "Weapon_Stick_Fire_Projectile_Despawn"
+            ]
+        }
+    }
+}

@@ -1,0 +1,5 @@
+{
+  "Interactions": ["Ability_BloodRush_Rune_Cast"],
+  "RequireNewClick": false,
+  "Tags": {"Attack": ["Melee"]}
+}

@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Ability_Octaslash_Rune_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Melee"
+    ]
+  }
+}

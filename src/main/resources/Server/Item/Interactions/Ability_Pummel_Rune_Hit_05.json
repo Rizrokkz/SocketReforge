@@ -1,0 +1,15 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "Simple",
+      "RunTime": 0.35,
+      "Effects": {
+        "ItemPlayerAnimationsId": "Pummel",
+        "ItemAnimationId": "Kick_Roundhouse_Left",
+        "WorldSoundEventId": "SFX_Shield_T1_Swing"
+      }
+    },
+    {"Type": "PummelRuneStep", "RunTime": 0.15}
+  ]
+}

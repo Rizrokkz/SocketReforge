@@ -1,0 +1,58 @@
+{
+  "Type": "Variant",
+  "Reference": "Template_Summoned_Ally",
+  "Modify": {
+    "Appearance": "Wolf_Black",
+    "Weapons": [],
+    "OffHand": [],
+    "DefaultOffHandSlot": -1,
+    "FlockArray": [ "Wolf_Soulstone_Summon" ],
+    "MaxHealth": 103,
+    "HearingRange": 12,
+    "ViewSector": 270,
+    "Attack": "Root_NPC_Wolf_Attack",
+    "AttackDistance": 2.5,
+    "AttackPauseRange": [ 1, 1.5 ],
+    "CombatAttackPreDelay": [ 0.1, 0.3 ],
+    "MaxSpeed": 10,
+    "CombatBackOffAfterAttack": false,
+    "CombatStrafingDurationRange": [ 0.2, 1 ],
+    "BlockProbability": 0,
+    "BreathesInWater": true,
+    "NameTranslationKey": "server.npcRoles.Wolf_Black.name",
+    "_InteractionVars": {
+      "Melee_Start": {
+        "Interactions": [
+          {
+            "Parent": "Wolf_Bite",
+            "$Comment": "Uses the native black wolf bite animation.",
+            "Effects": {
+              "ItemPlayerAnimationsId": "Wolf_Black_Default",
+              "ItemAnimationId": "Bite"
+            },
+            "RunTime": 0.167
+          }
+        ]
+      },
+      "Bite_Damage": {
+        "Interactions": [
+          {
+            "Parent": "Wolf_Bite_Damage",
+            "DamageCalculator": {
+              "Type": "Absolute",
+              "BaseDamage": {
+                "Physical": 27
+              },
+              "RandomPercentageModifier": 0.1
+            },
+            "DamageEffects": {
+              "Knockback": {
+                "Force": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

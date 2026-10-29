@@ -1,0 +1,25 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Pummel.name",
+    "Description": "irai.items.Rune_Pummel.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Pummel.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": ["Items.Ingredients"],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Pummel.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 15,
+    "Tags": ["mechanic.melee"],
+    "AbilityKeywords": ["Damage", "Melee", "Stun"],
+    "Cooldown": 15,
+    "Cast": "Root_Ability_Pummel_Rune",
+    "CostType": "Stamina"
+  },
+  "Tags": {"Type": ["Ingredient"]}
+}

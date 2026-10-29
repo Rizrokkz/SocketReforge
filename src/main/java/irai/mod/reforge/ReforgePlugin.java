@@ -29,6 +29,7 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.InteractionConfiguration;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
+import com.hypixel.hytale.server.core.modules.entity.EntityModule;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -87,11 +88,13 @@ import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.EnemyElementalShieldEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
+import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
 import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.LoreEffectEST;
 import irai.mod.reforge.Entity.Events.LoreKillEST;
 import irai.mod.reforge.Entity.Events.LorePlayerStateEST;
+import irai.mod.reforge.Entity.Events.LoreSkillUseEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
@@ -111,6 +114,11 @@ import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
+import irai.mod.reforge.Interactions.SoulReaperRune;
+import irai.mod.reforge.Interactions.OmnislashRune;
+import irai.mod.reforge.Interactions.BloodRushRune;
+import irai.mod.reforge.Interactions.PummelRune;
+import irai.mod.reforge.Interactions.WolfPackRune;
 import irai.mod.reforge.Interactions.StatueInteraction;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
@@ -145,6 +153,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final EquipmentRefineEST refineEST;
     private final SocketEffectEST socketEffectEST;
     private final LoreEffectEST loreEffectEST;
+    private final LoreSkillUseEST loreSkillUseEST;
     private final EnemyElementalShieldEST enemyElementalShieldEST;
     private final DamageNumberEST damageNumberEST;
     private final LoreKillEST loreKillEST;
@@ -197,6 +206,7 @@ public class ReforgePlugin extends JavaPlugin {
         refineEST = new EquipmentRefineEST();
         socketEffectEST = new SocketEffectEST();
         loreEffectEST = new LoreEffectEST();
+        loreSkillUseEST = new LoreSkillUseEST();
         enemyElementalShieldEST = new EnemyElementalShieldEST();
         damageNumberEST = new DamageNumberEST();
         loreKillEST = new LoreKillEST();
@@ -278,6 +288,8 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
+        EntityModule.get().registerEntity("irai.mod.reforge:OmnislashAfterimage",
+                OmnislashAfterimageEntity.class, OmnislashAfterimageEntity::new, OmnislashAfterimageEntity.CODEC);
         // Initialize language file loader for name resolution
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
@@ -313,6 +325,19 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("SocketPunchBench", SocketPunchBench.class, SocketPunchBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("EssenceSocketBench", EssenceSocketBench.class, EssenceSocketBench.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("LoreSocketBench", LoreSocketBench.class, LoreSocketBench.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("SoulReaperRune", SoulReaperRune.class, SoulReaperRune.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune3", OmnislashRune.Three.class, OmnislashRune.Three.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune6", OmnislashRune.Six.class, OmnislashRune.Six.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune8", OmnislashRune.Eight.class, OmnislashRune.Eight.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune12", OmnislashRune.Twelve.class, OmnislashRune.Twelve.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneStep", OmnislashRune.Step.class, OmnislashRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("BloodRushRune", BloodRushRune.Cast.class, BloodRushRune.Cast.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("BloodRushRuneStep", BloodRushRune.Step.class, BloodRushRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("PummelRune", PummelRune.Cast.class, PummelRune.Cast.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("PummelRuneStep", PummelRune.Step.class, PummelRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune1", WolfPackRune.One.class, WolfPackRune.One.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune2", WolfPackRune.Two.class, WolfPackRune.Two.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune3", WolfPackRune.Three.class, WolfPackRune.Three.CODEC);
         //this.getCodecRegistry(Interaction.CODEC).register("HatchetThrowUse", HatchetThrowUse.class, HatchetThrowUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantRecipeCombineUse", ResonantRecipeCombineUse.class, ResonantRecipeCombineUse.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("ResonantCompendiumUse", ResonantCompendiumUse.class, ResonantCompendiumUse.CODEC);
@@ -372,6 +397,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(loreEffectEST);
+        this.getEntityStoreRegistry().registerSystem(loreSkillUseEST);
         this.getEntityStoreRegistry().registerSystem(enemyElementalShieldEST);
         if (customCombatTextEnabled) {
             registerDamageNumberSystem();
