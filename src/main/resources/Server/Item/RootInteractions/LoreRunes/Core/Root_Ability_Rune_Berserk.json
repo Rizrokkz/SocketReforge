@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Ability_Rune_Berserk_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Melee"
+    ]
+  }
+}

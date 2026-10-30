@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Ability_Rune_Volley_4_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Ranged"
+    ]
+  }
+}

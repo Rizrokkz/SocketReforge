@@ -1,0 +1,33 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Serial",
+          "Interactions": [
+            "Ability_Omnislash_Rune_Enrage_Pose",
+            {"Type": "OmnislashRune3"},
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rune_Slash_01",
+            "Ability_Omnislash_Rune_Ready_Right",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rune_Slash_02",
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rune_Slash_03"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

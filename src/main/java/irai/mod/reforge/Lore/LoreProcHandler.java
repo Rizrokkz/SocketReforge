@@ -36,10 +36,12 @@ import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.InteractionManager;
 import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.CameraManager;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
 import com.hypixel.hytale.server.core.modules.entity.component.ActiveAnimationComponent;
+import com.hypixel.hytale.server.core.modules.entity.component.HeadRotation;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSettings;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
@@ -54,6 +56,13 @@ import com.hypixel.hytale.server.core.asset.type.item.config.CoreItemAbility;
 import com.hypixel.hytale.server.core.universe.world.ParticleUtil;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.protocol.VelocityThresholdStyle;
+import com.hypixel.hytale.protocol.ClientCameraView;
+import com.hypixel.hytale.protocol.MouseInputType;
+import com.hypixel.hytale.protocol.MovementForceRotationType;
+import com.hypixel.hytale.protocol.PositionDistanceOffsetType;
+import com.hypixel.hytale.protocol.RotationType;
+import com.hypixel.hytale.protocol.ServerCameraSettings;
+import com.hypixel.hytale.protocol.packets.camera.SetServerCamera;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
@@ -81,6 +90,7 @@ import com.hypixel.hytale.protocol.AnimationSlot;
 import com.hypixel.hytale.protocol.Direction;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.protocol.ModelTransform;
+import org.joml.Vector3f;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
@@ -92,6 +102,7 @@ import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
+import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.RuneDeltaDebug;
@@ -132,10 +143,16 @@ public final class LoreProcHandler {
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, OmnislashRuneChain> ACTIVE_OMNISLASH_RUNE_CHAINS =
             new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, OmnislashEnrageStorm> ACTIVE_OMNISLASH_ENRAGE_STORMS =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL =
+            new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> POISON_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Integer> POISON_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> DRAIN_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> STUN_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> BERSERK_RUNE_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> CRITICAL_CHARGE_HITS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BURN_VFX_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> POISON_VFX_UNTIL = new ConcurrentHashMap<>();
     private static final Map<String, ProjectileConfig> STAFF_PROJECTILE_CONFIGS = new ConcurrentHashMap<>();
@@ -206,6 +223,9 @@ public final class LoreProcHandler {
     private static final double BLOOD_RUSH_SELF_BLEED_CHANCE = 0.25d;
     private static final double BLOOD_RUSH_SELF_HEAL_CHANCE = 0.25d;
     private static final float BLOOD_RUSH_SELF_HEAL_DAMAGE_FRACTION = 0.25f;
+    private static final double CORE_RUNE_MAX_RADIUS = 24.0d;
+    private static final int CORE_RUNE_MAX_TARGETS = 48;
+    private static final int CORE_RUNE_MAX_NPC_CHECKS = 512;
     private static final String BLOOD_RUSH_RUNE_ITEM_ID = LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
     private static final String PUMMEL_RUNE_ITEM_ID = LoreSocketManager.PUMMEL_RUNE_ITEM_ID;
     private static final String[] PUMMEL_RUNE_HIT_PARTICLE_IDS = {"Impact_Unarmed"};
@@ -226,12 +246,15 @@ public final class LoreProcHandler {
     private static final int OMNISLASH_MAX_TARGETS = 8;
     private static final int OMNISLASH_MAX_NPC_CHECKS = 160;
     private static final double OMNISLASH_RADIUS = LoreAbility.BASE_OMNISLASH_RADIUS;
-    private static final double OMNISLASH_TELEPORT_STANDOFF = 1.5d;
+    private static final double OMNISLASH_DASH_REFERENCE_DISTANCE = 3.0d;
+    private static final double OMNISLASH_READY_SIDE_STEP_SPEED = 5.0d;
+    private static final long OMNISLASH_CAMERA_LOCK_IDLE_TIMEOUT_MS = 2400L;
+    private static final long OMNISLASH_CAMERA_UNLOCK_DELAY_MS = 350L;
     private static final long OMNISLASH_AFTERIMAGE_LIFETIME_MS = 360L;
     private static final String OMNISLASH_AFTERIMAGE_EFFECT_ID = "Lore_Omnislash_Afterimage";
     private static final int OMNISLASH_MAX_RUNE_HITS = 12;
     private static final double OMNISLASH_LOWER_RUNE_CHAIN_CHANCE = 0.25d;
-    private static final long OMNISLASH_LOWER_RUNE_CHAIN_DELAY_MS = 800L;
+    private static final long OMNISLASH_LOWER_RUNE_CHAIN_DELAY_MS = 300L;
     private static final long OMNISLASH_LOWER_RUNE_CHAIN_RETRY_MS = 250L;
     private static final int OMNISLASH_LOWER_RUNE_CHAIN_MAX_RETRIES = 12;
     private static final long OMNISLASH_LOWER_RUNE_CHAIN_TIMEOUT_MS = 45000L;
@@ -244,6 +267,22 @@ public final class LoreProcHandler {
     private static final String OMNISLASH_RUNE_3_ITEM_ID = "Rune_Omnislash_3";
     private static final String OMNISLASH_RUNE_6_ITEM_ID = "Rune_Omnislash_6";
     private static final String OMNISLASH_RUNE_8_ITEM_ID = "Rune_Omnislash_8";
+    private static final String OMNISLASH_RECHAIN_RUNE_3_ROOT_ID = "Root_Ability_Omnislash_Rechain_3";
+    private static final String OMNISLASH_RECHAIN_RUNE_6_ROOT_ID = "Root_Ability_Omnislash_Rechain_6";
+    private static final String OMNISLASH_RECHAIN_RUNE_8_ROOT_ID = "Root_Ability_Omnislash_Rechain_8";
+    private static final String OMNISLASH_RECHAIN_FINALE_ITEM_ID = "Rune_Omnislash_Rechain_Slam";
+    private static final String OMNISLASH_RECHAIN_SLAM_PARTICLE_ID = "Gobliterator_Slam";
+    private static final int OMNISLASH_RECHAIN_SLAM_MAX_IMPACT_CHECKS = 80;
+    private static final long OMNISLASH_RECHAIN_SLAM_IMPACT_CHECK_INTERVAL_MS = 50L;
+    private static final long OMNISLASH_RECHAIN_SLAM_PROTECTION_MS = 8000L;
+    private static final double OMNISLASH_RECHAIN_SLAM_BACKSTEP_DISTANCE = 3.0d;
+    private static final double OMNISLASH_ENRAGE_ORB_RADIUS = 3.0d;
+    private static final double OMNISLASH_ENRAGE_ORB_DAMAGE_RATIO = 0.10d;
+    private static final long OMNISLASH_ENRAGE_ORB_GATHER_MS = 420L;
+    private static final long OMNISLASH_ENRAGE_ORB_TICK_MS = 160L;
+    private static final long OMNISLASH_ENRAGE_ORB_TIMEOUT_MS = 50000L;
+    private static final double OMNISLASH_ENRAGE_ORB_SPEED = 18.0d;
+    private static final int OMNISLASH_ENRAGE_ORB_MAX_COUNT = 40;
     private static final double OCTASLASH_RAMP_PER_HIT = 0.10d;
     private static final double SYNERGY_PROC_BONUS = 0.25d;
     private static final double SYNERGY_PROC_MAX = 0.85d;
@@ -575,12 +614,12 @@ public final class LoreProcHandler {
             "Combat/Mace/Signature/Mace_Signature_Slash",
             "Mace_Signature_Slash"
     };
-    private static final String[] OMNISLASH_LUNGE_TRAIL_PARTICLE_IDS = {
-            "Combat/Daggers/Signature/Daggers_Lunge_Trail",
-            "Daggers_Lunge_Trail"
-    };
-    private static final int OMNISLASH_LUNGE_TRAIL_MAX_BURSTS = 5;
-    private static final double OMNISLASH_LUNGE_TRAIL_BURST_SPACING = 2.0d;
+    private static final double OMNISLASH_PASS_THROUGH_MIN = 0.35d;
+    private static final double OMNISLASH_PASS_THROUGH_MAX = 0.65d;
+    private static final long OMNISLASH_DASH_TRAIL_DURATION_MS = 167L;
+    private static final long OMNISLASH_DASH_CAMERA_REAIM_MS = 120L;
+    private static final double OMNISLASH_CAMERA_EYE_OFFSET = 1.55d;
+    private static final double OMNISLASH_TARGET_LOOK_OFFSET = 0.9d;
     private static final String[] BLEED_PARTICLE_IDS = {
             "Combat/Daggers/Basic/Impact_Dagger_Slash",
             "Impact_Dagger_Slash",
@@ -784,7 +823,7 @@ public final class LoreProcHandler {
         final Ref<EntityStore> attackerRef;
         final List<Ref<EntityStore>> targets;
         final float perHit;
-        final boolean teleportAttacker;
+        final boolean dashAttacker;
         final boolean skipRefine;
         final int totalHits;
         final String slashParticleId;
@@ -794,18 +833,22 @@ public final class LoreProcHandler {
         final long minimumIntervalMs;
         final long intervalReductionMs;
         int hitsApplied;
+        Ref<EntityStore> pendingTargetRef;
+        int pendingHitIndex = -1;
+        long cameraLockRevision;
+        boolean cameraLocked;
 
         OmnislashSequence(Store<EntityStore> store,
                           Ref<EntityStore> attackerRef,
                           List<Ref<EntityStore>> targets,
                           float perHit,
-                          boolean teleportAttacker,
+                          boolean dashAttacker,
                           boolean skipRefine,
                           int totalHits,
                           String slashParticleId,
                           float finalMultiplier,
                           int feedTier) {
-            this(store, attackerRef, targets, perHit, teleportAttacker, skipRefine, totalHits,
+            this(store, attackerRef, targets, perHit, dashAttacker, skipRefine, totalHits,
                     slashParticleId, finalMultiplier, feedTier,
                     OMNISLASH_HIT_DELAY_MS, OMNISLASH_HIT_DELAY_MS, 0L);
         }
@@ -814,7 +857,7 @@ public final class LoreProcHandler {
                           Ref<EntityStore> attackerRef,
                           List<Ref<EntityStore>> targets,
                           float perHit,
-                          boolean teleportAttacker,
+                          boolean dashAttacker,
                           boolean skipRefine,
                           int totalHits,
                           String slashParticleId,
@@ -827,7 +870,7 @@ public final class LoreProcHandler {
             this.attackerRef = attackerRef;
             this.targets = targets;
             this.perHit = perHit;
-            this.teleportAttacker = teleportAttacker;
+            this.dashAttacker = dashAttacker;
             this.skipRefine = skipRefine;
             this.totalHits = Math.max(1, totalHits);
             this.slashParticleId = slashParticleId;
@@ -846,6 +889,41 @@ public final class LoreProcHandler {
         OmnislashRuneChain(List<Integer> remainingHitCounts, Ref<EntityStore> initialTargetRef) {
             this.remainingHitCounts = new ArrayList<>(remainingHitCounts);
             this.lastTargetRef = initialTargetRef;
+        }
+    }
+
+    private static final class OmnislashEnrageStorm {
+        final Store<EntityStore> store;
+        final Ref<EntityStore> attackerRef;
+        final List<OmnislashEnrageOrb> orbs = new ArrayList<>();
+        int expectedOrbCount;
+        boolean launched;
+        boolean tickScheduled;
+
+        OmnislashEnrageStorm(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+            this.store = store;
+            this.attackerRef = attackerRef;
+        }
+    }
+
+    private static final class OmnislashEnrageOrb {
+        final Vector3d startPosition;
+        final Vector3d sphereOffset;
+        final float damage;
+        final long createdAtMs;
+        OmnislashFireOrbEntity visualEntity;
+        Vector3d position;
+        Ref<EntityStore> targetRef;
+
+        OmnislashEnrageOrb(Vector3d startPosition,
+                           Vector3d sphereOffset,
+                           float damage,
+                           long createdAtMs) {
+            this.startPosition = startPosition;
+            this.sphereOffset = sphereOffset;
+            this.damage = damage;
+            this.createdAtMs = createdAtMs;
+            this.position = new Vector3d(startPosition);
         }
     }
 
@@ -949,6 +1027,44 @@ public final class LoreProcHandler {
                                            CommandBuffer<EntityStore> commandBuffer) {
         return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger, selfIsAttacker,
                 usedSpirits, procState, commandBuffer, false);
+    }
+
+    /** Runs the original spirit proc profile from passive modifier runestones socketed in Rune Delta. */
+    public static boolean applySocketedModifierRunestones(Store<EntityStore> store,
+                                                          Player self,
+                                                          Ref<EntityStore> selfRef,
+                                                          Ref<EntityStore> otherRef,
+                                                          Damage damage,
+                                                          ItemStack weapon,
+                                                          LoreTrigger trigger,
+                                                          boolean selfIsAttacker,
+                                                          Set<String> usedSpirits,
+                                                          ProcState procState,
+                                                          CommandBuffer<EntityStore> commandBuffer) {
+        if (weapon == null || weapon.isEmpty() || trigger == null) {
+            return false;
+        }
+        List<LoreSocketManager.SocketedModifierRunestone> runestones =
+                LoreSocketManager.getSocketedModifierRunestones(weapon);
+        if (runestones.isEmpty()) {
+            return false;
+        }
+
+        LoreSocketData data = new LoreSocketData(runestones.size());
+        data.ensureSocketCount(runestones.size());
+        for (int i = 0; i < runestones.size(); i++) {
+            LoreSocketManager.SocketedModifierRunestone runestone = runestones.get(i);
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            if (socket == null) {
+                continue;
+            }
+            socket.setRuneItemId(runestone.itemId());
+            socket.setSpiritId(runestone.spiritId());
+            socket.setLevel(runestone.level());
+            socket.setFeedTier(runestone.feedTier());
+        }
+        return applyLoreSockets(store, self, selfRef, otherRef, damage, data, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer);
     }
 
     /** Applies lore socket effects on weapon ability use; infused soulstones can trigger here. */
@@ -1850,6 +1966,8 @@ public final class LoreProcHandler {
                         }
                         applyFrozenForDuration(store, opponentRef, durationMs);
                         onBossCounterAilmentApplied(store, opponentRef, "freeze");
+                        applyFreezeModifierPulse(store, selfRef, opponentRef, damageAmount, safeFeedTier,
+                                Math.min(3, Math.max(1, (int) (durationMs / 1000L))));
                     } else {
                         break;
                     }
@@ -1862,6 +1980,7 @@ public final class LoreProcHandler {
                 if (!tryApplyBossCounterVisualStatus(store, opponentRef, "shock", SHOCK_EFFECT_IDS)) {
                     break;
                 }
+                applyShockModifierBurst(store, attackerRef, opponentRef, damageAmount, safeFeedTier);
                 if (primaryProc) {
                     playLoreEffectSound(store, selfRef, LORE_SFX_SHOCK);
                 }
@@ -3035,6 +3154,68 @@ public final class LoreProcHandler {
         }
     }
 
+    private static void applyShockModifierBurst(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> primaryTarget,
+                                                float procDamage,
+                                                int feedTier) {
+        Vector3d center = LoreTargetingUtils.getPosition(store, primaryTarget);
+        if (center == null) {
+            return;
+        }
+        double radius = 3.0d;
+        float burstDamage = Math.max(1.0f, procDamage * 0.35f);
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, radius, radius * radius,
+                "modifier.shock", DEBUG_LORE_PROCS, 20, CORE_RUNE_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            LoreDamageUtils.applyLoreDamage(store, attackerRef, target, burstDamage, false, feedTier);
+            if (!isNpcAilmentImmune(store, target, "shock") && canApplyBossCounterAilment(store, target, "shock")) {
+                applyStunForDuration(store, target, 450L);
+                onBossCounterAilmentApplied(store, target, "shock");
+            }
+        }
+        String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
+        if (particle != null) {
+            LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(center).add(0.0d, 0.8d, 0.0d), 1.1f);
+        }
+    }
+
+    private static void applyFreezeModifierPulse(Store<EntityStore> store,
+                                                 Ref<EntityStore> attackerRef,
+                                                 Ref<EntityStore> frozenTarget,
+                                                 float procDamage,
+                                                 int feedTier,
+                                                 int ticks) {
+        if (store == null || frozenTarget == null || ticks <= 0) {
+            return;
+        }
+        float perPulse = Math.max(0.5f, procDamage * 0.12f);
+        for (int tick = 0; tick < ticks; tick++) {
+            long delay = tick * 1000L;
+            OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+                if (!isEntityAlive(store, frozenTarget) || !isFrozenActive(store, frozenTarget)) {
+                    return;
+                }
+                Vector3d center = LoreTargetingUtils.getPosition(store, frozenTarget);
+                if (center == null) {
+                    return;
+                }
+                List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                        store, attackerRef, center, 2.75d, 2.75d * 2.75d,
+                        "modifier.freeze", false, 16, CORE_RUNE_MAX_NPC_CHECKS);
+                for (Ref<EntityStore> target : targets) {
+                    if (target != null && !target.equals(attackerRef) && isEntityAlive(store, target)) {
+                        LoreDamageUtils.applyLoreDamage(store, attackerRef, target, perPulse, false, feedTier);
+                    }
+                }
+            }), delay, TimeUnit.MILLISECONDS);
+        }
+    }
+
     private static void applyVortexstrike(Store<EntityStore> store,
                                           Ref<EntityStore> attackerRef,
                                           Ref<EntityStore> targetRef,
@@ -4149,7 +4330,11 @@ public final class LoreProcHandler {
             return true;
         }
         String fallback = ability.getAbilityNameFallback();
-        return fallback != null && fallback.toLowerCase(Locale.ROOT).contains("groundslam");
+        if (fallback == null) {
+            return false;
+        }
+        String normalizedFallback = fallback.toLowerCase(Locale.ROOT);
+        return normalizedFallback.contains("groundslam") || normalizedFallback.contains("grand slam");
     }
 
     private static List<PendingLoreProc> collectAlwaysOnAugments(ProcCollectResult result,
@@ -4455,7 +4640,7 @@ public final class LoreProcHandler {
                                        Ref<EntityStore> attackerRef,
                                        Ref<EntityStore> targetRef,
                                        float perHit,
-                                       boolean teleportAttacker,
+                                       boolean dashAttacker,
                                        boolean skipRefine,
                                        int totalHits,
                                        double radius,
@@ -4475,9 +4660,8 @@ public final class LoreProcHandler {
         if (targets.isEmpty()) {
             return;
         }
-        LoreVisuals.tryApplyVisualEffect(store, attackerRef, OMNISLASH_TRAIL_EFFECT_IDS);
         String slashParticleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
-        OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, teleportAttacker,
+        OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, dashAttacker,
                 skipRefine, totalHits, slashParticleId, finalMultiplier, feedTier);
         scheduleOmnislash(sequence);
     }
@@ -4518,8 +4702,9 @@ public final class LoreProcHandler {
             removeOmnislashTrail(store, sequence.attackerRef);
             return;
         }
-        if (sequence.teleportAttacker) {
-            teleportToTarget(store, sequence.attackerRef, targetRef);
+        if (sequence.dashAttacker) {
+            dashOmnislashToTarget(store, sequence.attackerRef, targetRef,
+                    0f, sequence.skipRefine, sequence.feedTier, null);
         }
         int hitIndex = sequence.hitsApplied;
         LoreAnimationUtils.playSwingAnimation(store, sequence.attackerRef, hitIndex);
@@ -4547,6 +4732,540 @@ public final class LoreProcHandler {
             OMNISLASH_SCHEDULER.schedule(() -> queueOmnislashHit(sequence), interval, TimeUnit.MILLISECONDS);
         } else {
             removeOmnislashTrail(store, sequence.attackerRef);
+        }
+    }
+
+    /** Starts a JSON-configured Core ability rune after the interaction chain leaves the ECS tick. */
+    public static void activateCoreAbilityRune(Store<EntityStore> store,
+                                               Ref<EntityStore> attackerRef,
+                                               Ref<EntityStore> targetRef,
+                                               String abilityId,
+                                               int feedTier) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || abilityId == null || abilityId.isBlank()) {
+            return;
+        }
+        Runnable cast = () -> activateCoreAbilityRuneOnWorldThread(
+                store, attackerRef, targetRef, abilityId, Math.max(0, feedTier));
+        if (!LoreWorldTasks.queue(store, cast)) {
+            cast.run();
+        }
+    }
+
+    private static void activateCoreAbilityRuneOnWorldThread(Store<EntityStore> store,
+                                                              Ref<EntityStore> attackerRef,
+                                                              Ref<EntityStore> targetRef,
+                                                              String abilityId,
+                                                              int feedTier) {
+        if (store == null || store.isShutdown() || attackerRef == null || !isEntityAlive(store, attackerRef)) {
+            return;
+        }
+        Player player = store.getComponent(attackerRef, Player.getComponentType());
+        if (player == null) {
+            return;
+        }
+        if (targetRef != null && (!targetRef.isValid() || !isEntityAlive(store, targetRef))) {
+            targetRef = null;
+        }
+        String normalizedAbility = abilityId.trim().toLowerCase(Locale.ROOT)
+                .replace('-', '_').replace(' ', '_');
+        switch (normalizedAbility) {
+            case "grandslam", "grand_slam", "groundslam", "ground_slam" ->
+                    castGroundslamRune(store, attackerRef, feedTier);
+            case "razorstrike", "razor_strike" -> castRazorstrikeRune(store, attackerRef, targetRef, feedTier);
+            case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier);
+            case "vortexstrike", "vortex_strike" -> castVortexstrikeRune(store, attackerRef, targetRef, feedTier);
+            case "big_arrow", "bigarrow", "big_arrow_1", "big_arrow_2", "big_arrow_3" ->
+                    castBigArrowRune(store, attackerRef, targetRef, feedTier,
+                            parseCoreRuneTier(normalizedAbility, "big_arrow"));
+            case "volley", "volley_3", "volley_4", "volley_5", "volley_6" ->
+                    castVolleyRune(store, attackerRef, targetRef, feedTier,
+                            parseCoreRuneTier(normalizedAbility, "volley"));
+            case "berserk" -> castBerserkRune(store, attackerRef);
+            case "mana_font", "manafont", "mana_restore", "mana_font_1", "mana_font_2",
+                    "mana_font_3", "mana_font_4" -> castManaFontRune(store, attackerRef, feedTier,
+                    parseCoreRuneTier(normalizedAbility, "mana_font"));
+            default -> LoreDebug.logKv("coreRune.skip", "reason", "unknownAbility", "ability", abilityId);
+        }
+    }
+
+    private static int parseCoreRuneTier(String abilityId, String baseName) {
+        if (abilityId == null || baseName == null || !abilityId.startsWith(baseName + "_")) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(abilityId.substring(baseName.length() + 1));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private static void castGroundslamRune(Store<EntityStore> store,
+                                          Ref<EntityStore> attackerRef,
+                                          int feedTier) {
+        Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
+        if (center == null) {
+            return;
+        }
+        double radius = Math.min(7.0d, 4.5d + Math.max(0, feedTier) * 0.25d);
+        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.85f;
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, radius, radius * radius,
+                "core.groundslam", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier);
+            if (!isNpcAilmentImmune(store, target, "stun") && canApplyBossCounterAilment(store, target, "stun")) {
+                applyStunForDuration(store, target, 900L + Math.min(600L, feedTier * 100L));
+                onBossCounterAilmentApplied(store, target, "stun");
+            }
+        }
+        LoreVisuals.queueSignatureParticles(store, center, (float) radius, SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
+        LoreVisuals.playSignatureSound(store.getComponent(attackerRef, Player.getComponentType()),
+                "SFX_Mace_T3_Signature_Part_1", "SFX_Mace_T3_Signature_Part_1_Local",
+                "SFX_Mace_T3_Signature_Part_2", "SFX_Mace_T3_Signature_Part_2_Local");
+    }
+
+    private static void castRazorstrikeRune(Store<EntityStore> store,
+                                            Ref<EntityStore> attackerRef,
+                                            Ref<EntityStore> requestedTarget,
+                                            int feedTier) {
+        Ref<EntityStore> target = chooseCoreRuneTarget(store, attackerRef, requestedTarget, 12.0d);
+        if (target == null) {
+            return;
+        }
+        Vector3d start = LoreTargetingUtils.getPosition(store, attackerRef);
+        Vector3d end = LoreTargetingUtils.getPosition(store, target);
+        if (start == null || end == null) {
+            return;
+        }
+        Vector3d path = new Vector3d(end).sub(start);
+        path.y = 0.0d;
+        double targetDistance = path.length();
+        if (targetDistance < 0.1d) {
+            return;
+        }
+        path.normalize();
+        double travel = Math.min(8.0d, targetDistance + 1.4d);
+        lungeTowardTarget(store, attackerRef, target, 8.0d);
+        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.90f;
+        damageCoreRuneTargetsAlongPath(store, attackerRef, start, path, travel, 1.25d, damage, feedTier,
+                "core.razorstrike");
+        String particle = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
+        if (particle != null) {
+            LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(start).add(0.0d, 1.0d, 0.0d), 1.5f);
+            LoreVisuals.spawnScaledParticle(store, particle,
+                    new Vector3d(start).add(new Vector3d(path).mul(travel)).add(0.0d, 1.0d, 0.0d), 1.5f);
+        }
+    }
+
+    private static void castWhirlwindRune(Store<EntityStore> store,
+                                         Ref<EntityStore> attackerRef,
+                                         int feedTier) {
+        int pulses = 6;
+        float perPulse = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.22f;
+        double radius = Math.min(6.0d, 3.5d + feedTier * 0.2d);
+        for (int pulse = 0; pulse < pulses; pulse++) {
+            final int hitIndex = pulse;
+            OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+                if (!isEntityAlive(store, attackerRef)) {
+                    return;
+                }
+                Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
+                if (center == null) {
+                    return;
+                }
+                List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                        store, attackerRef, center, radius, radius * radius,
+                        "core.whirlwind", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+                for (Ref<EntityStore> target : targets) {
+                    if (target != null && !target.equals(attackerRef) && isEntityAlive(store, target)) {
+                        applyCoreRuneDamage(store, attackerRef, target, perPulse, feedTier);
+                    }
+                }
+                LoreAnimationUtils.playSwingAnimation(store, attackerRef, hitIndex);
+                LoreVisuals.queueSignatureParticles(store, center, (float) radius, SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
+            }), pulse * 425L, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void castVortexstrikeRune(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             Ref<EntityStore> requestedTarget,
+                                             int feedTier) {
+        Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
+        if (center == null) {
+            return;
+        }
+        double radius = Math.min(7.0d, 4.5d + feedTier * 0.2d);
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, radius, radius * radius,
+                "core.vortexstrike", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        Ref<EntityStore> dashTarget = requestedTarget != null && requestedTarget.isValid()
+                ? requestedTarget : (targets.isEmpty() ? null : targets.get(0));
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            applyCoreRuneVelocity(store, target, center, 4.0d, 0.4d);
+        }
+        if (dashTarget != null) {
+            lungeTowardTarget(store, attackerRef, dashTarget, 8.0d);
+            Vector3d start = LoreTargetingUtils.getPosition(store, attackerRef);
+            Vector3d end = LoreTargetingUtils.getPosition(store, dashTarget);
+            if (start != null && end != null) {
+                Vector3d direction = new Vector3d(end).sub(start);
+                direction.y = 0.0d;
+                double distance = Math.min(8.0d, direction.length());
+                if (direction.lengthSquared() > 1.0e-5d) {
+                    direction.normalize();
+                    damageCoreRuneTargetsAlongPath(store, attackerRef, start, direction, distance, 1.2d,
+                            resolveCoreRuneWeaponDamage(store, attackerRef) * 0.45f, feedTier,
+                            "core.vortexstrike.path");
+                }
+            }
+        }
+        center = LoreTargetingUtils.getPosition(store, attackerRef);
+        if (center == null) {
+            return;
+        }
+        double blastRadius = radius + 0.75d;
+        float blastDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.55f;
+        List<Ref<EntityStore>> blastTargets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, blastRadius, blastRadius * blastRadius,
+                "core.vortexstrike.blast", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> target : blastTargets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            applyCoreRuneDamage(store, attackerRef, target, blastDamage, feedTier);
+            applyCoreRuneVelocity(store, target, center, 8.0d, 2.2d);
+        }
+        // Disoriented NPCs are redirected toward a nearby hostile for three seconds where the NPC API permits it.
+        if (!blastTargets.isEmpty() && ThreadLocalRandom.current().nextDouble() < 0.25d) {
+            applyVortexConfusion(store, attackerRef, blastTargets, blastRadius);
+        }
+        LoreVisuals.queueSignatureParticles(store, center, (float) blastRadius, SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
+    }
+
+    private static void castBigArrowRune(Store<EntityStore> store,
+                                         Ref<EntityStore> attackerRef,
+                                         Ref<EntityStore> requestedTarget,
+                                         int feedTier,
+                                         int abilityTier) {
+        Ref<EntityStore> target = chooseCoreRuneTarget(store, attackerRef, requestedTarget, 24.0d);
+        if (target == null) {
+            return;
+        }
+        Vector3d start = LoreTargetingUtils.getPosition(store, attackerRef);
+        Vector3d end = LoreTargetingUtils.getPosition(store, target);
+        if (start == null || end == null) {
+            return;
+        }
+        Vector3d direction = new Vector3d(end).sub(start);
+        direction.y = 0.0d;
+        double distance = Math.min(24.0d, direction.length());
+        if (distance <= 0.1d) {
+            return;
+        }
+        direction.normalize();
+        int bonusTier = abilityTier >= 1 ? Math.min(3, abilityTier)
+                : Math.max(1, Math.min(3, 1 + Math.max(0, feedTier) / 2));
+        float bonusWeaponDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * (0.10f * bonusTier);
+        damageCoreRuneTargetsAlongPath(store, attackerRef, start, direction, distance, 1.0d,
+                resolveCoreRuneWeaponDamage(store, attackerRef) + bonusWeaponDamage, feedTier,
+                "core.bigArrow");
+        String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
+        if (particle != null) {
+            for (int i = 1; i <= 4; i++) {
+                Vector3d point = new Vector3d(start).fma(distance * i / 5.0d, direction)
+                        .add(0.0d, 1.0d, 0.0d);
+                LoreVisuals.spawnScaledParticle(store, particle, point, 1.2f + Math.min(0.8f, feedTier * 0.1f));
+            }
+        }
+    }
+
+    private static void castVolleyRune(Store<EntityStore> store,
+                                       Ref<EntityStore> attackerRef,
+                                       Ref<EntityStore> requestedTarget,
+                                       int feedTier,
+                                       int abilityTier) {
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, requestedTarget, 18.0d, 324.0d,
+                "core.volley", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        targets.removeIf(target -> target == null || target.equals(attackerRef) || !isEntityAlive(store, target));
+        if (targets.isEmpty()) {
+            return;
+        }
+        int arrowCount = abilityTier >= 3 ? Math.max(3, Math.min(6, abilityTier))
+                : Math.max(3, Math.min(6, 3 + Math.max(0, feedTier)));
+        int bounceCount = abilityTier >= 3 ? arrowCount - 3
+                : Math.min(3, Math.max(0, feedTier));
+        float arrowDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f;
+        for (int arrow = 0; arrow < arrowCount; arrow++) {
+            Ref<EntityStore> current = targets.get(arrow % targets.size());
+            for (int bounce = 0; bounce <= bounceCount; bounce++) {
+                if (current == null || !current.isValid() || !isEntityAlive(store, current)) {
+                    break;
+                }
+                applyCoreRuneDamage(store, attackerRef, current, arrowDamage, feedTier);
+                String particle = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
+                if (particle != null) {
+                    Vector3d hitPos = LoreTargetingUtils.getPosition(store, current);
+                    if (hitPos != null) {
+                        LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(hitPos).add(0.0d, 1.0d, 0.0d), 0.75f);
+                    }
+                }
+                if (bounce >= bounceCount || targets.size() < 2) {
+                    break;
+                }
+                current = targets.get((arrow + bounce + 1) % targets.size());
+                if (current.equals(targets.get((arrow + bounce) % targets.size()))) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void castBerserkRune(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        Player player = store.getComponent(attackerRef, Player.getComponentType());
+        UUID playerId = player == null ? null : player.getUuid();
+        if (playerId == null) {
+            return;
+        }
+        BERSERK_RUNE_UNTIL.put(playerId, System.currentTimeMillis() + 15_000L);
+        LoreVisuals.tryApplyTimedVisualEffectOverride(store, attackerRef, 15_000L,
+                new String[]{"Lore/Berserk_Haste", "Berserk_Haste", "Lore_Berserk_Haste"});
+    }
+
+    /** Adds the low-health Berserk bonus to real player attack events while the rune buff is active. */
+    public static void applyBerserkRuneDamageBonus(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Damage damage) {
+        if (store == null || attackerRef == null || damage == null) {
+            return;
+        }
+        Player player = store.getComponent(attackerRef, Player.getComponentType());
+        UUID playerId = player == null ? null : player.getUuid();
+        Long until = playerId == null ? null : BERSERK_RUNE_UNTIL.get(playerId);
+        long now = System.currentTimeMillis();
+        if (until == null) {
+            return;
+        }
+        if (now >= until) {
+            BERSERK_RUNE_UNTIL.remove(playerId, until);
+            return;
+        }
+        float maxHealth = LoreDamageUtils.resolveMaxHealth(store, attackerRef);
+        float currentHealth = LoreDamageUtils.resolveCurrentHealth(store, attackerRef);
+        if (maxHealth <= 0.0f || currentHealth <= 0.0f) {
+            return;
+        }
+        double healthRatio = currentHealth / maxHealth;
+        if (healthRatio > 0.25d) {
+            return;
+        }
+        double scale = Math.max(0.0d, Math.min(1.0d, (0.25d - healthRatio) / 0.24d));
+        damage.setAmount(damage.getAmount() * (float) (1.10d + scale * 0.20d));
+    }
+
+    public static boolean consumeCriticalChargeGuarantee(Player player, ItemStack weapon) {
+        if (player == null || player.getUuid() == null
+                || !LoreSocketManager.hasSocketedModifierRunestone(weapon, "Critical_Charge")) {
+            return false;
+        }
+        UUID playerId = player.getUuid();
+        int charge = CRITICAL_CHARGE_HITS.getOrDefault(playerId, 0);
+        if (charge < 7) {
+            return false;
+        }
+        CRITICAL_CHARGE_HITS.remove(playerId);
+        return true;
+    }
+
+    public static void addCriticalChargeFromHit(Player player, ItemStack weapon) {
+        if (player == null || player.getUuid() == null
+                || !LoreSocketManager.hasSocketedModifierRunestone(weapon, "Critical_Charge")) {
+            return;
+        }
+        CRITICAL_CHARGE_HITS.compute(player.getUuid(), (ignored, hits) -> Math.min(8, (hits == null ? 0 : hits) + 1));
+    }
+
+    private static void castManaFontRune(Store<EntityStore> store,
+                                         Ref<EntityStore> attackerRef,
+                                         int feedTier,
+                                         int abilityTier) {
+        int maxFeedTier = Math.max(1, LoreSocketManager.getMaxRuneFeedThresholds());
+        double feedProgress = Math.min(maxFeedTier, Math.max(0, feedTier)) / (double) maxFeedTier;
+        int durationMs = abilityTier >= 1
+                ? 15_000 * Math.min(4, abilityTier)
+                : 15_000 + (int) Math.round(45_000.0d * feedProgress);
+        EntityStatMap stats = store.getComponent(attackerRef, EntityStatMap.getComponentType());
+        if (stats == null) {
+            return;
+        }
+        int statIndex = LoreDamageUtils.getSignatureEnergyStatIndex(stats);
+        if (statIndex < 0) {
+            return;
+        }
+        EntityStatValue mana = stats.get(statIndex);
+        if (mana == null) {
+            return;
+        }
+        float perSecond = Math.max(1.0f, mana.getMax() * 0.04f);
+        LoreVisuals.tryApplyTimedVisualEffectOverride(store, attackerRef, durationMs, HEAL_TOTEM_EFFECT_IDS);
+        int ticks = Math.max(1, durationMs / 1000);
+        for (int tick = 1; tick <= ticks; tick++) {
+            OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store,
+                    () -> restoreSignatureEnergy(store, attackerRef, perSecond)),
+                    tick * 1000L, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static float resolveCoreRuneWeaponDamage(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
+        float damage = LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 10.0f);
+        return Math.max(1.0f, damage);
+    }
+
+    private static void applyCoreRuneDamage(Store<EntityStore> store,
+                                            Ref<EntityStore> attackerRef,
+                                            Ref<EntityStore> targetRef,
+                                            float damage,
+                                            int feedTier) {
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, damage, true, feedTier);
+        queueAbilityHitWeaponLores(store, attackerRef, targetRef);
+    }
+
+    private static Ref<EntityStore> chooseCoreRuneTarget(Store<EntityStore> store,
+                                                         Ref<EntityStore> attackerRef,
+                                                         Ref<EntityStore> requestedTarget,
+                                                         double radius) {
+        if (requestedTarget != null && requestedTarget.isValid() && isEntityAlive(store, requestedTarget)) {
+            return requestedTarget;
+        }
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, null, radius, radius * radius,
+                "core.target", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        Vector3d origin = LoreTargetingUtils.getPosition(store, attackerRef);
+        Ref<EntityStore> closest = null;
+        double closestSq = Double.MAX_VALUE;
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            Vector3d position = LoreTargetingUtils.getPosition(store, target);
+            if (origin == null || position == null) {
+                continue;
+            }
+            double distance = origin.distanceSquared(position);
+            if (distance < closestSq) {
+                closestSq = distance;
+                closest = target;
+            }
+        }
+        return closest;
+    }
+
+    private static void damageCoreRuneTargetsAlongPath(Store<EntityStore> store,
+                                                        Ref<EntityStore> attackerRef,
+                                                        Vector3d start,
+                                                        Vector3d direction,
+                                                        double distance,
+                                                        double halfWidth,
+                                                        float damage,
+                                                        int feedTier,
+                                                        String label) {
+        List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, null, distance + halfWidth, (distance + halfWidth) * (distance + halfWidth),
+                label, DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        Vector3d end = new Vector3d(start).fma(distance, direction);
+        double segmentLengthSq = new Vector3d(end).sub(start).lengthSquared();
+        for (Ref<EntityStore> candidate : candidates) {
+            if (candidate == null || candidate.equals(attackerRef) || !isEntityAlive(store, candidate)) {
+                continue;
+            }
+            Vector3d position = LoreTargetingUtils.getPosition(store, candidate);
+            if (position == null) {
+                continue;
+            }
+            Vector3d fromStart = new Vector3d(position).sub(start);
+            double projection = fromStart.dot(direction);
+            if (projection < 0.0d || projection > distance) {
+                continue;
+            }
+            Vector3d closest = new Vector3d(start).fma(projection, direction);
+            if (closest.distanceSquared(position) <= halfWidth * halfWidth && segmentLengthSq > 1.0e-5d) {
+                applyCoreRuneDamage(store, attackerRef, candidate, damage, feedTier);
+            }
+        }
+    }
+
+    private static void applyCoreRuneVelocity(Store<EntityStore> store,
+                                              Ref<EntityStore> targetRef,
+                                              Vector3d center,
+                                              double horizontal,
+                                              double vertical) {
+        if (store == null || targetRef == null || center == null) {
+            return;
+        }
+        Vector3d targetPos = LoreTargetingUtils.getPosition(store, targetRef);
+        if (targetPos == null) {
+            return;
+        }
+        Vector3d direction = new Vector3d(targetPos).sub(center);
+        direction.y = 0.0d;
+        if (direction.lengthSquared() < 1.0e-5d) {
+            direction.set(ThreadLocalRandom.current().nextDouble(-1.0d, 1.0d), 0.0d,
+                    ThreadLocalRandom.current().nextDouble(-1.0d, 1.0d));
+        }
+        direction.normalize().mul(horizontal).add(0.0d, vertical, 0.0d);
+        Velocity velocity = store.ensureAndGetComponent(targetRef, Velocity.getComponentType());
+        if (velocity != null) {
+            velocity.addInstruction(direction, VORTEXSTRIKE_LUNGE_CONFIG,
+                    com.hypixel.hytale.protocol.ChangeVelocityType.Add);
+        }
+    }
+
+    private static void applyVortexConfusion(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             List<Ref<EntityStore>> blastTargets,
+                                             double radius) {
+        for (Ref<EntityStore> confused : blastTargets) {
+            if (confused == null || confused.equals(attackerRef)
+                    || store.getComponent(confused, NPCEntity.getComponentType()) == null) {
+                continue;
+            }
+            Vector3d center = LoreTargetingUtils.getPosition(store, confused);
+            if (center == null) {
+                return;
+            }
+            List<Ref<EntityStore>> nearby = LoreTargetingUtils.collectTargetsAtPosition(
+                    store, confused, center, radius + 4.0d, (radius + 4.0d) * (radius + 4.0d),
+                    "core.vortexstrike.confuse", false, 16, CORE_RUNE_MAX_NPC_CHECKS);
+            for (Ref<EntityStore> other : nearby) {
+                if (other == null || other.equals(confused) || other.equals(attackerRef)
+                        || store.getComponent(other, NPCEntity.getComponentType()) == null) {
+                    continue;
+                }
+                NPCEntity npc = store.getComponent(confused, NPCEntity.getComponentType());
+                if (npc != null) {
+                    npc.onFlockSetTarget(MarkedEntitySupport.DEFAULT_TARGET_SLOT, other);
+                    LoreVisuals.tryApplyTimedVisualEffectOverride(store, confused, 3000L, FEAR_EFFECT_IDS);
+                    Ref<EntityStore> confusedRef = confused;
+                    OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+                        if (!isEntityAlive(store, confusedRef)) {
+                            return;
+                        }
+                        NPCEntity recovered = store.getComponent(confusedRef, NPCEntity.getComponentType());
+                        if (recovered != null) {
+                            recovered.onFlockSetTarget(MarkedEntitySupport.DEFAULT_TARGET_SLOT, null);
+                        }
+                    }), 3000L, TimeUnit.MILLISECONDS);
+                    return;
+                }
+            }
         }
     }
 
@@ -4876,6 +5595,7 @@ public final class LoreProcHandler {
         OmnislashSequence previousSequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.remove(attackerRef);
         if (previousSequence != null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef);
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.remove(attackerRef);
             queueRemoveOmnislashTrail(store, attackerRef);
         }
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
@@ -4883,9 +5603,11 @@ public final class LoreProcHandler {
             return;
         }
 
-        LoreDamageUtils.DamageBaseResult baseResult =
-                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
-        float perHit = Math.max(0f, baseResult.amount * 0.35f);
+        float weaponBaseDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
+        if (weaponBaseDamage <= 0f) {
+            weaponBaseDamage = 10f;
+        }
+        float perHit = weaponBaseDamage * 0.35f;
         if (perHit <= 0f) {
             return;
         }
@@ -4913,7 +5635,11 @@ public final class LoreProcHandler {
             ACTIVE_OMNISLASH_RUNE_CHAINS.put(attackerRef, runeChain);
             OmnislashRuneChain expiringChain = runeChain;
             OMNISLASH_SCHEDULER.schedule(
-                    () -> ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, expiringChain),
+                    () -> LoreWorldTasks.queue(store, () -> {
+                        if (ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, expiringChain)) {
+                            releaseOmnislashEnrageOrbs(store, attackerRef, null);
+                        }
+                    }),
                     OMNISLASH_LOWER_RUNE_CHAIN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             LoreDebug.logKv("omnislash.rune.chain.start",
                     "chance", OMNISLASH_LOWER_RUNE_CHAIN_CHANCE,
@@ -4921,21 +5647,161 @@ public final class LoreProcHandler {
         } else if (runeChain != null && targetRef != null && targetRef.isValid()) {
             runeChain.lastTargetRef = targetRef;
         }
+        OmnislashEnrageStorm enrageStorm = ACTIVE_OMNISLASH_ENRAGE_STORMS.get(attackerRef);
+        if (enrageStorm == null) {
+            enrageStorm = new OmnislashEnrageStorm(store, attackerRef);
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.put(attackerRef, enrageStorm);
+            scheduleOmnislashEnrageStormTimeout(enrageStorm);
+        }
+        if (enrageStorm.expectedOrbCount <= 0) {
+            enrageStorm.expectedOrbCount = hits
+                    + (hits >= OMNISLASH_MAX_RUNE_HITS && runeChain != null ? 17 : 0);
+        }
         long initialIntervalMs = 650L;
         long minimumIntervalMs = 200L;
         long intervalReductionMs = 50L;
         OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, true,
-                baseResult.skipRefine, hits, LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS),
+                true, hits, LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS),
                 OMNISLASH_FINAL_MULTIPLIER, 0, initialIntervalMs, minimumIntervalMs, intervalReductionMs);
         ACTIVE_OMNISLASH_RUNE_SEQUENCES.put(attackerRef, sequence);
-        LoreVisuals.tryApplyVisualEffect(store, attackerRef, OMNISLASH_TRAIL_EFFECT_IDS);
         long cleanupDelay = estimateAcceleratingOmnislashDurationMs(hits) + 5000L;
         OMNISLASH_SCHEDULER.schedule(
                 () -> LoreWorldTasks.queue(store, () -> finishOmnislashRuneSequence(store, attackerRef, sequence)),
                 cleanupDelay, TimeUnit.MILLISECONDS);
     }
 
-    /** Applies one configured JSON strike, then advances its target for the next strike. */
+    /** Selects the next JSON strike target and turns the player toward it. */
+    public static void prepareOmnislashRuneStep(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                String sideStepDirection) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        boolean stepRight = "Right".equalsIgnoreCase(sideStepDirection);
+        LoreWorldTasks.queue(store, () -> prepareOmnislashRuneStepOnWorldThread(
+                store, attackerRef, stepRight));
+    }
+
+    private static void prepareOmnislashRuneStepOnWorldThread(Store<EntityStore> store,
+                                                               Ref<EntityStore> attackerRef,
+                                                               boolean stepRight) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OmnislashSequence sequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.get(attackerRef);
+        if (sequence == null) {
+            return;
+        }
+        sequence.pendingTargetRef = null;
+        sequence.pendingHitIndex = -1;
+        if (sequence.hitsApplied >= sequence.totalHits) {
+            finishOmnislashRuneSequence(store, attackerRef, sequence);
+            return;
+        }
+        Ref<EntityStore> targetRef = selectOmnislashTarget(store, sequence);
+        if (targetRef == null) {
+            finishOmnislashRuneSequence(store, attackerRef, sequence);
+            return;
+        }
+        sequence.pendingTargetRef = targetRef;
+        sequence.pendingHitIndex = sequence.hitsApplied;
+        OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
+        if (runeChain != null) {
+            runeChain.lastTargetRef = targetRef;
+        }
+        applyOmnislashReadySideStep(store, attackerRef, targetRef, stepRight);
+        applyOmnislashFacing(store, attackerRef, targetRef);
+        applyOmnislashCameraLock(store, attackerRef, targetRef, sequence);
+        scheduleOmnislashCameraReaim(store, attackerRef, targetRef);
+    }
+
+    /** Applies a short lateral burst before the forward dash for visual separation. */
+    private static void applyOmnislashReadySideStep(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    Ref<EntityStore> targetRef,
+                                                    boolean stepRight) {
+        if (store == null || attackerRef == null || targetRef == null) {
+            return;
+        }
+        TransformComponent attackerTransform = store.getComponent(
+                attackerRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = store.getComponent(
+                targetRef, TransformComponent.getComponentType());
+        if (attackerTransform == null || targetTransform == null
+                || attackerTransform.getPosition() == null || targetTransform.getPosition() == null) {
+            return;
+        }
+
+        Vector3d towardTarget = new Vector3d(targetTransform.getPosition())
+                .sub(attackerTransform.getPosition());
+        towardTarget.set(towardTarget.x, 0.0d, towardTarget.z);
+        if (towardTarget.lengthSquared() <= 1.0e-6d) {
+            return;
+        }
+        towardTarget.normalize();
+        double sideSign = stepRight ? 1.0d : -1.0d;
+        Vector3d sideStep = new Vector3d(-towardTarget.z, 0.0d, towardTarget.x)
+                .mul(sideSign * OMNISLASH_READY_SIDE_STEP_SPEED);
+
+        Velocity velocity = store.ensureAndGetComponent(attackerRef, Velocity.getComponentType());
+        if (velocity == null) {
+            return;
+        }
+        Vector3d currentVelocity = velocity.getVelocity();
+        if (currentVelocity != null) {
+            sideStep.y = currentVelocity.y;
+        }
+        velocity.addInstruction(sideStep, VORTEXSTRIKE_LUNGE_CONFIG,
+                com.hypixel.hytale.protocol.ChangeVelocityType.Set);
+    }
+
+    /** Randomly chooses one JSON-authored pass-through distance and starts the dash. */
+    public static void applyOmnislashRuneDashChoice(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    double[] passThroughDistances) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        double[] choices = passThroughDistances == null ? new double[0] : passThroughDistances.clone();
+        LoreWorldTasks.queue(store, () -> applyOmnislashRuneDashChoiceOnWorldThread(
+                store, attackerRef, choices));
+    }
+
+    private static void applyOmnislashRuneDashChoiceOnWorldThread(Store<EntityStore> store,
+                                                                   Ref<EntityStore> attackerRef,
+                                                                   double[] passThroughDistances) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OmnislashSequence sequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.get(attackerRef);
+        if (sequence == null || sequence.pendingHitIndex != sequence.hitsApplied
+                || sequence.pendingTargetRef == null
+                || !isEntityAlive(store, sequence.pendingTargetRef)) {
+            return;
+        }
+        double passThroughDistance = 1.25d;
+        if (passThroughDistances != null && passThroughDistances.length > 0) {
+            double[] validChoices = java.util.Arrays.stream(passThroughDistances)
+                    .filter(value -> Double.isFinite(value) && value >= 0.1d && value <= 8.0d)
+                    .toArray();
+            if (validChoices.length > 0) {
+                passThroughDistance = validChoices[ThreadLocalRandom.current().nextInt(validChoices.length)];
+            }
+        }
+        int hitIndex = sequence.pendingHitIndex;
+        float multiplier = 1.0f + (float) (OMNISLASH_RAMP_PER_HIT * hitIndex);
+        if (sequence.totalHits > 1 && hitIndex >= sequence.totalHits - 1) {
+            multiplier *= sequence.finalMultiplier;
+        }
+        float afterimageExplosionDamage = sequence.totalHits >= OMNISLASH_MAX_RUNE_HITS
+                ? sequence.perHit * multiplier * OMNISLASH_AFTERIMAGE_EXPLOSION_DAMAGE_MULTIPLIER
+                : 0f;
+        dashOmnislashToTarget(store, attackerRef, sequence.pendingTargetRef, afterimageExplosionDamage,
+                sequence.skipRefine, sequence.feedTier, resolveOmnislashRuneSlashAnimationId(hitIndex),
+                passThroughDistance);
+    }
+
+    /** Applies one configured JSON strike to the target prepared for this step. */
     public static void applyOmnislashRuneStep(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
             return;
@@ -4958,14 +5824,13 @@ public final class LoreProcHandler {
             finishOmnislashRuneSequence(store, attackerRef, sequence);
             return;
         }
-        Ref<EntityStore> targetRef = selectOmnislashTarget(store, sequence);
-        if (targetRef == null) {
+        Ref<EntityStore> targetRef = sequence.pendingTargetRef;
+        if (sequence.pendingHitIndex != sequence.hitsApplied
+                || targetRef == null || !isEntityAlive(store, targetRef)) {
+            sequence.pendingTargetRef = null;
+            sequence.pendingHitIndex = -1;
             finishOmnislashRuneSequence(store, attackerRef, sequence);
             return;
-        }
-        OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
-        if (runeChain != null) {
-            runeChain.lastTargetRef = targetRef;
         }
 
         int hitIndex = sequence.hitsApplied;
@@ -4974,13 +5839,12 @@ public final class LoreProcHandler {
             multiplier *= sequence.finalMultiplier;
         }
         float actualPerHit = sequence.perHit * multiplier;
-        float afterimageExplosionDamage = sequence.totalHits >= OMNISLASH_MAX_RUNE_HITS
-                ? actualPerHit * OMNISLASH_AFTERIMAGE_EXPLOSION_DAMAGE_MULTIPLIER
-                : 0f;
-        teleportToTarget(store, attackerRef, targetRef, afterimageExplosionDamage,
-                sequence.skipRefine, sequence.feedTier, resolveOmnislashRuneSlashAnimationId(hitIndex));
-        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef,
-                actualPerHit, sequence.skipRefine, sequence.feedTier);
+        sequence.pendingTargetRef = null;
+        sequence.pendingHitIndex = -1;
+        LoreDamageUtils.applyLoreWeaponAbilityDamage(store, attackerRef, targetRef,
+                actualPerHit, sequence.feedTier);
+        captureOmnislashEnrageOrb(store, attackerRef, targetRef,
+                actualPerHit * (float) OMNISLASH_ENRAGE_ORB_DAMAGE_RATIO);
         queueAbilityHitWeaponLores(store, attackerRef, targetRef);
         tryApplyGroundslamAugment(store, attackerRef, targetRef);
         sequence.hitsApplied++;
@@ -5055,17 +5919,272 @@ public final class LoreProcHandler {
         }
         if (ACTIVE_OMNISLASH_RUNE_SEQUENCES.remove(attackerRef, sequence)) {
             removeOmnislashTrail(store, attackerRef);
+            scheduleOmnislashCameraUnlock(store, attackerRef, sequence,
+                    OMNISLASH_CAMERA_UNLOCK_DELAY_MS);
             OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
             if (runeChain == null) {
+                releaseOmnislashEnrageOrbs(store, attackerRef, null);
                 return;
             }
             if (sequence.hitsApplied < sequence.totalHits) {
                 ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+                releaseOmnislashEnrageOrbs(store, attackerRef, null);
                 return;
             }
             scheduleOmnislashLowerRuneChain(store, attackerRef, runeChain,
                     OMNISLASH_LOWER_RUNE_CHAIN_DELAY_MS, 0);
         }
+    }
+
+    private static void scheduleOmnislashEnrageStormTimeout(OmnislashEnrageStorm storm) {
+        if (storm == null || storm.store == null || storm.attackerRef == null) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(storm.store, () -> {
+            if (ACTIVE_OMNISLASH_ENRAGE_STORMS.get(storm.attackerRef) == storm && !storm.launched) {
+                releaseOmnislashEnrageOrbs(storm.store, storm.attackerRef, null);
+            }
+        }), OMNISLASH_ENRAGE_ORB_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private static void captureOmnislashEnrageOrb(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Ref<EntityStore> hitTargetRef,
+                                                   float slashDamage) {
+        if (store == null || attackerRef == null || slashDamage <= 0f) {
+            return;
+        }
+        OmnislashEnrageStorm storm = ACTIVE_OMNISLASH_ENRAGE_STORMS.get(attackerRef);
+        if (storm == null || storm.launched || storm.orbs.size() >= OMNISLASH_ENRAGE_ORB_MAX_COUNT) {
+            return;
+        }
+
+        TransformComponent attackerTransform = store.getComponent(
+                attackerRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = hitTargetRef == null || !isEntityAlive(store, hitTargetRef)
+                ? null
+                : store.getComponent(hitTargetRef, TransformComponent.getComponentType());
+        Vector3d startPosition = targetTransform != null && targetTransform.getPosition() != null
+                ? new Vector3d(targetTransform.getPosition())
+                : attackerTransform == null || attackerTransform.getPosition() == null
+                        ? null
+                        : new Vector3d(attackerTransform.getPosition());
+        if (startPosition == null) {
+            return;
+        }
+        startPosition.add(0.0d, 0.9d, 0.0d);
+
+        int index = storm.orbs.size();
+        int pointCount = Math.max(index + 1, storm.expectedOrbCount);
+        double vertical = 1.0d - (2.0d * (index + 0.5d) / pointCount);
+        double ringRadius = Math.sqrt(Math.max(0.0d, 1.0d - vertical * vertical));
+        double angle = index * 2.399963229728653d;
+        Vector3d sphereOffset = new Vector3d(
+                Math.cos(angle) * ringRadius * OMNISLASH_ENRAGE_ORB_RADIUS,
+                vertical * OMNISLASH_ENRAGE_ORB_RADIUS,
+                Math.sin(angle) * ringRadius * OMNISLASH_ENRAGE_ORB_RADIUS);
+        storm.orbs.add(new OmnislashEnrageOrb(
+                startPosition, sphereOffset, slashDamage, System.currentTimeMillis()));
+        OmnislashEnrageOrb orb = storm.orbs.get(storm.orbs.size() - 1);
+        spawnOmnislashEnrageOrbVisual(store, orb);
+        scheduleOmnislashEnrageOrbTick(storm);
+    }
+
+    private static void spawnOmnislashEnrageOrbVisual(Store<EntityStore> store, OmnislashEnrageOrb orb) {
+        if (store == null || orb == null || orb.startPosition == null) {
+            return;
+        }
+        try {
+            EntityStore entityStore = store.getExternalData();
+            World world = entityStore == null ? null : entityStore.getWorld();
+            if (world == null) {
+                return;
+            }
+            OmnislashFireOrbEntity visual = new OmnislashFireOrbEntity(world);
+            if (!visual.hasModel()) {
+                return;
+            }
+            world.spawnEntity(visual, new Vector3d(orb.startPosition), new Rotation3f());
+            orb.visualEntity = visual;
+        } catch (Throwable ignored) {
+            // A missing visual model must not cancel the slash's stored damage.
+        }
+    }
+
+    private static void moveOmnislashEnrageOrbVisual(Store<EntityStore> store,
+                                                      OmnislashEnrageOrb orb,
+                                                      Vector3d position) {
+        if (store == null || orb == null || orb.visualEntity == null || position == null) {
+            return;
+        }
+        try {
+            Ref<EntityStore> visualRef = orb.visualEntity.getReference();
+            if (visualRef == null || !visualRef.isValid()) {
+                return;
+            }
+            TransformComponent transform = store.getComponent(visualRef, TransformComponent.getComponentType());
+            if (transform != null) {
+                transform.teleportPosition(new Vector3d(position));
+            }
+        } catch (Throwable ignored) {
+            // Keep projectile visuals best-effort; damage and homing continue independently.
+        }
+    }
+
+    private static void removeOmnislashEnrageOrbVisual(OmnislashEnrageOrb orb) {
+        if (orb == null || orb.visualEntity == null) {
+            return;
+        }
+        try {
+            if (!orb.visualEntity.wasRemoved()) {
+                orb.visualEntity.remove();
+            }
+        } catch (Throwable ignored) {
+            // Cleanup is best-effort when the world is unloading.
+        }
+        orb.visualEntity = null;
+    }
+
+    private static void removeOmnislashEnrageOrbVisuals(OmnislashEnrageStorm storm) {
+        if (storm == null) {
+            return;
+        }
+        for (OmnislashEnrageOrb orb : storm.orbs) {
+            removeOmnislashEnrageOrbVisual(orb);
+        }
+    }
+
+    private static void releaseOmnislashEnrageOrbs(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    List<Ref<EntityStore>> preferredTargets) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OmnislashEnrageStorm storm = ACTIVE_OMNISLASH_ENRAGE_STORMS.get(attackerRef);
+        if (storm == null || storm.launched) {
+            return;
+        }
+
+        List<Ref<EntityStore>> targets = new ArrayList<>();
+        if (preferredTargets != null) {
+            for (Ref<EntityStore> targetRef : preferredTargets) {
+                if (targetRef != null && !attackerRef.equals(targetRef)
+                        && isEntityAlive(store, targetRef) && !isEntityDeadOrDying(store, targetRef)) {
+                    targets.add(targetRef);
+                }
+            }
+        }
+        boolean randomSingleTarget = targets.isEmpty();
+        if (targets.isEmpty()) {
+            TransformComponent transform = store.getComponent(
+                    attackerRef, TransformComponent.getComponentType());
+            if (transform != null && transform.getPosition() != null) {
+                Vector3d center = new Vector3d(transform.getPosition());
+                targets = new ArrayList<>(LoreTargetingUtils.collectTargetsAtPosition(
+                        store, attackerRef, center, OMNISLASH_RADIUS,
+                        OMNISLASH_RADIUS * OMNISLASH_RADIUS,
+                        "omnislash.enrage.orb", DEBUG_LORE_PROCS,
+                        OMNISLASH_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS));
+            }
+        }
+        targets.removeIf(targetRef -> targetRef == null || attackerRef.equals(targetRef)
+                || !isEntityAlive(store, targetRef) || isEntityDeadOrDying(store, targetRef));
+        if (targets.isEmpty() || storm.orbs.isEmpty()) {
+            removeOmnislashEnrageOrbVisuals(storm);
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.remove(attackerRef, storm);
+            return;
+        }
+
+        storm.launched = true;
+        Ref<EntityStore> randomTarget = randomSingleTarget
+                ? targets.get(ThreadLocalRandom.current().nextInt(targets.size()))
+                : null;
+        for (int i = 0; i < storm.orbs.size(); i++) {
+            OmnislashEnrageOrb orb = storm.orbs.get(i);
+            orb.targetRef = randomSingleTarget ? randomTarget : targets.get(i % targets.size());
+        }
+        scheduleOmnislashEnrageOrbTick(storm);
+    }
+
+    private static void scheduleOmnislashEnrageOrbTick(OmnislashEnrageStorm storm) {
+        if (storm == null || storm.store == null || storm.store.isShutdown()
+                || storm.orbs.isEmpty() || storm.tickScheduled) {
+            return;
+        }
+        storm.tickScheduled = true;
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(storm.store, () -> tickOmnislashEnrageOrbs(storm)),
+                OMNISLASH_ENRAGE_ORB_TICK_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private static void tickOmnislashEnrageOrbs(OmnislashEnrageStorm storm) {
+        if (storm == null || storm.store == null || storm.store.isShutdown()
+                || ACTIVE_OMNISLASH_ENRAGE_STORMS.get(storm.attackerRef) != storm) {
+            return;
+        }
+        storm.tickScheduled = false;
+        Store<EntityStore> store = storm.store;
+        if (!isEntityAlive(store, storm.attackerRef)) {
+            removeOmnislashEnrageOrbVisuals(storm);
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.remove(storm.attackerRef, storm);
+            return;
+        }
+        TransformComponent attackerTransform = store.getComponent(
+                storm.attackerRef, TransformComponent.getComponentType());
+        if (attackerTransform == null || attackerTransform.getPosition() == null) {
+            removeOmnislashEnrageOrbVisuals(storm);
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.remove(storm.attackerRef, storm);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Vector3d orbitCenter = new Vector3d(attackerTransform.getPosition()).add(0.0d, 1.0d, 0.0d);
+        double travelStep = OMNISLASH_ENRAGE_ORB_SPEED * OMNISLASH_ENRAGE_ORB_TICK_MS / 1000.0d;
+        for (int i = storm.orbs.size() - 1; i >= 0; i--) {
+            OmnislashEnrageOrb orb = storm.orbs.get(i);
+            if (!storm.launched) {
+                double gatherProgress = Math.min(1.0d,
+                        Math.max(0.0d, (double) (now - orb.createdAtMs) / OMNISLASH_ENRAGE_ORB_GATHER_MS));
+                Vector3d shellPosition = new Vector3d(orbitCenter).add(orb.sphereOffset);
+                orb.position = new Vector3d(orb.startPosition).lerp(shellPosition, gatherProgress);
+                moveOmnislashEnrageOrbVisual(store, orb, orb.position);
+                continue;
+            }
+
+            if (orb.targetRef == null || !isEntityAlive(store, orb.targetRef)
+                    || isEntityDeadOrDying(store, orb.targetRef)) {
+                removeOmnislashEnrageOrbVisual(orb);
+                storm.orbs.remove(i);
+                continue;
+            }
+            TransformComponent targetTransform = store.getComponent(
+                    orb.targetRef, TransformComponent.getComponentType());
+            if (targetTransform == null || targetTransform.getPosition() == null) {
+                removeOmnislashEnrageOrbVisual(orb);
+                storm.orbs.remove(i);
+                continue;
+            }
+            Vector3d impactPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.9d, 0.0d);
+            Vector3d toTarget = new Vector3d(impactPosition).sub(orb.position);
+            double distanceSquared = toTarget.lengthSquared();
+            if (distanceSquared <= travelStep * travelStep) {
+                moveOmnislashEnrageOrbVisual(store, orb, impactPosition);
+                LoreDamageUtils.applyLoreWeaponAbilityDamage(
+                        store, storm.attackerRef, orb.targetRef, orb.damage, 0);
+                removeOmnislashEnrageOrbVisual(orb);
+                storm.orbs.remove(i);
+                continue;
+            }
+            toTarget.normalize().mul(travelStep);
+            orb.position.add(toTarget);
+            moveOmnislashEnrageOrbVisual(store, orb, orb.position);
+        }
+
+        if (storm.launched && storm.orbs.isEmpty()) {
+            ACTIVE_OMNISLASH_ENRAGE_STORMS.remove(storm.attackerRef, storm);
+            return;
+        }
+        scheduleOmnislashEnrageOrbTick(storm);
     }
 
     private static void scheduleOmnislashLowerRuneChain(Store<EntityStore> store,
@@ -5094,11 +6213,7 @@ public final class LoreProcHandler {
             }
             return;
         }
-        if (runeChain.remainingHitCounts.isEmpty()) {
-            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
-            LoreDebug.log("omnislash.rune.chain.complete", "all lower rune levels used");
-            return;
-        }
+        boolean rechainFinale = runeChain.remainingHitCounts.isEmpty();
 
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
         InteractionModule module = InteractionModule.get();
@@ -5107,11 +6222,13 @@ public final class LoreProcHandler {
                 : store.getComponent(attackerRef, module.getInteractionManagerComponent());
         if (attacker == null || manager == null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
             return;
         }
         if (hasActiveInteractionChain(manager, SOCKETED_RUNE_INTERACTION_TYPE)) {
             if (retryCount >= OMNISLASH_LOWER_RUNE_CHAIN_MAX_RETRIES) {
                 ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+                releaseOmnislashEnrageOrbs(store, attackerRef, null);
                 LoreDebug.log("omnislash.rune.chain.stop", "lower rune interaction channel stayed busy");
                 return;
             }
@@ -5120,42 +6237,274 @@ public final class LoreProcHandler {
             return;
         }
 
-        int hitCount = runeChain.remainingHitCounts.get(0);
-        String itemId = resolveOmnislashRuneItemIdForHits(hitCount);
+        int hitCount = rechainFinale ? 0 : runeChain.remainingHitCounts.get(0);
+        String itemId = rechainFinale
+                ? OMNISLASH_RECHAIN_FINALE_ITEM_ID
+                : resolveOmnislashRuneItemIdForHits(hitCount);
         ItemStack runestone = new ItemStack(itemId, 1);
         Item item = runestone.getItem();
         if (item == null || item == Item.UNKNOWN || !(item.getAbility() instanceof CoreItemAbility ability)) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
             return;
         }
-        String rootId = ability.getCastRootId();
+        String rootId = rechainFinale
+                ? ability.getCastRootId()
+                : resolveOmnislashRechainRootId(hitCount);
         RootInteraction root = rootId == null || rootId.isBlank()
                 ? null
                 : RootInteraction.getRootInteractionOrUnknown(rootId);
         if (root == null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
             return;
         }
         InteractionContext context = createSocketedAbilityContext(manager, attackerRef, runestone);
         if (context == null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
             return;
         }
         Ref<EntityStore> targetRef = runeChain.lastTargetRef;
         if (targetRef != null && targetRef.isValid()) {
             context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
         }
+        if (rechainFinale) {
+            // Arm protection before queuing the cast: the first jump/impact tick can
+            // occur before the custom jump interaction is processed.
+            extendOmnislashRechainSlamProtection(attackerRef);
+        }
         InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
         if (chain == null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
             return;
         }
         manager.applyRules(context, chain.getChainData(), SOCKETED_RUNE_INTERACTION_TYPE, root);
         manager.queueExecuteChain(chain);
-        runeChain.remainingHitCounts.remove(0);
-        LoreDebug.logKv("omnislash.rune.chain.next",
-                "item", itemId,
-                "remaining", runeChain.remainingHitCounts);
+        if (rechainFinale) {
+            ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef, runeChain);
+            LoreDebug.log("omnislash.rune.chain.complete", "all lower rune levels used; slam finale queued");
+        } else {
+            runeChain.remainingHitCounts.remove(0);
+            LoreDebug.logKv("omnislash.rune.chain.next",
+                    "item", itemId,
+                    "remaining", runeChain.remainingHitCounts);
+        }
+    }
+
+    /** Applies the jump and dive for the hidden final strike after all rechain levels finish. */
+    public static void startOmnislashRechainSlamJump(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      double jumpVerticalSpeed) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        double speed = Double.isFinite(jumpVerticalSpeed)
+                ? Math.max(8.0d, Math.min(32.0d, jumpVerticalSpeed))
+                : 22.0d;
+        extendOmnislashRechainSlamProtection(attackerRef);
+        LoreWorldTasks.queue(store, () -> {
+            if (!isEntityAlive(store, attackerRef)) {
+                return;
+            }
+            Velocity velocity = store.ensureAndGetComponent(attackerRef, Velocity.getComponentType());
+            if (velocity == null) {
+                return;
+            }
+            Vector3d current = velocity.getVelocity();
+            Vector3d launch = new Vector3d(
+                    current == null ? 0.0d : current.x,
+                    speed,
+                    current == null ? 0.0d : current.z);
+            velocity.addInstruction(launch, VORTEXSTRIKE_LUNGE_CONFIG,
+                    com.hypixel.hytale.protocol.ChangeVelocityType.Set);
+        });
+    }
+
+    /** Starts the downward plunge and waits for landing before applying its area hit. */
+    public static void startOmnislashRechainSlamDive(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      double diveVerticalSpeed,
+                                                      double impactRadius,
+                                                      double damageMultiplier) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        double speed = Double.isFinite(diveVerticalSpeed)
+                ? Math.max(8.0d, Math.min(45.0d, diveVerticalSpeed))
+                : 30.0d;
+        double radius = Double.isFinite(impactRadius)
+                ? Math.max(1.0d, Math.min(12.0d, impactRadius))
+                : 5.0d;
+        double multiplier = Double.isFinite(damageMultiplier)
+                ? Math.max(0.1d, Math.min(10.0d, damageMultiplier))
+                : 1.5d;
+        extendOmnislashRechainSlamProtection(attackerRef);
+        LoreWorldTasks.queue(store, () -> {
+            if (!isEntityAlive(store, attackerRef)) {
+                return;
+            }
+            Velocity velocity = store.ensureAndGetComponent(attackerRef, Velocity.getComponentType());
+            if (velocity == null) {
+                return;
+            }
+            Vector3d current = velocity.getVelocity();
+            Vector3d dive = new Vector3d(
+                    current == null ? 0.0d : current.x * 0.25d,
+                    -speed,
+                    current == null ? 0.0d : current.z * 0.25d);
+            velocity.addInstruction(dive, VORTEXSTRIKE_LUNGE_CONFIG,
+                    com.hypixel.hytale.protocol.ChangeVelocityType.Set);
+            scheduleOmnislashRechainSlamImpactCheck(store, attackerRef,
+                    radius, multiplier, 0, false);
+        });
+    }
+
+    private static void extendOmnislashRechainSlamProtection(Ref<EntityStore> attackerRef) {
+        if (attackerRef == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long until = now + OMNISLASH_RECHAIN_SLAM_PROTECTION_MS;
+        long protectedUntil = OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL.merge(attackerRef, until, Math::max);
+        OMNISLASH_SCHEDULER.schedule(
+                () -> OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL.remove(attackerRef, protectedUntil),
+                Math.max(1L, protectedUntil - now), TimeUnit.MILLISECONDS);
+    }
+
+    /** Prevents all damage briefly while the player is in the scripted jump, dive, and landing. */
+    public static boolean shouldCancelOmnislashRechainSlamDamage(Store<EntityStore> store,
+                                                                  Ref<EntityStore> targetRef,
+                                                                  Damage damage) {
+        if (store == null || store.isShutdown() || targetRef == null || damage == null) {
+            return false;
+        }
+        Long protectedUntil = OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL.get(targetRef);
+        if (protectedUntil == null) {
+            return false;
+        }
+        if (protectedUntil <= System.currentTimeMillis()) {
+            OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL.remove(targetRef, protectedUntil);
+            return false;
+        }
+        return true;
+    }
+
+    private static void scheduleOmnislashRechainSlamImpactCheck(Store<EntityStore> store,
+                                                                 Ref<EntityStore> attackerRef,
+                                                                 double radius,
+                                                                 double damageMultiplier,
+                                                                 int checks,
+                                                                 boolean hasLeftGround) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(store, () -> checkOmnislashRechainSlamImpact(
+                        store, attackerRef, radius, damageMultiplier, checks, hasLeftGround)),
+                OMNISLASH_RECHAIN_SLAM_IMPACT_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private static void checkOmnislashRechainSlamImpact(Store<EntityStore> store,
+                                                        Ref<EntityStore> attackerRef,
+                                                        double radius,
+                                                        double damageMultiplier,
+                                                        int checks,
+                                                        boolean hasLeftGround) {
+        if (store == null || store.isShutdown() || attackerRef == null || !isEntityAlive(store, attackerRef)) {
+            return;
+        }
+        MovementStatesComponent movement = store.getComponent(
+                attackerRef, MovementStatesComponent.getComponentType());
+        boolean onGround = movement != null && movement.getMovementStates() != null
+                && movement.getMovementStates().onGround;
+        boolean leftGround = hasLeftGround || !onGround;
+        if ((leftGround && onGround) || checks >= OMNISLASH_RECHAIN_SLAM_MAX_IMPACT_CHECKS) {
+            applyOmnislashRechainSlamImpact(store, attackerRef, radius, damageMultiplier);
+            return;
+        }
+        scheduleOmnislashRechainSlamImpactCheck(
+                store, attackerRef, radius, damageMultiplier, checks + 1, leftGround);
+    }
+
+    private static void applyOmnislashRechainSlamImpact(Store<EntityStore> store,
+                                                         Ref<EntityStore> attackerRef,
+                                                         double radius,
+                                                         double damageMultiplier) {
+        TransformComponent transform = store.getComponent(
+                attackerRef, TransformComponent.getComponentType());
+        if (transform == null || transform.getPosition() == null) {
+            return;
+        }
+        Vector3d center = new Vector3d(transform.getPosition());
+        LoreVisuals.spawnScaledParticle(store, OMNISLASH_RECHAIN_SLAM_PARTICLE_ID,
+                new Vector3d(center).add(0.0d, 0.25d, 0.0d), 1.0f);
+        applyOmnislashRechainSlamBackstep(store, attackerRef, transform);
+
+        float weaponBaseDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
+        if (weaponBaseDamage <= 0f) {
+            weaponBaseDamage = 10f;
+        }
+        float damage = weaponBaseDamage * (float) damageMultiplier;
+        if (damage <= 0.0f) {
+            releaseOmnislashEnrageOrbs(store, attackerRef, null);
+            return;
+        }
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, radius, radius * radius,
+                "omnislash.rechain.slam", DEBUG_LORE_PROCS, 32, OMNISLASH_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> targetRef : targets) {
+            if (targetRef == null || attackerRef.equals(targetRef) || isEntityDeadOrDying(store, targetRef)) {
+                continue;
+            }
+            LoreDamageUtils.applyLoreWeaponAbilityDamage(store, attackerRef, targetRef, damage, 0);
+            queueAbilityHitWeaponLores(store, attackerRef, targetRef);
+        }
+        releaseOmnislashEnrageOrbs(store, attackerRef, targets);
+    }
+
+    /** Pushes the player backward from the slam landing, creating a short recovery step. */
+    private static void applyOmnislashRechainSlamBackstep(Store<EntityStore> store,
+                                                           Ref<EntityStore> attackerRef,
+                                                           TransformComponent transform) {
+        if (store == null || attackerRef == null || transform == null || !isEntityAlive(store, attackerRef)) {
+            return;
+        }
+        Vector3d lookDirection = null;
+        HeadRotation headRotation = store.getComponent(attackerRef, HeadRotation.getComponentType());
+        if (headRotation != null) {
+            Vector3d headDirection = headRotation.getDirection();
+            if (headDirection != null) {
+                lookDirection = new Vector3d(headDirection);
+            }
+        }
+        if (lookDirection == null
+                || lookDirection.x * lookDirection.x + lookDirection.z * lookDirection.z < 1.0e-6d) {
+            Rotation3f rotation = resolveLookRotation(transform);
+            if (rotation == null) {
+                return;
+            }
+            double yawRadians = Math.toRadians(rotation.yaw());
+            lookDirection = new Vector3d(-Math.sin(yawRadians), 0.0d, Math.cos(yawRadians));
+        }
+        // HeadRotation follows the active player view, including front-camera
+        // orientation; moving against it produces the backstep direction.
+        lookDirection.y = 0.0d;
+        lookDirection.normalize();
+        Vector3d backstep = lookDirection.negate().mul(VORTEXSTRIKE_LUNGE_FORCE_MAX
+                * (OMNISLASH_RECHAIN_SLAM_BACKSTEP_DISTANCE / VORTEXSTRIKE_LUNGE_DISTANCE));
+        Velocity velocity = store.ensureAndGetComponent(attackerRef, Velocity.getComponentType());
+        if (velocity != null) {
+            velocity.addInstruction(backstep, VORTEXSTRIKE_LUNGE_CONFIG,
+                    com.hypixel.hytale.protocol.ChangeVelocityType.Set);
+        }
+        try {
+            AnimationUtils.playAnimation(attackerRef, AnimationSlot.Action,
+                    "Omnislash", "DashForward", true, store);
+        } catch (Throwable ignored) {
+            // Keep the movement even if the dash animation cannot be resolved.
+        }
     }
 
     private static String resolveOmnislashRuneItemIdForHits(int hitCount) {
@@ -5163,6 +6512,14 @@ public final class LoreProcHandler {
             case 8 -> OMNISLASH_RUNE_8_ITEM_ID;
             case 6 -> OMNISLASH_RUNE_6_ITEM_ID;
             default -> OMNISLASH_RUNE_3_ITEM_ID;
+        };
+    }
+
+    private static String resolveOmnislashRechainRootId(int hitCount) {
+        return switch (hitCount) {
+            case 8 -> OMNISLASH_RECHAIN_RUNE_8_ROOT_ID;
+            case 6 -> OMNISLASH_RECHAIN_RUNE_6_ROOT_ID;
+            default -> OMNISLASH_RECHAIN_RUNE_3_ROOT_ID;
         };
     }
 
@@ -5768,19 +7125,25 @@ public final class LoreProcHandler {
         return null;
     }
 
-    private static void teleportToTarget(Store<EntityStore> store,
-                                         Ref<EntityStore> attackerRef,
-                                         Ref<EntityStore> targetRef) {
-        teleportToTarget(store, attackerRef, targetRef, 0f, true, 0, null);
+    private static void dashOmnislashToTarget(Store<EntityStore> store,
+                                              Ref<EntityStore> attackerRef,
+                                              Ref<EntityStore> targetRef,
+                                              float afterimageExplosionDamage,
+                                              boolean skipRefine,
+                                              int feedTier,
+                                              String afterimageAnimationId) {
+        dashOmnislashToTarget(store, attackerRef, targetRef, afterimageExplosionDamage,
+                skipRefine, feedTier, afterimageAnimationId, null);
     }
 
-    private static void teleportToTarget(Store<EntityStore> store,
-                                         Ref<EntityStore> attackerRef,
-                                         Ref<EntityStore> targetRef,
-                                         float afterimageExplosionDamage,
-                                         boolean skipRefine,
-                                         int feedTier,
-                                         String afterimageAnimationId) {
+    private static void dashOmnislashToTarget(Store<EntityStore> store,
+                                              Ref<EntityStore> attackerRef,
+                                              Ref<EntityStore> targetRef,
+                                              float afterimageExplosionDamage,
+                                              boolean skipRefine,
+                                              int feedTier,
+                                              String afterimageAnimationId,
+                                              Double configuredPassThroughDistance) {
         if (store == null || attackerRef == null || targetRef == null) {
             return;
         }
@@ -5789,63 +7152,227 @@ public final class LoreProcHandler {
         if (attackerTransform == null || targetTransform == null) {
             return;
         }
+        Vector3d startPos = attackerTransform.getPosition();
+        Vector3d targetPos = targetTransform.getPosition();
+        if (startPos == null || targetPos == null) {
+            return;
+        }
+        Vector3d direction = new Vector3d(targetPos).sub(startPos);
+        direction.set(direction.x, 0.0d, direction.z);
+        double distance = direction.length();
+        if (distance <= 0.05d) {
+            return;
+        }
+        direction.normalize();
+
+        // Face the selected target before the strike and dash. Updating both
+        // rotations keeps the model and the player's view pointed together.
+        applyOmnislashFacing(store, attackerRef, targetRef);
+        scheduleOmnislashCameraReaim(store, attackerRef, targetRef);
+
         spawnOmnislashAfterimage(store, attackerRef, attackerTransform,
                 afterimageExplosionDamage, skipRefine, feedTier, afterimageAnimationId);
-        Vector3d targetPos = targetTransform.getPosition();
-        if (targetPos == null) {
-            return;
+
+        // Rune slash assets choose a specific extra pass-through distance. Legacy
+        // lore procs keep a target-relative randomized overshoot.
+        double passThroughDistance;
+        if (configuredPassThroughDistance != null && Double.isFinite(configuredPassThroughDistance)) {
+            passThroughDistance = Math.max(0.1d, configuredPassThroughDistance);
+        } else {
+            double passThroughRatio = ThreadLocalRandom.current().nextDouble(
+                    OMNISLASH_PASS_THROUGH_MIN, OMNISLASH_PASS_THROUGH_MAX);
+            passThroughDistance = distance * passThroughRatio;
         }
-        Vector3d dest = new Vector3d(targetPos);
-        double standOff = OMNISLASH_TELEPORT_STANDOFF;
-        switch (ThreadLocalRandom.current().nextInt(4)) {
-            case 0 -> dest.add(0.0d, 0.0d, -standOff); // north
-            case 1 -> dest.add(standOff, 0.0d, 0.0d);  // east
-            case 2 -> dest.add(0.0d, 0.0d, standOff);  // south
-            default -> dest.add(-standOff, 0.0d, 0.0d); // west
+        double travelDistance = distance + passThroughDistance;
+        double forceMagnitude = VORTEXSTRIKE_LUNGE_FORCE_MIN
+                + (VORTEXSTRIKE_LUNGE_FORCE_MAX - VORTEXSTRIKE_LUNGE_FORCE_MIN)
+                * (travelDistance / OMNISLASH_DASH_REFERENCE_DISTANCE);
+        if (afterimageAnimationId == null) {
+            // Passive lore procs do not run the JSON slash interaction, so give
+            // those dashes the same short, model-attached trail window.
+            LoreVisuals.tryApplyTimedVisualEffectOverride(store, attackerRef,
+                    OMNISLASH_DASH_TRAIL_DURATION_MS, OMNISLASH_TRAIL_EFFECT_IDS);
         }
-        Vector3d startPos = attackerTransform.getPosition();
-        if (startPos != null) {
-            spawnOmnislashLungeTrail(store, startPos, dest);
-        }
-        Vector3d lookDirection = new Vector3d(targetPos).sub(dest);
-        lookDirection.set(lookDirection.x, 0.0d, lookDirection.z);
-        Rotation3f rotation = Rotation3f.lookAt(lookDirection);
-        if (rotation == null) {
-            rotation = attackerTransform.getRotation() != null
-                    ? attackerTransform.getRotation().clone()
-                    : new Rotation3f(0f, 0f, 0f);
-        }
-        rotation.setPitch(0f);
-        rotation.setRoll(0f);
-        // Callers execute on the world task queue, where Store component writes are safe.
-        applyTeleportInternal(store, attackerRef, dest, rotation);
+        // This method runs on LoreWorldTasks' world thread, so component writes
+        // are safe here and the lunge starts on the same strike tick.
+        applyOmnislashDashVelocity(store, attackerRef, direction, forceMagnitude);
     }
 
-    private static void spawnOmnislashLungeTrail(Store<EntityStore> store,
-                                                  Vector3d startPosition,
-                                                  Vector3d destination) {
-        if (store == null || startPosition == null || destination == null) {
+    private static void applyOmnislashFacing(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             Ref<EntityStore> targetRef) {
+        if (store == null || attackerRef == null || targetRef == null) {
             return;
         }
-        String particleId = LoreVisuals.resolveParticleEffectId(OMNISLASH_LUNGE_TRAIL_PARTICLE_IDS);
-        if (particleId == null) {
+        TransformComponent transform = store.getComponent(attackerRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = store.getComponent(targetRef, TransformComponent.getComponentType());
+        if (transform == null || targetTransform == null
+                || transform.getPosition() == null || targetTransform.getPosition() == null) {
+            return;
+        }
+        Vector3d flatDirection = new Vector3d(targetTransform.getPosition()).sub(transform.getPosition());
+        flatDirection.set(flatDirection.x, 0.0d, flatDirection.z);
+        if (flatDirection.lengthSquared() <= 1.0e-6d) {
+            return;
+        }
+        Rotation3f bodyRotation = Rotation3f.lookAt(flatDirection);
+        bodyRotation.setPitch(0f);
+        bodyRotation.setRoll(0f);
+        transform.teleportRotation(bodyRotation);
+
+        Vector3d cameraPosition = new Vector3d(transform.getPosition())
+                .add(0.0d, OMNISLASH_CAMERA_EYE_OFFSET, 0.0d);
+        Vector3d targetLookPosition = new Vector3d(targetTransform.getPosition())
+                .add(0.0d, OMNISLASH_TARGET_LOOK_OFFSET, 0.0d);
+        Rotation3f cameraLookRotation = Rotation3f.lookAt(cameraPosition, targetLookPosition);
+        cameraLookRotation.setRoll(0f);
+        HeadRotation headRotation = store.getComponent(attackerRef, HeadRotation.getComponentType());
+        if (headRotation != null) {
+            headRotation.teleportRotation(cameraLookRotation);
+        }
+
+        // Keep the player's camera look synchronized as well as the character's
+        // body rotation; the head component alone can be overwritten by input.
+        PlayerRef playerRef = store.getComponent(attackerRef, PlayerRef.getComponentType());
+        EntityStore entityStore = store.getExternalData();
+        World world = entityStore == null ? null : entityStore.getWorld();
+        if (playerRef != null && world != null) {
+            playerRef.updatePosition(world, transform.getTransform(), cameraLookRotation);
+        }
+    }
+
+    /** Locks the custom camera on the current target and refreshes the release timer. */
+    private static void applyOmnislashCameraLock(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> targetRef,
+                                                OmnislashSequence sequence) {
+        if (store == null || store.isShutdown() || attackerRef == null || targetRef == null
+                || sequence == null || !attackerRef.isValid() || !isEntityAlive(store, targetRef)) {
+            return;
+        }
+        PlayerRef playerRef = store.getComponent(attackerRef, PlayerRef.getComponentType());
+        TransformComponent attackerTransform = store.getComponent(
+                attackerRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = store.getComponent(
+                targetRef, TransformComponent.getComponentType());
+        if (playerRef == null || playerRef.getPacketHandler() == null
+                || attackerTransform == null || targetTransform == null
+                || attackerTransform.getPosition() == null || targetTransform.getPosition() == null) {
             return;
         }
 
-        double dx = destination.x - startPosition.x;
-        double dy = destination.y - startPosition.y;
-        double dz = destination.z - startPosition.z;
-        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        int burstCount = Math.max(2, Math.min(OMNISLASH_LUNGE_TRAIL_MAX_BURSTS,
-                (int) Math.ceil(distance / OMNISLASH_LUNGE_TRAIL_BURST_SPACING) + 1));
-        for (int i = 0; i < burstCount; i++) {
-            double t = (double) i / (double) (burstCount - 1);
-            Vector3d burstPosition = new Vector3d(
-                    startPosition.x + dx * t,
-                    startPosition.y + dy * t,
-                    startPosition.z + dz * t);
-            LoreVisuals.spawnScaledParticle(store, particleId, burstPosition, 0.65f);
+        Vector3d flatDirection = new Vector3d(targetTransform.getPosition())
+                .sub(attackerTransform.getPosition());
+        flatDirection.set(flatDirection.x, 0.0d, flatDirection.z);
+        if (flatDirection.lengthSquared() <= 1.0e-6d) {
+            return;
         }
+        Rotation3f bodyRotation = Rotation3f.lookAt(flatDirection);
+        bodyRotation.setPitch(0f);
+        bodyRotation.setRoll(0f);
+
+        Vector3d cameraPosition = new Vector3d(attackerTransform.getPosition())
+                .add(0.0d, OMNISLASH_CAMERA_EYE_OFFSET, 0.0d);
+        Vector3d targetLookPosition = new Vector3d(targetTransform.getPosition())
+                .add(0.0d, OMNISLASH_TARGET_LOOK_OFFSET, 0.0d);
+        Rotation3f cameraRotation = Rotation3f.lookAt(cameraPosition, targetLookPosition);
+        cameraRotation.setRoll(0f);
+
+        ServerCameraSettings settings = new ServerCameraSettings();
+        settings.positionLerpSpeed = 0.3f;
+        settings.rotationLerpSpeed = 1.0f;
+        settings.distance = 4.0f;
+        settings.allowPitchControls = false;
+        settings.isFirstPerson = false;
+        settings.eyeOffset = true;
+        settings.positionDistanceOffsetType = PositionDistanceOffsetType.DistanceOffset;
+        settings.rotationType = RotationType.Custom;
+        settings.rotation = new Direction(cameraRotation.yaw(), cameraRotation.pitch(), 0f);
+        settings.movementForceRotationType = MovementForceRotationType.Custom;
+        settings.movementForceRotation = new Direction(bodyRotation.yaw(), 0f, 0f);
+        settings.mouseInputType = MouseInputType.LookAtPlane;
+        settings.planeNormal = new Vector3f(0f, 1f, 0f);
+        playerRef.getPacketHandler().writeNoCache(
+                new SetServerCamera(ClientCameraView.Custom, true, settings));
+
+        sequence.cameraLocked = true;
+        scheduleOmnislashCameraUnlock(store, attackerRef, sequence,
+                OMNISLASH_CAMERA_LOCK_IDLE_TIMEOUT_MS);
+    }
+
+    /** Unlocks after the final slash, or after an interrupted combo stops refreshing its lock. */
+    private static void scheduleOmnislashCameraUnlock(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      OmnislashSequence sequence,
+                                                      long delayMs) {
+        if (store == null || store.isShutdown() || attackerRef == null || sequence == null
+                || !sequence.cameraLocked) {
+            return;
+        }
+        long revision = ++sequence.cameraLockRevision;
+        OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+            if (store.isShutdown() || !attackerRef.isValid()
+                    || sequence.cameraLockRevision != revision) {
+                return;
+            }
+            OmnislashSequence activeSequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.get(attackerRef);
+            if (activeSequence != null && activeSequence != sequence) {
+                return;
+            }
+            PlayerRef playerRef = store.getComponent(attackerRef, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                CameraManager cameraManager = store.getComponent(
+                        attackerRef, CameraManager.getComponentType());
+                if (cameraManager != null) {
+                    cameraManager.resetCamera(playerRef);
+                } else if (playerRef.getPacketHandler() != null) {
+                    playerRef.getPacketHandler().writeNoCache(
+                            new SetServerCamera(ClientCameraView.Custom, false, null));
+                }
+            }
+            sequence.cameraLocked = false;
+        }), Math.max(1L, delayMs), TimeUnit.MILLISECONDS);
+    }
+
+    private static void scheduleOmnislashCameraReaim(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || targetRef == null) {
+            return;
+        }
+        OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
+            if (store.isShutdown() || !isEntityAlive(store, attackerRef) || !isEntityAlive(store, targetRef)) {
+                return;
+            }
+            applyOmnislashFacing(store, attackerRef, targetRef);
+            OmnislashSequence sequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.get(attackerRef);
+            if (sequence != null && sequence.pendingTargetRef == targetRef) {
+                applyOmnislashCameraLock(store, attackerRef, targetRef, sequence);
+            }
+        }), OMNISLASH_DASH_CAMERA_REAIM_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private static void applyOmnislashDashVelocity(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    Vector3d direction,
+                                                    double speed) {
+        if (store == null || attackerRef == null || direction == null || speed <= 0.0d
+                || !isEntityAlive(store, attackerRef)) {
+            return;
+        }
+        Velocity velocity = store.ensureAndGetComponent(attackerRef, Velocity.getComponentType());
+        if (velocity == null) {
+            return;
+        }
+        Vector3d dashVelocity = new Vector3d(direction).mul(speed);
+        Vector3d currentVelocity = velocity.getVelocity();
+        if (currentVelocity != null) {
+            dashVelocity.y = currentVelocity.y;
+        }
+        // Yamato's dash uses Set so each slash gets a clean forward burst
+        // instead of accumulating leftover velocity from previous hits.
+        velocity.addInstruction(dashVelocity, VORTEXSTRIKE_LUNGE_CONFIG,
+                com.hypixel.hytale.protocol.ChangeVelocityType.Set);
     }
 
     private static void spawnOmnislashAfterimage(Store<EntityStore> store,

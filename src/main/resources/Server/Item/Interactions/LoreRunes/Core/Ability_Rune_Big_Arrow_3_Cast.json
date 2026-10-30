@@ -1,0 +1,35 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "CoreAbilityRune",
+          "Ability": "Big_Arrow_3"
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "LaunchAbilityProjectile",
+          "Projectile": "Projectile_Config_Core_Rune_Big_Arrow",
+          "Pierce": true,
+          "Distance": 24,
+          "Scale": 1.8,
+          "ScaleAttribute": "AoeScale",
+          "SpeedAttribute": "Speed",
+          "Lifetime": 3
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

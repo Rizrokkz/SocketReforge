@@ -39,6 +39,9 @@ public final class LoreDamageUtils {
     public static final MetaKey<Boolean> META_LORE_DAMAGE =
             Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
                     "socketreforge:lore_damage", Codec.BOOLEAN);
+    public static final MetaKey<Boolean> META_APPLY_EQUIPMENT_DAMAGE_BONUSES =
+            Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
+                    "socketreforge:lore_equipment_damage_bonuses", Codec.BOOLEAN);
     private static final boolean DEBUG_SIGNATURE_ENERGY = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.signatureEnergy", "false"));
     private static final boolean DEBUG_SIGNATURE_ENERGY_STACK = Boolean.parseBoolean(
@@ -124,6 +127,16 @@ public final class LoreDamageUtils {
         applyCombatDamage(store, sourceRef, targetRef, rawDamage, skipRefine, true, true, feedTier, kind, skipCombatText);
     }
 
+    /** Applies a lore-marked weapon strike through the normal equipment bonus pipeline. */
+    public static void applyLoreWeaponAbilityDamage(Store<EntityStore> store,
+                                                    Ref<EntityStore> sourceRef,
+                                                    Ref<EntityStore> targetRef,
+                                                    float rawDamage,
+                                                    int feedTier) {
+        applyCombatDamage(store, sourceRef, targetRef, rawDamage, false, true,
+                true, feedTier, null, false, true);
+    }
+
     public static void applyCombatDamage(Store<EntityStore> store,
                                          Ref<EntityStore> sourceRef,
                                          Ref<EntityStore> targetRef,
@@ -155,6 +168,21 @@ public final class LoreDamageUtils {
                                           int feedTier,
                                           DamageNumberFormatter.DamageKind kind,
                                           boolean skipCombatText) {
+        applyCombatDamage(store, sourceRef, targetRef, rawDamage, skipRefine, useEntitySource,
+                isLoreDamage, feedTier, kind, skipCombatText, false);
+    }
+
+    private static void applyCombatDamage(Store<EntityStore> store,
+                                          Ref<EntityStore> sourceRef,
+                                          Ref<EntityStore> targetRef,
+                                          float rawDamage,
+                                          boolean skipRefine,
+                                          boolean useEntitySource,
+                                          boolean isLoreDamage,
+                                          int feedTier,
+                                          DamageNumberFormatter.DamageKind kind,
+                                          boolean skipCombatText,
+                                          boolean applyEquipmentDamageBonuses) {
         float adjustedDamage = rawDamage;
         if (isLoreDamage && store != null && sourceRef != null) {
             float weaponBase = resolveWeaponBaseDamage(store, sourceRef);
@@ -177,7 +205,7 @@ public final class LoreDamageUtils {
             LoreProcHandler.commandSummonedWolvesToAttack(store, sourceRef, targetRef);
         }
         if (applyDamageEvent(store, sourceRef, targetRef, adjustedDamage, skipRefine, useEntitySource, isLoreDamage,
-                kind, skipCombatText)) {
+                kind, skipCombatText, applyEquipmentDamageBonuses)) {
             return;
         }
         applyDirectHealthLoss(store, targetRef, adjustedDamage);
@@ -416,7 +444,8 @@ public final class LoreDamageUtils {
                                             boolean useEntitySource,
                                             boolean isLoreDamage,
                                             DamageNumberFormatter.DamageKind kind,
-                                            boolean skipCombatText) {
+                                            boolean skipCombatText,
+                                            boolean applyEquipmentDamageBonuses) {
         try {
             float sigBefore = DEBUG_SIGNATURE_ENERGY ? getSignatureEnergy(store, sourceRef) : -1f;
             Damage.Source source = (useEntitySource && sourceRef != null)
@@ -425,6 +454,9 @@ public final class LoreDamageUtils {
             Damage damage = new Damage(source, DamageCause.PHYSICAL, rawDamage);
             if (isLoreDamage) {
                 damage.putMetaObject(META_LORE_DAMAGE, Boolean.TRUE);
+            }
+            if (applyEquipmentDamageBonuses) {
+                damage.putMetaObject(META_APPLY_EQUIPMENT_DAMAGE_BONUSES, Boolean.TRUE);
             }
             if (skipRefine) {
                 damage.putMetaObject(EquipmentRefineEST.META_SKIP_REFORGE, Boolean.TRUE);

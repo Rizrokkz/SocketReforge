@@ -1,0 +1,11 @@
+{
+    "Interactions":  [
+                         "Ability_Omnislash_Rechain_Cast_6"
+                     ],
+    "RequireNewClick":  false,
+    "Tags":  {
+                 "Attack":  [
+                                "Melee"
+                            ]
+             }
+}

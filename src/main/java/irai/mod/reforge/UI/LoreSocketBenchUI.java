@@ -238,7 +238,7 @@ public final class LoreSocketBenchUI {
                 String name = UIItemUtils.displayNameOrItemId(stack, player);
                 gems.add(new Entry(kind, slot, stack, itemId, stack.getQuantity(), name));
             }
-            if (LoreSocketManager.isAbilityRunestone(stack)) {
+            if (LoreSocketManager.isAbilityRunestone(stack) || LoreSocketManager.isModifierRunestone(stack)) {
                 String name = UIItemUtils.displayNameOrItemId(stack, player);
                 runes.add(new Entry(kind, slot, stack, itemId, stack.getQuantity(), name));
             }
@@ -1038,6 +1038,9 @@ public final class LoreSocketBenchUI {
             return "";
         }
         if (gemSection) {
+            if (LoreSocketManager.isModifierRunestone(entry.item)) {
+                return LangLoader.getUITranslation(player, "ui.lore_socket.material_modifier_rune_desc");
+            }
             if (LoreSocketManager.isAbilityRunestone(entry.item)) {
                 return LangLoader.getUITranslation(player, "ui.lore_socket.material_rune_desc");
             }
@@ -1105,6 +1108,18 @@ public final class LoreSocketBenchUI {
                             && socket.getFeedTier() < 1) {
                         actionKey = "ui.lore_socket.process_wolfpack_feed_required_button";
                     }
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isCoreAbilityRunestoneSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelCoreAbilityLore(socket)
+                            ? "ui.lore_socket.process_core_rune_extract_button"
+                            : "ui.lore_socket.process_core_rune_max_required_button";
+                    return LangLoader.getUITranslation(player, actionKey);
+                }
+                if (socket != null && LoreSocketManager.isModifierRunestoneSpirit(socket.getSpiritId())) {
+                    String actionKey = LoreSocketManager.isMaxLevelModifierLore(socket)
+                            ? "ui.lore_socket.process_modifier_rune_extract_button"
+                            : "ui.lore_socket.process_modifier_rune_max_required_button";
                     return LangLoader.getUITranslation(player, actionKey);
                 }
             }
@@ -1695,7 +1710,8 @@ public final class LoreSocketBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_gem"));
         }
         if (runeDelta) {
-            if (!LoreSocketManager.isAbilityRunestone(gem.item)) {
+            boolean modifierRunestone = LoreSocketManager.isModifierRunestone(gem.item);
+            if (!LoreSocketManager.isAbilityRunestone(gem.item) && !modifierRunestone) {
                 return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_invalid_rune"));
             }
             int slotIndex = resolveSlotIndex(data, slotKey, null);
@@ -1716,6 +1732,14 @@ public final class LoreSocketBenchUI {
             socket.setColor("");
             socket.setRuneDamageFeeds(0);
             socket.setRuneManaFeeds(0);
+            if (modifierRunestone) {
+                socket.setLevel(LoreSocketManager.getModifierRunestoneLevel(gem.item));
+                socket.setFeedTier(LoreSocketManager.getModifierRunestoneFeedTier(gem.item));
+            } else {
+                socket.setLevel(0);
+                socket.setXp(0);
+                socket.setFeedTier(0);
+            }
             saveEquipment(player, equipment, data);
 
             ItemContainer runeContainer = getContainer(player, gem.kind);
@@ -2033,6 +2057,48 @@ public final class LoreSocketBenchUI {
             saveEquipment(player, equipment, data);
             return new ProcessResult(LangLoader.getUITranslation(player,
                     "ui.lore_feed.status_wolfpack_extracted"));
+        }
+
+        if (LoreSocketManager.isCoreAbilityRunestoneSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelCoreAbilityLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_core_rune_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_core_rune_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractCoreAbilityRunestone(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_core_rune_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_core_rune_extracted"));
+        }
+
+        if (LoreSocketManager.isModifierRunestoneSpirit(socket.getSpiritId())) {
+            if (!LoreSocketManager.isMaxLevelModifierLore(socket)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_modifier_rune_max_required"));
+            }
+            if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_modifier_rune_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractModifierRunestone(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_modifier_rune_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_modifier_rune_extracted"));
         }
 
         if (!LoreSocketManager.tryClearSpirit(player, data, slotIndex, true)) {

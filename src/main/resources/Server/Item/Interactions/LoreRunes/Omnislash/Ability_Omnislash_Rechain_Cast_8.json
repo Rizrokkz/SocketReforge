@@ -1,0 +1,49 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Serial",
+          "Interactions": [
+            {
+              "Type": "OmnislashRune8"
+            },
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_01",
+            "Ability_Omnislash_Rune_Ready_Right",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_02",
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_03",
+            "Ability_Omnislash_Rune_Ready_Right",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_04",
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_05",
+            "Ability_Omnislash_Rune_Ready_Right",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_06",
+            "Ability_Omnislash_Rune_Ready",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_07",
+            "Ability_Omnislash_Rune_Ready_Right",
+            "Ability_Omnislash_Rune_Dash",
+            "Ability_Omnislash_Rechain_Slash_08"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

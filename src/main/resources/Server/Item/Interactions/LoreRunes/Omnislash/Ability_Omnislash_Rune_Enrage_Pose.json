@@ -1,0 +1,9 @@
+{
+  "Type": "Simple",
+  "RunTime": 0.45,
+  "Effects": {
+    "ItemPlayerAnimationsId": "Omnislash",
+    "ItemAnimationId": "EnragePose",
+    "WaitForAnimationToFinish": false
+  }
+}

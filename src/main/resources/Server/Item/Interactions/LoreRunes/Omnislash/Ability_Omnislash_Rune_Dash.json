@@ -1,0 +1,10 @@
+{
+  "Type": "OmnislashRuneDashChoice",
+  "RunTime": 0.15,
+  "PassThroughDistances": [2.5, 3.25, 4.0],
+  "Effects": {
+    "ItemPlayerAnimationsId": "Omnislash",
+    "ItemAnimationId": "DashForward",
+    "WaitForAnimationToFinish": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Ability_Rune_Mana_Font_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Melee"
+    ]
+  }
+}

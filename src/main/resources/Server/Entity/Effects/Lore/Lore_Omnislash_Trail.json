@@ -1,7 +1,7 @@
 {
-  "Duration": 15.0,
+  "Duration": 0.167,
   "RemovalBehavior": "Duration",
-  "OverlapBehavior": "Overwrite",
+  "OverlapBehavior": "Extend",
   "ApplicationEffects": {
     "Particles": [
       {

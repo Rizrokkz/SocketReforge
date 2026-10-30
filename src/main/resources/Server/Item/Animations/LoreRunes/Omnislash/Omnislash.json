@@ -1,0 +1,87 @@
+{
+  "Animations": {
+    "SlashUpLeft": {
+      "ThirdPerson": "Characters/Animations/Items/Dual_Handed/Longsword/Attacks/Swing_Up_Left/Swing_Up_Left.blockyanim",
+      "FirstPerson": "Characters/Animations/Items/Dual_Handed/Longsword/Attacks/Swing_Up_Left/Swing_Up_Left_FPS.blockyanim",
+      "Speed": 1.1,
+      "Looping": false,
+      "BlendingDuration": 0.05
+    },
+    "SlashUpRight": {
+      "ThirdPerson": "Characters/Animations/Items/Dual_Handed/Battleaxe/Attacks/Swing_Up_Right/Swing_Up_Right.blockyanim",
+      "FirstPerson": "Characters/Animations/Items/Dual_Handed/Battleaxe/Attacks/Swing_Up_Right/Swing_Up_Right_FPS.blockyanim",
+      "Speed": 1.1,
+      "Looping": false,
+      "BlendingDuration": 0.05
+    },
+    "SlashDown": {
+      "ThirdPerson": "Characters/Animations/Items/Dual_Handed/Longsword/Attacks/Swing_Down/Swing_Down.blockyanim",
+      "FirstPerson": "Characters/Animations/Items/Dual_Handed/Longsword/Attacks/Swing_Down/Swing_Down_FPS.blockyanim",
+      "Speed": 1.1,
+      "Looping": false,
+      "BlendingDuration": 0.05
+    },
+    "SlashSmash": {
+      "ThirdPerson": "Characters/Animations/Items/Dual_Handed/Battleaxe/Attacks/Downstrike_Charged/Downstrike_Charged.blockyanim",
+      "FirstPerson": "Characters/Animations/Items/Dual_Handed/Battleaxe/Attacks/Downstrike_Charged/Downstrike_Charged_FPS.blockyanim",
+      "Speed": 0.9,
+      "Looping": false,
+      "BlendingDuration": 0.08
+    },
+    "EnragePose": {
+      "ThirdPerson": "Characters/Animations/Runes/Battleaxe/Tier1/Summon2.blockyanim",
+      "ThirdPersonFace": "Characters/Animations/Expressions/Rage.blockyanim",
+      "KeepPreviousFirstPersonAnimation": true,
+      "Speed": 1.0,
+      "Looping": false,
+      "BlendingDuration": 0.2
+    },
+    "DashForward": {
+      "ThirdPerson": "Characters/Animations/Dash/Dash_Forward.blockyanim",
+      "Speed": 1.15,
+      "Looping": false,
+      "KeepPreviousFirstPersonAnimation": true,
+      "BlendingDuration": 0.05
+    },
+    "DashLeft": {
+      "ThirdPerson": "Characters/Animations/Dash/Dash_Left.blockyanim",
+      "Speed": 1.0,
+      "Looping": false,
+      "KeepPreviousFirstPersonAnimation": true,
+      "BlendingDuration": 0.05
+    },
+    "DashRight": {
+      "ThirdPerson": "Characters/Animations/Dash/Dash_Right.blockyanim",
+      "Speed": 1.0,
+      "Looping": false,
+      "KeepPreviousFirstPersonAnimation": true,
+      "BlendingDuration": 0.05
+    },
+    "RechainJump": {
+      "ThirdPerson": "Characters/Animations/Dash/Dash_Backward.blockyanim",
+      "Speed": 1.1,
+      "Looping": false,
+      "KeepPreviousFirstPersonAnimation": true,
+      "BlendingDuration": 0.1
+    },
+    "RechainSlam": {
+      "ThirdPerson": "Characters/Animations/Roll/Roll.blockyanim",
+      "Speed": 5.0,
+      "Looping": false,
+      "KeepPreviousFirstPersonAnimation": true,
+      "BlendingDuration": 0.05
+    }
+  },
+  "WiggleWeights": {
+    "Pitch": 2.5,
+    "PitchDeceleration": 0.1,
+    "Roll": 0.1,
+    "RollDeceleration": 0.1,
+    "X": 2.5,
+    "XDeceleration": 0.1,
+    "Y": 0.1,
+    "YDeceleration": 0.1,
+    "Z": 0.1,
+    "ZDeceleration": 0.1
+  }
+}

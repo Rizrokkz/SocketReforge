@@ -1,0 +1,34 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Razorstrike.name",
+    "Description": "irai.items.Rune_Razorstrike.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 18,
+    "AbilityKeywords": [
+      "Damage",
+      "Melee",
+      "Aoe"
+    ],
+    "Cooldown": 12,
+    "Cast": "Root_Ability_Rune_Razorstrike",
+    "CostType": "Stamina"
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

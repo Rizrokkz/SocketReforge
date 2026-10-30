@@ -1,0 +1,29 @@
+{
+  "Parent": "Projectile_Config_Arrow_Base",
+  "Physics": {
+    "Type": "Standard",
+    "Gravity": 0,
+    "TerminalVelocityAir": 48,
+    "TerminalVelocityWater": 20,
+    "RotationMode": "Velocity",
+    "Bounciness": 0
+  },
+  "LaunchForce": 55,
+  "SpawnRotationOffset": {
+    "Pitch": 0,
+    "Yaw": -12,
+    "Roll": 0
+  },
+  "Interactions": {
+    "ProjectileHit": {
+      "Interactions": [
+        "Common_Projectile_Impact_Effects"
+      ]
+    },
+    "ProjectileMiss": {
+      "Interactions": [
+        "Common_Projectile_Miss"
+      ]
+    }
+  }
+}

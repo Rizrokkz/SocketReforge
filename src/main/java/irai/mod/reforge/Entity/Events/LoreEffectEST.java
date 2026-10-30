@@ -78,6 +78,10 @@ public final class LoreEffectEST extends DamageEventSystem {
         Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
         Player defender = targetRef == null ? null : store.getComponent(targetRef, Player.getComponentType());
 
+        if (attacker != null) {
+            LoreProcHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
+        }
+
         if (attacker != null && targetRef != null) {
             LoreProcHandler.tryApplyFrozenShatter(store, attackerRef, targetRef, damage);
         }
@@ -114,7 +118,7 @@ public final class LoreEffectEST extends DamageEventSystem {
 
         boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
         boolean runeDelta = LoreSocketManager.isRuneDeltaActive(weapon);
-        boolean isCrit = rollCrit(weapon);
+        boolean isCrit = DamageNumberMeta.isCritical(damage) || rollCrit(weapon);
         boolean isBlocked = isBlocked(damage);
         float beforeLoreProcDamage = damage.getAmount();
         Set<String> used = new HashSet<>();
@@ -130,6 +134,17 @@ public final class LoreEffectEST extends DamageEventSystem {
             if (isBlocked) {
                 changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, defenderRef,
                         damage, data, LoreTrigger.ON_BLOCKED, true, used, procState, commandBuffer);
+            }
+        } else {
+            changed |= LoreProcHandler.applySocketedModifierRunestones(store, attacker, attackerRef, defenderRef,
+                    damage, weapon, LoreTrigger.ON_HIT, true, used, procState, commandBuffer);
+            if (isCrit) {
+                changed |= LoreProcHandler.applySocketedModifierRunestones(store, attacker, attackerRef, defenderRef,
+                        damage, weapon, LoreTrigger.ON_CRIT, true, used, procState, commandBuffer);
+            }
+            if (isBlocked) {
+                changed |= LoreProcHandler.applySocketedModifierRunestones(store, attacker, attackerRef, defenderRef,
+                        damage, weapon, LoreTrigger.ON_BLOCKED, true, used, procState, commandBuffer);
             }
         }
 
@@ -155,6 +170,7 @@ public final class LoreEffectEST extends DamageEventSystem {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
             LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, ctx, updated);
         }
+        LoreProcHandler.addCriticalChargeFromHit(attacker, weapon);
     }
 
     private void applyDefenderLore(Store<EntityStore> store,
@@ -200,6 +216,17 @@ public final class LoreEffectEST extends DamageEventSystem {
             if (nearDeath) {
                 changed |= LoreProcHandler.applyLoreSockets(store, defender, defenderRef, attackerRef,
                         damage, data, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
+            }
+        } else {
+            changed |= LoreProcHandler.applySocketedModifierRunestones(store, defender, defenderRef, attackerRef,
+                    damage, weapon, LoreTrigger.ON_DAMAGED, false, used, procState, commandBuffer);
+            if (isBlocked) {
+                changed |= LoreProcHandler.applySocketedModifierRunestones(store, defender, defenderRef, attackerRef,
+                        damage, weapon, LoreTrigger.ON_BLOCK, false, used, procState, commandBuffer);
+            }
+            if (nearDeath) {
+                changed |= LoreProcHandler.applySocketedModifierRunestones(store, defender, defenderRef, attackerRef,
+                        damage, weapon, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
             }
         }
 

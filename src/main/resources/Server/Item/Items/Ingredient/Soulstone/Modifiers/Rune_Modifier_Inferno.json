@@ -1,0 +1,22 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Modifier_Inferno.name",
+    "Description": "irai.items.Rune_Modifier_Inferno.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

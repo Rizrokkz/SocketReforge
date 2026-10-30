@@ -2,6 +2,8 @@ package irai.mod.reforge.Interactions;
 
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -15,8 +17,12 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
 
+import java.util.Arrays;
+
 /** Starts the Omnislash combo with the hit count selected by the rune's feed stage. */
 public abstract class OmnislashRune extends SimpleInteraction {
+    private static final double[] DEFAULT_PASS_THROUGH_DISTANCES = {0.75d, 1.25d, 1.75d};
+
     private final int hitCount;
 
     protected OmnislashRune(int hitCount) {
@@ -98,6 +104,145 @@ public abstract class OmnislashRune extends SimpleInteraction {
             }
             Store<EntityStore> store = ownerRef.getStore();
             LoreProcHandler.applyOmnislashRuneStep(store, ownerRef);
+        }
+    }
+
+    /** Faces the next selected target before a JSON-configured dash is chosen. */
+    public static final class Ready extends SimpleInteraction {
+        private String sideStepDirection = "Left";
+
+        public static final BuilderCodec<Ready> CODEC =
+                BuilderCodec.<Ready>builder(Ready.class, Ready::new, SimpleInteraction.CODEC)
+                        .append(new KeyedCodec<>("SideStepDirection", Codec.STRING),
+                                (interaction, value) -> interaction.sideStepDirection =
+                                        "Right".equalsIgnoreCase(value) ? "Right" : "Left",
+                                interaction -> interaction.sideStepDirection)
+                        .add()
+                        .build();
+
+        @Override
+        protected void tick0(boolean firstRun, float time, @NonNullDecl InteractionType type,
+                             @NonNullDecl InteractionContext context,
+                             @NonNullDecl CooldownHandler cooldownHandler) {
+            super.tick0(firstRun, time, type, context, cooldownHandler);
+            if (!firstRun) {
+                return;
+            }
+            Ref<EntityStore> ownerRef = context.getOwningEntity();
+            if (ownerRef == null || !ownerRef.isValid()) {
+                return;
+            }
+            LoreProcHandler.prepareOmnislashRuneStep(
+                    ownerRef.getStore(), ownerRef, sideStepDirection);
+        }
+    }
+
+    /** Chooses one authored pass-through distance and starts that slash's dash. */
+    public static final class DashChoice extends SimpleInteraction {
+        private double[] passThroughDistances = DEFAULT_PASS_THROUGH_DISTANCES.clone();
+
+        public static final BuilderCodec<DashChoice> CODEC =
+                BuilderCodec.<DashChoice>builder(DashChoice.class, DashChoice::new, SimpleInteraction.CODEC)
+                        .append(new KeyedCodec<>("PassThroughDistances", Codec.DOUBLE_ARRAY),
+                                (interaction, value) -> interaction.passThroughDistances = sanitize(value),
+                                interaction -> interaction.passThroughDistances)
+                        .add()
+                        .build();
+
+        private static double[] sanitize(double[] values) {
+            if (values == null || values.length == 0) {
+                return DEFAULT_PASS_THROUGH_DISTANCES.clone();
+            }
+            return Arrays.stream(values)
+                    .filter(value -> Double.isFinite(value) && value >= 0.1d && value <= 8.0d)
+                    .limit(8)
+                    .toArray();
+        }
+
+        @Override
+        protected void tick0(boolean firstRun, float time, @NonNullDecl InteractionType type,
+                             @NonNullDecl InteractionContext context,
+                             @NonNullDecl CooldownHandler cooldownHandler) {
+            super.tick0(firstRun, time, type, context, cooldownHandler);
+            if (!firstRun) {
+                return;
+            }
+            Ref<EntityStore> ownerRef = context.getOwningEntity();
+            if (ownerRef == null || !ownerRef.isValid()) {
+                return;
+            }
+            LoreProcHandler.applyOmnislashRuneDashChoice(
+                    ownerRef.getStore(), ownerRef, passThroughDistances);
+        }
+    }
+
+    /** Launches the hidden rechain-finale rune's vertical jump. */
+    public static final class RechainSlamJump extends SimpleInteraction {
+        private double jumpVerticalSpeed = 22.0d;
+
+        public static final BuilderCodec<RechainSlamJump> CODEC =
+                BuilderCodec.<RechainSlamJump>builder(
+                                RechainSlamJump.class, RechainSlamJump::new, SimpleInteraction.CODEC)
+                        .append(new KeyedCodec<>("JumpVerticalSpeed", Codec.DOUBLE),
+                                (interaction, value) -> interaction.jumpVerticalSpeed = value,
+                                interaction -> interaction.jumpVerticalSpeed)
+                        .add()
+                        .build();
+
+        @Override
+        protected void tick0(boolean firstRun, float time, @NonNullDecl InteractionType type,
+                             @NonNullDecl InteractionContext context,
+                             @NonNullDecl CooldownHandler cooldownHandler) {
+            super.tick0(firstRun, time, type, context, cooldownHandler);
+            if (!firstRun) {
+                return;
+            }
+            Ref<EntityStore> ownerRef = context.getOwningEntity();
+            if (ownerRef == null || !ownerRef.isValid()) {
+                return;
+            }
+            LoreProcHandler.startOmnislashRechainSlamJump(
+                    ownerRef.getStore(), ownerRef, jumpVerticalSpeed);
+        }
+    }
+
+    /** Dives toward the ground and applies the rechain-finale slam on landing. */
+    public static final class RechainSlamDive extends SimpleInteraction {
+        private double diveVerticalSpeed = 30.0d;
+        private double impactRadius = 5.0d;
+        private double damageMultiplier = 1.5d;
+
+        public static final BuilderCodec<RechainSlamDive> CODEC =
+                BuilderCodec.<RechainSlamDive>builder(
+                                RechainSlamDive.class, RechainSlamDive::new, SimpleInteraction.CODEC)
+                        .append(new KeyedCodec<>("DiveVerticalSpeed", Codec.DOUBLE),
+                                (interaction, value) -> interaction.diveVerticalSpeed = value,
+                                interaction -> interaction.diveVerticalSpeed)
+                        .add()
+                        .append(new KeyedCodec<>("ImpactRadius", Codec.DOUBLE),
+                                (interaction, value) -> interaction.impactRadius = value,
+                                interaction -> interaction.impactRadius)
+                        .add()
+                        .append(new KeyedCodec<>("DamageMultiplier", Codec.DOUBLE),
+                                (interaction, value) -> interaction.damageMultiplier = value,
+                                interaction -> interaction.damageMultiplier)
+                        .add()
+                        .build();
+
+        @Override
+        protected void tick0(boolean firstRun, float time, @NonNullDecl InteractionType type,
+                             @NonNullDecl InteractionContext context,
+                             @NonNullDecl CooldownHandler cooldownHandler) {
+            super.tick0(firstRun, time, type, context, cooldownHandler);
+            if (!firstRun) {
+                return;
+            }
+            Ref<EntityStore> ownerRef = context.getOwningEntity();
+            if (ownerRef == null || !ownerRef.isValid()) {
+                return;
+            }
+            LoreProcHandler.startOmnislashRechainSlamDive(
+                    ownerRef.getStore(), ownerRef, diveVerticalSpeed, impactRadius, damageMultiplier);
         }
     }
 }

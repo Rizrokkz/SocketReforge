@@ -120,11 +120,17 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
+        if (LoreProcHandler.shouldCancelOmnislashRechainSlamDamage(store, targetRef, damage)) {
+            damage.setCancelled(true);
+            return;
+        }
+
         boolean loreDamage = Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
+        boolean applyLoreEquipmentBonuses = Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(LoreDamageUtils.META_APPLY_EQUIPMENT_DAMAGE_BONUSES));
 
         // Get target (entity receiving damage)
-        Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
-
         // Get damage source
         Damage.Source source = damage.getSource();
         if (!(source instanceof Damage.EntitySource entitySource)) {
@@ -134,7 +140,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
         Ref<EntityStore> attackerRef = entitySource.getRef();
         LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
         LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
-        boolean skipRefine = loreDamage || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
+        boolean skipRefine = (loreDamage && !applyLoreEquipmentBonuses)
+                || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
 
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
         if (!skipRefine) {
@@ -167,13 +174,17 @@ public class EquipmentRefineEST extends DamageEventSystem {
                         newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
                     }
 
-                    boolean isCrit = critChancePercent > 0.0
-                            && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent;
+                    boolean chargedCrit = LoreProcHandler.consumeCriticalChargeGuarantee(attacker, weapon);
+                    boolean isCrit = chargedCrit || (critChancePercent > 0.0
+                            && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent);
                     if (isCrit) {
                         DamageNumberMeta.markCritical(damage);
                     }
-                    if (isCrit && critDamagePercent > 0.0) {
-                        newDamage = (float) (newDamage * (1.0 + (critDamagePercent / 100.0)));
+                    double effectiveCritDamagePercent = chargedCrit
+                            ? Math.max(50.0d, critDamagePercent)
+                            : critDamagePercent;
+                    if (isCrit && effectiveCritDamagePercent > 0.0) {
+                        newDamage = (float) (newDamage * (1.0 + (effectiveCritDamagePercent / 100.0)));
                     }
 
                     int equippedVoidEssenceCount = countEquippedVoidEssences(attacker, weapon);

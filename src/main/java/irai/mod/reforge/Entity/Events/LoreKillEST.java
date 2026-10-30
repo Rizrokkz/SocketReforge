@@ -160,6 +160,10 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         }
         changed |= LoreProcHandler.applyLoreSockets(store, attacker, attackerRef, ref,
                 null, data, LoreTrigger.ON_KILL, true, used, procState, commandBuffer);
+        if (LoreSocketManager.isRuneDeltaActive(weapon)) {
+            changed |= LoreProcHandler.applySocketedModifierRunestones(store, attacker, attackerRef, ref,
+                    null, weapon, LoreTrigger.ON_KILL, true, used, procState, commandBuffer);
+        }
         if (firstKill) {
             LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, ref,
                     null, LoreTrigger.ON_FIRST_KILL, true, used, procState, commandBuffer);

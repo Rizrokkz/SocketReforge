@@ -1,0 +1,34 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Volley_3.name",
+    "Description": "irai.items.Rune_Volley_3.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Cost": 22,
+    "AbilityKeywords": [
+      "Damage",
+      "Duration",
+      "Wind"
+    ],
+    "Cooldown": 20,
+    "Cast": "Root_Ability_Rune_Volley_3",
+    "CostType": "Stamina"
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

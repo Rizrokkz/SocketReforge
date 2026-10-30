@@ -1,0 +1,10 @@
+{
+  "Type": "OmnislashRuneReady",
+  "RunTime": 0.15,
+  "SideStepDirection": "Right",
+  "Effects": {
+    "ItemPlayerAnimationsId": "Omnislash",
+    "ItemAnimationId": "DashRight",
+    "WaitForAnimationToFinish": false
+  }
+}

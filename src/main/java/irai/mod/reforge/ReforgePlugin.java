@@ -107,12 +107,14 @@ import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryChangeEST;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryEventEST;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
+import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Interactions.BloodRushRune;
 import irai.mod.reforge.Interactions.CorruptionInteraction;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.OmnislashRune;
 import irai.mod.reforge.Interactions.PummelRune;
+import irai.mod.reforge.Interactions.CoreAbilityRune;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
@@ -290,6 +292,8 @@ public class ReforgePlugin extends JavaPlugin {
     protected void setup() {
         EntityModule.get().registerEntity("irai.mod.reforge:OmnislashAfterimage",
                 OmnislashAfterimageEntity.class, OmnislashAfterimageEntity::new, OmnislashAfterimageEntity.CODEC);
+        EntityModule.get().registerEntity("irai.mod.reforge:OmnislashFireOrb",
+                OmnislashFireOrbEntity.class, OmnislashFireOrbEntity::new, OmnislashFireOrbEntity.CODEC);
         // Initialize language file loader for name resolution
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
@@ -331,10 +335,15 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune8", OmnislashRune.Eight.class, OmnislashRune.Eight.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("OmnislashRune12", OmnislashRune.Twelve.class, OmnislashRune.Twelve.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneStep", OmnislashRune.Step.class, OmnislashRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneReady", OmnislashRune.Ready.class, OmnislashRune.Ready.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneDashChoice", OmnislashRune.DashChoice.class, OmnislashRune.DashChoice.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneSlamJump", OmnislashRune.RechainSlamJump.class, OmnislashRune.RechainSlamJump.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneSlamDive", OmnislashRune.RechainSlamDive.class, OmnislashRune.RechainSlamDive.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("BloodRushRune", BloodRushRune.Cast.class, BloodRushRune.Cast.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("BloodRushRuneStep", BloodRushRune.Step.class, BloodRushRune.Step.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("PummelRune", PummelRune.Cast.class, PummelRune.Cast.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("PummelRuneStep", PummelRune.Step.class, PummelRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("CoreAbilityRune", CoreAbilityRune.class, CoreAbilityRune.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune1", WolfPackRune.One.class, WolfPackRune.One.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune2", WolfPackRune.Two.class, WolfPackRune.Two.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune3", WolfPackRune.Three.class, WolfPackRune.Three.CODEC);

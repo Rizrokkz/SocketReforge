@@ -123,7 +123,7 @@ public final class LoreAbilityRegistry {
                     "tooltip.lore.technique.vortexstrike", "Vortexstrike",
                     LoreTrigger.ON_HIT, 0.06d, 4600L, LoreEffectType.VORTEXSTRIKE, 0.42d, 0.02d),
             new SignatureAbility("SIGNATURE_GROUNDSLAM",
-                    "tooltip.lore.technique.groundslam", "Groundslam",
+                    "tooltip.lore.technique.groundslam", "Grand Slam",
                     LoreTrigger.ON_HIT, 0.07d, 5200L, LoreEffectType.APPLY_STUN, 1.5d, 0.10d),
             new SignatureAbility("SIGNATURE_RAZORSTRIKE",
                     "tooltip.lore.technique.razorstrike", "Razorstrike",

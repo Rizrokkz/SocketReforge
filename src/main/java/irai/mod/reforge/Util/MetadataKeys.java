@@ -54,6 +54,8 @@ public final class MetadataKeys {
     public static final String LORE_SOCKET_RUNE_DAMAGE_FEEDS = "SocketReforge.Lore.Socket.RuneDamageFeeds";
     public static final String LORE_SOCKET_RUNE_MANA_FEEDS = "SocketReforge.Lore.Socket.RuneManaFeeds";
     public static final String LORE_SOULSTONE_SPIRIT = "SocketReforge.Lore.Soulstone.Spirit";
+    public static final String LORE_MODIFIER_RUNESTONE_LEVEL = "SocketReforge.Lore.ModifierRunestone.Level";
+    public static final String LORE_MODIFIER_RUNESTONE_FEED_TIER = "SocketReforge.Lore.ModifierRunestone.FeedTier";
 
     // Loot tracking
     public static final String LOOT_ROLLED = "SocketReforge.Loot.Rolled";

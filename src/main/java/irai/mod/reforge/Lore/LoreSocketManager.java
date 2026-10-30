@@ -45,13 +45,59 @@ public final class LoreSocketManager {
     public static final String OMNISLASH_RUNE_6_ITEM_ID = "Rune_Omnislash_6";
     public static final String OMNISLASH_RUNE_8_ITEM_ID = "Rune_Omnislash_8";
     public static final String OMNISLASH_RUNE_12_ITEM_ID = "Rune_Omnislash_12";
+    public static final String MODIFIER_RUNESTONE_PREFIX = "Rune_Modifier_";
+    public static final String CORE_RUNESTONE_PREFIX = "Rune_";
+    public static final String GRAND_SLAM_RUNE_ITEM_ID = "Rune_GrandSlam";
     public static final String GHASTLY_ESSENCE_ITEM_ID = "Ingredient_Ghastly_Essence";
+    private record ModifierRunestoneDefinition(String spiritId, String abilityId) {}
+
+    private static final ModifierRunestoneDefinition[] CORE_RUNESTONES = {
+            new ModifierRunestoneDefinition("Whale_Humpback", "GrandSlam"),
+            new ModifierRunestoneDefinition("Horse_Skeleton", "Razorstrike"),
+            new ModifierRunestoneDefinition("Skeleton_Burnt_Praetorian", "Whirlwind"),
+            new ModifierRunestoneDefinition("Spirit_Thunder", "Vortexstrike"),
+            new ModifierRunestoneDefinition("Camel", "Big_Arrow"),
+            new ModifierRunestoneDefinition("Horse", "Volley"),
+            new ModifierRunestoneDefinition("Bear_Grizzly", "Berserk"),
+            new ModifierRunestoneDefinition("Spirit_Manafont", "Mana_Font")
+    };
+
+    private static final ModifierRunestoneDefinition[] MODIFIER_RUNESTONES = {
+            new ModifierRunestoneDefinition("Wraith", "Blur"),
+            new ModifierRunestoneDefinition("Spawn_Void", "Fear"),
+            // Keep old extracted Rune Delta modifiers functional; new max-level extraction grants Core runes.
+            new ModifierRunestoneDefinition("Horse_Skeleton", "Razorstrike"),
+            new ModifierRunestoneDefinition("Skeleton_Burnt_Praetorian", "Whirlwind"),
+            new ModifierRunestoneDefinition("Skeleton_Burnt_Soldier", "Burn"),
+            new ModifierRunestoneDefinition("Zombie_Burnt", "Bleed"),
+            new ModifierRunestoneDefinition("Cow_Undead", "Shrapnel"),
+            new ModifierRunestoneDefinition("Whale_Humpback", "Groundslam"),
+            new ModifierRunestoneDefinition("Trillodon", "Area_Regeneration"),
+            new ModifierRunestoneDefinition("Crocodile", "Caustic_Finale"),
+            new ModifierRunestoneDefinition("Horse", "Volley"),
+            new ModifierRunestoneDefinition("Bison", "Critical_Charge"),
+            new ModifierRunestoneDefinition("Tiger_Sabertooth", "Drain_Life"),
+            new ModifierRunestoneDefinition("Mosshorn_Plain", "Area_Heal"),
+            new ModifierRunestoneDefinition("Mosshorn", "Regeneration"),
+            new ModifierRunestoneDefinition("Toad_Rhino", "Shield"),
+            new ModifierRunestoneDefinition("Bear_Grizzly", "Thorns"),
+            new ModifierRunestoneDefinition("Moose_Bull", "Haste"),
+            new ModifierRunestoneDefinition("Toad_Rhino_Magma", "Inferno"),
+            new ModifierRunestoneDefinition("Hound_Bleached", "Slow"),
+            new ModifierRunestoneDefinition("Leopard_Snow", "Freeze"),
+            new ModifierRunestoneDefinition("Spirit_Thunder", "Vortexstrike"),
+            new ModifierRunestoneDefinition("Camel", "Big_Arrow"),
+            new ModifierRunestoneDefinition("Ram", "Shock"),
+            new ModifierRunestoneDefinition("Scorpion", "Poison"),
+            new ModifierRunestoneDefinition("Spirit_Manafont", "Mana_Restore")
+    };
     private static final float RUNE_DAMAGE_BONUS_PER_FEED = 0.10f;
     private static final float RUNE_MANA_REDUCTION_PER_FEED = 0.05f;
     private static final float MIN_RUNE_MANA_COST_MULTIPLIER = 0.40f;
     private static LoreConfig config = new LoreConfig();
 
     public record SocketedRunestone(String itemId, int slotIndex, int damageFeeds, int manaFeeds) {}
+    public record SocketedModifierRunestone(String itemId, String spiritId, int slotIndex, int level, int feedTier) {}
     private static final String[] LORE_WEAPON_EXCLUDE_TOKENS = {
             "shield",
             "buckler",
@@ -655,6 +701,99 @@ public final class LoreSocketManager {
                 && isWolfPackSpirit(socket.getSpiritId());
     }
 
+    public static boolean isModifierRunestoneSpirit(String spiritId) {
+        return resolveModifierRunestoneItemId(spiritId) != null;
+    }
+
+    public static boolean isCoreAbilityRunestoneSpirit(String spiritId) {
+        return resolveCoreAbilityRunestoneItemId(spiritId) != null;
+    }
+
+    public static boolean isMaxLevelCoreAbilityLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isCoreAbilityRunestoneSpirit(socket.getSpiritId());
+    }
+
+    public static String resolveCoreAbilityRunestoneItemId(String spiritId) {
+        if (spiritId == null || spiritId.isBlank()) {
+            return null;
+        }
+        for (ModifierRunestoneDefinition runestone : CORE_RUNESTONES) {
+            if (runestone.spiritId().equalsIgnoreCase(spiritId.trim())) {
+                return switch (runestone.abilityId()) {
+                    case "Volley" -> CORE_RUNESTONE_PREFIX + "Volley_3";
+                    case "Big_Arrow" -> CORE_RUNESTONE_PREFIX + "Big_Arrow_1";
+                    case "Mana_Font" -> CORE_RUNESTONE_PREFIX + "Mana_Font_1";
+                    case "GrandSlam" -> GRAND_SLAM_RUNE_ITEM_ID;
+                    default -> CORE_RUNESTONE_PREFIX + runestone.abilityId();
+                };
+            }
+        }
+        return null;
+    }
+
+    public static String resolveCoreAbilityRunestoneItemId(String spiritId, int feedTier) {
+        if (spiritId != null && spiritId.equalsIgnoreCase("Horse")) {
+            int maxTier = Math.max(1, getMaxRuneFeedThresholds());
+            int tier = Math.max(0, Math.min(maxTier, feedTier));
+            int arrowCount = tier >= maxTier ? 6
+                    : tier * 3 >= maxTier * 2 ? 5
+                    : tier * 3 >= maxTier ? 4
+                    : 3;
+            return CORE_RUNESTONE_PREFIX + "Volley_" + arrowCount;
+        }
+        if (spiritId != null && spiritId.equalsIgnoreCase("Camel")) {
+            int rank = resolveFeedRank(feedTier, 3);
+            return CORE_RUNESTONE_PREFIX + "Big_Arrow_" + rank;
+        }
+        if (spiritId != null && spiritId.equalsIgnoreCase("Spirit_Manafont")) {
+            int rank = resolveFeedRank(feedTier, 4);
+            return CORE_RUNESTONE_PREFIX + "Mana_Font_" + rank;
+        }
+        return resolveCoreAbilityRunestoneItemId(spiritId);
+    }
+
+    private static int resolveFeedRank(int feedTier, int rankCount) {
+        int maxTier = Math.max(1, getMaxRuneFeedThresholds());
+        int tier = Math.max(0, Math.min(maxTier, feedTier));
+        return Math.max(1, Math.min(rankCount,
+                (int) Math.ceil((tier / (double) maxTier) * rankCount)));
+    }
+
+    public static String resolveCoreAbilityRunestoneSpiritId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        if (GRAND_SLAM_RUNE_ITEM_ID.equalsIgnoreCase(itemId.trim())) {
+            return "Whale_Humpback";
+        }
+        for (ModifierRunestoneDefinition runestone : CORE_RUNESTONES) {
+            if ("Volley".equals(runestone.abilityId())
+                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_volley_[3-6]")) {
+                return runestone.spiritId();
+            }
+            if ("Big_Arrow".equals(runestone.abilityId())
+                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_big_arrow_[1-3]")) {
+                return runestone.spiritId();
+            }
+            if ("Mana_Font".equals(runestone.abilityId())
+                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_mana_font_[1-4]")) {
+                return runestone.spiritId();
+            }
+            if ((CORE_RUNESTONE_PREFIX + runestone.abilityId()).equalsIgnoreCase(itemId.trim())) {
+                return runestone.spiritId();
+            }
+        }
+        return null;
+    }
+
+    public static boolean isMaxLevelModifierLore(LoreSocketData.LoreSocket socket) {
+        return socket != null && socket.hasSpirit()
+                && socket.getLevel() >= Math.max(1, config.getMaxLevel())
+                && isModifierRunestoneSpirit(socket.getSpiritId());
+    }
+
     public static String resolveWolfPackRuneItemId(int feedTier) {
         return switch (LoreAbility.resolveWolfPackTier(feedTier)) {
             case 2 -> WOLF_PACK_RUNE_2_ITEM_ID;
@@ -830,6 +969,65 @@ public final class LoreSocketManager {
             return false;
         }
 
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Consumes Ghastly Essence and extracts a max-level spirit as a passive modifier runestone. */
+    public static boolean tryExtractModifierRunestone(Player player,
+                                                      LoreSocketData data,
+                                                      int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelModifierLore(socket)) {
+            return false;
+        }
+
+        String spiritId = socket.getSpiritId();
+        String itemId = resolveModifierRunestoneItemId(spiritId);
+        if (itemId == null || !consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+
+        ItemStack rune = new ItemStack(itemId, 1)
+                .withMetadata(MetadataKeys.LORE_MODIFIER_RUNESTONE_LEVEL, Codec.INTEGER, socket.getLevel())
+                .withMetadata(MetadataKeys.LORE_MODIFIER_RUNESTONE_FEED_TIER, Codec.INTEGER, socket.getFeedTier());
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
+
+        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
+        clearSocketGem(socket);
+        return true;
+    }
+
+    /** Extracts the mapped Core ability rune from a max-level spirit socket. */
+    public static boolean tryExtractCoreAbilityRunestone(Player player,
+                                                         LoreSocketData data,
+                                                         int slotIndex) {
+        if (player == null || player.getInventory() == null || data == null) {
+            return false;
+        }
+        LoreSocketData.LoreSocket socket = data.getSocket(slotIndex);
+        if (!isMaxLevelCoreAbilityLore(socket)) {
+            return false;
+        }
+        String spiritId = socket.getSpiritId();
+        String itemId = resolveCoreAbilityRunestoneItemId(spiritId, socket.getFeedTier());
+        if (itemId == null || !consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
+            return false;
+        }
+        ItemStack rune = new ItemStack(itemId, 1)
+                .withMetadata(MetadataKeys.LORE_MODIFIER_RUNESTONE_LEVEL, Codec.INTEGER, socket.getLevel())
+                .withMetadata(MetadataKeys.LORE_MODIFIER_RUNESTONE_FEED_TIER, Codec.INTEGER, socket.getFeedTier());
+        if (!UIInventoryUtils.addItemToInventory(player, rune)) {
+            UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
+            return false;
+        }
         LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
@@ -1218,6 +1416,50 @@ public final class LoreSocketManager {
         return rootId != null && !rootId.isBlank();
     }
 
+    public static boolean isModifierRunestone(ItemStack item) {
+        return item != null && !item.isEmpty() && resolveModifierRunestoneSpiritId(item.getItemId()) != null;
+    }
+
+    public static boolean isModifierRunestoneId(String itemId) {
+        return resolveModifierRunestoneSpiritId(itemId) != null;
+    }
+
+    public static String resolveModifierRunestoneSpiritId(String itemId) {
+        if (itemId == null || itemId.isBlank()) {
+            return null;
+        }
+        for (ModifierRunestoneDefinition runestone : MODIFIER_RUNESTONES) {
+            if ((MODIFIER_RUNESTONE_PREFIX + runestone.abilityId()).equalsIgnoreCase(itemId.trim())) {
+                return runestone.spiritId();
+            }
+        }
+        return null;
+    }
+
+    public static String resolveModifierRunestoneItemId(String spiritId) {
+        if (spiritId == null || spiritId.isBlank()) {
+            return null;
+        }
+        for (ModifierRunestoneDefinition runestone : MODIFIER_RUNESTONES) {
+            if (runestone.spiritId().equalsIgnoreCase(spiritId.trim())) {
+                return MODIFIER_RUNESTONE_PREFIX + runestone.abilityId();
+            }
+        }
+        return null;
+    }
+
+    public static int getModifierRunestoneLevel(ItemStack item) {
+        Integer level = item == null ? null
+                : item.getFromMetadataOrNull(MetadataKeys.LORE_MODIFIER_RUNESTONE_LEVEL, Codec.INTEGER);
+        return Math.max(1, level == null ? config.getMaxLevel() : level);
+    }
+
+    public static int getModifierRunestoneFeedTier(ItemStack item) {
+        Integer feedTier = item == null ? null
+                : item.getFromMetadataOrNull(MetadataKeys.LORE_MODIFIER_RUNESTONE_FEED_TIER, Codec.INTEGER);
+        return Math.max(0, feedTier == null ? 0 : feedTier);
+    }
+
     public static List<SocketedRunestone> getSocketedRunestones(ItemStack item) {
         if (!isRuneDeltaActive(item)) {
             return List.of();
@@ -1242,6 +1484,44 @@ public final class LoreSocketManager {
             }
         }
         return runes;
+    }
+
+    public static List<SocketedModifierRunestone> getSocketedModifierRunestones(ItemStack item) {
+        if (!isRuneDeltaActive(item)) {
+            return List.of();
+        }
+        LoreSocketData data = getLoreSocketData(item);
+        if (data == null) {
+            return List.of();
+        }
+        List<SocketedModifierRunestone> runes = new ArrayList<>();
+        for (int i = 0; i < data.getSocketCount(); i++) {
+            LoreSocketData.LoreSocket socket = data.getSocket(i);
+            if (socket == null || !socket.hasRune()) {
+                continue;
+            }
+            String spiritId = resolveModifierRunestoneSpiritId(socket.getRuneItemId());
+            if (spiritId != null) {
+                runes.add(new SocketedModifierRunestone(
+                        socket.getRuneItemId(), spiritId, i,
+                        socket.getLevel() > 0 ? socket.getLevel() : Math.max(1, config.getMaxLevel()),
+                        socket.getFeedTier()));
+            }
+        }
+        return runes;
+    }
+
+    public static boolean hasSocketedModifierRunestone(ItemStack item, String abilityId) {
+        if (item == null || item.isEmpty() || abilityId == null || abilityId.isBlank()) {
+            return false;
+        }
+        String expected = (MODIFIER_RUNESTONE_PREFIX + abilityId).toLowerCase(Locale.ROOT);
+        for (SocketedModifierRunestone runestone : getSocketedModifierRunestones(item)) {
+            if (runestone.itemId() != null && runestone.itemId().toLowerCase(Locale.ROOT).equals(expected)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static List<String> getSocketedRunestoneIds(ItemStack item) {

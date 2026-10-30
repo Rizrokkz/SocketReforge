@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
+## [1.4.6] - 2026-10-30
+
+### Added
+- **Soulstone lore system** - Added colored raw and infused Soulstones, Soul Reaper soul harvesting, and color-matched Lore socketing. Soul Reaper requires a raw Soulstone in the player's inventory to create an infused one.
+- **Lore ability runes** - Added ability runes for Soul Reaper, Octaslash, Omnislash, Blood Rush, Pummel, and Wolf Pack, with item assets, cast interactions, and ability-slot support.
+- **Feed-tier progression and extraction** - Added tiered Wolf Pack runes and 3-, 6-, 8-, and 12-hit Omnislash runes. Max-level Octaslash and Omnislash Lore can be extracted into ability runes using Ghastly Essence.
+- **Omnislash visuals and chaining** - Added per-hit teleport slashes, weapon trails, blue afterimages, and a final afterimage explosion for the max-tier rune.
+- **Blood Rush and Pummel attacks** - Added six-hit Blood Rush, whose damage scales with missing health, and a five-hit Pummel combo ending in a knockback and stun.
+- **Wolf Pack summon tiers** - Added one-, two-, and three-wolf summons with feed-tier lifetimes and cooldowns.
+
+### Changed
+- **Lore proc handling** - Preserved passive lore procs while allowing the new ability runes to be equipped and activated separately. Rune Delta continues to activate socketed runes through its existing system.
+- **Lore feedback and effects** - Added lore-ready naming and localized messages, plus configurable hit effects and animations for the new abilities.
+
+### Fixed
+- **Omnislash teleport safety** - Queue teleport updates outside active entity-store processing to avoid interaction tick errors.
+- **Wolf Pack in Creative mode** - Reject Creative-mode summons with a player-facing message instead of attempting unsupported flock membership.
+
+---
+
 ## [1.4.5-hotfix.2] - 2026-10-23
 
 ### Added

@@ -1,0 +1,35 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "OmnislashRuneSlamJump",
+      "RunTime": 0.8,
+      "JumpVerticalSpeed": 22.0,
+      "Effects": {
+        "ItemPlayerAnimationsId": "Omnislash",
+        "ItemAnimationId": "RechainJump",
+        "WaitForAnimationToFinish": false
+      }
+    },
+    {
+      "Type": "OmnislashRuneSlamDive",
+      "RunTime": 0.3,
+      "DiveVerticalSpeed": 30.0,
+      "ImpactRadius": 5.0,
+      "DamageMultiplier": 1.5,
+      "Effects": {
+        "ItemPlayerAnimationsId": "Omnislash",
+        "ItemAnimationId": "RechainSlam",
+        "WaitForAnimationToFinish": false,
+        "WorldSoundEventId": "SFX_Gobliterator_Club_Slam_Swing"
+      }
+    },
+    {
+      "Type": "Simple",
+      "RunTime": 0.05,
+      "Effects": {
+        "WorldSoundEventId": "SFX_Gobliterator_Club_Slam_Impact"
+      }
+    }
+  ]
+}

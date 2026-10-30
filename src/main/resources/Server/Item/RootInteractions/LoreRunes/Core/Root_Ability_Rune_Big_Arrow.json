@@ -1,0 +1,9 @@
+{
+  "Interactions": [
+    "Ability_Rune_Big_Arrow_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": ["Ranged"]
+  }
+}
