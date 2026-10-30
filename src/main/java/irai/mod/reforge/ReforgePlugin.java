@@ -26,10 +26,10 @@ import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
+import com.hypixel.hytale.server.core.modules.entity.EntityModule;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.InteractionConfiguration;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
-import com.hypixel.hytale.server.core.modules.entity.EntityModule;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -88,7 +88,6 @@ import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.EnemyElementalShieldEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
-import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.Events.LifeHealthSystem;
 import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.LoreEffectEST;
@@ -98,8 +97,8 @@ import irai.mod.reforge.Entity.Events.LoreSkillUseEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
-import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.Events.ResonantRecipeCraftingEST;
+import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.Events.SalvageMetadataCompatEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
@@ -107,19 +106,20 @@ import irai.mod.reforge.Entity.Events.TreasureChestSocketLootListener;
 import irai.mod.reforge.Entity.Events.WaterRegenSystem;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryChangeEST;
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryEventEST;
+import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
+import irai.mod.reforge.Interactions.BloodRushRune;
 import irai.mod.reforge.Interactions.CorruptionInteraction;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.LoreSocketBench;
+import irai.mod.reforge.Interactions.OmnislashRune;
+import irai.mod.reforge.Interactions.PummelRune;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
 import irai.mod.reforge.Interactions.SocketPunchBench;
 import irai.mod.reforge.Interactions.SoulReaperRune;
-import irai.mod.reforge.Interactions.OmnislashRune;
-import irai.mod.reforge.Interactions.BloodRushRune;
-import irai.mod.reforge.Interactions.PummelRune;
-import irai.mod.reforge.Interactions.WolfPackRune;
 import irai.mod.reforge.Interactions.StatueInteraction;
+import irai.mod.reforge.Interactions.WolfPackRune;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -423,7 +423,7 @@ public class ReforgePlugin extends JavaPlugin {
         disableUnsafeBuiltinHitAnimation();
         
         //HSTATS
-        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.5-hotfix.2");
+        new HStats("2ec5204c-3635-430d-9d75-bb4529430f77", "1.4.6");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
