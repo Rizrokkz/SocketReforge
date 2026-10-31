@@ -18,7 +18,8 @@
     "Slot": "Core",
     "Cost": 8,
     "AbilityKeywords": [
-      "Support"
+      "Support",
+      "Buff"
     ],
     "Cooldown": 60,
     "Cast": "Root_Ability_Rune_Mana_Font_3",

@@ -116,6 +116,8 @@ import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.OmnislashRune;
 import irai.mod.reforge.Interactions.PummelRune;
 import irai.mod.reforge.Interactions.CoreAbilityRune;
+import irai.mod.reforge.Interactions.OctaslashRuneSupport;
+import irai.mod.reforge.Interactions.CoreRuneProjectileInteraction;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
@@ -347,6 +349,12 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("PummelRune", PummelRune.Cast.class, PummelRune.Cast.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("PummelRuneStep", PummelRune.Step.class, PummelRune.Step.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("CoreAbilityRune", CoreAbilityRune.class, CoreAbilityRune.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("OctaslashRuneSupport",
+                OctaslashRuneSupport.class, OctaslashRuneSupport.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("CoreRuneProjectileHit",
+                CoreRuneProjectileInteraction.Hit.class, CoreRuneProjectileInteraction.Hit.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("CoreRuneProjectileMiss",
+                CoreRuneProjectileInteraction.Miss.class, CoreRuneProjectileInteraction.Miss.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune1", WolfPackRune.One.class, WolfPackRune.One.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune2", WolfPackRune.Two.class, WolfPackRune.Two.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune3", WolfPackRune.Three.class, WolfPackRune.Three.CODEC);

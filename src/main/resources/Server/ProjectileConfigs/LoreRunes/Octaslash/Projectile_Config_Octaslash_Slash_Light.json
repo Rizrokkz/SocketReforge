@@ -26,7 +26,8 @@
   "Interactions": {
     "ProjectileHit": {
       "Interactions": [
-        "Ability_Octaslash_Rune_Slash_Hit_Light"
+        "Ability_Octaslash_Rune_Slash_Hit_Light",
+        { "Type": "CoreRuneProjectileHit", "Ability": "Octaslash" }
       ]
     }
   }

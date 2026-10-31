@@ -61,16 +61,25 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (store == null || damage == null) {
             return;
         }
-        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
-            return;
-        }
-
+        boolean loreDamage = Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         Damage.Source source = damage.getSource();
         if (!(source instanceof Damage.EntitySource entitySource)) {
             return;
         }
         Ref<EntityStore> attackerRef = entitySource.getRef();
+
+        if (loreDamage) {
+            LoreProcHandler.applyCoreAbilityNativeOnHitEffects(store, attackerRef, targetRef);
+            return;
+        }
+
+        LoreProcHandler.applyForeignCoreAbilitySupportOnHit(
+                store, attackerRef, targetRef, damage, commandBuffer);
+
+        LoreProcHandler.applyWolfPackAbilitySupportRunestones(
+                store, attackerRef, targetRef, damage, commandBuffer);
 
         LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
         LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "LoreEffectEST.before");

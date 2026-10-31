@@ -1,6 +1,7 @@
 package irai.mod.reforge.Lore;
 
 import java.util.Iterator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -23,6 +24,7 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Rotation3f;
@@ -40,6 +42,7 @@ import com.hypixel.hytale.server.core.entity.entities.player.CameraManager;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
+import com.hypixel.hytale.server.core.modules.entity.AllLegacyLivingEntityTypesQuery;
 import com.hypixel.hytale.server.core.modules.entity.component.ActiveAnimationComponent;
 import com.hypixel.hytale.server.core.modules.entity.component.HeadRotation;
 import com.hypixel.hytale.server.core.modules.entity.component.ModelComponent;
@@ -70,7 +73,9 @@ import com.hypixel.hytale.server.core.inventory.container.SimpleItemContainer;
 import com.hypixel.hytale.server.core.universe.world.npc.INonPlayerCharacter;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
+import com.hypixel.hytale.server.core.modules.physics.SimplePhysicsProvider;
 import com.hypixel.hytale.server.core.modules.splitvelocity.VelocityConfig;
+import com.hypixel.hytale.server.core.entity.entities.ProjectileComponent;
 import com.hypixel.hytale.server.core.modules.interaction.InteractionModule;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.RootInteraction;
@@ -123,10 +128,18 @@ public final class LoreProcHandler {
     private static final Map<String, Long> READY_NOTIFICATION_AT = new ConcurrentHashMap<>();
     private static final long READY_NOTIFICATION_MIN_COOLDOWN_MS = 1500L;
     private static final Map<String, Set<Ref<EntityStore>>> WOLF_SUMMONS = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, WolfPackSupport> WOLF_SUPPORTS_BY_ENTITY = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, TimedAbilitySupport> ACTIVE_OCTASLASH_SUPPORT = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, CoreAbilityNativeModifiers> ACTIVE_CORE_ABILITY_NATIVE_MODIFIERS =
+            new ConcurrentHashMap<>();
+    private static final Map<UUID, ForeignCoreAbilitySupport> ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT =
+            new ConcurrentHashMap<>();
     private static final Set<String> WOLF_SPAWN_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
     private static final Set<String> WOLF_FLOCK_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
     private static final Map<String, Long> WOLF_CREATIVE_NOTICE_AT = new ConcurrentHashMap<>();
     private static final long WOLF_CREATIVE_NOTICE_COOLDOWN_MS = 5000L;
+    private static final long OCTASLASH_SUPPORT_WINDOW_MS = 6000L;
+    private static final long CORE_ABILITY_MODIFIER_WINDOW_MS = 8000L;
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
@@ -148,6 +161,10 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, OmnislashEnrageStorm> ACTIVE_OMNISLASH_ENRAGE_STORMS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, VolleyRuneBuff> ACTIVE_VOLLEY_RUNE_BUFFS =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, VolleyHomingArrow> ACTIVE_VOLLEY_PROJECTILE_ARROWS =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, BigArrowRuneShot> ACTIVE_BIG_ARROW_RUNE_SHOTS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL =
             new ConcurrentHashMap<>();
@@ -295,6 +312,8 @@ public final class LoreProcHandler {
     private static final double VOLLEY_ARROW_SPEED = 28.0d;
     private static final double VOLLEY_ARROW_BOUNCE_RADIUS = 18.0d;
     private static final int VOLLEY_ARROW_MAX_COUNT = 6;
+    private static final int VOLLEY_ARROW_MAX_FORK_COUNT = 6;
+    private static final int VOLLEY_ARROW_MAX_BOUNCES = 8;
     private static final double OCTASLASH_RAMP_PER_HIT = 0.10d;
     private static final double SYNERGY_PROC_BONUS = 0.25d;
     private static final double SYNERGY_PROC_MAX = 0.85d;
@@ -843,6 +862,7 @@ public final class LoreProcHandler {
         final String slashParticleId;
         final float finalMultiplier;
         final int feedTier;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         final long initialIntervalMs;
         final long minimumIntervalMs;
         final long intervalReductionMs;
@@ -863,7 +883,7 @@ public final class LoreProcHandler {
                           float finalMultiplier,
                           int feedTier) {
             this(store, attackerRef, targets, perHit, dashAttacker, skipRefine, totalHits,
-                    slashParticleId, finalMultiplier, feedTier,
+                    slashParticleId, finalMultiplier, feedTier, List.of(),
                     OMNISLASH_HIT_DELAY_MS, OMNISLASH_HIT_DELAY_MS, 0L);
         }
 
@@ -877,6 +897,7 @@ public final class LoreProcHandler {
                           String slashParticleId,
                           float finalMultiplier,
                           int feedTier,
+                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
                           long initialIntervalMs,
                           long minimumIntervalMs,
                           long intervalReductionMs) {
@@ -890,9 +911,65 @@ public final class LoreProcHandler {
             this.slashParticleId = slashParticleId;
             this.finalMultiplier = finalMultiplier <= 0f ? 1.0f : finalMultiplier;
             this.feedTier = Math.max(0, feedTier);
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
             this.initialIntervalMs = Math.max(1L, initialIntervalMs);
             this.minimumIntervalMs = Math.max(1L, Math.min(this.initialIntervalMs, minimumIntervalMs));
             this.intervalReductionMs = Math.max(0L, intervalReductionMs);
+        }
+    }
+
+    private static final class TimedAbilitySupport {
+        final List<LoreSocketManager.SocketedModifierRunestone> runestones;
+        final long expiresAtMs;
+
+        TimedAbilitySupport(List<LoreSocketManager.SocketedModifierRunestone> runestones, long expiresAtMs) {
+            this.runestones = runestones == null || runestones.isEmpty() ? List.of() : List.copyOf(runestones);
+            this.expiresAtMs = expiresAtMs;
+        }
+    }
+
+    private static final class CoreAbilityNativeModifiers {
+        final Map<String, Float> attributes;
+        final String[] onHitEffectIds;
+        final String elementalCauseId;
+        final long expiresAtMs;
+
+        CoreAbilityNativeModifiers(Map<String, Float> attributes,
+                                   String[] onHitEffectIds,
+                                   String elementalCauseId,
+                                   long expiresAtMs) {
+            this.attributes = attributes == null || attributes.isEmpty()
+                    ? Map.of() : Map.copyOf(attributes);
+            this.onHitEffectIds = onHitEffectIds == null ? new String[0] : onHitEffectIds.clone();
+            this.elementalCauseId = elementalCauseId == null || elementalCauseId.isBlank()
+                    ? null : elementalCauseId;
+            this.expiresAtMs = expiresAtMs;
+        }
+    }
+
+    private static final class ForeignCoreAbilitySupport {
+        final Ref<EntityStore> ownerRef;
+        final List<LoreSocketManager.SocketedModifierRunestone> runestones;
+        final long expiresAtMs;
+
+        ForeignCoreAbilitySupport(Ref<EntityStore> ownerRef,
+                                  List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                  long expiresAtMs) {
+            this.ownerRef = ownerRef;
+            this.runestones = runestones == null || runestones.isEmpty() ? List.of() : List.copyOf(runestones);
+            this.expiresAtMs = expiresAtMs;
+        }
+    }
+
+    private static final class WolfPackSupport {
+        final Ref<EntityStore> ownerRef;
+        final List<LoreSocketManager.SocketedModifierRunestone> runestones;
+
+        WolfPackSupport(Ref<EntityStore> ownerRef,
+                        List<LoreSocketManager.SocketedModifierRunestone> runestones) {
+            this.ownerRef = ownerRef;
+            this.runestones = runestones == null || runestones.isEmpty() ? List.of() : List.copyOf(runestones);
         }
     }
 
@@ -946,8 +1023,12 @@ public final class LoreProcHandler {
         final Ref<EntityStore> attackerRef;
         final int maxArrows;
         final int bounceCount;
+        final int forkCount;
         final int feedTier;
         final float arrowDamage;
+        final float splitChildDamageMultiplier;
+        final float projectileSpeedMultiplier;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         final long startedAtMs;
         final long expiresAtMs;
         final List<VolleyHomingArrow> arrows = new ArrayList<>();
@@ -958,38 +1039,72 @@ public final class LoreProcHandler {
                        Ref<EntityStore> attackerRef,
                        int maxArrows,
                        int bounceCount,
+                       int forkCount,
                        int feedTier,
                        float arrowDamage,
+                       float splitChildDamageMultiplier,
+                       float projectileSpeedMultiplier,
+                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
                        long startedAtMs) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.maxArrows = maxArrows;
             this.bounceCount = bounceCount;
+            this.forkCount = forkCount;
             this.feedTier = feedTier;
             this.arrowDamage = arrowDamage;
+            this.splitChildDamageMultiplier = splitChildDamageMultiplier;
+            this.projectileSpeedMultiplier = projectileSpeedMultiplier;
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
             this.startedAtMs = startedAtMs;
             this.expiresAtMs = startedAtMs + VOLLEY_RUNE_BUFF_DURATION_MS;
         }
     }
 
+    private static final class BigArrowRuneShot {
+        final float damage;
+        final int feedTier;
+        final long expiresAtMs;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
+        final Set<Ref<EntityStore>> hitTargets = ConcurrentHashMap.newKeySet();
+
+        BigArrowRuneShot(float damage,
+                         int feedTier,
+                         long expiresAtMs,
+                         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+            this.damage = damage;
+            this.feedTier = feedTier;
+            this.expiresAtMs = expiresAtMs;
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
+        }
+    }
+
     private static final class VolleyHomingArrow {
+        final Ref<EntityStore> attackerRef;
         final Vector3d startPosition;
         final Vector3d orbitOffset;
-        final float damage;
+        float damage;
         final long createdAtMs;
         final Set<Ref<EntityStore>> hitTargets = new HashSet<>();
         VolleyHomingArrowEntity visualEntity;
         Vector3d position;
         Ref<EntityStore> sourceTargetRef;
         Ref<EntityStore> targetRef;
+        Ref<EntityStore> projectileRef;
         int bouncesRemaining;
+        final int forksRemaining;
 
-        VolleyHomingArrow(Vector3d startPosition,
+        VolleyHomingArrow(Ref<EntityStore> attackerRef,
+                          Vector3d startPosition,
                           Vector3d orbitOffset,
                           float damage,
                           long createdAtMs,
                           Ref<EntityStore> sourceTargetRef,
-                          int bouncesRemaining) {
+                          int bouncesRemaining,
+                          int forksRemaining) {
+            this.attackerRef = attackerRef;
             this.startPosition = startPosition;
             this.orbitOffset = orbitOffset;
             this.damage = damage;
@@ -997,6 +1112,7 @@ public final class LoreProcHandler {
             this.sourceTargetRef = sourceTargetRef;
             this.position = new Vector3d(startPosition);
             this.bouncesRemaining = bouncesRemaining;
+            this.forksRemaining = forksRemaining;
         }
     }
 
@@ -1006,18 +1122,22 @@ public final class LoreProcHandler {
         final Ref<EntityStore> targetRef;
         final float baseDamage;
         final boolean skipRefine;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         int hitsApplied;
 
         BloodRushSequence(Store<EntityStore> store,
                           Ref<EntityStore> attackerRef,
                           Ref<EntityStore> targetRef,
                           float baseDamage,
-                          boolean skipRefine) {
+                          boolean skipRefine,
+                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.targetRef = targetRef;
             this.baseDamage = Math.max(0f, baseDamage);
             this.skipRefine = skipRefine;
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
         }
     }
 
@@ -1027,18 +1147,22 @@ public final class LoreProcHandler {
         final Ref<EntityStore> targetRef;
         final float baseDamage;
         final boolean skipRefine;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         int hitsApplied;
 
         PummelSequence(Store<EntityStore> store,
                        Ref<EntityStore> attackerRef,
                        Ref<EntityStore> targetRef,
                        float baseDamage,
-                       boolean skipRefine) {
+                       boolean skipRefine,
+                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.targetRef = targetRef;
             this.baseDamage = Math.max(0f, baseDamage);
             this.skipRefine = skipRefine;
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
         }
     }
 
@@ -1119,7 +1243,23 @@ public final class LoreProcHandler {
         }
         List<LoreSocketManager.SocketedModifierRunestone> runestones =
                 LoreSocketManager.getSocketedModifierRunestones(weapon);
-        if (runestones.isEmpty()) {
+        return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones,
+                trigger, selfIsAttacker, usedSpirits, procState, commandBuffer);
+    }
+
+    /** Applies modifier runestones supplied by a Core ability's Support slots. */
+    public static boolean applyModifierRunestones(Store<EntityStore> store,
+                                                  Player self,
+                                                  Ref<EntityStore> selfRef,
+                                                  Ref<EntityStore> otherRef,
+                                                  Damage damage,
+                                                  List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                  LoreTrigger trigger,
+                                                  boolean selfIsAttacker,
+                                                  Set<String> usedSpirits,
+                                                  ProcState procState,
+                                                  CommandBuffer<EntityStore> commandBuffer) {
+        if (runestones == null || runestones.isEmpty()) {
             return false;
         }
 
@@ -4797,6 +4937,8 @@ public final class LoreProcHandler {
         LoreDamageUtils.applyLoreDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine,
                 sequence.feedTier);
         queueAbilityHitWeaponLores(store, sequence.attackerRef, targetRef);
+        applyCoreAbilitySupportRunestones(store, sequence.attackerRef, targetRef,
+                sequence.supportRunestones, LoreTrigger.ON_HIT);
         tryApplyGroundslamAugment(store, sequence.attackerRef, targetRef);
         sequence.hitsApplied++;
         if (sequence.hitsApplied < sequence.totalHits) {
@@ -4813,13 +4955,21 @@ public final class LoreProcHandler {
                                                Ref<EntityStore> attackerRef,
                                                Ref<EntityStore> targetRef,
                                                String abilityId,
-                                               int feedTier) {
+                                               int feedTier,
+                                               Map<String, Float> abilityAttributes,
+                                               List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
                 || abilityId == null || abilityId.isBlank()) {
             return;
         }
+        Map<String, Float> attributeSnapshot = abilityAttributes == null || abilityAttributes.isEmpty()
+                ? Map.of() : Map.copyOf(abilityAttributes);
+        List<LoreSocketManager.SocketedModifierRunestone> supportRunestoneSnapshot =
+                supportRunestones == null || supportRunestones.isEmpty()
+                        ? List.of() : List.copyOf(supportRunestones);
         Runnable cast = () -> activateCoreAbilityRuneOnWorldThread(
-                store, attackerRef, targetRef, abilityId, Math.max(0, feedTier));
+                store, attackerRef, targetRef, abilityId, Math.max(0, feedTier),
+                attributeSnapshot, supportRunestoneSnapshot);
         if (!LoreWorldTasks.queue(store, cast)) {
             cast.run();
         }
@@ -4840,7 +4990,9 @@ public final class LoreProcHandler {
                                                               Ref<EntityStore> attackerRef,
                                                               Ref<EntityStore> targetRef,
                                                               String abilityId,
-                                                              int feedTier) {
+                                                              int feedTier,
+                                                              Map<String, Float> abilityAttributes,
+                                                              List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !isEntityAlive(store, attackerRef)) {
             return;
         }
@@ -4853,18 +5005,22 @@ public final class LoreProcHandler {
         }
         String normalizedAbility = abilityId.trim().toLowerCase(Locale.ROOT)
                 .replace('-', '_').replace(' ', '_');
+        applyCoreAbilitySupportRunestones(store, attackerRef, targetRef, supportRunestones,
+                LoreTrigger.ON_SKILL_USE);
         switch (normalizedAbility) {
             case "grandslam", "grand_slam", "groundslam", "ground_slam" ->
-                    castGroundslamRune(store, attackerRef, feedTier);
-            case "razorstrike", "razor_strike" -> castRazorstrikeRune(store, attackerRef, targetRef, feedTier);
-            case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier);
-            case "vortexstrike", "vortex_strike" -> castVortexstrikeRune(store, attackerRef, targetRef, feedTier);
+                    castGroundslamRune(store, attackerRef, feedTier, supportRunestones);
+            case "razorstrike", "razor_strike" ->
+                    castRazorstrikeRune(store, attackerRef, targetRef, feedTier, supportRunestones);
+            case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier, supportRunestones);
+            case "vortexstrike", "vortex_strike" ->
+                    castVortexstrikeRune(store, attackerRef, targetRef, feedTier, supportRunestones);
             case "big_arrow", "bigarrow", "big_arrow_1", "big_arrow_2", "big_arrow_3" ->
-                    castBigArrowRune(store, attackerRef, targetRef, feedTier,
-                            parseCoreRuneTier(normalizedAbility, "big_arrow"));
+                    castBigArrowRune(store, attackerRef, feedTier,
+                            parseCoreRuneTier(normalizedAbility, "big_arrow"), supportRunestones);
             case "volley", "volley_3", "volley_4", "volley_5", "volley_6" ->
-                    castVolleyRune(store, attackerRef, feedTier,
-                            parseCoreRuneTier(normalizedAbility, "volley"));
+                    castVolleyRune(store, attackerRef, targetRef, feedTier,
+                            parseCoreRuneTier(normalizedAbility, "volley"), abilityAttributes, supportRunestones);
             case "berserk" -> castBerserkRune(store, attackerRef);
             case "mana_font", "manafont", "mana_restore", "mana_font_1", "mana_font_2",
                     "mana_font_3", "mana_font_4" -> castManaFontRune(store, attackerRef, feedTier,
@@ -4886,7 +5042,8 @@ public final class LoreProcHandler {
 
     private static void castGroundslamRune(Store<EntityStore> store,
                                           Ref<EntityStore> attackerRef,
-                                          int feedTier) {
+                                          int feedTier,
+                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
         if (center == null) {
             return;
@@ -4900,7 +5057,7 @@ public final class LoreProcHandler {
             if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
                 continue;
             }
-            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier);
+            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier, supportRunestones);
             if (!isNpcAilmentImmune(store, target, "stun") && canApplyBossCounterAilment(store, target, "stun")) {
                 applyStunForDuration(store, target, 900L + Math.min(600L, feedTier * 100L));
                 onBossCounterAilmentApplied(store, target, "stun");
@@ -4915,7 +5072,8 @@ public final class LoreProcHandler {
     private static void castRazorstrikeRune(Store<EntityStore> store,
                                             Ref<EntityStore> attackerRef,
                                             Ref<EntityStore> requestedTarget,
-                                            int feedTier) {
+                                            int feedTier,
+                                            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         Ref<EntityStore> target = chooseCoreRuneTarget(store, attackerRef, requestedTarget, 12.0d);
         if (target == null) {
             return;
@@ -4936,7 +5094,7 @@ public final class LoreProcHandler {
         lungeTowardTarget(store, attackerRef, target, 8.0d);
         float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.90f;
         damageCoreRuneTargetsAlongPath(store, attackerRef, start, path, travel, 1.25d, damage, feedTier,
-                "core.razorstrike");
+                "core.razorstrike", supportRunestones);
         String particle = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
         if (particle != null) {
             LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(start).add(0.0d, 1.0d, 0.0d), 1.5f);
@@ -4947,7 +5105,8 @@ public final class LoreProcHandler {
 
     private static void castWhirlwindRune(Store<EntityStore> store,
                                          Ref<EntityStore> attackerRef,
-                                         int feedTier) {
+                                         int feedTier,
+                                         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         int pulses = 6;
         float perPulse = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.22f;
         double radius = Math.min(6.0d, 3.5d + feedTier * 0.2d);
@@ -4966,7 +5125,7 @@ public final class LoreProcHandler {
                         "core.whirlwind", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
                 for (Ref<EntityStore> target : targets) {
                     if (target != null && !target.equals(attackerRef) && isEntityAlive(store, target)) {
-                        applyCoreRuneDamage(store, attackerRef, target, perPulse, feedTier);
+                        applyCoreRuneDamage(store, attackerRef, target, perPulse, feedTier, supportRunestones);
                     }
                 }
                 LoreAnimationUtils.playSwingAnimation(store, attackerRef, hitIndex);
@@ -4978,7 +5137,8 @@ public final class LoreProcHandler {
     private static void castVortexstrikeRune(Store<EntityStore> store,
                                              Ref<EntityStore> attackerRef,
                                              Ref<EntityStore> requestedTarget,
-                                             int feedTier) {
+                                             int feedTier,
+                                             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
         if (center == null) {
             return;
@@ -5007,7 +5167,7 @@ public final class LoreProcHandler {
                     direction.normalize();
                     damageCoreRuneTargetsAlongPath(store, attackerRef, start, direction, distance, 1.2d,
                             resolveCoreRuneWeaponDamage(store, attackerRef) * 0.45f, feedTier,
-                            "core.vortexstrike.path");
+                            "core.vortexstrike.path", supportRunestones);
                 }
             }
         }
@@ -5024,7 +5184,7 @@ public final class LoreProcHandler {
             if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
                 continue;
             }
-            applyCoreRuneDamage(store, attackerRef, target, blastDamage, feedTier);
+            applyCoreRuneDamage(store, attackerRef, target, blastDamage, feedTier, supportRunestones);
             applyCoreRuneVelocity(store, target, center, 8.0d, 2.2d);
         }
         // Disoriented NPCs are redirected toward a nearby hostile for three seconds where the NPC API permits it.
@@ -5036,9 +5196,9 @@ public final class LoreProcHandler {
 
     private static void castBigArrowRune(Store<EntityStore> store,
                                          Ref<EntityStore> attackerRef,
-                                         Ref<EntityStore> targetRef,
                                          int feedTier,
-                                         int abilityTier) {
+                                         int abilityTier,
+                                         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         TransformComponent transform = store.getComponent(attackerRef, TransformComponent.getComponentType());
         Transform look = null;
         try {
@@ -5065,10 +5225,376 @@ public final class LoreProcHandler {
                 : Math.max(1, Math.min(3, 1 + Math.max(0, feedTier) / 2));
         float bonusWeaponDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * (0.10f * bonusTier);
         float damage = resolveCoreRuneWeaponDamage(store, attackerRef) + bonusWeaponDamage;
-        scheduleBigArrowPathDamage(store, attackerRef, targetRef, start, direction, distance,
-                damage, feedTier, "core.bigArrow");
+        BigArrowRuneShot shot = new BigArrowRuneShot(damage, feedTier,
+                System.currentTimeMillis() + 4500L, supportRunestones);
+        ACTIVE_BIG_ARROW_RUNE_SHOTS.put(attackerRef, shot);
+        OMNISLASH_SCHEDULER.schedule(
+                () -> ACTIVE_BIG_ARROW_RUNE_SHOTS.remove(attackerRef, shot),
+                4500L, TimeUnit.MILLISECONDS);
         scheduleBigArrowTrail(store, start, direction, distance, feedTier);
-        scheduleBigArrowImplosion(store, attackerRef, start, direction, distance, feedTier);
+        scheduleBigArrowImplosion(store, attackerRef, start, direction, distance, feedTier, supportRunestones);
+    }
+
+    public static void handleCoreRuneProjectileHit(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Ref<EntityStore> projectileRef,
+                                                   Ref<EntityStore> targetRef,
+                                                   String ability) {
+        if (store == null || store.isShutdown()) {
+            return;
+        }
+        String normalizedAbility = ability == null ? "" : ability.trim().toLowerCase(Locale.ROOT);
+        if (!normalizedAbility.equals("volley")
+                && (attackerRef == null || !attackerRef.isValid())) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> {
+            if (normalizedAbility.equals("big_arrow") || normalizedAbility.equals("bigarrow")) {
+                applyBigArrowProjectileHit(store, attackerRef, targetRef);
+            } else if (normalizedAbility.equals("volley")) {
+                applyVolleyProjectileHit(store, attackerRef, projectileRef, targetRef);
+            } else if (normalizedAbility.equals("octaslash")) {
+                applyOctaslashSupportRunestonesOnHit(store, attackerRef, targetRef, null, null);
+            }
+        });
+    }
+
+    public static void handleCoreRuneProjectileMiss(Store<EntityStore> store,
+                                                    Ref<EntityStore> attackerRef,
+                                                    Ref<EntityStore> projectileRef,
+                                                    String ability) {
+        if (store == null || store.isShutdown()
+                || ability == null || !ability.trim().equalsIgnoreCase("Volley")) {
+            return;
+        }
+        LoreWorldTasks.queue(store,
+                () -> retryVolleyProjectileAfterMiss(store, attackerRef, projectileRef));
+    }
+
+    private static void applyBigArrowProjectileHit(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Ref<EntityStore> targetRef) {
+        BigArrowRuneShot shot = ACTIVE_BIG_ARROW_RUNE_SHOTS.get(attackerRef);
+        if (shot == null) {
+            return;
+        }
+        if (System.currentTimeMillis() >= shot.expiresAtMs) {
+            ACTIVE_BIG_ARROW_RUNE_SHOTS.remove(attackerRef, shot);
+            return;
+        }
+        if (targetRef == null || !targetRef.isValid() || !isEntityAlive(store, targetRef)
+                || !shot.hitTargets.add(targetRef)) {
+            return;
+        }
+        applyCoreRuneDamage(store, attackerRef, targetRef, shot.damage, shot.feedTier,
+                shot.supportRunestones);
+    }
+
+    private static void applyVolleyProjectileHit(Store<EntityStore> store,
+                                                 Ref<EntityStore> attackerRef,
+                                                 Ref<EntityStore> projectileRef,
+                                                 Ref<EntityStore> targetRef) {
+        VolleyHomingArrow trackedArrow = projectileRef == null
+                ? null : ACTIVE_VOLLEY_PROJECTILE_ARROWS.get(projectileRef);
+        if (targetRef == null && trackedArrow != null) {
+            targetRef = trackedArrow.targetRef;
+        }
+        Ref<EntityStore> resolvedAttackerRef = trackedArrow == null
+                ? attackerRef : trackedArrow.attackerRef;
+        VolleyRuneBuff buff = resolvedAttackerRef == null
+                ? null : ACTIVE_VOLLEY_RUNE_BUFFS.get(resolvedAttackerRef);
+        if (buff == null || !buff.launched || targetRef == null || !targetRef.isValid()
+                || !isEntityAlive(store, targetRef)) {
+            return;
+        }
+        if (store.getComponent(targetRef, Player.getComponentType()) != null) {
+            retryVolleyProjectileAfterMiss(store, resolvedAttackerRef, projectileRef);
+            return;
+        }
+        VolleyHomingArrow arrow = findVolleyProjectileArrow(buff, projectileRef, targetRef);
+        if (arrow == null) {
+            return;
+        }
+        Ref<EntityStore> oldProjectileRef = arrow.projectileRef;
+        forgetVolleyProjectile(arrow);
+        removeVolleyProjectileEntity(store, oldProjectileRef);
+        if (!arrow.hitTargets.add(targetRef)) {
+            finishVolleyArrow(buff, arrow);
+            return;
+        }
+
+        Vector3d impactPosition = LoreTargetingUtils.getPosition(store, targetRef);
+        if (impactPosition == null) {
+            finishVolleyArrow(buff, arrow);
+            return;
+        }
+        impactPosition.add(0.0d, 0.9d, 0.0d);
+        LoreDamageUtils.applyLoreWeaponAbilityDamage(
+                store, buff.attackerRef, targetRef, arrow.damage, buff.feedTier);
+        queueAbilityHitWeaponLores(store, buff.attackerRef, targetRef);
+        applyVolleySupportRunestones(store, buff, targetRef);
+        String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_BIG_ARROW_PARTICLE_IDS);
+        if (particle != null) {
+            LoreVisuals.spawnScaledParticle(store, particle, impactPosition, 0.7f);
+        }
+
+        if (arrow.forksRemaining >= 2) {
+            forkVolleyArrow(store, buff, arrow, targetRef, impactPosition);
+        }
+
+        arrow.bouncesRemaining--;
+        Ref<EntityStore> nextTarget = arrow.bouncesRemaining < 0
+                ? null : chooseVolleyTarget(store, buff, arrow, impactPosition);
+        if (nextTarget == null) {
+            if (arrow.bouncesRemaining >= 0) {
+                System.out.println("[SocketReforge] Volley rebound stopped: no alternate NPC within "
+                        + (int) VOLLEY_ARROW_BOUNCE_RADIUS + " blocks.");
+            }
+            finishVolleyArrow(buff, arrow);
+            return;
+        }
+        System.out.println("[SocketReforge] Volley rebound acquired "
+                + LoreTargetingUtils.resolveDebugEntityLabel(store, nextTarget)
+                + "; remaining=" + arrow.bouncesRemaining);
+        arrow.damage *= buff.splitChildDamageMultiplier;
+        arrow.targetRef = nextTarget;
+        arrow.position = new Vector3d(impactPosition);
+        if (!launchVolleyArrowProjectile(store, buff, arrow, nextTarget, arrow.position)) {
+            finishVolleyArrow(buff, arrow);
+        }
+    }
+
+    private static void applyVolleySupportRunestones(Store<EntityStore> store,
+                                                     VolleyRuneBuff buff,
+                                                     Ref<EntityStore> targetRef) {
+        if (buff == null) {
+            return;
+        }
+        applyCoreAbilitySupportRunestones(store, buff.attackerRef, targetRef,
+                buff.supportRunestones, LoreTrigger.ON_HIT);
+    }
+
+    private static int forkVolleyArrow(Store<EntityStore> store,
+                                       VolleyRuneBuff buff,
+                                       VolleyHomingArrow parentArrow,
+                                       Ref<EntityStore> hitTargetRef,
+                                       Vector3d impactPosition) {
+        if (store == null || buff == null || parentArrow == null || impactPosition == null) {
+            return 0;
+        }
+        int childCount = Math.min(VOLLEY_ARROW_MAX_FORK_COUNT, parentArrow.forksRemaining);
+        Set<Ref<EntityStore>> reservedTargets = new HashSet<>(parentArrow.hitTargets);
+        long now = System.currentTimeMillis();
+        int launchedChildren = 0;
+        for (int i = 0; i < childCount; i++) {
+            VolleyHomingArrow child = new VolleyHomingArrow(
+                    parentArrow.attackerRef,
+                    impactPosition,
+                    new Vector3d(),
+                    parentArrow.damage * buff.splitChildDamageMultiplier,
+                    now,
+                    hitTargetRef,
+                    parentArrow.bouncesRemaining,
+                    1);
+            child.hitTargets.addAll(reservedTargets);
+            Ref<EntityStore> childTargetRef = chooseVolleyTarget(store, buff, child, impactPosition);
+            if (childTargetRef == null) {
+                continue;
+            }
+            child.targetRef = childTargetRef;
+            child.position = new Vector3d(impactPosition);
+            buff.arrows.add(child);
+            if (launchVolleyArrowProjectile(store, buff, child, childTargetRef, impactPosition)) {
+                reservedTargets.add(childTargetRef);
+                launchedChildren++;
+            } else {
+                buff.arrows.remove(child);
+            }
+        }
+        System.out.println("[SocketReforge] Volley fork split: requested=" + childCount
+                + ", launched=" + launchedChildren + ", parentReboundsRemaining="
+                + parentArrow.bouncesRemaining + ".");
+        return launchedChildren;
+    }
+
+    private static VolleyHomingArrow findVolleyProjectileArrow(VolleyRuneBuff buff,
+                                                               Ref<EntityStore> projectileRef,
+                                                               Ref<EntityStore> targetRef) {
+        if (buff == null) {
+            return null;
+        }
+        if (projectileRef != null) {
+            VolleyHomingArrow arrow = ACTIVE_VOLLEY_PROJECTILE_ARROWS.remove(projectileRef);
+            if (arrow != null) {
+                return arrow;
+            }
+        }
+        for (VolleyHomingArrow arrow : buff.arrows) {
+            if (arrow.projectileRef != null && arrow.targetRef != null
+                    && arrow.targetRef.equals(targetRef)) {
+                return arrow;
+            }
+        }
+        return null;
+    }
+
+    private static void retryVolleyProjectileAfterMiss(Store<EntityStore> store,
+                                                       Ref<EntityStore> attackerRef,
+                                                       Ref<EntityStore> projectileRef) {
+        VolleyHomingArrow arrow = projectileRef == null
+                ? null : ACTIVE_VOLLEY_PROJECTILE_ARROWS.remove(projectileRef);
+        Ref<EntityStore> resolvedAttackerRef = arrow == null ? attackerRef : arrow.attackerRef;
+        VolleyRuneBuff buff = resolvedAttackerRef == null
+                ? null : ACTIVE_VOLLEY_RUNE_BUFFS.get(resolvedAttackerRef);
+        if (buff == null || !buff.launched) {
+            return;
+        }
+        if (arrow == null) {
+            for (VolleyHomingArrow candidate : buff.arrows) {
+                if (candidate.projectileRef != null) {
+                    arrow = candidate;
+                    break;
+                }
+            }
+        }
+        if (arrow == null) {
+            return;
+        }
+        Ref<EntityStore> actualProjectileRef = arrow.projectileRef;
+        forgetVolleyProjectile(arrow);
+        arrow.bouncesRemaining--;
+        Vector3d currentPosition = actualProjectileRef == null
+                ? new Vector3d(arrow.position)
+                : LoreTargetingUtils.getPosition(store, actualProjectileRef);
+        if (currentPosition == null) {
+            currentPosition = new Vector3d(arrow.position);
+        }
+        removeVolleyProjectileEntity(store, actualProjectileRef);
+        Ref<EntityStore> nextTarget = arrow.bouncesRemaining < 0
+                ? null : chooseVolleyTarget(store, buff, arrow, currentPosition);
+        if (nextTarget == null) {
+            finishVolleyArrow(buff, arrow);
+            return;
+        }
+        arrow.targetRef = nextTarget;
+        arrow.position = new Vector3d(currentPosition);
+        if (!launchVolleyArrowProjectile(store, buff, arrow, nextTarget, currentPosition)) {
+            finishVolleyArrow(buff, arrow);
+        }
+    }
+
+    private static void forgetVolleyProjectile(VolleyHomingArrow arrow) {
+        if (arrow == null || arrow.projectileRef == null) {
+            return;
+        }
+        ACTIVE_VOLLEY_PROJECTILE_ARROWS.remove(arrow.projectileRef, arrow);
+        arrow.projectileRef = null;
+    }
+
+    private static void removeVolleyProjectileEntity(Store<EntityStore> store,
+                                                      Ref<EntityStore> projectileRef) {
+        if (store == null || store.isShutdown() || projectileRef == null || !projectileRef.isValid()) {
+            return;
+        }
+        try {
+            store.removeEntity(projectileRef, RemoveReason.REMOVE);
+        } catch (Throwable ignored) {
+            // Projectile collision callbacks can already have removed the entity.
+        }
+    }
+
+    private static void finishVolleyArrow(VolleyRuneBuff buff, VolleyHomingArrow arrow) {
+        if (buff == null || arrow == null) {
+            return;
+        }
+        Ref<EntityStore> projectileRef = arrow.projectileRef;
+        forgetVolleyProjectile(arrow);
+        removeVolleyProjectileEntity(buff.store, projectileRef);
+        removeVolleyArrowVisual(arrow);
+        buff.arrows.remove(arrow);
+        if (buff.arrows.isEmpty() && buff.launched) {
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+        }
+    }
+
+    private static boolean launchVolleyArrowProjectile(Store<EntityStore> store,
+                                                       VolleyRuneBuff buff,
+                                                       VolleyHomingArrow arrow,
+                                                       Ref<EntityStore> targetRef,
+                                                       Vector3d startPosition) {
+        if (store == null || buff == null || arrow == null || targetRef == null
+                || !targetRef.isValid() || startPosition == null) {
+            return false;
+        }
+        TransformComponent targetTransform = store.getComponent(
+                targetRef, TransformComponent.getComponentType());
+        if (targetTransform == null || targetTransform.getPosition() == null) {
+            return false;
+        }
+        Vector3d targetPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.9d, 0.0d);
+        Vector3d direction = targetPosition.sub(new Vector3d(startPosition));
+        if (direction.lengthSquared() <= 1.0e-6d) {
+            return false;
+        }
+        direction.normalize();
+        ProjectileConfig config = resolveProjectileConfig(
+                "Projectile_Config_Core_Rune_Volley_Arrow_Aim_Center");
+        ProjectileModule module = ProjectileModule.get();
+        if (config == null || module == null) {
+            System.err.println("[SocketReforge] Volley arrow could not launch: projectile config or module is missing"
+                    + " (config=" + (config != null) + ", module=" + (module != null) + ")");
+            return false;
+        }
+        double configuredLaunchForce = config.getLaunchForce();
+        float launchVelocityScale = configuredLaunchForce > 0.01d
+                ? (float) (VOLLEY_ARROW_SPEED * buff.projectileSpeedMultiplier / configuredLaunchForce)
+                : 1.0f;
+
+        boolean[] spawnQueued = {false};
+        @SuppressWarnings("unchecked")
+        Ref<EntityStore>[] spawnedProjectile = new Ref[1];
+        int[] attempts = {0};
+        Throwable[] spawnError = {null};
+        try {
+            // The player ref has no parent table of its own, so the ref-scoped overload can
+            // legitimately visit zero chunks. Use the store-wide traversal to obtain its
+            // command buffer, while still passing the player as projectile owner.
+            store.forEachChunk(Query.any(), (chunk, commandBuffer) -> {
+                if (spawnQueued[0] || commandBuffer == null) {
+                    return;
+                }
+                attempts[0]++;
+                try {
+                    Ref<EntityStore> projectileRef = module.spawnProjectile(
+                            buff.attackerRef, commandBuffer, config,
+                            new Vector3d(startPosition), new Vector3d(direction), 1.0f, launchVelocityScale);
+                    if (projectileRef != null) {
+                        // CommandBuffer.addEntity returns a pending Ref. It is not valid until
+                        // the store applies the queued spawn after this traversal completes.
+                        spawnedProjectile[0] = projectileRef;
+                        spawnQueued[0] = true;
+                    }
+                } catch (Throwable error) {
+                    spawnError[0] = error;
+                }
+            });
+        } catch (Throwable error) {
+            spawnError[0] = error;
+        }
+        Ref<EntityStore> projectileRef = spawnedProjectile[0];
+        if (projectileRef == null) {
+            String reason = spawnError[0] == null ? "no projectile returned"
+                    : spawnError[0].getClass().getSimpleName() + ": " + spawnError[0].getMessage();
+            System.err.println("[SocketReforge] Volley arrow spawn failed: attempts=" + attempts[0]
+                    + ", reason=" + reason);
+            return false;
+        }
+        arrow.projectileRef = projectileRef;
+        arrow.targetRef = targetRef;
+        arrow.position = new Vector3d(startPosition);
+        ACTIVE_VOLLEY_PROJECTILE_ARROWS.put(projectileRef, arrow);
+        removeVolleyArrowVisual(arrow);
+        return true;
     }
 
     /** Emits bow projectile sparks at timed positions along the arrow's expected flight path. */
@@ -5114,7 +5640,8 @@ public final class LoreProcHandler {
                                                    Vector3d start,
                                                    Vector3d direction,
                                                    double distance,
-                                                   int feedTier) {
+                                                   int feedTier,
+                                                   List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || attackerRef == null || start == null || direction == null || distance <= 0.0d) {
             return;
         }
@@ -5123,7 +5650,7 @@ public final class LoreProcHandler {
         Vector3d impactPosition = new Vector3d(start).fma(distance, new Vector3d(direction).normalize());
         OMNISLASH_SCHEDULER.schedule(
                 () -> LoreWorldTasks.queue(store, () -> triggerBigArrowImplosion(
-                        store, attackerRef, impactPosition, feedTier)),
+                        store, attackerRef, impactPosition, feedTier, supportRunestones)),
                 impactDelayMs,
                 TimeUnit.MILLISECONDS);
     }
@@ -5131,7 +5658,8 @@ public final class LoreProcHandler {
     private static void triggerBigArrowImplosion(Store<EntityStore> store,
                                                  Ref<EntityStore> attackerRef,
                                                  Vector3d center,
-                                                 int feedTier) {
+                                                 int feedTier,
+                                                 List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !isEntityAlive(store, attackerRef)
                 || center == null) {
             return;
@@ -5156,96 +5684,8 @@ public final class LoreProcHandler {
             if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
                 continue;
             }
-            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier);
+            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier, supportRunestones);
             applyCoreRuneVelocity(store, target, center, -7.0d, 1.0d);
-        }
-    }
-
-    /** Scans the arrow corridor in flight-sized segments and damages each target once. */
-    private static void scheduleBigArrowPathDamage(Store<EntityStore> store,
-                                                   Ref<EntityStore> attackerRef,
-                                                   Ref<EntityStore> targetRef,
-                                                   Vector3d start,
-                                                   Vector3d direction,
-                                                   double distance,
-                                                   float damage,
-                                                   int feedTier,
-                                                   String label) {
-        if (store == null || attackerRef == null || start == null || direction == null
-                || distance <= 0.0d || damage <= 0.0f) {
-            return;
-        }
-        double speed = resolveBigArrowSpeed();
-        long travelTimeMs = Math.max(1L, (long) Math.ceil(distance / speed * 1000.0d));
-        int samples = Math.max(2, Math.min(32, (int) Math.ceil(distance / 0.8d) + 1));
-        double scanRadius = Math.max(2.0d, distance / (samples - 1) + 1.5d);
-        Set<Ref<EntityStore>> damagedTargets = ConcurrentHashMap.newKeySet();
-        Vector3d origin = new Vector3d(start);
-        Vector3d flightDirection = new Vector3d(direction).normalize();
-        for (int sample = 0; sample < samples; sample++) {
-            double progress = sample / (double) (samples - 1);
-            long delayMs = Math.round(travelTimeMs * progress);
-            Vector3d scanPosition = new Vector3d(origin).fma(distance * progress, flightDirection);
-            OMNISLASH_SCHEDULER.schedule(
-                    () -> LoreWorldTasks.queue(store, () -> {
-                        if (!store.isShutdown() && attackerRef.isValid()
-                                && isEntityAlive(store, attackerRef)) {
-                            damageBigArrowTargetsNearSegment(store, attackerRef, targetRef,
-                                    origin, flightDirection, distance, scanPosition, scanRadius,
-                                    damagedTargets, damage, feedTier, label);
-                        }
-                    }),
-                    delayMs,
-                    TimeUnit.MILLISECONDS);
-        }
-    }
-
-    private static void damageBigArrowTargetsNearSegment(Store<EntityStore> store,
-                                                         Ref<EntityStore> attackerRef,
-                                                         Ref<EntityStore> targetRef,
-                                                         Vector3d start,
-                                                         Vector3d direction,
-                                                         double distance,
-                                                         Vector3d scanPosition,
-                                                         double scanRadius,
-                                                         Set<Ref<EntityStore>> damagedTargets,
-                                                         float damage,
-                                                         int feedTier,
-                                                         String label) {
-        List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectTargetsAtPosition(
-                store, attackerRef, scanPosition, scanRadius, scanRadius * scanRadius,
-                label + ".segment", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
-        if (targetRef != null && targetRef.isValid() && !candidates.contains(targetRef)) {
-            candidates.add(targetRef);
-        }
-        double hitRadiusSq = 1.75d * 1.75d;
-        for (Ref<EntityStore> candidate : candidates) {
-            if (candidate == null || candidate.equals(attackerRef) || !candidate.isValid()
-                    || damagedTargets.contains(candidate) || !isEntityAlive(store, candidate)) {
-                continue;
-            }
-            Vector3d position = LoreTargetingUtils.getPosition(store, candidate);
-            if (position == null) {
-                continue;
-            }
-            // Entity transforms are near the feet; test the arrow against the torso instead.
-            position.y += 0.9d;
-            if (position.distanceSquared(scanPosition) > scanRadius * scanRadius) {
-                continue;
-            }
-            Vector3d fromStart = new Vector3d(position).sub(start);
-            double projection = fromStart.dot(direction);
-            if (projection < 0.0d || projection > distance) {
-                continue;
-            }
-            Vector3d closest = new Vector3d(start).fma(projection, direction);
-            if (closest.distanceSquared(position) <= hitRadiusSq
-                    && damagedTargets.add(candidate)) {
-                applyCoreRuneDamage(store, attackerRef, candidate, damage, feedTier);
-                LoreDebug.logKv(label + ".hit", "entity",
-                        LoreTargetingUtils.resolveDebugEntityLabel(store, candidate),
-                        "distance", String.format(Locale.ROOT, "%.2f", projection));
-            }
         }
     }
 
@@ -5293,8 +5733,11 @@ public final class LoreProcHandler {
 
     private static void castVolleyRune(Store<EntityStore> store,
                                        Ref<EntityStore> attackerRef,
+                                       Ref<EntityStore> targetRef,
                                        int feedTier,
-                                       int abilityTier) {
+                                       int abilityTier,
+                                       Map<String, Float> abilityAttributes,
+                                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
             return;
         }
@@ -5305,16 +5748,91 @@ public final class LoreProcHandler {
         int arrowCount = abilityTier >= 3
                 ? Math.max(3, Math.min(VOLLEY_ARROW_MAX_COUNT, abilityTier))
                 : Math.max(3, Math.min(VOLLEY_ARROW_MAX_COUNT, 3 + Math.max(0, feedTier)));
-        int bounceCount = Math.max(0, Math.min(3, arrowCount - 3));
+        int bounceCount = abilityTier >= 3
+                ? Math.max(0, Math.min(3, arrowCount - 3))
+                : Math.max(1, Math.min(3, arrowCount - 3));
+        int ricochetModifier = Math.max(0, Math.round(resolveVolleyAttribute(
+                abilityAttributes, "Ricochet", 1.0f)) - 1);
+        bounceCount = Math.max(0, Math.min(VOLLEY_ARROW_MAX_BOUNCES, bounceCount + ricochetModifier));
+        int forkCount = Math.max(1, Math.min(VOLLEY_ARROW_MAX_FORK_COUNT,
+                Math.round(resolveVolleyAttribute(abilityAttributes, "Fork", 1.0f))));
+        float splitChildDamageMultiplier = clampVolleyAttribute(resolveVolleyAttribute(
+                abilityAttributes, "SplitChildDamage", 1.0f), 0.0f, 5.0f);
+        float projectileSpeedMultiplier = clampVolleyAttribute(resolveVolleyAttribute(
+                abilityAttributes, "Speed", 1.0f), 0.1f, 5.0f);
         long now = System.currentTimeMillis();
         VolleyRuneBuff buff = new VolleyRuneBuff(store, attackerRef, arrowCount, bounceCount,
-                feedTier, resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f, now);
+                forkCount, feedTier, resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f,
+                splitChildDamageMultiplier, projectileSpeedMultiplier, supportRunestones, now);
         ACTIVE_VOLLEY_RUNE_BUFFS.put(attackerRef, buff);
+        seedVolleyRuneArrows(store, buff, targetRef);
+        System.out.println("[SocketReforge] Volley behavior: arrows=" + arrowCount
+                + ", forks=" + forkCount + ", rebounds=" + bounceCount
+                + ", splitChildDamage=" + splitChildDamageMultiplier
+                + ", speed=" + projectileSpeedMultiplier
+                + ", supportRunestones=" + buff.supportRunestones.size());
         OMNISLASH_SCHEDULER.schedule(
                 () -> LoreWorldTasks.queue(store, () -> releaseVolleyRuneBuff(buff)),
-                VOLLEY_RUNE_BUFF_DURATION_MS, TimeUnit.MILLISECONDS);
+                VOLLEY_ARROW_GATHER_MS, TimeUnit.MILLISECONDS);
         LoreDebug.logKv("core.volley.activate", "arrows", arrowCount,
-                "bounces", bounceCount, "durationMs", VOLLEY_RUNE_BUFF_DURATION_MS);
+                "bounces", bounceCount, "forks", forkCount,
+                "splitChildDamage", splitChildDamageMultiplier,
+                "speed", projectileSpeedMultiplier,
+                "supportRunestones", supportRunestones == null ? 0 : supportRunestones.size(),
+                "releaseDelayMs", VOLLEY_ARROW_GATHER_MS);
+    }
+
+    private static float resolveVolleyAttribute(Map<String, Float> attributes,
+                                                String attribute,
+                                                float fallback) {
+        if (attributes == null || attribute == null) {
+            return fallback;
+        }
+        Float value = attributes.get(attribute);
+        return value == null || !Float.isFinite(value) ? fallback : value;
+    }
+
+    private static float clampVolleyAttribute(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static void seedVolleyRuneArrows(Store<EntityStore> store,
+                                              VolleyRuneBuff buff,
+                                              Ref<EntityStore> targetRef) {
+        if (store == null || buff == null) {
+            return;
+        }
+        List<Ref<EntityStore>> candidates = new ArrayList<>();
+        if (targetRef != null && targetRef.isValid() && !targetRef.equals(buff.attackerRef)
+                && store.getComponent(targetRef, Player.getComponentType()) == null
+                && isEntityAlive(store, targetRef) && !isEntityDeadOrDying(store, targetRef)) {
+            candidates.add(targetRef);
+        } else {
+            Vector3d center = LoreTargetingUtils.getPosition(store, buff.attackerRef);
+            if (center != null) {
+                List<Ref<EntityStore>> nearbyTargets = LoreTargetingUtils.collectTargetsAtPosition(
+                        store, buff.attackerRef, center, VOLLEY_ARROW_BOUNCE_RADIUS,
+                        VOLLEY_ARROW_BOUNCE_RADIUS * VOLLEY_ARROW_BOUNCE_RADIUS,
+                        "core.volley.seed", false, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+                if (nearbyTargets != null) {
+                    candidates.addAll(nearbyTargets);
+                }
+            }
+        }
+        List<Ref<EntityStore>> targets = new ArrayList<>();
+        for (Ref<EntityStore> target : candidates) {
+            if (target != null && target.isValid() && !target.equals(buff.attackerRef)
+                    && store.getComponent(target, Player.getComponentType()) == null
+                    && isEntityAlive(store, target) && !isEntityDeadOrDying(store, target)) {
+                targets.add(target);
+            }
+        }
+        if (targets.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < buff.maxArrows; i++) {
+            captureVolleyRuneArrow(store, buff.attackerRef, targets.get(i % targets.size()));
+        }
     }
 
     private static void captureVolleyRuneArrow(Store<EntityStore> store,
@@ -5345,8 +5863,8 @@ public final class LoreProcHandler {
                 Math.cos(angle) * ringRadius * VOLLEY_ARROW_ORBIT_RADIUS,
                 vertical * VOLLEY_ARROW_ORBIT_RADIUS,
                 Math.sin(angle) * ringRadius * VOLLEY_ARROW_ORBIT_RADIUS);
-        VolleyHomingArrow arrow = new VolleyHomingArrow(targetPosition, orbitOffset,
-                buff.arrowDamage, now, targetRef, buff.bounceCount);
+        VolleyHomingArrow arrow = new VolleyHomingArrow(attackerRef, targetPosition, orbitOffset,
+                buff.arrowDamage, now, targetRef, buff.bounceCount, buff.forkCount);
         buff.arrows.add(arrow);
         spawnVolleyArrowVisual(store, buff, arrow);
         scheduleVolleyRuneTick(buff);
@@ -5427,8 +5945,17 @@ public final class LoreProcHandler {
         if (buff == null) {
             return;
         }
-        for (VolleyHomingArrow arrow : buff.arrows) {
-            removeVolleyArrowVisual(arrow);
+        for (VolleyHomingArrow arrow : new ArrayList<>(buff.arrows)) {
+            Ref<EntityStore> projectileRef = arrow.projectileRef;
+            if (projectileRef != null && projectileRef.isValid() && buff.store != null
+                    && !buff.store.isShutdown()) {
+                try {
+                    buff.store.removeEntity(projectileRef, RemoveReason.REMOVE);
+                } catch (Throwable ignored) {
+                    // Best-effort cleanup if the projectile was already removed by its hit interaction.
+                }
+            }
+            finishVolleyArrow(buff, arrow);
         }
     }
 
@@ -5451,8 +5978,12 @@ public final class LoreProcHandler {
             }
             arrow.targetRef = target;
             if (target == null) {
-                removeVolleyArrowVisual(arrow);
-                buff.arrows.remove(i);
+                finishVolleyArrow(buff, arrow);
+                continue;
+            }
+            Vector3d launchPosition = new Vector3d(arrow.position);
+            if (!launchVolleyArrowProjectile(buff.store, buff, arrow, target, launchPosition)) {
+                finishVolleyArrow(buff, arrow);
             }
         }
         if (buff.arrows.isEmpty()) {
@@ -5463,7 +5994,19 @@ public final class LoreProcHandler {
                 buff.store.getComponent(buff.attackerRef, Player.getComponentType()),
                 "SFX_Bow_T2_Shoot_Local");
         LoreDebug.logKv("core.volley.release", "arrows", buff.arrows.size());
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(buff.store, () -> expireVolleyRuneProjectiles(buff)),
+                VOLLEY_ARROW_MAX_AGE_MS, TimeUnit.MILLISECONDS);
         scheduleVolleyRuneTick(buff);
+    }
+
+    private static void expireVolleyRuneProjectiles(VolleyRuneBuff buff) {
+        if (buff == null || buff.store == null || buff.store.isShutdown()
+                || ACTIVE_VOLLEY_RUNE_BUFFS.get(buff.attackerRef) != buff) {
+            return;
+        }
+        removeVolleyArrowVisuals(buff);
+        ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
     }
 
     private static Ref<EntityStore> chooseVolleyTarget(Store<EntityStore> store,
@@ -5496,7 +6039,45 @@ public final class LoreProcHandler {
                 closest = target;
             }
         }
-        return closest;
+        if (closest != null) {
+            return closest;
+        }
+
+        // The NPC spatial index can return an empty list while valid living entities are still
+        // present in the ECS store. Scan the living-entity query as a fallback so a bounce can
+        // still find a nearby target in that case.
+        final Ref<EntityStore>[] fallbackTarget = new Ref[1];
+        final double[] fallbackDistance = {Double.MAX_VALUE};
+        final int[] inspected = {0};
+        store.forEachChunk(AllLegacyLivingEntityTypesQuery.INSTANCE, (chunk, commandBuffer) -> {
+            for (int i = 0; i < chunk.size(); i++) {
+                if (inspected[0]++ >= CORE_RUNE_MAX_NPC_CHECKS) {
+                    return false;
+                }
+                Ref<EntityStore> target = chunk.getReferenceTo(i);
+                if (target == null || target.equals(buff.attackerRef)
+                        || chunk.getComponent(i, Player.getComponentType()) != null
+                        || arrow.hitTargets.contains(target) || !isEntityAlive(store, target)
+                        || isEntityDeadOrDying(store, target)) {
+                    continue;
+                }
+                TransformComponent targetTransform = chunk.getComponent(
+                        i, TransformComponent.getComponentType());
+                if (targetTransform == null || targetTransform.getPosition() == null) {
+                    continue;
+                }
+                Vector3d targetPosition = targetTransform.getPosition();
+                double distance = targetPosition.distanceSquared(center);
+                if (distance > VOLLEY_ARROW_BOUNCE_RADIUS * VOLLEY_ARROW_BOUNCE_RADIUS
+                        || distance >= fallbackDistance[0]) {
+                    continue;
+                }
+                fallbackTarget[0] = target;
+                fallbackDistance[0] = distance;
+            }
+            return true;
+        });
+        return fallbackTarget[0];
     }
 
     private static void scheduleVolleyRuneTick(VolleyRuneBuff buff) {
@@ -5532,76 +6113,107 @@ public final class LoreProcHandler {
         }
 
         long now = System.currentTimeMillis();
+        if (buff.launched) {
+            for (int i = buff.arrows.size() - 1; i >= 0; i--) {
+                VolleyHomingArrow arrow = buff.arrows.get(i);
+                if (now - arrow.createdAtMs > VOLLEY_ARROW_MAX_AGE_MS
+                        || !updateVolleyArrowProjectileHoming(store, buff, arrow)) {
+                    finishVolleyArrow(buff, arrow);
+                }
+            }
+            if (buff.arrows.isEmpty()) {
+                ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+                return;
+            }
+            scheduleVolleyRuneTick(buff);
+            return;
+        }
+
         Vector3d orbitCenter = new Vector3d(attackerTransform.getPosition()).add(0.0d, 1.25d, 0.0d);
-        double travelStep = VOLLEY_ARROW_SPEED * VOLLEY_ARROW_TICK_MS / 1000.0d;
         for (int i = buff.arrows.size() - 1; i >= 0; i--) {
             VolleyHomingArrow arrow = buff.arrows.get(i);
             if (now - arrow.createdAtMs > VOLLEY_ARROW_MAX_AGE_MS) {
-                removeVolleyArrowVisual(arrow);
-                buff.arrows.remove(i);
+                finishVolleyArrow(buff, arrow);
                 continue;
             }
-            if (!buff.launched) {
-                double gatherProgress = Math.min(1.0d,
-                        Math.max(0.0d, (double) (now - arrow.createdAtMs) / VOLLEY_ARROW_GATHER_MS));
-                Vector3d orbitPosition = new Vector3d(orbitCenter).add(arrow.orbitOffset);
-                Vector3d nextPosition = new Vector3d(arrow.startPosition).lerp(orbitPosition, gatherProgress);
-                Vector3d direction = new Vector3d(nextPosition).sub(arrow.position);
-                arrow.position = nextPosition;
-                moveVolleyArrowVisual(store, arrow, arrow.position, direction);
-                continue;
-            }
-
-            if (arrow.targetRef == null || !isEntityAlive(store, arrow.targetRef)
-                    || isEntityDeadOrDying(store, arrow.targetRef)) {
-                arrow.targetRef = chooseVolleyTarget(store, buff, arrow, arrow.position);
-            }
-            if (arrow.targetRef == null) {
-                removeVolleyArrowVisual(arrow);
-                buff.arrows.remove(i);
-                continue;
-            }
-            TransformComponent targetTransform = store.getComponent(
-                    arrow.targetRef, TransformComponent.getComponentType());
-            if (targetTransform == null || targetTransform.getPosition() == null) {
-                arrow.targetRef = null;
-                continue;
-            }
-            Vector3d impactPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.9d, 0.0d);
-            Vector3d toTarget = new Vector3d(impactPosition).sub(arrow.position);
-            double distanceSquared = toTarget.lengthSquared();
-            if (distanceSquared <= travelStep * travelStep) {
-                moveVolleyArrowVisual(store, arrow, impactPosition, toTarget);
-                Ref<EntityStore> hitTarget = arrow.targetRef;
-                arrow.hitTargets.add(hitTarget);
-                LoreDamageUtils.applyLoreWeaponAbilityDamage(
-                        store, buff.attackerRef, hitTarget, arrow.damage, buff.feedTier);
-                queueAbilityHitWeaponLores(store, buff.attackerRef, hitTarget);
-                String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_BIG_ARROW_PARTICLE_IDS);
-                if (particle != null) {
-                    LoreVisuals.spawnScaledParticle(store, particle, impactPosition, 0.7f);
-                }
-                arrow.bouncesRemaining--;
-                Ref<EntityStore> nextTarget = arrow.bouncesRemaining < 0
-                        ? null : chooseVolleyTarget(store, buff, arrow, impactPosition);
-                if (nextTarget == null) {
-                    removeVolleyArrowVisual(arrow);
-                    buff.arrows.remove(i);
-                    continue;
-                }
-                arrow.targetRef = nextTarget;
-                continue;
-            }
-            toTarget.normalize().mul(travelStep);
-            arrow.position.add(toTarget);
-            moveVolleyArrowVisual(store, arrow, arrow.position, toTarget);
+            double gatherProgress = Math.min(1.0d,
+                    Math.max(0.0d, (double) (now - arrow.createdAtMs) / VOLLEY_ARROW_GATHER_MS));
+            Vector3d orbitPosition = new Vector3d(orbitCenter).add(arrow.orbitOffset);
+            Vector3d nextPosition = new Vector3d(arrow.startPosition).lerp(orbitPosition, gatherProgress);
+            Vector3d direction = new Vector3d(nextPosition).sub(arrow.position);
+            arrow.position = nextPosition;
+            moveVolleyArrowVisual(store, arrow, arrow.position, direction);
         }
 
-        if (buff.launched && buff.arrows.isEmpty()) {
+        if (buff.arrows.isEmpty()) {
             ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
             return;
         }
         scheduleVolleyRuneTick(buff);
+    }
+
+    private static boolean updateVolleyArrowProjectileHoming(Store<EntityStore> store,
+                                                             VolleyRuneBuff buff,
+                                                             VolleyHomingArrow arrow) {
+        if (store == null || buff == null || arrow == null || arrow.projectileRef == null
+                || !arrow.projectileRef.isValid()) {
+            return false;
+        }
+        Ref<EntityStore> targetRef = arrow.targetRef;
+        if (targetRef == null || !targetRef.isValid() || !isEntityAlive(store, targetRef)
+                || isEntityDeadOrDying(store, targetRef)) {
+            targetRef = chooseVolleyTarget(store, buff, arrow, arrow.position);
+            arrow.targetRef = targetRef;
+        }
+        if (targetRef == null) {
+            return false;
+        }
+        TransformComponent projectileTransform = store.getComponent(
+                arrow.projectileRef, TransformComponent.getComponentType());
+        TransformComponent targetTransform = store.getComponent(
+                targetRef, TransformComponent.getComponentType());
+        Velocity projectileVelocity = store.getComponent(arrow.projectileRef, Velocity.getComponentType());
+        ProjectileComponent projectileComponent = store.getComponent(
+                arrow.projectileRef, ProjectileComponent.getComponentType());
+        if (projectileTransform == null || projectileTransform.getPosition() == null
+                || targetTransform == null || targetTransform.getPosition() == null
+                || projectileVelocity == null) {
+            return false;
+        }
+        Vector3d previousPosition = arrow.position == null
+                ? new Vector3d(projectileTransform.getPosition())
+                : new Vector3d(arrow.position);
+        Vector3d projectilePosition = new Vector3d(projectileTransform.getPosition());
+        Vector3d targetPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.9d, 0.0d);
+        if (distanceSquaredToSegment(targetPosition, previousPosition, projectilePosition) <= 1.25d * 1.25d) {
+            applyVolleyProjectileHit(store, buff.attackerRef, arrow.projectileRef, targetRef);
+            return true;
+        }
+        arrow.position = projectilePosition;
+        Vector3d toTarget = targetPosition.sub(arrow.position);
+        if (toTarget.lengthSquared() > 1.0e-6d) {
+            Vector3d homingVelocity = toTarget.normalize().mul(
+                    VOLLEY_ARROW_SPEED * buff.projectileSpeedMultiplier);
+            projectileVelocity.set(homingVelocity);
+            SimplePhysicsProvider physicsProvider = projectileComponent == null
+                    ? null : projectileComponent.getSimplePhysicsProvider();
+            if (physicsProvider != null) {
+                physicsProvider.setVelocity(homingVelocity);
+            }
+        }
+        return true;
+    }
+
+    private static double distanceSquaredToSegment(Vector3d point, Vector3d start, Vector3d end) {
+        Vector3d segment = new Vector3d(end).sub(start);
+        double segmentLengthSquared = segment.lengthSquared();
+        if (segmentLengthSquared <= 1.0e-8d) {
+            return point.distanceSquared(start);
+        }
+        double progress = new Vector3d(point).sub(start).dot(segment) / segmentLengthSquared;
+        progress = Math.max(0.0d, Math.min(1.0d, progress));
+        Vector3d closestPoint = new Vector3d(start).fma(progress, segment);
+        return point.distanceSquared(closestPoint);
     }
 
     private static void castBerserkRune(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
@@ -5709,8 +6321,216 @@ public final class LoreProcHandler {
                                             Ref<EntityStore> targetRef,
                                             float damage,
                                             int feedTier) {
+        applyCoreRuneDamage(store, attackerRef, targetRef, damage, feedTier, List.of());
+    }
+
+    private static void applyCoreRuneDamage(Store<EntityStore> store,
+                                            Ref<EntityStore> attackerRef,
+                                            Ref<EntityStore> targetRef,
+                                            float damage,
+                                            int feedTier,
+                                            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, damage, true, feedTier);
         queueAbilityHitWeaponLores(store, attackerRef, targetRef);
+        applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
+                supportRunestones, LoreTrigger.ON_HIT);
+    }
+
+    private static void applyCoreAbilitySupportRunestones(
+            Store<EntityStore> store,
+            Ref<EntityStore> attackerRef,
+            Ref<EntityStore> targetRef,
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
+            LoreTrigger trigger) {
+        if (store == null || supportRunestones == null || supportRunestones.isEmpty()
+                || attackerRef == null || !attackerRef.isValid() || trigger == null) {
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null) {
+            return;
+        }
+        applyAbilitySupportRunestones(store, attacker, attackerRef, targetRef, null,
+                supportRunestones, trigger, null);
+    }
+
+    /** Captures native Core support modifiers for SocketReforge's scripted rune damage path. */
+    public static void captureCoreAbilityNativeModifiers(Ref<EntityStore> ownerRef,
+                                                         Map<String, Float> attributes,
+                                                         String[] onHitEffectIds,
+                                                         String elementalCauseId) {
+        if (ownerRef == null || !ownerRef.isValid()) {
+            return;
+        }
+        Map<String, Float> safeAttributes = new HashMap<>();
+        if (attributes != null) {
+            for (Map.Entry<String, Float> entry : attributes.entrySet()) {
+                if (entry.getKey() != null && !entry.getKey().isBlank()
+                        && entry.getValue() != null && Float.isFinite(entry.getValue())) {
+                    safeAttributes.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        ACTIVE_CORE_ABILITY_NATIVE_MODIFIERS.put(ownerRef, new CoreAbilityNativeModifiers(
+                safeAttributes, onHitEffectIds, elementalCauseId,
+                System.currentTimeMillis() + CORE_ABILITY_MODIFIER_WINDOW_MS));
+    }
+
+    /** Applies the generic native Damage attribute to scripted Core rune hits. */
+    public static float applyCoreAbilityNativeDamageModifier(Ref<EntityStore> ownerRef, float damage) {
+        CoreAbilityNativeModifiers modifiers = getActiveCoreAbilityNativeModifiers(ownerRef);
+        if (modifiers == null || !Float.isFinite(damage)) {
+            return damage;
+        }
+        Float multiplier = modifiers.attributes.get("Damage");
+        return multiplier == null || !Float.isFinite(multiplier)
+                ? damage : damage * Math.max(0.0f, multiplier);
+    }
+
+    /** Applies native SupportItemAbility on-hit effects to scripted Core rune hits. */
+    public static void applyCoreAbilityNativeOnHitEffects(Store<EntityStore> store,
+                                                          Ref<EntityStore> ownerRef,
+                                                          Ref<EntityStore> targetRef) {
+        if (store == null || targetRef == null || !targetRef.isValid()) {
+            return;
+        }
+        CoreAbilityNativeModifiers modifiers = getActiveCoreAbilityNativeModifiers(ownerRef);
+        if (modifiers == null || modifiers.onHitEffectIds.length == 0) {
+            return;
+        }
+        for (String effectId : modifiers.onHitEffectIds) {
+            if (effectId != null && !effectId.isBlank()) {
+                LoreVisuals.tryApplyVisualEffect(store, targetRef, effectId);
+            }
+        }
+    }
+
+    /** Returns the native elemental damage cause captured for a scripted Core rune hit. */
+    public static int getCoreAbilityNativeDamageCauseIndex(Ref<EntityStore> ownerRef) {
+        CoreAbilityNativeModifiers modifiers = getActiveCoreAbilityNativeModifiers(ownerRef);
+        if (modifiers == null || modifiers.elementalCauseId == null) {
+            return -1;
+        }
+        try {
+            var assetMap = DamageCause.getAssetMap();
+            return assetMap == null ? -1 : assetMap.getIndexOrDefault(modifiers.elementalCauseId, -1);
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    private static CoreAbilityNativeModifiers getActiveCoreAbilityNativeModifiers(Ref<EntityStore> ownerRef) {
+        if (ownerRef == null || !ownerRef.isValid()) {
+            return null;
+        }
+        CoreAbilityNativeModifiers modifiers = ACTIVE_CORE_ABILITY_NATIVE_MODIFIERS.get(ownerRef);
+        if (modifiers != null && modifiers.expiresAtMs <= System.currentTimeMillis()) {
+            ACTIVE_CORE_ABILITY_NATIVE_MODIFIERS.remove(ownerRef, modifiers);
+            return null;
+        }
+        return modifiers;
+    }
+
+    /** Replaces the active SocketReforge modifier runestones for a foreign Core rune cast. */
+    public static void beginForeignCoreAbilitySupport(Store<EntityStore> store,
+                                                       Ref<EntityStore> ownerRef,
+                                                       Ref<EntityStore> targetRef,
+                                                       List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                       CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || ownerRef == null || !ownerRef.isValid()) {
+            return;
+        }
+        Player owner = store.getComponent(ownerRef, Player.getComponentType());
+        UUID ownerUuid = owner == null || owner.getPlayerRef() == null
+                ? null : owner.getPlayerRef().getUuid();
+        if (ownerUuid == null) {
+            return;
+        }
+        if (runestones == null || runestones.isEmpty()) {
+            ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.remove(ownerUuid);
+            return;
+        }
+        List<LoreSocketManager.SocketedModifierRunestone> snapshot = List.copyOf(runestones);
+        long expiresAt = System.currentTimeMillis() + CORE_ABILITY_MODIFIER_WINDOW_MS;
+        ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.put(ownerUuid,
+                new ForeignCoreAbilitySupport(ownerRef, snapshot, expiresAt));
+        applyAbilitySupportRunestones(store, owner, ownerRef, targetRef, null,
+                snapshot, LoreTrigger.ON_SKILL_USE, commandBuffer);
+    }
+
+    /** Drops a prior foreign Core modifier snapshot when the player starts another ability. */
+    public static void clearForeignCoreAbilitySupport(Store<EntityStore> store, Ref<EntityStore> ownerRef) {
+        if (store == null || ownerRef == null || !ownerRef.isValid()) {
+            return;
+        }
+        Player owner = store.getComponent(ownerRef, Player.getComponentType());
+        UUID ownerUuid = owner == null || owner.getPlayerRef() == null
+                ? null : owner.getPlayerRef().getUuid();
+        if (ownerUuid != null) {
+            ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.remove(ownerUuid);
+        }
+    }
+
+    /** Applies SocketReforge modifier runestones to damage from the active foreign Core rune. */
+    public static void applyForeignCoreAbilitySupportOnHit(Store<EntityStore> store,
+                                                            Ref<EntityStore> sourceRef,
+                                                            Ref<EntityStore> targetRef,
+                                                            Damage damage,
+                                                            CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || sourceRef == null || !sourceRef.isValid()
+                || targetRef == null || !targetRef.isValid()) {
+            return;
+        }
+        UUID ownerUuid = null;
+        Player directOwner = store.getComponent(sourceRef, Player.getComponentType());
+        if (directOwner != null && directOwner.getPlayerRef() != null) {
+            ownerUuid = directOwner.getPlayerRef().getUuid();
+        } else {
+            ProjectileComponent projectile = store.getComponent(sourceRef, ProjectileComponent.getComponentType());
+            if (projectile != null) {
+                ownerUuid = projectile.getCreatorUuid();
+            }
+        }
+        if (ownerUuid == null) {
+            return;
+        }
+        ForeignCoreAbilitySupport support = ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.get(ownerUuid);
+        if (support == null) {
+            return;
+        }
+        if (support.expiresAtMs <= System.currentTimeMillis()
+                || support.ownerRef == null || !support.ownerRef.isValid()) {
+            ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.remove(ownerUuid, support);
+            return;
+        }
+        Player owner = store.getComponent(support.ownerRef, Player.getComponentType());
+        if (owner != null) {
+            applyAbilitySupportRunestones(store, owner, support.ownerRef, targetRef, damage,
+                    support.runestones, LoreTrigger.ON_HIT, commandBuffer);
+        }
+    }
+
+    private static void applyAbilitySupportRunestones(
+            Store<EntityStore> store,
+            Player attacker,
+            Ref<EntityStore> attackerRef,
+            Ref<EntityStore> targetRef,
+            Damage damage,
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
+            LoreTrigger trigger,
+            CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || attacker == null || supportRunestones == null || supportRunestones.isEmpty()
+                || attackerRef == null || !attackerRef.isValid() || trigger == null) {
+            return;
+        }
+        Set<String> used = new HashSet<>();
+        ProcState procState = new ProcState();
+        applyModifierRunestones(store, attacker, attackerRef, targetRef, damage,
+                supportRunestones, trigger, true, used, procState, commandBuffer);
+        if (procState.hasTriggered()) {
+            applyModifierRunestones(store, attacker, attackerRef, targetRef, damage,
+                    supportRunestones, LoreTrigger.ON_LORE_PROC, true, used, null, commandBuffer);
+        }
     }
 
     private static Ref<EntityStore> chooseCoreRuneTarget(Store<EntityStore> store,
@@ -5751,7 +6571,8 @@ public final class LoreProcHandler {
                                                         double halfWidth,
                                                         float damage,
                                                         int feedTier,
-                                                        String label) {
+                                                        String label,
+                                                        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectOmnislashTargets(
                 store, attackerRef, null, distance + halfWidth, (distance + halfWidth) * (distance + halfWidth),
                 label, DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
@@ -5772,7 +6593,7 @@ public final class LoreProcHandler {
             }
             Vector3d closest = new Vector3d(start).fma(projection, direction);
             if (closest.distanceSquared(position) <= halfWidth * halfWidth && segmentLengthSq > 1.0e-5d) {
-                applyCoreRuneDamage(store, attackerRef, candidate, damage, feedTier);
+                applyCoreRuneDamage(store, attackerRef, candidate, damage, feedTier, supportRunestones);
             }
         }
     }
@@ -5848,6 +6669,13 @@ public final class LoreProcHandler {
     public static void startBloodRushRune(Store<EntityStore> store,
                                           Ref<EntityStore> attackerRef,
                                           Ref<EntityStore> targetRef) {
+        startBloodRushRune(store, attackerRef, targetRef, List.of());
+    }
+
+    public static void startBloodRushRune(Store<EntityStore> store,
+                                          Ref<EntityStore> attackerRef,
+                                          Ref<EntityStore> targetRef,
+                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
                 || ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.containsKey(attackerRef)) {
             return;
@@ -5867,13 +6695,16 @@ public final class LoreProcHandler {
             return;
         }
 
+        applyCoreAbilitySupportRunestones(store, attackerRef, targets.get(0),
+                supportRunestones, LoreTrigger.ON_SKILL_USE);
+
         LoreDamageUtils.DamageBaseResult baseResult =
                 LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
         if (baseResult.amount <= 0f) {
             return;
         }
         BloodRushSequence sequence = new BloodRushSequence(store, attackerRef, targets.get(0),
-                baseResult.amount, baseResult.skipRefine);
+                baseResult.amount, baseResult.skipRefine, supportRunestones);
         if (ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
             return;
         }
@@ -5923,6 +6754,8 @@ public final class LoreProcHandler {
         LoreVisuals.tryApplyVisualEffect(store, attackerRef, BLOOD_RUSH_SWEEP_EFFECT_ID);
         applyBloodRushSelfEffect(store, attackerRef, hitDamage);
         queueAbilityHitWeaponLores(store, attackerRef, sequence.targetRef);
+        applyCoreAbilitySupportRunestones(store, attackerRef, sequence.targetRef,
+                sequence.supportRunestones, LoreTrigger.ON_HIT);
         sequence.hitsApplied++;
         if (sequence.hitsApplied >= BLOOD_RUSH_RUNE_HITS) {
             finishBloodRushRuneSequence(attackerRef, sequence);
@@ -5964,6 +6797,13 @@ public final class LoreProcHandler {
     public static void startPummelRune(Store<EntityStore> store,
                                        Ref<EntityStore> attackerRef,
                                        Ref<EntityStore> targetRef) {
+        startPummelRune(store, attackerRef, targetRef, List.of());
+    }
+
+    public static void startPummelRune(Store<EntityStore> store,
+                                       Ref<EntityStore> attackerRef,
+                                       Ref<EntityStore> targetRef,
+                                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
                 || ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
             return;
@@ -5982,13 +6822,16 @@ public final class LoreProcHandler {
             return;
         }
 
+        applyCoreAbilitySupportRunestones(store, attackerRef, targets.get(0),
+                supportRunestones, LoreTrigger.ON_SKILL_USE);
+
         LoreDamageUtils.DamageBaseResult baseResult =
                 LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
         if (baseResult.amount <= 0f) {
             return;
         }
         PummelSequence sequence = new PummelSequence(store, attackerRef, targets.get(0),
-                baseResult.amount, baseResult.skipRefine);
+                baseResult.amount, baseResult.skipRefine, supportRunestones);
         if (ACTIVE_PUMMEL_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
             return;
         }
@@ -6010,6 +6853,14 @@ public final class LoreProcHandler {
                                          Ref<EntityStore> ownerRef,
                                          Ref<EntityStore> targetRef,
                                          int tier) {
+        startWolfPackRune(store, ownerRef, targetRef, tier, List.of());
+    }
+
+    public static void startWolfPackRune(Store<EntityStore> store,
+                                         Ref<EntityStore> ownerRef,
+                                         Ref<EntityStore> targetRef,
+                                         int tier,
+                                         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || ownerRef == null || !ownerRef.isValid()) {
             return;
         }
@@ -6018,6 +6869,9 @@ public final class LoreProcHandler {
             return;
         }
         UUID ownerId = owner.getUuid();
+        List<LoreSocketManager.SocketedModifierRunestone> supportSnapshot =
+                supportRunestones == null || supportRunestones.isEmpty()
+                        ? List.of() : List.copyOf(supportRunestones);
         LoreWorldTasks.queue(store, () -> {
             if (store.isShutdown() || !ownerRef.isValid()) {
                 return;
@@ -6026,8 +6880,88 @@ public final class LoreProcHandler {
                     && store.getComponent(targetRef, NPCEntity.getComponentType()) != null) {
                 commandSummonedWolvesToAttackOnWorldThread(store, ownerId, targetRef);
             }
-            trySummonWolfPack(store, ownerRef, ownerId, tier, targetRef);
+            applyCoreAbilitySupportRunestones(store, ownerRef, targetRef,
+                    supportSnapshot, LoreTrigger.ON_SKILL_USE);
+            Set<Ref<EntityStore>> activeWolves = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
+            if (activeWolves != null) {
+                WolfPackSupport wolfSupport = new WolfPackSupport(ownerRef, supportSnapshot);
+                for (Ref<EntityStore> wolfRef : activeWolves) {
+                    if (wolfRef != null && wolfRef.isValid()) {
+                        WOLF_SUPPORTS_BY_ENTITY.put(wolfRef, wolfSupport);
+                    }
+                }
+            }
+            trySummonWolfPack(store, ownerRef, ownerId, tier, targetRef, supportSnapshot);
         });
+    }
+
+    /** Applies the owning Wolf Pack rune's modifiers to native NPC wolf damage. */
+    public static void applyWolfPackAbilitySupportRunestones(Store<EntityStore> store,
+                                                              Ref<EntityStore> wolfRef,
+                                                              Ref<EntityStore> targetRef,
+                                                              Damage damage,
+                                                              CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || wolfRef == null || targetRef == null) {
+            return;
+        }
+        WolfPackSupport support = WOLF_SUPPORTS_BY_ENTITY.get(wolfRef);
+        if (support == null || support.runestones.isEmpty() || support.ownerRef == null
+                || !support.ownerRef.isValid()) {
+            return;
+        }
+        Player owner = store.getComponent(support.ownerRef, Player.getComponentType());
+        if (owner == null) {
+            return;
+        }
+        applyAbilitySupportRunestones(store, owner, support.ownerRef, targetRef, damage,
+                support.runestones, LoreTrigger.ON_HIT, commandBuffer);
+    }
+
+    /** Captures support runestones for Octaslash's native projectile hit events. */
+    public static void startOctaslashSupportWindow(Store<EntityStore> store,
+                                                   Ref<EntityStore> ownerRef,
+                                                   List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+        if (store == null || store.isShutdown() || ownerRef == null || !ownerRef.isValid()) {
+            return;
+        }
+        List<LoreSocketManager.SocketedModifierRunestone> snapshot =
+                supportRunestones == null || supportRunestones.isEmpty()
+                        ? List.of() : List.copyOf(supportRunestones);
+        long expiresAt = System.currentTimeMillis() + OCTASLASH_SUPPORT_WINDOW_MS;
+        ACTIVE_OCTASLASH_SUPPORT.put(ownerRef, new TimedAbilitySupport(snapshot, expiresAt));
+        LoreWorldTasks.queue(store, () -> {
+            if (!store.isShutdown() && ownerRef.isValid()) {
+                applyCoreAbilitySupportRunestones(store, ownerRef, null,
+                        snapshot, LoreTrigger.ON_SKILL_USE);
+            }
+        });
+        OMNISLASH_SCHEDULER.schedule(() -> ACTIVE_OCTASLASH_SUPPORT.computeIfPresent(ownerRef,
+                (ref, active) -> active.expiresAtMs <= System.currentTimeMillis() ? null : active),
+                OCTASLASH_SUPPORT_WINDOW_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Fires Octaslash support modifiers for each native projectile hit during its cast window. */
+    public static void applyOctaslashSupportRunestonesOnHit(Store<EntityStore> store,
+                                                            Ref<EntityStore> attackerRef,
+                                                            Ref<EntityStore> targetRef,
+                                                            Damage damage,
+                                                            CommandBuffer<EntityStore> commandBuffer) {
+        if (store == null || attackerRef == null || targetRef == null) {
+            return;
+        }
+        TimedAbilitySupport support = ACTIVE_OCTASLASH_SUPPORT.get(attackerRef);
+        if (support == null) {
+            return;
+        }
+        if (support.expiresAtMs <= System.currentTimeMillis()) {
+            ACTIVE_OCTASLASH_SUPPORT.remove(attackerRef, support);
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker != null) {
+            applyAbilitySupportRunestones(store, attacker, attackerRef, targetRef, damage,
+                    support.runestones, LoreTrigger.ON_HIT, commandBuffer);
+        }
     }
 
     /** Retargets an owner's active Soulstone wolves to the NPC the player just hit. */
@@ -6109,6 +7043,8 @@ public final class LoreProcHandler {
             LoreVisuals.tryApplyVisualEffect(store, attackerRef, PUMMEL_SWEEP_EFFECT_IDS_BY_HIT[hitIndex]);
         }
         queueAbilityHitWeaponLores(store, attackerRef, sequence.targetRef);
+        applyCoreAbilitySupportRunestones(store, attackerRef, sequence.targetRef,
+                sequence.supportRunestones, LoreTrigger.ON_HIT);
 
         sequence.hitsApplied++;
         if (sequence.hitsApplied >= PUMMEL_RUNE_HITS) {
@@ -6164,6 +7100,14 @@ public final class LoreProcHandler {
                                           Ref<EntityStore> attackerRef,
                                           Ref<EntityStore> targetRef,
                                           int totalHits) {
+        startOmnislashRune(store, attackerRef, targetRef, totalHits, List.of());
+    }
+
+    public static void startOmnislashRune(Store<EntityStore> store,
+                                          Ref<EntityStore> attackerRef,
+                                          Ref<EntityStore> targetRef,
+                                          int totalHits,
+                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
             return;
         }
@@ -6194,6 +7138,8 @@ public final class LoreProcHandler {
         if (targets.isEmpty()) {
             return;
         }
+        applyCoreAbilitySupportRunestones(store, attackerRef, targets.get(0),
+                supportRunestones, LoreTrigger.ON_SKILL_USE);
 
         int hits = Math.max(1, Math.min(12, totalHits));
         OmnislashRuneChain runeChain = ACTIVE_OMNISLASH_RUNE_CHAINS.get(attackerRef);
@@ -6237,7 +7183,8 @@ public final class LoreProcHandler {
         long intervalReductionMs = 50L;
         OmnislashSequence sequence = new OmnislashSequence(store, attackerRef, targets, perHit, true,
                 true, hits, LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS),
-                OMNISLASH_FINAL_MULTIPLIER, 0, initialIntervalMs, minimumIntervalMs, intervalReductionMs);
+                OMNISLASH_FINAL_MULTIPLIER, 0, supportRunestones,
+                initialIntervalMs, minimumIntervalMs, intervalReductionMs);
         ACTIVE_OMNISLASH_RUNE_SEQUENCES.put(attackerRef, sequence);
         long cleanupDelay = estimateAcceleratingOmnislashDurationMs(hits) + 5000L;
         OMNISLASH_SCHEDULER.schedule(
@@ -6470,15 +7417,24 @@ public final class LoreProcHandler {
         }
 
         boolean changed = LoreSocketManager.syncSocketColors(weapon, data);
+        boolean runeDelta = LoreSocketManager.isRuneDeltaActive(weapon);
         Set<String> used = new HashSet<>();
         ProcState procState = new ProcState();
         // This opt-in permits ordinary ON_HIT lores during the slash sequence. The
         // collector still rejects nested multi-hit abilities while Ability1 is active.
         changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
                 LoreTrigger.ON_HIT, true, used, procState, null, true);
+        if (runeDelta) {
+            changed |= applySocketedModifierRunestones(store, attacker, attackerRef, targetRef, null,
+                    weapon, LoreTrigger.ON_HIT, true, used, procState, null);
+        }
         if (procState.hasTriggered()) {
             changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
                     LoreTrigger.ON_LORE_PROC, true, used, null, null, true);
+            if (runeDelta) {
+                changed |= applySocketedModifierRunestones(store, attacker, attackerRef, targetRef, null,
+                        weapon, LoreTrigger.ON_LORE_PROC, true, used, null, null);
+            }
         }
 
         if (changed) {
@@ -8241,6 +9197,9 @@ public final class LoreProcHandler {
             Ref<EntityStore> ref = iterator.next();
             if (ref == null || !isEntityAlive(store, ref)) {
                 iterator.remove();
+                if (ref != null) {
+                    WOLF_SUPPORTS_BY_ENTITY.remove(ref);
+                }
             }
         }
         return summons.size();
@@ -8263,6 +9222,9 @@ public final class LoreProcHandler {
         }
         if (summons.isEmpty()) {
             WOLF_SUMMONS.remove(key, summons);
+            for (Ref<EntityStore> wolfRef : summons) {
+                WOLF_SUPPORTS_BY_ENTITY.remove(wolfRef);
+            }
         }
     }
 
@@ -8935,6 +9897,15 @@ public final class LoreProcHandler {
                                           UUID playerId,
                                           int feedTier,
                                           Ref<EntityStore> targetRef) {
+        trySummonWolfPack(store, summonerRef, playerId, feedTier, targetRef, List.of());
+    }
+
+    private static void trySummonWolfPack(Store<EntityStore> store,
+                                          Ref<EntityStore> summonerRef,
+                                          UUID playerId,
+                                          int feedTier,
+                                          Ref<EntityStore> targetRef,
+                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || summonerRef == null || playerId == null) {
             return;
         }
@@ -8984,6 +9955,11 @@ public final class LoreProcHandler {
             }
             joinSummonedWolfToOwnerFlock(store, summonerRef, spawned);
             summons.add(spawned);
+            if (supportRunestones != null && !supportRunestones.isEmpty()) {
+                WOLF_SUPPORTS_BY_ENTITY.put(spawned, new WolfPackSupport(summonerRef, supportRunestones));
+            } else {
+                WOLF_SUPPORTS_BY_ENTITY.remove(spawned);
+            }
             scheduleWolfDespawn(store, key, spawned, lifetimeMs);
             if (targetRef != null && targetRef.isValid()) {
                 NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
@@ -9133,6 +10109,7 @@ public final class LoreProcHandler {
                     summons.remove(wolfRef);
                     cleanupSummonKey(key, summons);
                 }
+                WOLF_SUPPORTS_BY_ENTITY.remove(wolfRef);
             }
         }), lifetimeMs, TimeUnit.MILLISECONDS);
     }

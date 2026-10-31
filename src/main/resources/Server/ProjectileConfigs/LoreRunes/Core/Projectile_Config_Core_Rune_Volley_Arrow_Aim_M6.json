@@ -17,11 +17,13 @@
   "Interactions": {
     "ProjectileHit": {
       "Interactions": [
+        { "Type": "CoreRuneProjectileHit", "Ability": "Volley" },
         "Common_Projectile_Impact_Effects"
       ]
     },
     "ProjectileMiss": {
       "Interactions": [
+        { "Type": "CoreRuneProjectileMiss", "Ability": "Volley" },
         "Common_Projectile_Miss"
       ]
     }

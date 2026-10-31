@@ -1,0 +1,29 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.1,
+          "Effects": {
+            "WorldSoundEventId": "SFX_Bow_T2_Draw",
+            "LocalSoundEventId": "SFX_Bow_T2_Draw_Local"
+          }
+        },
+        {
+          "Type": "CoreAbilityRune",
+          "Ability": "Volley"
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    }
+  ]
+}

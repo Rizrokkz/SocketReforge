@@ -65,16 +65,12 @@ public final class LoreSocketManager {
     private static final ModifierRunestoneDefinition[] MODIFIER_RUNESTONES = {
             new ModifierRunestoneDefinition("Wraith", "Blur"),
             new ModifierRunestoneDefinition("Spawn_Void", "Fear"),
-            // Keep old extracted Rune Delta modifiers functional; new max-level extraction grants Core runes.
-            new ModifierRunestoneDefinition("Horse_Skeleton", "Razorstrike"),
-            new ModifierRunestoneDefinition("Skeleton_Burnt_Praetorian", "Whirlwind"),
             new ModifierRunestoneDefinition("Skeleton_Burnt_Soldier", "Burn"),
             new ModifierRunestoneDefinition("Zombie_Burnt", "Bleed"),
             new ModifierRunestoneDefinition("Cow_Undead", "Shrapnel"),
             new ModifierRunestoneDefinition("Whale_Humpback", "Groundslam"),
             new ModifierRunestoneDefinition("Trillodon", "Area_Regeneration"),
             new ModifierRunestoneDefinition("Crocodile", "Caustic_Finale"),
-            new ModifierRunestoneDefinition("Horse", "Volley"),
             new ModifierRunestoneDefinition("Bison", "Critical_Charge"),
             new ModifierRunestoneDefinition("Tiger_Sabertooth", "Drain_Life"),
             new ModifierRunestoneDefinition("Mosshorn_Plain", "Area_Heal"),
@@ -85,7 +81,6 @@ public final class LoreSocketManager {
             new ModifierRunestoneDefinition("Toad_Rhino_Magma", "Inferno"),
             new ModifierRunestoneDefinition("Hound_Bleached", "Slow"),
             new ModifierRunestoneDefinition("Leopard_Snow", "Freeze"),
-            new ModifierRunestoneDefinition("Spirit_Thunder", "Vortexstrike"),
             new ModifierRunestoneDefinition("Camel", "Big_Arrow"),
             new ModifierRunestoneDefinition("Ram", "Shock"),
             new ModifierRunestoneDefinition("Scorpion", "Poison"),
@@ -770,7 +765,7 @@ public final class LoreSocketManager {
         }
         for (ModifierRunestoneDefinition runestone : CORE_RUNESTONES) {
             if ("Volley".equals(runestone.abilityId())
-                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_volley_[3-6]")) {
+                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_volley(?:_[3-6])?")) {
                 return runestone.spiritId();
             }
             if ("Big_Arrow".equals(runestone.abilityId())

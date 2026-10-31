@@ -19,8 +19,10 @@
     "Cost": 22,
     "AbilityKeywords": [
       "Damage",
+      "Projectile",
       "Duration",
-      "Wind"
+      "Wind",
+      "Elemental"
     ],
     "Cooldown": 20,
     "Cast": "Root_Ability_Rune_Volley_6",

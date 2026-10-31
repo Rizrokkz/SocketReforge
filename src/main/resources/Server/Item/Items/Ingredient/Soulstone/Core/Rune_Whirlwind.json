@@ -20,7 +20,9 @@
     "AbilityKeywords": [
       "Damage",
       "Melee",
-      "Aoe"
+      "Aoe",
+      "Wind",
+      "Elemental"
     ],
     "Cooldown": 18,
     "Cast": "Root_Ability_Rune_Whirlwind",

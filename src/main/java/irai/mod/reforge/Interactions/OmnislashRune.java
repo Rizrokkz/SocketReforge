@@ -10,14 +10,18 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreSocketManager;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /** Starts the Omnislash combo with the hit count selected by the rune's feed stage. */
 public abstract class OmnislashRune extends SimpleInteraction {
@@ -54,7 +58,31 @@ public abstract class OmnislashRune extends SimpleInteraction {
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
-        LoreProcHandler.startOmnislashRune(store, ownerRef, targetRef, hitCount);
+        ImpactModifiers nativeModifiers = ImpactModifiers.collect(context, ownerRef, store);
+        Map<String, Float> nativeAttributes = nativeModifiers == null
+                ? Map.of() : nativeModifiers.getAttributes();
+        if (nativeAttributes == null || nativeAttributes.isEmpty()) {
+            nativeAttributes = CoreAbilityRune.readEquippedSupportAttributes(
+                    context, ownerRef, store, context.getHeldItem());
+        }
+        LoreProcHandler.captureCoreAbilityNativeModifiers(ownerRef, nativeAttributes,
+                nativeModifiers == null ? null : nativeModifiers.getOnHitEffectIds(),
+                nativeModifiers == null ? null : nativeModifiers.getElementalCauseId());
+
+        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
+                CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
+        String[] nativeOnHitEffects = nativeModifiers == null
+                ? null : nativeModifiers.getOnHitEffectIds();
+        if ((nativeAttributes != null && !nativeAttributes.isEmpty())
+                || (nativeOnHitEffects != null && nativeOnHitEffects.length > 0)
+                || !supportRunestones.isEmpty()) {
+            System.out.println("[SocketReforge] Omnislash support snapshot: rune="
+                    + (context.getHeldItem() == null ? "null" : context.getHeldItem().getItemId())
+                    + ", nativeAttributes=" + nativeAttributes
+                    + ", nativeOnHitEffects=" + Arrays.toString(nativeOnHitEffects)
+                    + ", supportRunestones=" + supportRunestones);
+        }
+        LoreProcHandler.startOmnislashRune(store, ownerRef, targetRef, hitCount, supportRunestones);
     }
 
     public static final class Three extends OmnislashRune {

@@ -20,7 +20,8 @@
     "AbilityKeywords": [
       "Damage",
       "Melee",
-      "Aoe"
+      "Aoe",
+      "Elemental"
     ],
     "Cooldown": 24,
     "Cast": "Root_Ability_Rune_Vortexstrike",

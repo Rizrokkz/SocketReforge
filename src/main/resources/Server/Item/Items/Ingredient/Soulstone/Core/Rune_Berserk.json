@@ -18,7 +18,8 @@
     "Slot": "Core",
     "Cost": 15,
     "AbilityKeywords": [
-      "Damage"
+      "Damage",
+      "Buff"
     ],
     "Cooldown": 45,
     "Cast": "Root_Ability_Rune_Berserk",

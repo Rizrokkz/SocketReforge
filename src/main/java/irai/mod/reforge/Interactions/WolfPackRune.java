@@ -14,6 +14,9 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreSocketManager;
+
+import java.util.List;
 
 /** Cast entry points for the three feed tiers of the Soulstone Wolf Pack rune. */
 public abstract class WolfPackRune extends SimpleInteraction {
@@ -48,7 +51,9 @@ public abstract class WolfPackRune extends SimpleInteraction {
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
-        LoreProcHandler.startWolfPackRune(store, ownerRef, targetRef, tier);
+        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
+                CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
+        LoreProcHandler.startWolfPackRune(store, ownerRef, targetRef, tier, supportRunestones);
     }
 
     public static final class One extends WolfPackRune {

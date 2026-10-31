@@ -16,6 +16,7 @@
   "Interactions": {
     "ProjectileHit": {
       "Interactions": [
+        { "Type": "CoreRuneProjectileHit", "Ability": "Big_Arrow" },
         "Common_Projectile_Impact_Effects"
       ]
     },

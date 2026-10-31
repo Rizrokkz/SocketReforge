@@ -14,6 +14,9 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreSocketManager;
+
+import java.util.List;
 
 /** Starts and advances the five JSON-configured hits of the Pummel rune. */
 public final class PummelRune {
@@ -46,7 +49,9 @@ public final class PummelRune {
             if (targetRef != null && !targetRef.isValid()) {
                 targetRef = null;
             }
-            LoreProcHandler.startPummelRune(store, ownerRef, targetRef);
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
+                    CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
+            LoreProcHandler.startPummelRune(store, ownerRef, targetRef, supportRunestones);
         }
     }
 

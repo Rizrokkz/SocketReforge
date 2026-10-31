@@ -20,8 +20,11 @@
     "Cost": 18,
     "AbilityKeywords": [
       "Damage",
+      "Projectile",
+      "Aoe",
       "Duration",
-      "Wind"
+      "Wind",
+      "Elemental"
     ],
     "Cooldown": 16,
     "Cast": "Root_Ability_Rune_Big_Arrow",

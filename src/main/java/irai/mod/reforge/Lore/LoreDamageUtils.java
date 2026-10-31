@@ -195,6 +195,7 @@ public final class LoreDamageUtils {
                     adjustedDamage = minDamage;
                 }
             }
+            adjustedDamage = LoreProcHandler.applyCoreAbilityNativeDamageModifier(sourceRef, adjustedDamage);
         }
         if (store == null || targetRef == null || adjustedDamage <= 0f) {
             LoreDebug.logKv("damage.skip", "reason", "invalid", "rawDamage", rawDamage);
@@ -454,6 +455,10 @@ public final class LoreDamageUtils {
             Damage damage = new Damage(source, DamageCause.PHYSICAL, rawDamage);
             if (isLoreDamage) {
                 damage.putMetaObject(META_LORE_DAMAGE, Boolean.TRUE);
+                int nativeCauseIndex = LoreProcHandler.getCoreAbilityNativeDamageCauseIndex(sourceRef);
+                if (nativeCauseIndex >= 0) {
+                    damage.setDamageCauseIndex(nativeCauseIndex);
+                }
             }
             if (applyEquipmentDamageBonuses) {
                 damage.putMetaObject(META_APPLY_EQUIPMENT_DAMAGE_BONUSES, Boolean.TRUE);

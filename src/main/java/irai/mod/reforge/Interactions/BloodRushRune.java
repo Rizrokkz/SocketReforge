@@ -14,6 +14,9 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.LoreSocketManager;
+
+import java.util.List;
 
 /** Starts and advances the six configurable strikes in the Blood Rush rune. */
 public final class BloodRushRune {
@@ -46,7 +49,9 @@ public final class BloodRushRune {
             if (targetRef != null && !targetRef.isValid()) {
                 targetRef = null;
             }
-            LoreProcHandler.startBloodRushRune(store, ownerRef, targetRef);
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
+                    CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
+            LoreProcHandler.startBloodRushRune(store, ownerRef, targetRef, supportRunestones);
         }
     }
 

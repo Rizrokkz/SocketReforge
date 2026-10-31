@@ -21,7 +21,8 @@
       "mechanic.soul_reap"
     ],
     "AbilityKeywords": [
-      "Other"
+      "Damage",
+      "Projectile"
     ],
     "Cooldown": 8,
     "Cast": "Root_Ability_Soul_Reaper",
