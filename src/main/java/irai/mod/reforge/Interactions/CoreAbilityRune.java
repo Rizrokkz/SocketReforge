@@ -3,6 +3,7 @@ package irai.mod.reforge.Interactions;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
@@ -61,6 +62,9 @@ public final class CoreAbilityRune extends SimpleInteraction {
         if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
             return;
         }
+        if (!canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
+            return;
+        }
         Ref<EntityStore> targetRef = context.getTargetEntity();
         if (targetRef == null) {
             targetRef = context.getMetaStore().getIfPresentMetaObject(Interaction.TARGET_ENTITY);
@@ -100,8 +104,86 @@ public final class CoreAbilityRune extends SimpleInteraction {
                     + ", attributes=" + abilityAttributes
                     + ", supportRunestones=" + supportRunestones);
         }
-        LoreProcHandler.activateCoreAbilityRune(store, ownerRef, targetRef, ability, feedTier,
-                abilityAttributes == null ? Map.of() : abilityAttributes, supportRunestones);
+        if (isInteractionAuthoredAbility(ability)) {
+            LoreProcHandler.activateCoreAbilityRuneSupport(
+                    store, ownerRef, targetRef, supportRunestones, ability, feedTier);
+        } else {
+            LoreProcHandler.activateCoreAbilityRune(store, ownerRef, targetRef, ability, feedTier,
+                    abilityAttributes == null ? Map.of() : abilityAttributes, supportRunestones);
+        }
+    }
+
+    private static boolean isInteractionAuthoredAbility(String ability) {
+        if (ability == null) {
+            return false;
+        }
+        String normalized = ability.trim().toLowerCase(Locale.ROOT)
+                .replace('-', '_').replace(' ', '_');
+        return normalized.equals("grandslam") || normalized.equals("grand_slam")
+                || normalized.equals("razorstrike") || normalized.equals("razor_strike");
+    }
+
+    public static boolean canUseWithHeldWeapon(Store<EntityStore> store,
+                                               Ref<EntityStore> ownerRef,
+                                               ItemStack rune) {
+        if (store == null || ownerRef == null || !ownerRef.isValid()
+                || rune == null || rune.isEmpty() || rune.getItem() == null
+                || !(rune.getItem().getAbility() instanceof CoreItemAbility ability)) {
+            return false;
+        }
+        Player player = store.getComponent(ownerRef, Player.getComponentType());
+        if (player == null) {
+            return false;
+        }
+        PlayerInventoryUtils.HeldItemContext heldContext = PlayerInventoryUtils.getHeldItemContext(player);
+        ItemStack weapon = heldContext == null || !heldContext.isValid()
+                ? null : LoreHeldItemUpdateManager.resolveHeldItem(player, heldContext);
+        if (weapon == null || weapon.isEmpty() || !ability.canUseWith(weapon)) {
+            return false;
+        }
+        boolean melee = hasAbilityKeyword(ability, "Melee");
+        boolean projectile = hasAbilityKeyword(ability, "Projectile");
+        boolean rangedWeapon = isRangedWeapon(weapon);
+        if (melee && rangedWeapon) {
+            return false;
+        }
+        return melee || !projectile || rangedWeapon;
+    }
+
+    private static boolean hasAbilityKeyword(CoreItemAbility ability, String keyword) {
+        String[] keywords = ability == null ? null : ability.getAbilityKeywords();
+        if (keywords == null) {
+            return false;
+        }
+        for (String candidate : keywords) {
+            if (candidate != null && candidate.equalsIgnoreCase(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRangedWeapon(ItemStack weapon) {
+        String itemId = weapon == null ? null : weapon.getItemId();
+        if (itemId == null || itemId.isBlank()) {
+            return false;
+        }
+        String normalized = itemId.toLowerCase(Locale.ROOT);
+        return normalized.contains("bow")
+                || normalized.contains("crossbow")
+                || normalized.contains("gun")
+                || normalized.contains("rifle")
+                || normalized.contains("pistol")
+                || normalized.contains("blunderbuss")
+                || normalized.contains("firearm")
+                || normalized.contains("staff")
+                || normalized.contains("wand")
+                || normalized.contains("spellbook")
+                || normalized.contains("spell_book")
+                || normalized.contains("grimoire")
+                || normalized.contains("tome")
+                || normalized.contains("blowgun")
+                || normalized.contains("flamethrower");
     }
 
     private static ItemStack readHeldWeapon(Ref<EntityStore> ownerRef, Store<EntityStore> store) {

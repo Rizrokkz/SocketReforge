@@ -1,0 +1,9 @@
+{
+  "ApplicationEffects": {
+    "ScreenEffect": "ScreenEffects/Daggers.png"
+  },
+  "OverlapBehavior": "Overwrite",
+  "RemovalBehavior": "Duration",
+  "Infinite": false,
+  "Duration": 0.3
+}

@@ -108,6 +108,7 @@ import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
+import irai.mod.reforge.Interactions.CoreAbilityRune;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Entity.VolleyHomingArrowEntity;
@@ -167,6 +168,8 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, VolleyHomingArrow> ACTIVE_VOLLEY_PROJECTILE_ARROWS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, BigArrowRuneShot> ACTIVE_BIG_ARROW_RUNE_SHOTS =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, RazorstrikeRuneShot> ACTIVE_RAZORSTRIKE_RUNE_SHOTS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL =
             new ConcurrentHashMap<>();
@@ -319,9 +322,9 @@ public final class LoreProcHandler {
     private static final double OCTASLASH_RAMP_PER_HIT = 0.10d;
     private static final double SYNERGY_PROC_BONUS = 0.25d;
     private static final double SYNERGY_PROC_MAX = 0.85d;
-    private static final double SIGNATURE_GROUNDSLAM_RADIUS = 2.5d;
+    private static final double SIGNATURE_GRAND_SLAM_RADIUS = 2.5d;
     private static final double SIGNATURE_WHIRLWIND_RADIUS = LoreAbility.BASE_WHIRLWIND_RADIUS;
-    private static final double SIGNATURE_GROUNDSLAM_PCT = 0.40d;
+    private static final double SIGNATURE_GRAND_SLAM_PCT = 0.40d;
     private static final double SIGNATURE_WHIRLWIND_PCT = 0.28d;
     private static final double SIGNATURE_RAZORSTRIKE_PCT = 0.32d;
     private static final String SIGNATURE_KEY_PREFIX = "tooltip.lore.technique.";
@@ -393,7 +396,8 @@ public final class LoreProcHandler {
     private static final boolean DEBUG_SIGNATURE_ENERGY_TRACE = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.signatureEnergyTrace", "true"));
     private static final Map<String, String> SIGNATURE_ROOT_BY_KEY = Map.of(
-            "tooltip.lore.technique.groundslam", "Root_Weapon_Mace_Signature_Groundslam",
+            // Grand Slam uses Hytale's native Groundslam interaction asset.
+            "tooltip.lore.technique.grand_slam", "Root_Weapon_Mace_Signature_Groundslam",
             "tooltip.lore.technique.vortexstrike", "Root_Weapon_Sword_Signature_Vortexstrike",
             "tooltip.lore.technique.whirlwind", "Root_Weapon_Battleaxe_Signature_Whirlwind",
             "tooltip.lore.technique.razorstrike", "Root_Weapon_Daggers_Signature_Razorstrike",
@@ -545,7 +549,7 @@ public final class LoreProcHandler {
             "Totem_Heal_AoE",
             "Totem_Heal_Extra"
     };
-    private static final String[] SIGNATURE_GROUNDSLAM_PARTICLE_IDS = {
+    private static final String[] SIGNATURE_GRAND_SLAM_PARTICLE_IDS = {
             "Combat/Mace/Signature/Mace_Signature_Ground_Hit",
             "Mace_Signature_Ground_Hit",
             "Combat/Mace/Signature/Mace_Signature_Slash",
@@ -553,7 +557,7 @@ public final class LoreProcHandler {
             "Combat/Mace/Signature/Impact_Mace_Signature",
             "Impact_Mace_Signature"
     };
-    private static final String[] SIGNATURE_GROUNDSLAM_EFFECT_IDS = {
+    private static final String[] SIGNATURE_GRAND_SLAM_EFFECT_IDS = {
             "Weapons/Mace_Signature",
             "Mace_Signature"
     };
@@ -615,9 +619,9 @@ public final class LoreProcHandler {
             "Explosion_Small"
     };
     private static final String[] OMNISLASH_AFTERIMAGE_EXPLOSION_PARTICLE_IDS = {
-            "Explosion_Medium",
-            "Impact_Explosion",
-            "Explosion_Small"
+            "Sword_Signature_AoE2",
+            "Sword_Signature_AoE2",
+            "Sword_Signature_AoE2"
     };
     private static final String[] FINALE_SOUND_IDS = {
             "SFX_Goblin_Lobber_Bomb_Death",
@@ -678,8 +682,8 @@ public final class LoreProcHandler {
             "Lore/Lore_Omnislash_Trail",
             "Lore_Omnislash_Trail"
     };
-    private static final double GROUNDSLAM_AUGMENT_CHANCE_MULTIPLIER = 3.0d;
-    private static final Map<UUID, GroundslamContext> GROUNDSLAM_CONTEXTS = new ConcurrentHashMap<>();
+    private static final double GRAND_SLAM_AUGMENT_CHANCE_MULTIPLIER = 3.0d;
+    private static final Map<UUID, GrandSlamContext> GRAND_SLAM_CONTEXTS = new ConcurrentHashMap<>();
     private static final String[] BLUR_EFFECT_IDS = {
             "Lore/Lore_Blur",
             "Lore_Blur",
@@ -709,7 +713,7 @@ public final class LoreProcHandler {
         }
     }
 
-    private static final class GroundslamContext {
+    private static final class GrandSlamContext {
         final UUID playerId;
         final LoreAbility ability;
         final String spiritId;
@@ -718,7 +722,7 @@ public final class LoreProcHandler {
         int remainingHits;
         long expiresAt;
 
-        GroundslamContext(UUID playerId,
+        GrandSlamContext(UUID playerId,
                           LoreAbility ability,
                           String spiritId,
                           int level,
@@ -775,7 +779,7 @@ public final class LoreProcHandler {
         final List<PendingLoreProc> forcedAugments;
         final List<PendingLoreProc> modifierProcs;
         final List<PendingLoreProc> flatProcs;
-        final PendingLoreProc groundslam;
+        final PendingLoreProc grandSlam;
         final long durationMs;
         final Damage damage;
         final CommandBuffer<EntityStore> commandBuffer;
@@ -790,7 +794,7 @@ public final class LoreProcHandler {
                       List<PendingLoreProc> augmentProcs,
                       List<PendingLoreProc> forcedAugments,
                       List<PendingLoreProc> modifierProcs,
-                      PendingLoreProc groundslam,
+                      PendingLoreProc grandSlam,
                       long durationMs,
                       Damage damage,
                       CommandBuffer<EntityStore> commandBuffer,
@@ -805,7 +809,7 @@ public final class LoreProcHandler {
             this.forcedAugments = forcedAugments;
             this.modifierProcs = modifierProcs;
             this.flatProcs = null;
-            this.groundslam = groundslam;
+            this.grandSlam = grandSlam;
             this.durationMs = durationMs;
             this.damage = damage;
             this.commandBuffer = commandBuffer;
@@ -832,7 +836,7 @@ public final class LoreProcHandler {
             this.forcedAugments = null;
             this.modifierProcs = null;
             this.flatProcs = flatProcs;
-            this.groundslam = null;
+            this.grandSlam = null;
             this.durationMs = durationMs;
             this.damage = damage;
             this.commandBuffer = commandBuffer;
@@ -848,7 +852,7 @@ public final class LoreProcHandler {
                         flatProcs, durationMs, null, null, false);
             }
             return new LoreProcBatch(store, selfRef, otherRef, selfIsAttacker, playerId,
-                    coreProcs, augmentProcs, forcedAugments, modifierProcs, groundslam,
+                    coreProcs, augmentProcs, forcedAugments, modifierProcs, grandSlam,
                     durationMs, null, null, false);
         }
     }
@@ -1075,6 +1079,25 @@ public final class LoreProcHandler {
                          int feedTier,
                          long expiresAtMs,
                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+            this.damage = damage;
+            this.feedTier = feedTier;
+            this.expiresAtMs = expiresAtMs;
+            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
+                    ? List.of() : List.copyOf(supportRunestones);
+        }
+    }
+
+    private static final class RazorstrikeRuneShot {
+        final float damage;
+        final int feedTier;
+        final long expiresAtMs;
+        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
+        final Set<Ref<EntityStore>> hitTargets = ConcurrentHashMap.newKeySet();
+
+        RazorstrikeRuneShot(float damage,
+                            int feedTier,
+                            long expiresAtMs,
+                            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
             this.damage = damage;
             this.feedTier = feedTier;
             this.expiresAtMs = expiresAtMs;
@@ -1617,27 +1640,27 @@ public final class LoreProcHandler {
         java.util.Set<Integer> xpAwarded = new java.util.HashSet<>();
         if (!coreProcs.isEmpty()) {
             List<PendingLoreProc> forcedAugments = collectAlwaysOnAugments(result, augmentProcs);
-            PendingLoreProc groundslam = pickGroundslamAugment(result.eligible);
+            PendingLoreProc grandSlam = pickGrandSlamAugment(result.eligible);
             long durationMs = estimateBatchDurationMs(coreProcs, augmentProcs, forcedAugments, modifierProcs);
             LoreProcBatch batch = new LoreProcBatch(store, selfRef, otherRef, selfIsAttacker, result.playerId,
-                    coreProcs, augmentProcs, forcedAugments, modifierProcs, groundslam,
+                    coreProcs, augmentProcs, forcedAugments, modifierProcs, grandSlam,
                     durationMs, damage, commandBuffer, true);
             for (PendingLoreProc core : coreProcs) {
                 int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
-                if (selfIsAttacker && groundslam != null) {
-                    armGroundslamAugment(result.playerId, groundslam, coreHits);
-                    changed |= applyProcXp(data, groundslam, maxLevel, self, xpAwarded);
+                if (selfIsAttacker && grandSlam != null) {
+                    armGrandSlamAugment(result.playerId, grandSlam, coreHits);
+                    changed |= applyProcXp(data, grandSlam, maxLevel, self, xpAwarded);
                 }
                 changed |= applyProcXp(data, core, maxLevel, self, xpAwarded);
 
                 for (PendingLoreProc augment : augmentProcs) {
-                    if (groundslam != null && augment.socketIndex == groundslam.socketIndex) {
+                    if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
                     changed |= applyProcXp(data, augment, maxLevel, self, xpAwarded);
                 }
                 for (PendingLoreProc augment : forcedAugments) {
-                    if (groundslam != null && augment.socketIndex == groundslam.socketIndex) {
+                    if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
                     changed |= applyProcXp(data, augment, maxLevel, self, xpAwarded);
@@ -1783,15 +1806,15 @@ public final class LoreProcHandler {
         if (batch.coreProcs != null && !batch.coreProcs.isEmpty()) {
             for (PendingLoreProc core : batch.coreProcs) {
                 int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
-                if (batch.selfIsAttacker && batch.groundslam != null) {
-                    armGroundslamAugment(batch.playerId, batch.groundslam, coreHits);
+                if (batch.selfIsAttacker && batch.grandSlam != null) {
+                    armGrandSlamAugment(batch.playerId, batch.grandSlam, coreHits);
                 }
                 applyEffectWithSynergy(batch.store, commandBuffer, damage, core.ability, core.level, core.feedTier,
                         batch.selfIsAttacker, batch.selfRef, batch.otherRef, batch.playerId, core.spiritId, 1);
 
                 if (batch.augmentProcs != null) {
                     for (PendingLoreProc augment : batch.augmentProcs) {
-                        if (batch.groundslam != null && augment.socketIndex == batch.groundslam.socketIndex) {
+                        if (batch.grandSlam != null && augment.socketIndex == batch.grandSlam.socketIndex) {
                             continue;
                         }
                         applyEffectWithSynergy(batch.store, commandBuffer, damage, augment.ability, augment.level,
@@ -1801,7 +1824,7 @@ public final class LoreProcHandler {
                 }
                 if (batch.forcedAugments != null) {
                     for (PendingLoreProc augment : batch.forcedAugments) {
-                        if (batch.groundslam != null && augment.socketIndex == batch.groundslam.socketIndex) {
+                        if (batch.grandSlam != null && augment.socketIndex == batch.grandSlam.socketIndex) {
                             continue;
                         }
                         applyEffectWithSynergy(batch.store, commandBuffer, damage, augment.ability, augment.level,
@@ -1816,9 +1839,9 @@ public final class LoreProcHandler {
                                 batch.playerId, modifier.spiritId, 1);
                     }
                 }
-                if (batch.selfIsAttacker && batch.groundslam != null && core.ability != null
+                if (batch.selfIsAttacker && batch.grandSlam != null && core.ability != null
                         && core.ability.getEffectType() == LoreEffectType.SUMMON_WOLF_PACK) {
-                    tryApplyGroundslamAugment(batch.store, batch.selfRef, batch.otherRef);
+                    tryApplyGrandSlamAugment(batch.store, batch.selfRef, batch.otherRef);
                 }
             }
             return;
@@ -2823,6 +2846,10 @@ public final class LoreProcHandler {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "notCoreRunestone", "rune", runestoneItemId);
             return false;
         }
+        if (!CoreAbilityRune.canUseWithHeldWeapon(store, attackerRef, runestone)) {
+            RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "weaponIncompatible", "rune", runestoneItemId);
+            return false;
+        }
         String rootId = ability.getCastRootId();
         if (rootId == null || rootId.isBlank()) {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "missingCastRoot", "rune", runestoneItemId);
@@ -3044,12 +3071,12 @@ public final class LoreProcHandler {
         Vector3d defenderPos = LoreTargetingUtils.getPosition(store, defenderRef);
         Player attacker = attackerRef == null ? null : store.getComponent(attackerRef, Player.getComponentType());
         switch (key) {
-            case "tooltip.lore.technique.groundslam" -> {
+            case "tooltip.lore.technique.grand_slam" -> {
                 Vector3d pos = attackerPos != null ? attackerPos : defenderPos;
                 if (pos == null) {
                     return;
                 }
-                LoreVisuals.queueSignatureParticles(store, pos, 1.4f, SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
+                LoreVisuals.queueSignatureParticles(store, pos, 1.4f, SIGNATURE_GRAND_SLAM_PARTICLE_IDS);
                 LoreVisuals.playSignatureSound(attacker,
                         "SFX_Mace_T2_Signature_Impact",
                         "SFX_Mace_T2_Signature_Impact_Local",
@@ -3433,9 +3460,9 @@ public final class LoreProcHandler {
                 if (base <= 0f) {
                     return;
                 }
-                double pct = clampPercentDamage(LoreAbility.scaleEffectValue(SIGNATURE_GROUNDSLAM_PCT, feedTier), 0.20d, 0.85d);
+                double pct = clampPercentDamage(LoreAbility.scaleEffectValue(SIGNATURE_GRAND_SLAM_PCT, feedTier), 0.20d, 0.85d);
                 float perTarget = (float) (base * pct);
-                double radius = LoreAbility.scaleRadius(SIGNATURE_GROUNDSLAM_RADIUS, feedTier);
+                double radius = LoreAbility.scaleRadius(SIGNATURE_GRAND_SLAM_RADIUS, feedTier);
                 applySignatureAoEDamage(store, attackerRef, defenderRef, perTarget, radius, baseResult.skipRefine, feedTier);
             }
             case BERSERK -> {
@@ -4698,7 +4725,7 @@ public final class LoreProcHandler {
         if (ability == null) {
             return false;
         }
-        if (isGroundslamAugment(ability)) {
+        if (isGrandSlamAugment(ability)) {
             return true;
         }
         LoreEffectType type = ability.getEffectType();
@@ -4725,12 +4752,12 @@ public final class LoreProcHandler {
         };
     }
 
-    private static boolean isGroundslamAugment(LoreAbility ability) {
+    private static boolean isGrandSlamAugment(LoreAbility ability) {
         if (ability == null) {
             return false;
         }
         String key = ability.getAbilityNameKey();
-        if (key != null && key.equalsIgnoreCase("tooltip.lore.technique.groundslam")) {
+        if (key != null && key.equalsIgnoreCase("tooltip.lore.technique.grand_slam")) {
             return true;
         }
         String fallback = ability.getAbilityNameFallback();
@@ -4738,7 +4765,7 @@ public final class LoreProcHandler {
             return false;
         }
         String normalizedFallback = fallback.toLowerCase(Locale.ROOT);
-        return normalizedFallback.contains("groundslam") || normalizedFallback.contains("grand slam");
+        return normalizedFallback.contains("grand slam");
     }
 
     private static List<PendingLoreProc> collectAlwaysOnAugments(ProcCollectResult result,
@@ -4778,13 +4805,13 @@ public final class LoreProcHandler {
         return false;
     }
 
-    private static PendingLoreProc pickGroundslamAugment(List<PendingLoreProc> eligible) {
+    private static PendingLoreProc pickGrandSlamAugment(List<PendingLoreProc> eligible) {
         if (eligible == null || eligible.isEmpty()) {
             return null;
         }
         PendingLoreProc best = null;
         for (PendingLoreProc proc : eligible) {
-            if (proc == null || proc.ability == null || !isGroundslamAugment(proc.ability)) {
+            if (proc == null || proc.ability == null || !isGrandSlamAugment(proc.ability)) {
                 continue;
             }
             if (best == null) {
@@ -4829,19 +4856,19 @@ public final class LoreProcHandler {
         return duration;
     }
 
-    private static void armGroundslamAugment(UUID playerId, PendingLoreProc proc, int hits) {
+    private static void armGrandSlamAugment(UUID playerId, PendingLoreProc proc, int hits) {
         if (playerId == null || proc == null || proc.ability == null || hits <= 0) {
             return;
         }
         long now = System.currentTimeMillis();
         long spacing = Math.max(OMNISLASH_HIT_DELAY_MS, MULTIHIT_HIT_DELAY_MS);
         long expiresAt = now + (hits * spacing) + 1200L;
-        GroundslamContext ctx = new GroundslamContext(playerId, proc.ability, proc.spiritId,
+        GrandSlamContext ctx = new GrandSlamContext(playerId, proc.ability, proc.spiritId,
                 proc.level, proc.feedTier, hits, expiresAt);
-        GROUNDSLAM_CONTEXTS.put(playerId, ctx);
+        GRAND_SLAM_CONTEXTS.put(playerId, ctx);
     }
 
-    private static void tryApplyGroundslamAugment(Store<EntityStore> store,
+    private static void tryApplyGrandSlamAugment(Store<EntityStore> store,
                                                   Ref<EntityStore> attackerRef,
                                                   Ref<EntityStore> targetRef) {
         if (store == null || attackerRef == null) {
@@ -4855,21 +4882,21 @@ public final class LoreProcHandler {
         if (playerId == null) {
             return;
         }
-        GroundslamContext ctx = GROUNDSLAM_CONTEXTS.get(playerId);
+        GrandSlamContext ctx = GRAND_SLAM_CONTEXTS.get(playerId);
         if (ctx == null) {
             return;
         }
         long now = System.currentTimeMillis();
         if (ctx.remainingHits <= 0 || now > ctx.expiresAt) {
-            GROUNDSLAM_CONTEXTS.remove(playerId);
+            GRAND_SLAM_CONTEXTS.remove(playerId);
             return;
         }
         ctx.remainingHits--;
         if (ctx.remainingHits <= 0) {
-            GROUNDSLAM_CONTEXTS.remove(playerId);
+            GRAND_SLAM_CONTEXTS.remove(playerId);
         }
         if (!tryProcWithMultiplier(playerId, ctx.spiritId, ctx.ability, ctx.feedTier,
-                GROUNDSLAM_AUGMENT_CHANCE_MULTIPLIER)) {
+                GRAND_SLAM_AUGMENT_CHANCE_MULTIPLIER)) {
             return;
         }
         applySignatureFallbackVfx(store, attackerRef, targetRef, ctx.ability, ctx.feedTier);
@@ -5132,7 +5159,7 @@ public final class LoreProcHandler {
         LoreDamageUtils.applyLoreDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine,
                 sequence.feedTier);
         queueAbilityHitWeaponLores(store, sequence.attackerRef, targetRef);
-        tryApplyGroundslamAugment(store, sequence.attackerRef, targetRef);
+        tryApplyGrandSlamAugment(store, sequence.attackerRef, targetRef);
         sequence.hitsApplied++;
         if (sequence.hitsApplied < sequence.totalHits) {
             long interval = Math.max(sequence.minimumIntervalMs,
@@ -5165,6 +5192,45 @@ public final class LoreProcHandler {
                 attributeSnapshot, supportRunestoneSnapshot);
         if (!LoreWorldTasks.queue(store, cast)) {
             cast.run();
+        }
+    }
+
+    /** Applies support runestones for abilities whose gameplay is authored in interaction assets. */
+    public static void activateCoreAbilityRuneSupport(
+            Store<EntityStore> store,
+            Ref<EntityStore> attackerRef,
+            Ref<EntityStore> targetRef,
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
+            String abilityId,
+            int feedTier) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        List<LoreSocketManager.SocketedModifierRunestone> supportSnapshot =
+                supportRunestones == null || supportRunestones.isEmpty()
+                        ? List.of() : List.copyOf(supportRunestones);
+        String normalizedAbility = abilityId == null ? "" : abilityId.trim().toLowerCase(Locale.ROOT)
+                .replace('-', '_').replace(' ', '_');
+        if (normalizedAbility.equals("razorstrike") || normalizedAbility.equals("razor_strike")) {
+            RazorstrikeRuneShot shot = new RazorstrikeRuneShot(
+                    resolveCoreRuneWeaponDamage(store, attackerRef), Math.max(0, feedTier),
+                    System.currentTimeMillis() + 3000L, supportSnapshot);
+            ACTIVE_RAZORSTRIKE_RUNE_SHOTS.put(attackerRef, shot);
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> ACTIVE_RAZORSTRIKE_RUNE_SHOTS.remove(attackerRef, shot),
+                    3000L, TimeUnit.MILLISECONDS);
+        }
+        Runnable apply = () -> {
+            if (store.isShutdown() || !isEntityAlive(store, attackerRef)) {
+                return;
+            }
+            Ref<EntityStore> validTarget = targetRef != null && targetRef.isValid()
+                    && isEntityAlive(store, targetRef) ? targetRef : null;
+            applyCoreAbilitySupportRunestones(store, attackerRef, validTarget, supportSnapshot,
+                    LoreTrigger.ON_SKILL_USE);
+        };
+        if (!LoreWorldTasks.queue(store, apply)) {
+            apply.run();
         }
     }
 
@@ -5201,10 +5267,6 @@ public final class LoreProcHandler {
         applyCoreAbilitySupportRunestones(store, attackerRef, targetRef, supportRunestones,
                 LoreTrigger.ON_SKILL_USE);
         switch (normalizedAbility) {
-            case "grandslam", "grand_slam", "groundslam", "ground_slam" ->
-                    castGroundslamRune(store, attackerRef, feedTier, supportRunestones);
-            case "razorstrike", "razor_strike" ->
-                    castRazorstrikeRune(store, attackerRef, targetRef, feedTier, supportRunestones);
             case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier, supportRunestones);
             case "vortexstrike", "vortex_strike" ->
                     castVortexstrikeRune(store, attackerRef, targetRef, feedTier, supportRunestones);
@@ -5230,69 +5292,6 @@ public final class LoreProcHandler {
             return Integer.parseInt(abilityId.substring(baseName.length() + 1));
         } catch (NumberFormatException ignored) {
             return 0;
-        }
-    }
-
-    private static void castGroundslamRune(Store<EntityStore> store,
-                                          Ref<EntityStore> attackerRef,
-                                          int feedTier,
-                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-        Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
-        if (center == null) {
-            return;
-        }
-        double radius = Math.min(7.0d, 4.5d + Math.max(0, feedTier) * 0.25d);
-        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.85f;
-        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
-                store, attackerRef, center, radius, radius * radius,
-                "core.groundslam", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
-        for (Ref<EntityStore> target : targets) {
-            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
-                continue;
-            }
-            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier, supportRunestones);
-            if (!isNpcAilmentImmune(store, target, "stun") && canApplyBossCounterAilment(store, target, "stun")) {
-                applyStunForDuration(store, target, 900L + Math.min(600L, feedTier * 100L));
-                onBossCounterAilmentApplied(store, target, "stun");
-            }
-        }
-        LoreVisuals.queueSignatureParticles(store, center, (float) radius, SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
-        LoreVisuals.playSignatureSound(store.getComponent(attackerRef, Player.getComponentType()),
-                "SFX_Mace_T3_Signature_Part_1", "SFX_Mace_T3_Signature_Part_1_Local",
-                "SFX_Mace_T3_Signature_Part_2", "SFX_Mace_T3_Signature_Part_2_Local");
-    }
-
-    private static void castRazorstrikeRune(Store<EntityStore> store,
-                                            Ref<EntityStore> attackerRef,
-                                            Ref<EntityStore> requestedTarget,
-                                            int feedTier,
-                                            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-        Ref<EntityStore> target = chooseCoreRuneTarget(store, attackerRef, requestedTarget, 12.0d);
-        if (target == null) {
-            return;
-        }
-        Vector3d start = LoreTargetingUtils.getPosition(store, attackerRef);
-        Vector3d end = LoreTargetingUtils.getPosition(store, target);
-        if (start == null || end == null) {
-            return;
-        }
-        Vector3d path = new Vector3d(end).sub(start);
-        path.y = 0.0d;
-        double targetDistance = path.length();
-        if (targetDistance < 0.1d) {
-            return;
-        }
-        path.normalize();
-        double travel = Math.min(8.0d, targetDistance + 1.4d);
-        lungeTowardTarget(store, attackerRef, target, 8.0d);
-        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.90f;
-        damageCoreRuneTargetsAlongPath(store, attackerRef, start, path, travel, 1.25d, damage, feedTier,
-                "core.razorstrike", supportRunestones);
-        String particle = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
-        if (particle != null) {
-            LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(start).add(0.0d, 1.0d, 0.0d), 1.5f);
-            LoreVisuals.spawnScaledParticle(store, particle,
-                    new Vector3d(start).add(new Vector3d(path).mul(travel)).add(0.0d, 1.0d, 0.0d), 1.5f);
         }
     }
 
@@ -5448,8 +5447,38 @@ public final class LoreProcHandler {
                 applyVolleyProjectileHit(store, attackerRef, projectileRef, targetRef);
             } else if (normalizedAbility.equals("octaslash")) {
                 applyOctaslashSupportRunestonesOnHit(store, attackerRef, targetRef, null, null);
+            } else if (normalizedAbility.equals("razorstrike") || normalizedAbility.equals("razor_strike")) {
+                applyRazorstrikeRuneProjectileHit(store, attackerRef, targetRef);
             }
         });
+    }
+
+    private static void applyRazorstrikeRuneProjectileHit(Store<EntityStore> store,
+                                                          Ref<EntityStore> attackerRef,
+                                                          Ref<EntityStore> targetRef) {
+        RazorstrikeRuneShot shot = ACTIVE_RAZORSTRIKE_RUNE_SHOTS.get(attackerRef);
+        if (shot == null) {
+            RazorstrikeRuneShot fallback = new RazorstrikeRuneShot(
+                    resolveCoreRuneWeaponDamage(store, attackerRef), 0,
+                    System.currentTimeMillis() + 3000L, List.of());
+            RazorstrikeRuneShot existing = ACTIVE_RAZORSTRIKE_RUNE_SHOTS.putIfAbsent(attackerRef, fallback);
+            shot = existing == null ? fallback : existing;
+            if (existing == null) {
+                OMNISLASH_SCHEDULER.schedule(
+                        () -> ACTIVE_RAZORSTRIKE_RUNE_SHOTS.remove(attackerRef, fallback),
+                        3000L, TimeUnit.MILLISECONDS);
+            }
+        }
+        if (System.currentTimeMillis() >= shot.expiresAtMs) {
+            ACTIVE_RAZORSTRIKE_RUNE_SHOTS.remove(attackerRef, shot);
+            return;
+        }
+        if (targetRef == null || !targetRef.isValid() || targetRef.equals(attackerRef)
+                || !isEntityAlive(store, targetRef) || !shot.hitTargets.add(targetRef)) {
+            return;
+        }
+        applyCoreRuneDamage(store, attackerRef, targetRef, shot.damage,
+                shot.feedTier, shot.supportRunestones);
     }
 
     public static void handleCoreRuneProjectileMiss(Store<EntityStore> store,
@@ -6757,16 +6786,17 @@ public final class LoreProcHandler {
         return closest;
     }
 
-    private static void damageCoreRuneTargetsAlongPath(Store<EntityStore> store,
-                                                        Ref<EntityStore> attackerRef,
-                                                        Vector3d start,
-                                                        Vector3d direction,
-                                                        double distance,
-                                                        double halfWidth,
-                                                        float damage,
-                                                        int feedTier,
-                                                        String label,
-                                                        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+    private static void damageCoreRuneTargetsAlongPath(
+            Store<EntityStore> store,
+            Ref<EntityStore> attackerRef,
+            Vector3d start,
+            Vector3d direction,
+            double distance,
+            double halfWidth,
+            float damage,
+            int feedTier,
+            String label,
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectOmnislashTargets(
                 store, attackerRef, null, distance + halfWidth, (distance + halfWidth) * (distance + halfWidth),
                 label, DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
@@ -7568,7 +7598,7 @@ public final class LoreProcHandler {
         captureOmnislashEnrageOrb(store, attackerRef, targetRef,
                 actualPerHit * (float) OMNISLASH_ENRAGE_ORB_DAMAGE_RATIO);
         queueAbilityHitWeaponLores(store, attackerRef, targetRef);
-        tryApplyGroundslamAugment(store, attackerRef, targetRef);
+        tryApplyGrandSlamAugment(store, attackerRef, targetRef);
         sequence.hitsApplied++;
         if (sequence.hitsApplied >= sequence.totalHits) {
             finishOmnislashRuneSequence(store, attackerRef, sequence);
@@ -8426,7 +8456,7 @@ public final class LoreProcHandler {
             LoreVisuals.spawnSlashParticles(store, attackerRef, targetRef, particleId, 1.0f);
         }
         LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, actualPerHit, skipRefine, feedTier);
-        tryApplyGroundslamAugment(store, attackerRef, targetRef);
+        tryApplyGrandSlamAugment(store, attackerRef, targetRef);
     }
 
     private static void scheduleChargeAttackHits(Store<EntityStore> store,
@@ -8475,7 +8505,7 @@ public final class LoreProcHandler {
         }
         LoreAnimationUtils.playChargeAttackAnimation(store, attackerRef, hitIndex);
         LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, perHit, false, feedTier);
-        tryApplyGroundslamAugment(store, attackerRef, targetRef);
+        tryApplyGrandSlamAugment(store, attackerRef, targetRef);
     }
 
     private static float resolveChargeAttackBase(Store<EntityStore> store,

@@ -50,6 +50,9 @@ public abstract class OmnislashRune extends SimpleInteraction {
         if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
             return;
         }
+        if (!CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
+            return;
+        }
 
         Ref<EntityStore> targetRef = context.getTargetEntity();
         if (targetRef == null) {

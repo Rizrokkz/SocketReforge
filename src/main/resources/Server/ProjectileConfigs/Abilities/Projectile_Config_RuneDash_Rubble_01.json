@@ -1,0 +1,50 @@
+{
+    "Model":  "SocketReforge_RuneDash_Rubble",
+    "Physics":  {
+                    "Type":  "GroundFollow",
+                    "MaxClimb":  1,
+                    "MaxDrop":  1,
+                    "Gravity":  0,
+                    "TerminalVelocityAir":  31,
+                    "TerminalVelocityWater":  5,
+                    "RotationMode":  "Velocity",
+                    "ComputePitch":  false,
+                    "Bounciness":  0.0
+                },
+    "LaunchForce":  30,
+    "DirectionalHitBox":  {
+                              "Width":  2.1,
+                              "Depth":  1.2
+                          },
+    "SpawnOffset":  {
+                        "X":  0,
+                        "Y":  -1.4,
+                        "Z":  -0.5
+                    },
+    "Interactions":  {
+                         "ProjectileHit":  {
+                                                "Interactions":  [
+                                                                     {
+                                                                         "Type":  "Simple",
+                                                                         "RunTime":  0.75,
+                                                                         "Next":  "Ability_GroundSlam_Spike"
+                                                                     },
+                                                                     {
+                                                                         "Type":  "RemoveEntity"
+                                                                     }
+                                                                 ]
+                                            },
+                         "ProjectileMiss":  {
+                                                "Interactions":  [
+                                                                     {
+                                                                         "Type":  "Simple",
+                                                                         "RunTime":  0.75,
+                                                                         "Next":  "Ability_GroundSlam_Spike"
+                                                                     },
+                                                                     {
+                                                                         "Type":  "RemoveEntity"
+                                                                     }
+                                                                 ]
+                                            }
+                     }
+}

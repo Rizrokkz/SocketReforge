@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Ability_Rune_GrandSlam_1_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Melee"
+    ]
+  }
+}

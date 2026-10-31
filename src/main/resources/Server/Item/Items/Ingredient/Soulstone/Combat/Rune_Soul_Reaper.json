@@ -16,6 +16,7 @@
   "MaxStack": 1,
   "Ability": {
     "Slot": "Core",
+    "Weapons": ["Bow", "Crossbow", "Gun", "Staff", "Spellbook", "Wand"],
     "Cost": 0,
     "Tags": [
       "mechanic.soul_reap"

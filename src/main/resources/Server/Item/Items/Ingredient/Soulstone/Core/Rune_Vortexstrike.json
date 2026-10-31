@@ -3,19 +3,20 @@
     "Name": "irai.items.Rune_Vortexstrike.name",
     "Description": "irai.items.Rune_Vortexstrike.description"
   },
-  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_VortexStrike.png",
   "ItemLevel": 1,
   "Quality": "Epic",
   "Categories": [
     "Items.Ingredients"
   ],
   "Model": "Items/Runes/Rune_Ability.blockymodel",
-  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "Texture": "Items/Runes/Rune_Ability_VortexStrike.png",
   "PlayerAnimationsId": "Item",
   "ItemSoundSetId": "ISS_Items_Gems",
   "MaxStack": 1,
   "Ability": {
     "Slot": "Core",
+    "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
     "Cost": 24,
     "AbilityKeywords": [
       "Damage",

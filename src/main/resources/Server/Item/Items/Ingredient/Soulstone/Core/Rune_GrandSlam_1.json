@@ -1,0 +1,35 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_GrandSlam_1.name",
+    "Description": "irai.items.Rune_GrandSlam_1.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_GrandSlam.png",
+  "ItemLevel": 1,
+  "Quality": "Epic",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_GrandSlam.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Slot": "Core",
+    "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
+    "Cost": 14,
+    "AbilityKeywords": [
+      "Damage",
+      "Melee",
+      "Aoe"
+    ],
+    "Cooldown": 14,
+    "Cast": "Root_Ability_Rune_GrandSlam_1",
+    "CostType": "Stamina"
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

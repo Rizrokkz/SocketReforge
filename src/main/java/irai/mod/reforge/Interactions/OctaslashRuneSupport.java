@@ -39,6 +39,9 @@ public final class OctaslashRuneSupport extends SimpleInteraction {
         if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
             return;
         }
+        if (!CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
+            return;
+        }
         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
                 CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
         LoreProcHandler.startOctaslashSupportWindow(store, ownerRef, supportRunestones);

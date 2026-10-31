@@ -122,8 +122,8 @@ public final class LoreAbilityRegistry {
             new SignatureAbility("SIGNATURE_VORTEXSTRIKE",
                     "tooltip.lore.technique.vortexstrike", "Vortexstrike",
                     LoreTrigger.ON_HIT, 0.06d, 4600L, LoreEffectType.VORTEXSTRIKE, 0.42d, 0.02d),
-            new SignatureAbility("SIGNATURE_GROUNDSLAM",
-                    "tooltip.lore.technique.groundslam", "Grand Slam",
+            new SignatureAbility("SIGNATURE_GRAND_SLAM",
+                    "tooltip.lore.technique.grand_slam", "Grand Slam",
                     LoreTrigger.ON_HIT, 0.07d, 5200L, LoreEffectType.APPLY_STUN, 1.5d, 0.10d),
             new SignatureAbility("SIGNATURE_RAZORSTRIKE",
                     "tooltip.lore.technique.razorstrike", "Razorstrike",
@@ -170,7 +170,7 @@ public final class LoreAbilityRegistry {
     private static final Map<String, SignatureAbility> SIGNATURE_ABILITY_BY_ID = buildSignatureAbilityMap();
 
     private static final SignatureRule[] SIGNATURE_RULES = new SignatureRule[] {
-            new SignatureRule("SIGNATURE_GROUNDSLAM", 80,
+            new SignatureRule("SIGNATURE_GRAND_SLAM", 80,
                     "golem", "rhino", "ogre", "troll", "giant", "behemoth", "brute",
                     "crusher", "magma", "stone", "rock", "earth", "minotaur", "ram"),
             new SignatureRule("SIGNATURE_VORTEXSTRIKE", 120,
@@ -263,6 +263,10 @@ public final class LoreAbilityRegistry {
             String token = params[0].trim();
             if (!token.isBlank()) {
                 String signatureId = token.toUpperCase(Locale.ROOT);
+                // Continue loading existing user configs that still use the previous Socket Reforge name.
+                if ("SIGNATURE_GROUNDSLAM".equals(signatureId)) {
+                    signatureId = "SIGNATURE_GRAND_SLAM";
+                }
                 SignatureAbility signature = SIGNATURE_ABILITY_BY_ID.get(signatureId);
                 if (signature != null) {
                     return signature.toLoreAbility(spiritId);

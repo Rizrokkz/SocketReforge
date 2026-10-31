@@ -3,14 +3,14 @@
     "Name": "irai.items.Rune_Big_Arrow_3.name",
     "Description": "irai.items.Rune_Big_Arrow_3.description"
   },
-  "Icon": "Icons/ItemsGenerated/Rune_Ability_Octaslash.png",
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_BigArrow.png",
   "ItemLevel": 1,
   "Quality": "Epic",
   "Categories": [
     "Items.Ingredients"
   ],
   "Model": "Items/Runes/Rune_Ability.blockymodel",
-  "Texture": "Items/Runes/Rune_Ability_Octaslash.png",
+  "Texture": "Items/Runes/Rune_Ability_BigArrow.png",
   "PlayerAnimationsId": "Item",
   "ItemSoundSetId": "ISS_Items_Gems",
   "MaxStack": 1,

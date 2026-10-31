@@ -1,0 +1,18 @@
+{
+  "Model": "NPC/MISC/Empty.blockymodel",
+  "Texture": "Items/Projectiles/Projectile_default.png",
+  "MinScale": 1,
+  "MaxScale": 1,
+  "HitBox": {
+    "Max": {
+      "X": 1.6,
+      "Y": 1.2,
+      "Z": 1.6
+    },
+    "Min": {
+      "X": -1.6,
+      "Y": 0,
+      "Z": -1.6
+    }
+  }
+}

@@ -68,7 +68,6 @@ public final class LoreSocketManager {
             new ModifierRunestoneDefinition("Skeleton_Burnt_Soldier", "Burn"),
             new ModifierRunestoneDefinition("Zombie_Burnt", "Bleed"),
             new ModifierRunestoneDefinition("Cow_Undead", "Shrapnel"),
-            new ModifierRunestoneDefinition("Whale_Humpback", "Groundslam"),
             new ModifierRunestoneDefinition("Trillodon", "Area_Regeneration"),
             new ModifierRunestoneDefinition("Crocodile", "Caustic_Finale"),
             new ModifierRunestoneDefinition("Bison", "Critical_Charge"),
@@ -81,7 +80,6 @@ public final class LoreSocketManager {
             new ModifierRunestoneDefinition("Toad_Rhino_Magma", "Inferno"),
             new ModifierRunestoneDefinition("Hound_Bleached", "Slow"),
             new ModifierRunestoneDefinition("Leopard_Snow", "Freeze"),
-            new ModifierRunestoneDefinition("Camel", "Big_Arrow"),
             new ModifierRunestoneDefinition("Ram", "Shock"),
             new ModifierRunestoneDefinition("Scorpion", "Poison"),
             new ModifierRunestoneDefinition("Spirit_Manafont", "Mana_Restore")
@@ -745,6 +743,10 @@ public final class LoreSocketManager {
         if (spiritId != null && spiritId.equalsIgnoreCase("Spirit_Manafont")) {
             int rank = resolveFeedRank(feedTier, 4);
             return CORE_RUNESTONE_PREFIX + "Mana_Font_" + rank;
+        }
+        if (spiritId != null && spiritId.equalsIgnoreCase("Whale_Humpback")) {
+            int rank = resolveFeedRank(feedTier, 2);
+            return rank == 1 ? CORE_RUNESTONE_PREFIX + "GrandSlam_1" : GRAND_SLAM_RUNE_ITEM_ID;
         }
         return resolveCoreAbilityRunestoneItemId(spiritId);
     }

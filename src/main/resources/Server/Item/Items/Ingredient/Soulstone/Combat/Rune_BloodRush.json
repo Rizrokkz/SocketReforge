@@ -14,6 +14,7 @@
   "MaxStack": 1,
   "Ability": {
     "Slot": "Core",
+    "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
     "Cost": 20,
     "Tags": ["mechanic.melee"],
     "AbilityKeywords": ["Damage", "Melee"],

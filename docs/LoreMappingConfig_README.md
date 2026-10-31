@@ -175,7 +175,7 @@ The following predefined signatures are available:
 - `SIGNATURE_RAZORSTRIKE`
 - `SIGNATURE_WHIRLWIND`
 - `SIGNATURE_SHRAPNEL`
-- `SIGNATURE_GROUNDSLAM`
+- `SIGNATURE_GRAND_SLAM`
 - `SIGNATURE_PUMMEL`
 - `SIGNATURE_CAUSTIC_FINALE`
 - `SIGNATURE_VOLLEY`
@@ -198,7 +198,7 @@ The following predefined signatures are available:
   "Skeleton_Burnt_Soldier=ON_HIT,0.07,5000,APPLY_BURN,2.0,0.10",
   "Zombie_Burnt=ON_HIT,0.07,5200,APPLY_BLEED,2.0,0.10",
   "Cow_Undead=SIGNATURE_SHRAPNEL",
-  "Whale_Humpback=SIGNATURE_GROUNDSLAM",
+  "Whale_Humpback=SIGNATURE_GRAND_SLAM",
   "Shark_Hammerhead=SIGNATURE_PUMMEL",
   "Trillodon=ON_HIT,0.06,7000,HEAL_AREA_OVER_TIME,1.6,0.08",
   "Crocodile=SIGNATURE_CAUSTIC_FINALE",
@@ -255,7 +255,7 @@ If you want a simple starting point:
   ],
   "LORE_ABILITY_ENTRIES": [
     "Golem_Firesteel=SIGNATURE_OCTASLASH",
-    "Whale_Humpback=SIGNATURE_GROUNDSLAM",
+    "Whale_Humpback=SIGNATURE_GRAND_SLAM",
     "Shark_Hammerhead=SIGNATURE_PUMMEL"
   ]
 }
