@@ -4,13 +4,22 @@
     {
       "Interactions": [
         {
+          "Type": "Simple",
+          "RunTime": 0.8,
+          "HorizontalSpeedMultiplier": 0.45,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Bow",
+            "ItemAnimationId": "ShootCharging",
+            "WaitForAnimationToFinish": false,
+            "ClearAnimationOnFinish": false,
+            "WorldSoundEventId": "SFX_Bow_T2_Draw",
+            "LocalSoundEventId": "SFX_Bow_T2_Draw_Local"
+          }
+        },
+        {
           "Type": "CoreAbilityRune",
           "Ability": "Big_Arrow"
-        }
-      ]
-    },
-    {
-      "Interactions": [
+        },
         {
           "Type": "LaunchAbilityProjectile",
           "Projectile": "Projectile_Config_Core_Rune_Big_Arrow",
@@ -19,7 +28,15 @@
           "Scale": 1.8,
           "ScaleAttribute": "AoeScale",
           "SpeedAttribute": "Speed",
-          "Lifetime": 3
+          "Lifetime": 3,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Bow",
+            "ItemAnimationId": "ShootCharged",
+            "WaitForAnimationToFinish": false,
+            "ClearAnimationOnFinish": true,
+            "WorldSoundEventId": "SFX_Bow_T2_Shoot",
+            "LocalSoundEventId": "SFX_Bow_T2_Shoot_Local"
+          }
         }
       ]
     },

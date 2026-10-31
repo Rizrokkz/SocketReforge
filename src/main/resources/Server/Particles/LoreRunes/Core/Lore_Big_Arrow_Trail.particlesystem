@@ -1,0 +1,8 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "Lore_Big_Arrow_Trail"
+    }
+  ],
+  "LifeSpan": 0.3
+}

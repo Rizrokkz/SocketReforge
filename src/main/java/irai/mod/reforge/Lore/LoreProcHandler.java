@@ -80,6 +80,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.ser
 import com.hypixel.hytale.server.core.modules.projectile.ProjectileModule;
 import com.hypixel.hytale.server.core.modules.projectile.config.ProjectileConfig;
 import com.hypixel.hytale.server.core.modules.projectile.interaction.ProjectileInteraction;
+import com.hypixel.hytale.server.core.util.TargetUtil;
 import com.hypixel.hytale.server.npc.NPCPlugin;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.npc.role.Role;
@@ -103,6 +104,7 @@ import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
+import irai.mod.reforge.Entity.VolleyHomingArrowEntity;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.RuneDeltaDebug;
@@ -144,6 +146,8 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, OmnislashRuneChain> ACTIVE_OMNISLASH_RUNE_CHAINS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, OmnislashEnrageStorm> ACTIVE_OMNISLASH_ENRAGE_STORMS =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, VolleyRuneBuff> ACTIVE_VOLLEY_RUNE_BUFFS =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> OMNISLASH_RECHAIN_SLAM_PROTECTION_UNTIL =
             new ConcurrentHashMap<>();
@@ -283,6 +287,14 @@ public final class LoreProcHandler {
     private static final long OMNISLASH_ENRAGE_ORB_TIMEOUT_MS = 50000L;
     private static final double OMNISLASH_ENRAGE_ORB_SPEED = 18.0d;
     private static final int OMNISLASH_ENRAGE_ORB_MAX_COUNT = 40;
+    private static final long VOLLEY_RUNE_BUFF_DURATION_MS = 5000L;
+    private static final long VOLLEY_ARROW_GATHER_MS = 350L;
+    private static final long VOLLEY_ARROW_TICK_MS = 80L;
+    private static final long VOLLEY_ARROW_MAX_AGE_MS = 12000L;
+    private static final double VOLLEY_ARROW_ORBIT_RADIUS = 2.0d;
+    private static final double VOLLEY_ARROW_SPEED = 28.0d;
+    private static final double VOLLEY_ARROW_BOUNCE_RADIUS = 18.0d;
+    private static final int VOLLEY_ARROW_MAX_COUNT = 6;
     private static final double OCTASLASH_RAMP_PER_HIT = 0.10d;
     private static final double SYNERGY_PROC_BONUS = 0.25d;
     private static final double SYNERGY_PROC_MAX = 0.85d;
@@ -604,6 +616,8 @@ public final class LoreProcHandler {
             "Weapon/Bow/Bow_Signature_Launch",
             "Bow_Signature_Launch"
     };
+    private static final String BIG_ARROW_IMPLOSION_PARTICLE_ID = "Lore_Big_Arrow_Implosion";
+    private static final double BIG_ARROW_IMPLOSION_RADIUS = 4.5d;
     private static final String[] OMNISLASH_SLASH_PARTICLE_IDS = {
             "Combat/Daggers/Signature/Daggers_Signature_Slash",
             "Daggers_Signature_Slash",
@@ -924,6 +938,65 @@ public final class LoreProcHandler {
             this.damage = damage;
             this.createdAtMs = createdAtMs;
             this.position = new Vector3d(startPosition);
+        }
+    }
+
+    private static final class VolleyRuneBuff {
+        final Store<EntityStore> store;
+        final Ref<EntityStore> attackerRef;
+        final int maxArrows;
+        final int bounceCount;
+        final int feedTier;
+        final float arrowDamage;
+        final long startedAtMs;
+        final long expiresAtMs;
+        final List<VolleyHomingArrow> arrows = new ArrayList<>();
+        boolean launched;
+        boolean tickScheduled;
+
+        VolleyRuneBuff(Store<EntityStore> store,
+                       Ref<EntityStore> attackerRef,
+                       int maxArrows,
+                       int bounceCount,
+                       int feedTier,
+                       float arrowDamage,
+                       long startedAtMs) {
+            this.store = store;
+            this.attackerRef = attackerRef;
+            this.maxArrows = maxArrows;
+            this.bounceCount = bounceCount;
+            this.feedTier = feedTier;
+            this.arrowDamage = arrowDamage;
+            this.startedAtMs = startedAtMs;
+            this.expiresAtMs = startedAtMs + VOLLEY_RUNE_BUFF_DURATION_MS;
+        }
+    }
+
+    private static final class VolleyHomingArrow {
+        final Vector3d startPosition;
+        final Vector3d orbitOffset;
+        final float damage;
+        final long createdAtMs;
+        final Set<Ref<EntityStore>> hitTargets = new HashSet<>();
+        VolleyHomingArrowEntity visualEntity;
+        Vector3d position;
+        Ref<EntityStore> sourceTargetRef;
+        Ref<EntityStore> targetRef;
+        int bouncesRemaining;
+
+        VolleyHomingArrow(Vector3d startPosition,
+                          Vector3d orbitOffset,
+                          float damage,
+                          long createdAtMs,
+                          Ref<EntityStore> sourceTargetRef,
+                          int bouncesRemaining) {
+            this.startPosition = startPosition;
+            this.orbitOffset = orbitOffset;
+            this.damage = damage;
+            this.createdAtMs = createdAtMs;
+            this.sourceTargetRef = sourceTargetRef;
+            this.position = new Vector3d(startPosition);
+            this.bouncesRemaining = bouncesRemaining;
         }
     }
 
@@ -4752,6 +4825,17 @@ public final class LoreProcHandler {
         }
     }
 
+    /** Records a normal player hit for an active Volley rune without mutating ECS state in its damage system. */
+    public static void recordVolleyRuneHit(Store<EntityStore> store,
+                                           Ref<EntityStore> attackerRef,
+                                           Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || targetRef == null
+                || !attackerRef.isValid() || !targetRef.isValid()) {
+            return;
+        }
+        LoreWorldTasks.queue(store, () -> captureVolleyRuneArrow(store, attackerRef, targetRef));
+    }
+
     private static void activateCoreAbilityRuneOnWorldThread(Store<EntityStore> store,
                                                               Ref<EntityStore> attackerRef,
                                                               Ref<EntityStore> targetRef,
@@ -4779,7 +4863,7 @@ public final class LoreProcHandler {
                     castBigArrowRune(store, attackerRef, targetRef, feedTier,
                             parseCoreRuneTier(normalizedAbility, "big_arrow"));
             case "volley", "volley_3", "volley_4", "volley_5", "volley_6" ->
-                    castVolleyRune(store, attackerRef, targetRef, feedTier,
+                    castVolleyRune(store, attackerRef, feedTier,
                             parseCoreRuneTier(normalizedAbility, "volley"));
             case "berserk" -> castBerserkRune(store, attackerRef);
             case "mana_font", "manafont", "mana_restore", "mana_font_1", "mana_font_2",
@@ -4952,81 +5036,572 @@ public final class LoreProcHandler {
 
     private static void castBigArrowRune(Store<EntityStore> store,
                                          Ref<EntityStore> attackerRef,
-                                         Ref<EntityStore> requestedTarget,
+                                         Ref<EntityStore> targetRef,
                                          int feedTier,
                                          int abilityTier) {
-        Ref<EntityStore> target = chooseCoreRuneTarget(store, attackerRef, requestedTarget, 24.0d);
-        if (target == null) {
+        TransformComponent transform = store.getComponent(attackerRef, TransformComponent.getComponentType());
+        Transform look = null;
+        try {
+            look = TargetUtil.getLook(attackerRef, store);
+        } catch (Throwable ignored) {
+            // Fall back to the player's transform and head rotation below.
+        }
+        Vector3d start = look == null || look.getPosition() == null
+                ? LoreTargetingUtils.getPosition(store, attackerRef)
+                : new Vector3d(look.getPosition());
+        Vector3d direction = look == null || look.getDirection() == null
+                ? resolvePlayerLookDirection(store, attackerRef, transform)
+                : new Vector3d(look.getDirection());
+        if (direction != null && direction.lengthSquared() > 1.0e-6d) {
+            direction.normalize();
+        } else {
+            direction = null;
+        }
+        if (start == null || direction == null) {
             return;
         }
-        Vector3d start = LoreTargetingUtils.getPosition(store, attackerRef);
-        Vector3d end = LoreTargetingUtils.getPosition(store, target);
-        if (start == null || end == null) {
-            return;
-        }
-        Vector3d direction = new Vector3d(end).sub(start);
-        direction.y = 0.0d;
-        double distance = Math.min(24.0d, direction.length());
-        if (distance <= 0.1d) {
-            return;
-        }
-        direction.normalize();
+        double distance = 24.0d;
         int bonusTier = abilityTier >= 1 ? Math.min(3, abilityTier)
                 : Math.max(1, Math.min(3, 1 + Math.max(0, feedTier) / 2));
         float bonusWeaponDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * (0.10f * bonusTier);
-        damageCoreRuneTargetsAlongPath(store, attackerRef, start, direction, distance, 1.0d,
-                resolveCoreRuneWeaponDamage(store, attackerRef) + bonusWeaponDamage, feedTier,
-                "core.bigArrow");
-        String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_GROUNDSLAM_PARTICLE_IDS);
-        if (particle != null) {
-            for (int i = 1; i <= 4; i++) {
-                Vector3d point = new Vector3d(start).fma(distance * i / 5.0d, direction)
-                        .add(0.0d, 1.0d, 0.0d);
-                LoreVisuals.spawnScaledParticle(store, particle, point, 1.2f + Math.min(0.8f, feedTier * 0.1f));
+        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) + bonusWeaponDamage;
+        scheduleBigArrowPathDamage(store, attackerRef, targetRef, start, direction, distance,
+                damage, feedTier, "core.bigArrow");
+        scheduleBigArrowTrail(store, start, direction, distance, feedTier);
+        scheduleBigArrowImplosion(store, attackerRef, start, direction, distance, feedTier);
+    }
+
+    /** Emits bow projectile sparks at timed positions along the arrow's expected flight path. */
+    private static void scheduleBigArrowTrail(Store<EntityStore> store,
+                                               Vector3d playerPosition,
+                                               Vector3d direction,
+                                               double distance,
+                                               int feedTier) {
+        if (store == null || playerPosition == null || direction == null || distance <= 0.0d) {
+            return;
+        }
+        String particleId = LoreVisuals.resolveParticleEffectId(
+                "Lore_Big_Arrow_Trail", "LoreRunes/Core/Lore_Big_Arrow_Trail");
+        if (particleId == null) {
+            return;
+        }
+
+        double speed = resolveBigArrowSpeed();
+        long travelTimeMs = Math.max(1L, (long) Math.ceil(distance / speed * 1000.0d));
+        int samples = Math.max(2, Math.min(32, (int) Math.ceil(distance / 0.8d) + 1));
+        float scale = 1.2f + Math.min(0.8f, feedTier * 0.1f);
+        Rotation3f particleRotation = Rotation3f.lookAt(new Vector3d(direction));
+        for (int sample = 0; sample < samples; sample++) {
+            double progress = sample / (double) (samples - 1);
+            long delayMs = Math.round(travelTimeMs * progress);
+            Vector3d particlePosition = new Vector3d(playerPosition)
+                    .fma(distance * progress, direction);
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> LoreWorldTasks.queue(store, () -> {
+                        if (!store.isShutdown()) {
+                            LoreVisuals.spawnRotatedScaledParticle(
+                                    store, particleId, particlePosition, particleRotation, scale);
+                        }
+                    }),
+                    delayMs,
+                    TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Resolves the arrow's endpoint after flight, then pulls and damages nearby enemies. */
+    private static void scheduleBigArrowImplosion(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Vector3d start,
+                                                   Vector3d direction,
+                                                   double distance,
+                                                   int feedTier) {
+        if (store == null || attackerRef == null || start == null || direction == null || distance <= 0.0d) {
+            return;
+        }
+        double speed = resolveBigArrowSpeed();
+        long impactDelayMs = Math.max(1L, (long) Math.ceil(distance / speed * 1000.0d));
+        Vector3d impactPosition = new Vector3d(start).fma(distance, new Vector3d(direction).normalize());
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(store, () -> triggerBigArrowImplosion(
+                        store, attackerRef, impactPosition, feedTier)),
+                impactDelayMs,
+                TimeUnit.MILLISECONDS);
+    }
+
+    private static void triggerBigArrowImplosion(Store<EntityStore> store,
+                                                 Ref<EntityStore> attackerRef,
+                                                 Vector3d center,
+                                                 int feedTier) {
+        if (store == null || store.isShutdown() || attackerRef == null || !isEntityAlive(store, attackerRef)
+                || center == null) {
+            return;
+        }
+        String particleId = LoreVisuals.resolveParticleEffectId(BIG_ARROW_IMPLOSION_PARTICLE_ID);
+        if (particleId != null) {
+            LoreVisuals.spawnScaledParticle(store, particleId, center,
+                    1.0f + Math.min(0.6f, Math.max(0, feedTier) * 0.1f));
+        }
+        LoreVisuals.playSignatureSound(
+                store.getComponent(attackerRef, Player.getComponentType()),
+                "SFX_Staff_Flame_Fireball_Impact");
+
+        double radius = BIG_ARROW_IMPLOSION_RADIUS;
+        double radiusSquared = radius * radius;
+        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f;
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, center, radius, radiusSquared,
+                "core.bigArrow.implosion", DEBUG_LORE_PROCS,
+                CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
+                continue;
+            }
+            applyCoreRuneDamage(store, attackerRef, target, damage, feedTier);
+            applyCoreRuneVelocity(store, target, center, -7.0d, 1.0d);
+        }
+    }
+
+    /** Scans the arrow corridor in flight-sized segments and damages each target once. */
+    private static void scheduleBigArrowPathDamage(Store<EntityStore> store,
+                                                   Ref<EntityStore> attackerRef,
+                                                   Ref<EntityStore> targetRef,
+                                                   Vector3d start,
+                                                   Vector3d direction,
+                                                   double distance,
+                                                   float damage,
+                                                   int feedTier,
+                                                   String label) {
+        if (store == null || attackerRef == null || start == null || direction == null
+                || distance <= 0.0d || damage <= 0.0f) {
+            return;
+        }
+        double speed = resolveBigArrowSpeed();
+        long travelTimeMs = Math.max(1L, (long) Math.ceil(distance / speed * 1000.0d));
+        int samples = Math.max(2, Math.min(32, (int) Math.ceil(distance / 0.8d) + 1));
+        double scanRadius = Math.max(2.0d, distance / (samples - 1) + 1.5d);
+        Set<Ref<EntityStore>> damagedTargets = ConcurrentHashMap.newKeySet();
+        Vector3d origin = new Vector3d(start);
+        Vector3d flightDirection = new Vector3d(direction).normalize();
+        for (int sample = 0; sample < samples; sample++) {
+            double progress = sample / (double) (samples - 1);
+            long delayMs = Math.round(travelTimeMs * progress);
+            Vector3d scanPosition = new Vector3d(origin).fma(distance * progress, flightDirection);
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> LoreWorldTasks.queue(store, () -> {
+                        if (!store.isShutdown() && attackerRef.isValid()
+                                && isEntityAlive(store, attackerRef)) {
+                            damageBigArrowTargetsNearSegment(store, attackerRef, targetRef,
+                                    origin, flightDirection, distance, scanPosition, scanRadius,
+                                    damagedTargets, damage, feedTier, label);
+                        }
+                    }),
+                    delayMs,
+                    TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void damageBigArrowTargetsNearSegment(Store<EntityStore> store,
+                                                         Ref<EntityStore> attackerRef,
+                                                         Ref<EntityStore> targetRef,
+                                                         Vector3d start,
+                                                         Vector3d direction,
+                                                         double distance,
+                                                         Vector3d scanPosition,
+                                                         double scanRadius,
+                                                         Set<Ref<EntityStore>> damagedTargets,
+                                                         float damage,
+                                                         int feedTier,
+                                                         String label) {
+        List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectTargetsAtPosition(
+                store, attackerRef, scanPosition, scanRadius, scanRadius * scanRadius,
+                label + ".segment", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        if (targetRef != null && targetRef.isValid() && !candidates.contains(targetRef)) {
+            candidates.add(targetRef);
+        }
+        double hitRadiusSq = 1.75d * 1.75d;
+        for (Ref<EntityStore> candidate : candidates) {
+            if (candidate == null || candidate.equals(attackerRef) || !candidate.isValid()
+                    || damagedTargets.contains(candidate) || !isEntityAlive(store, candidate)) {
+                continue;
+            }
+            Vector3d position = LoreTargetingUtils.getPosition(store, candidate);
+            if (position == null) {
+                continue;
+            }
+            // Entity transforms are near the feet; test the arrow against the torso instead.
+            position.y += 0.9d;
+            if (position.distanceSquared(scanPosition) > scanRadius * scanRadius) {
+                continue;
+            }
+            Vector3d fromStart = new Vector3d(position).sub(start);
+            double projection = fromStart.dot(direction);
+            if (projection < 0.0d || projection > distance) {
+                continue;
+            }
+            Vector3d closest = new Vector3d(start).fma(projection, direction);
+            if (closest.distanceSquared(position) <= hitRadiusSq
+                    && damagedTargets.add(candidate)) {
+                applyCoreRuneDamage(store, attackerRef, candidate, damage, feedTier);
+                LoreDebug.logKv(label + ".hit", "entity",
+                        LoreTargetingUtils.resolveDebugEntityLabel(store, candidate),
+                        "distance", String.format(Locale.ROOT, "%.2f", projection));
             }
         }
     }
 
+    private static double resolveBigArrowSpeed() {
+        ProjectileConfig projectileConfig = resolveProjectileConfig("Projectile_Config_Core_Rune_Big_Arrow");
+        double speed = projectileConfig == null ? 0.0d : projectileConfig.getMuzzleVelocity();
+        if (speed <= 0.01d && projectileConfig != null) {
+            speed = projectileConfig.getLaunchForce();
+        }
+        return speed <= 0.01d ? 22.5d : speed;
+    }
+
+    /** Uses the player's current view direction so core projectile paths match the native launcher aim. */
+    private static Vector3d resolvePlayerLookDirection(Store<EntityStore> store,
+                                                        Ref<EntityStore> playerRef,
+                                                        TransformComponent transform) {
+        if (store == null || playerRef == null) {
+            return null;
+        }
+        try {
+            HeadRotation headRotation = store.getComponent(playerRef, HeadRotation.getComponentType());
+            Vector3d headDirection = headRotation == null ? null : headRotation.getDirection();
+            if (headDirection != null && headDirection.lengthSquared() > 1.0e-6d) {
+                return new Vector3d(headDirection).normalize();
+            }
+        } catch (Throwable ignored) {
+            // Fall back to the transform's look orientation when head rotation is unavailable.
+        }
+        Rotation3f rotation = resolveLookRotation(transform);
+        if (rotation == null) {
+            return null;
+        }
+        try {
+            Vector3d direction = new Transform(new Vector3d(), rotation).getDirection();
+            if (direction != null && direction.lengthSquared() > 1.0e-6d) {
+                return direction.normalize();
+            }
+        } catch (Throwable ignored) {
+            // Retain the horizontal yaw fallback below.
+        }
+        double yawRadians = Math.toRadians(rotation.yaw());
+        Vector3d direction = new Vector3d(-Math.sin(yawRadians), 0.0d, Math.cos(yawRadians));
+        return direction.lengthSquared() > 1.0e-6d ? direction.normalize() : null;
+    }
+
     private static void castVolleyRune(Store<EntityStore> store,
                                        Ref<EntityStore> attackerRef,
-                                       Ref<EntityStore> requestedTarget,
                                        int feedTier,
                                        int abilityTier) {
-        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
-                store, attackerRef, requestedTarget, 18.0d, 324.0d,
-                "core.volley", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
-        targets.removeIf(target -> target == null || target.equals(attackerRef) || !isEntityAlive(store, target));
-        if (targets.isEmpty()) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
             return;
         }
-        int arrowCount = abilityTier >= 3 ? Math.max(3, Math.min(6, abilityTier))
-                : Math.max(3, Math.min(6, 3 + Math.max(0, feedTier)));
-        int bounceCount = abilityTier >= 3 ? arrowCount - 3
-                : Math.min(3, Math.max(0, feedTier));
-        float arrowDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f;
-        for (int arrow = 0; arrow < arrowCount; arrow++) {
-            Ref<EntityStore> current = targets.get(arrow % targets.size());
-            for (int bounce = 0; bounce <= bounceCount; bounce++) {
-                if (current == null || !current.isValid() || !isEntityAlive(store, current)) {
-                    break;
-                }
-                applyCoreRuneDamage(store, attackerRef, current, arrowDamage, feedTier);
-                String particle = LoreVisuals.resolveParticleEffectId(OMNISLASH_SLASH_PARTICLE_IDS);
-                if (particle != null) {
-                    Vector3d hitPos = LoreTargetingUtils.getPosition(store, current);
-                    if (hitPos != null) {
-                        LoreVisuals.spawnScaledParticle(store, particle, new Vector3d(hitPos).add(0.0d, 1.0d, 0.0d), 0.75f);
-                    }
-                }
-                if (bounce >= bounceCount || targets.size() < 2) {
-                    break;
-                }
-                current = targets.get((arrow + bounce + 1) % targets.size());
-                if (current.equals(targets.get((arrow + bounce) % targets.size()))) {
-                    break;
-                }
+        VolleyRuneBuff previous = ACTIVE_VOLLEY_RUNE_BUFFS.remove(attackerRef);
+        if (previous != null) {
+            removeVolleyArrowVisuals(previous);
+        }
+        int arrowCount = abilityTier >= 3
+                ? Math.max(3, Math.min(VOLLEY_ARROW_MAX_COUNT, abilityTier))
+                : Math.max(3, Math.min(VOLLEY_ARROW_MAX_COUNT, 3 + Math.max(0, feedTier)));
+        int bounceCount = Math.max(0, Math.min(3, arrowCount - 3));
+        long now = System.currentTimeMillis();
+        VolleyRuneBuff buff = new VolleyRuneBuff(store, attackerRef, arrowCount, bounceCount,
+                feedTier, resolveCoreRuneWeaponDamage(store, attackerRef) * 0.25f, now);
+        ACTIVE_VOLLEY_RUNE_BUFFS.put(attackerRef, buff);
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(store, () -> releaseVolleyRuneBuff(buff)),
+                VOLLEY_RUNE_BUFF_DURATION_MS, TimeUnit.MILLISECONDS);
+        LoreDebug.logKv("core.volley.activate", "arrows", arrowCount,
+                "bounces", bounceCount, "durationMs", VOLLEY_RUNE_BUFF_DURATION_MS);
+    }
+
+    private static void captureVolleyRuneArrow(Store<EntityStore> store,
+                                               Ref<EntityStore> attackerRef,
+                                               Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || targetRef == null
+                || !attackerRef.isValid() || !targetRef.isValid() || attackerRef.equals(targetRef)
+                || !isEntityAlive(store, attackerRef) || !isEntityAlive(store, targetRef)) {
+            return;
+        }
+        VolleyRuneBuff buff = ACTIVE_VOLLEY_RUNE_BUFFS.get(attackerRef);
+        long now = System.currentTimeMillis();
+        if (buff == null || buff.launched || now >= buff.expiresAtMs
+                || buff.arrows.size() >= buff.maxArrows) {
+            return;
+        }
+        Vector3d targetPosition = LoreTargetingUtils.getPosition(store, targetRef);
+        if (targetPosition == null) {
+            return;
+        }
+        targetPosition.add(0.0d, 0.9d, 0.0d);
+        int index = buff.arrows.size();
+        int pointCount = Math.max(1, buff.maxArrows);
+        double vertical = 1.0d - 2.0d * (index + 0.5d) / pointCount;
+        double ringRadius = Math.sqrt(Math.max(0.0d, 1.0d - vertical * vertical));
+        double angle = index * 2.399963229728653d;
+        Vector3d orbitOffset = new Vector3d(
+                Math.cos(angle) * ringRadius * VOLLEY_ARROW_ORBIT_RADIUS,
+                vertical * VOLLEY_ARROW_ORBIT_RADIUS,
+                Math.sin(angle) * ringRadius * VOLLEY_ARROW_ORBIT_RADIUS);
+        VolleyHomingArrow arrow = new VolleyHomingArrow(targetPosition, orbitOffset,
+                buff.arrowDamage, now, targetRef, buff.bounceCount);
+        buff.arrows.add(arrow);
+        spawnVolleyArrowVisual(store, buff, arrow);
+        scheduleVolleyRuneTick(buff);
+        LoreDebug.logKv("core.volley.capture", "arrow", buff.arrows.size(),
+                "max", buff.maxArrows,
+                "target", LoreTargetingUtils.resolveDebugEntityLabel(store, targetRef));
+    }
+
+    private static void spawnVolleyArrowVisual(Store<EntityStore> store,
+                                               VolleyRuneBuff buff,
+                                               VolleyHomingArrow arrow) {
+        if (store == null || buff == null || arrow == null || arrow.startPosition == null) {
+            return;
+        }
+        try {
+            EntityStore entityStore = store.getExternalData();
+            World world = entityStore == null ? null : entityStore.getWorld();
+            if (world == null) {
+                return;
+            }
+            Vector3d facing = LoreTargetingUtils.getPosition(store, buff.attackerRef);
+            facing = facing == null
+                    ? new Vector3d(0.0d, 0.0d, 1.0d)
+                    : new Vector3d(arrow.startPosition).sub(facing);
+            Rotation3f rotation = facing.lengthSquared() > 1.0e-6d
+                    ? Rotation3f.lookAt(facing.normalize()) : new Rotation3f();
+            VolleyHomingArrowEntity visual = new VolleyHomingArrowEntity(world);
+            if (!visual.hasModel()) {
+                return;
+            }
+            world.spawnEntity(visual, new Vector3d(arrow.startPosition), rotation);
+            arrow.visualEntity = visual;
+        } catch (Throwable ignored) {
+            // The homing damage must still work if the optional arrow model is unavailable.
+        }
+    }
+
+    private static void moveVolleyArrowVisual(Store<EntityStore> store,
+                                              VolleyHomingArrow arrow,
+                                              Vector3d position,
+                                              Vector3d direction) {
+        if (store == null || arrow == null || arrow.visualEntity == null || position == null) {
+            return;
+        }
+        try {
+            Ref<EntityStore> visualRef = arrow.visualEntity.getReference();
+            if (visualRef == null || !visualRef.isValid()) {
+                return;
+            }
+            TransformComponent transform = store.getComponent(visualRef, TransformComponent.getComponentType());
+            if (transform == null) {
+                return;
+            }
+            transform.teleportPosition(new Vector3d(position));
+            if (direction != null && direction.lengthSquared() > 1.0e-6d) {
+                transform.teleportRotation(Rotation3f.lookAt(new Vector3d(direction).normalize()));
+            }
+        } catch (Throwable ignored) {
+            // Best-effort visual update; arrow targeting and damage continue independently.
+        }
+    }
+
+    private static void removeVolleyArrowVisual(VolleyHomingArrow arrow) {
+        if (arrow == null || arrow.visualEntity == null) {
+            return;
+        }
+        try {
+            if (!arrow.visualEntity.wasRemoved()) {
+                arrow.visualEntity.remove();
+            }
+        } catch (Throwable ignored) {
+            // Cleanup is best-effort while a world is unloading.
+        }
+        arrow.visualEntity = null;
+    }
+
+    private static void removeVolleyArrowVisuals(VolleyRuneBuff buff) {
+        if (buff == null) {
+            return;
+        }
+        for (VolleyHomingArrow arrow : buff.arrows) {
+            removeVolleyArrowVisual(arrow);
+        }
+    }
+
+    private static void releaseVolleyRuneBuff(VolleyRuneBuff buff) {
+        if (buff == null || buff.store == null || buff.store.isShutdown()
+                || ACTIVE_VOLLEY_RUNE_BUFFS.get(buff.attackerRef) != buff || buff.launched) {
+            return;
+        }
+        if (!isEntityAlive(buff.store, buff.attackerRef)) {
+            removeVolleyArrowVisuals(buff);
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+            return;
+        }
+        buff.launched = true;
+        for (int i = buff.arrows.size() - 1; i >= 0; i--) {
+            VolleyHomingArrow arrow = buff.arrows.get(i);
+            Ref<EntityStore> target = arrow.sourceTargetRef;
+            if (target == null || !isEntityAlive(buff.store, target) || isEntityDeadOrDying(buff.store, target)) {
+                target = chooseVolleyTarget(buff.store, buff, arrow, arrow.position);
+            }
+            arrow.targetRef = target;
+            if (target == null) {
+                removeVolleyArrowVisual(arrow);
+                buff.arrows.remove(i);
             }
         }
+        if (buff.arrows.isEmpty()) {
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+            return;
+        }
+        LoreVisuals.playSignatureSound(
+                buff.store.getComponent(buff.attackerRef, Player.getComponentType()),
+                "SFX_Bow_T2_Shoot_Local");
+        LoreDebug.logKv("core.volley.release", "arrows", buff.arrows.size());
+        scheduleVolleyRuneTick(buff);
+    }
+
+    private static Ref<EntityStore> chooseVolleyTarget(Store<EntityStore> store,
+                                                       VolleyRuneBuff buff,
+                                                       VolleyHomingArrow arrow,
+                                                       Vector3d center) {
+        if (store == null || buff == null || arrow == null || center == null) {
+            return null;
+        }
+        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
+                store, buff.attackerRef, center, VOLLEY_ARROW_BOUNCE_RADIUS,
+                VOLLEY_ARROW_BOUNCE_RADIUS * VOLLEY_ARROW_BOUNCE_RADIUS,
+                "core.volley.target", false, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
+        Ref<EntityStore> closest = null;
+        double closestDistance = Double.MAX_VALUE;
+        for (Ref<EntityStore> target : targets) {
+            if (target == null || target.equals(buff.attackerRef) || !target.isValid()
+                    || store.getComponent(target, Player.getComponentType()) != null
+                    || arrow.hitTargets.contains(target) || !isEntityAlive(store, target)
+                    || isEntityDeadOrDying(store, target)) {
+                continue;
+            }
+            Vector3d targetPosition = LoreTargetingUtils.getPosition(store, target);
+            if (targetPosition == null) {
+                continue;
+            }
+            double distance = targetPosition.distanceSquared(center);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closest = target;
+            }
+        }
+        return closest;
+    }
+
+    private static void scheduleVolleyRuneTick(VolleyRuneBuff buff) {
+        if (buff == null || buff.store == null || buff.store.isShutdown()
+                || buff.tickScheduled || buff.arrows.isEmpty()
+                || ACTIVE_VOLLEY_RUNE_BUFFS.get(buff.attackerRef) != buff) {
+            return;
+        }
+        buff.tickScheduled = true;
+        OMNISLASH_SCHEDULER.schedule(
+                () -> LoreWorldTasks.queue(buff.store, () -> tickVolleyRuneArrows(buff)),
+                VOLLEY_ARROW_TICK_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private static void tickVolleyRuneArrows(VolleyRuneBuff buff) {
+        if (buff == null || buff.store == null || buff.store.isShutdown()
+                || ACTIVE_VOLLEY_RUNE_BUFFS.get(buff.attackerRef) != buff) {
+            return;
+        }
+        buff.tickScheduled = false;
+        Store<EntityStore> store = buff.store;
+        if (!isEntityAlive(store, buff.attackerRef)) {
+            removeVolleyArrowVisuals(buff);
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+            return;
+        }
+        TransformComponent attackerTransform = store.getComponent(
+                buff.attackerRef, TransformComponent.getComponentType());
+        if (attackerTransform == null || attackerTransform.getPosition() == null) {
+            removeVolleyArrowVisuals(buff);
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Vector3d orbitCenter = new Vector3d(attackerTransform.getPosition()).add(0.0d, 1.25d, 0.0d);
+        double travelStep = VOLLEY_ARROW_SPEED * VOLLEY_ARROW_TICK_MS / 1000.0d;
+        for (int i = buff.arrows.size() - 1; i >= 0; i--) {
+            VolleyHomingArrow arrow = buff.arrows.get(i);
+            if (now - arrow.createdAtMs > VOLLEY_ARROW_MAX_AGE_MS) {
+                removeVolleyArrowVisual(arrow);
+                buff.arrows.remove(i);
+                continue;
+            }
+            if (!buff.launched) {
+                double gatherProgress = Math.min(1.0d,
+                        Math.max(0.0d, (double) (now - arrow.createdAtMs) / VOLLEY_ARROW_GATHER_MS));
+                Vector3d orbitPosition = new Vector3d(orbitCenter).add(arrow.orbitOffset);
+                Vector3d nextPosition = new Vector3d(arrow.startPosition).lerp(orbitPosition, gatherProgress);
+                Vector3d direction = new Vector3d(nextPosition).sub(arrow.position);
+                arrow.position = nextPosition;
+                moveVolleyArrowVisual(store, arrow, arrow.position, direction);
+                continue;
+            }
+
+            if (arrow.targetRef == null || !isEntityAlive(store, arrow.targetRef)
+                    || isEntityDeadOrDying(store, arrow.targetRef)) {
+                arrow.targetRef = chooseVolleyTarget(store, buff, arrow, arrow.position);
+            }
+            if (arrow.targetRef == null) {
+                removeVolleyArrowVisual(arrow);
+                buff.arrows.remove(i);
+                continue;
+            }
+            TransformComponent targetTransform = store.getComponent(
+                    arrow.targetRef, TransformComponent.getComponentType());
+            if (targetTransform == null || targetTransform.getPosition() == null) {
+                arrow.targetRef = null;
+                continue;
+            }
+            Vector3d impactPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.9d, 0.0d);
+            Vector3d toTarget = new Vector3d(impactPosition).sub(arrow.position);
+            double distanceSquared = toTarget.lengthSquared();
+            if (distanceSquared <= travelStep * travelStep) {
+                moveVolleyArrowVisual(store, arrow, impactPosition, toTarget);
+                Ref<EntityStore> hitTarget = arrow.targetRef;
+                arrow.hitTargets.add(hitTarget);
+                LoreDamageUtils.applyLoreWeaponAbilityDamage(
+                        store, buff.attackerRef, hitTarget, arrow.damage, buff.feedTier);
+                queueAbilityHitWeaponLores(store, buff.attackerRef, hitTarget);
+                String particle = LoreVisuals.resolveParticleEffectId(SIGNATURE_BIG_ARROW_PARTICLE_IDS);
+                if (particle != null) {
+                    LoreVisuals.spawnScaledParticle(store, particle, impactPosition, 0.7f);
+                }
+                arrow.bouncesRemaining--;
+                Ref<EntityStore> nextTarget = arrow.bouncesRemaining < 0
+                        ? null : chooseVolleyTarget(store, buff, arrow, impactPosition);
+                if (nextTarget == null) {
+                    removeVolleyArrowVisual(arrow);
+                    buff.arrows.remove(i);
+                    continue;
+                }
+                arrow.targetRef = nextTarget;
+                continue;
+            }
+            toTarget.normalize().mul(travelStep);
+            arrow.position.add(toTarget);
+            moveVolleyArrowVisual(store, arrow, arrow.position, toTarget);
+        }
+
+        if (buff.launched && buff.arrows.isEmpty()) {
+            ACTIVE_VOLLEY_RUNE_BUFFS.remove(buff.attackerRef, buff);
+            return;
+        }
+        scheduleVolleyRuneTick(buff);
     }
 
     private static void castBerserkRune(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
@@ -5888,6 +6463,7 @@ public final class LoreProcHandler {
         if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
             return;
         }
+        captureVolleyRuneArrow(store, attackerRef, targetRef);
         LoreSocketData data = LoreSocketManager.getLoreSocketData(weapon);
         if (data == null) {
             return;

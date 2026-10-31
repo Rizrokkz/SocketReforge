@@ -20,6 +20,7 @@ import com.hypixel.hytale.component.spatial.SpatialResource;
 import com.hypixel.hytale.component.spatial.SpatialStructure;
 import com.hypixel.hytale.server.core.universe.world.SoundUtil;
 import com.hypixel.hytale.protocol.SoundCategory;
+import com.hypixel.hytale.math.vector.Rotation3f;
 import org.joml.Vector3d;
 
 /**
@@ -474,6 +475,39 @@ public final class LoreVisuals {
             }
             ParticleUtil.spawnParticleEffect(particleId, pos, viewers, store);
         }
+    }
+
+    /** Spawns a scaled particle with its emitter oriented along the supplied rotation. */
+    public static void spawnRotatedScaledParticle(Store<EntityStore> store,
+                                                   String particleId,
+                                                   Vector3d pos,
+                                                   Rotation3f rotation,
+                                                   float scale) {
+        if (store == null || particleId == null || particleId.isBlank() || pos == null || rotation == null) {
+            return;
+        }
+        float yaw = rotation.yaw();
+        float pitch = rotation.pitch();
+        float roll = rotation.roll();
+        List<Ref<EntityStore>> viewers = collectParticleRecipients(store, pos);
+        if (viewers == null || viewers.isEmpty()) {
+            ParticleUtil.spawnParticleEffect(particleId, pos, yaw, pitch, roll, scale, 0f, store);
+            return;
+        }
+        ParticleUtil.spawnParticleEffect(
+                particleId,
+                pos.x,
+                pos.y,
+                pos.z,
+                yaw,
+                pitch,
+                roll,
+                scale,
+                null,
+                null,
+                viewers,
+                store
+        );
     }
 
     public static String resolveParticleEffectId(String... particleIds) {

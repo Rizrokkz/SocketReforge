@@ -16,6 +16,7 @@
   "MaxStack": 1,
   "Ability": {
     "Slot": "Core",
+    "Weapons": ["Bow"],
     "Cost": 18,
     "AbilityKeywords": [
       "Damage",

@@ -79,6 +79,7 @@ public final class LoreEffectEST extends DamageEventSystem {
         Player defender = targetRef == null ? null : store.getComponent(targetRef, Player.getComponentType());
 
         if (attacker != null) {
+            LoreProcHandler.recordVolleyRuneHit(store, attackerRef, targetRef);
             LoreProcHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
         }
 

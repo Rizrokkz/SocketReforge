@@ -4,64 +4,16 @@
     {
       "Interactions": [
         {
+          "Type": "Simple",
+          "RunTime": 0.1,
+          "Effects": {
+            "WorldSoundEventId": "SFX_Bow_T2_Draw",
+            "LocalSoundEventId": "SFX_Bow_T2_Draw_Local"
+          }
+        },
+        {
           "Type": "CoreAbilityRune",
           "Ability": "Volley_4"
-        }
-      ]
-    },
-    {
-      "Interactions": [
-        {
-          "Type": "LaunchAbilityProjectile",
-          "Projectile": "Projectile_Config_Core_Rune_Volley_Arrow_Aim_M12",
-          "Pierce": true,
-          "Distance": 18,
-          "Scale": 0.8,
-          "ScaleAttribute": "AoeScale",
-          "SpeedAttribute": "Speed",
-          "Lifetime": 3
-        }
-      ]
-    },
-    {
-      "Interactions": [
-        {
-          "Type": "LaunchAbilityProjectile",
-          "Projectile": "Projectile_Config_Core_Rune_Volley_Arrow_Aim_M6",
-          "Pierce": true,
-          "Distance": 18,
-          "Scale": 0.8,
-          "ScaleAttribute": "AoeScale",
-          "SpeedAttribute": "Speed",
-          "Lifetime": 3
-        }
-      ]
-    },
-    {
-      "Interactions": [
-        {
-          "Type": "LaunchAbilityProjectile",
-          "Projectile": "Projectile_Config_Core_Rune_Volley_Arrow_Aim_P6",
-          "Pierce": true,
-          "Distance": 18,
-          "Scale": 0.8,
-          "ScaleAttribute": "AoeScale",
-          "SpeedAttribute": "Speed",
-          "Lifetime": 3
-        }
-      ]
-    },
-    {
-      "Interactions": [
-        {
-          "Type": "LaunchAbilityProjectile",
-          "Projectile": "Projectile_Config_Core_Rune_Volley_Arrow_Aim_P12",
-          "Pierce": true,
-          "Distance": 18,
-          "Scale": 0.8,
-          "ScaleAttribute": "AoeScale",
-          "SpeedAttribute": "Speed",
-          "Lifetime": 3
         }
       ]
     },

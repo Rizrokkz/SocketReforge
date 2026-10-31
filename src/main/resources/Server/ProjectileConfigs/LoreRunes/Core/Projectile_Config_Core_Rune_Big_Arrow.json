@@ -8,7 +8,7 @@
     "RotationMode": "Velocity",
     "Bounciness": 0
   },
-  "LaunchForce": 45,
+  "LaunchForce": 22.5,
   "DirectionalHitBox": {
     "Width": 1.25,
     "Depth": 0.9

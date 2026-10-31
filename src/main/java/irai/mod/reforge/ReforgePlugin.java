@@ -108,6 +108,7 @@ import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryChangeEST
 import irai.mod.reforge.Entity.Events.WeaponAffinityAppearanceInventoryEventEST;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
+import irai.mod.reforge.Entity.VolleyHomingArrowEntity;
 import irai.mod.reforge.Interactions.BloodRushRune;
 import irai.mod.reforge.Interactions.CorruptionInteraction;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
@@ -294,6 +295,8 @@ public class ReforgePlugin extends JavaPlugin {
                 OmnislashAfterimageEntity.class, OmnislashAfterimageEntity::new, OmnislashAfterimageEntity.CODEC);
         EntityModule.get().registerEntity("irai.mod.reforge:OmnislashFireOrb",
                 OmnislashFireOrbEntity.class, OmnislashFireOrbEntity::new, OmnislashFireOrbEntity.CODEC);
+        EntityModule.get().registerEntity("irai.mod.reforge:VolleyHomingArrow",
+                VolleyHomingArrowEntity.class, VolleyHomingArrowEntity::new, VolleyHomingArrowEntity.CODEC);
         // Initialize language file loader for name resolution
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
