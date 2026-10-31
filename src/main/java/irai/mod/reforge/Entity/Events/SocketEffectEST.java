@@ -45,6 +45,7 @@ import irai.mod.reforge.Lore.LoreStatusTracker;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Lore.LoreVisuals;
 import irai.mod.reforge.Lore.SoulReaperTracker;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
@@ -488,60 +489,8 @@ public class SocketEffectEST extends DamageEventSystem {
                 }
             }
             case RUNE_DELTA -> {
-                double procRoll = ThreadLocalRandom.current().nextDouble();
-                boolean onCooldown = isRuneDeltaCooldownActive(weapon)
-                        || isResonanceOnCooldown(attacker.getUuid(), "w_rune_delta");
-                RuneDeltaDebug.logKv(attacker, "proc.roll",
-                        "weapon", weapon.getItemId(),
-                        "damage", dealt,
-                        "roll", procRoll,
-                        "threshold", 0.12d,
-                        "cooldown", onCooldown);
-                if (procRoll >= 0.12d) {
-                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "roll");
-                    break;
-                }
-                if (onCooldown) {
-                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "cooldown");
-                    break;
-                }
-                List<LoreSocketManager.SocketedRunestone> runestones = LoreSocketManager.getSocketedRunestones(weapon);
-                if (runestones.isEmpty()) {
-                    RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "noSocketedRunestones");
-                    break;
-                }
-                LoreSocketManager.SocketedRunestone runestone = runestones.get(
-                        ThreadLocalRandom.current().nextInt(runestones.size()));
-                long runeCooldownMillis = LoreProcHandler.getSocketedAbilityCooldownMillis(runestone.itemId());
-                if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())
-                        && runeCooldownMillis <= 0L) {
-                    runeCooldownMillis = 8_000L;
-                }
-                RuneDeltaDebug.logKv(attacker, "proc.select",
-                        "rune", runestone.itemId(),
-                        "damageFeeds", runestone.damageFeeds(),
-                        "manaFeeds", runestone.manaFeeds(),
-                        "ability2CooldownMs", runeCooldownMillis,
-                        "available", runestones.stream().map(LoreSocketManager.SocketedRunestone::itemId)
-                                .collect(java.util.stream.Collectors.joining(",")));
-                boolean started = LoreProcHandler.tryRunSocketedAbility(
-                        store, commandBuffer, attackerRef, defenderRef, runestone.itemId(),
-                        runestone.damageFeeds(), runestone.manaFeeds());
-                if (started) {
-                    if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())) {
-                        SoulReaperTracker.clear(attacker.getUuid());
-                    }
-                    boolean cooldownStored = storeRuneDeltaCooldown(weaponContext, runeCooldownMillis);
-                    // Keep the proc throttled even if the weapon metadata update is not visible
-                    // to the next damage event immediately.
-                    markResonanceCooldown(attacker.getUuid(), "w_rune_delta", runeCooldownMillis);
-                    tryApplyVisualEffect(store, attackerRef, SHOCK_EFFECT_IDS);
-                    RuneDeltaDebug.logKv(attacker, "proc.success",
-                            "cooldownMs", runeCooldownMillis,
-                            "weaponCooldownStored", cooldownStored);
-                } else {
-                    RuneDeltaDebug.logKv(attacker, "proc.failed", "reason", "abilityStartRejected");
-                }
+                tryRuneDeltaProc(store, commandBuffer, attacker, attackerRef, defenderPlayer,
+                        defenderRef, weapon, weaponContext, dealt, false);
             }
             case HEAL_SURGE -> {
                 if (!isResonanceOnCooldown(attacker.getUuid(), "w_heal")) {
@@ -555,6 +504,99 @@ public class SocketEffectEST extends DamageEventSystem {
                 // Other resonance types are armor-centric or passive.
             }
         }
+    }
+
+    /** Applies Rune Delta to a scripted ability strike that bypasses the damage-event handler. */
+    public static void tryApplyRuneDeltaOnAbilityHit(Store<EntityStore> store,
+                                                     Ref<EntityStore> attackerRef,
+                                                     Ref<EntityStore> targetRef,
+                                                     ItemStack weapon,
+                                                     PlayerInventoryUtils.HeldItemContext weaponContext) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || targetRef == null || !targetRef.isValid() || weapon == null || weapon.isEmpty()
+                || !LoreSocketManager.isRuneDeltaActive(weapon)) {
+            return;
+        }
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        if (attacker == null || attacker.getUuid() == null) {
+            return;
+        }
+        Player defenderPlayer = store.getComponent(targetRef, Player.getComponentType());
+        if (defenderPlayer != null && isSamePlayer(attacker, defenderPlayer)) {
+            return;
+        }
+        tryRuneDeltaProc(store, null, attacker, attackerRef, defenderPlayer, targetRef,
+                weapon, weaponContext, 1f, true);
+    }
+
+    private static void tryRuneDeltaProc(Store<EntityStore> store,
+                                         CommandBuffer<EntityStore> commandBuffer,
+                                         Player attacker,
+                                         Ref<EntityStore> attackerRef,
+                                         Player defenderPlayer,
+                                         Ref<EntityStore> defenderRef,
+                                         ItemStack weapon,
+                                         PlayerInventoryUtils.HeldItemContext weaponContext,
+                                         float dealt,
+                                         boolean scriptedAbilityHit) {
+        if (store == null || attacker == null || attacker.getUuid() == null || attackerRef == null
+                || defenderRef == null || weapon == null || weapon.isEmpty() || dealt <= 0f) {
+            return;
+        }
+        double procRoll = ThreadLocalRandom.current().nextDouble();
+        boolean onCooldown = isRuneDeltaCooldownActive(weapon)
+                || isResonanceOnCooldown(attacker.getUuid(), "w_rune_delta");
+        RuneDeltaDebug.logKv(attacker, "proc.roll",
+                "weapon", weapon.getItemId(),
+                "damage", scriptedAbilityHit ? "scripted-ability-hit" : dealt,
+                "roll", procRoll,
+                "threshold", 0.12d,
+                "cooldown", onCooldown);
+        if (procRoll >= 0.12d) {
+            RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "roll");
+            return;
+        }
+        if (onCooldown) {
+            RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "cooldown");
+            return;
+        }
+        List<LoreSocketManager.SocketedRunestone> runestones = LoreSocketManager.getSocketedRunestones(weapon);
+        if (runestones.isEmpty()) {
+            RuneDeltaDebug.logKv(attacker, "proc.skip", "reason", "noSocketedRunestones");
+            return;
+        }
+        LoreSocketManager.SocketedRunestone runestone = runestones.get(
+                ThreadLocalRandom.current().nextInt(runestones.size()));
+        long runeCooldownMillis = LoreProcHandler.getSocketedAbilityCooldownMillis(runestone.itemId());
+        if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())
+                && runeCooldownMillis <= 0L) {
+            runeCooldownMillis = 8_000L;
+        }
+        RuneDeltaDebug.logKv(attacker, "proc.select",
+                "rune", runestone.itemId(),
+                "damageFeeds", runestone.damageFeeds(),
+                "manaFeeds", runestone.manaFeeds(),
+                "ability2CooldownMs", runeCooldownMillis,
+                "available", runestones.stream().map(LoreSocketManager.SocketedRunestone::itemId)
+                        .collect(java.util.stream.Collectors.joining(",")));
+        boolean started = LoreProcHandler.tryRunSocketedAbility(
+                store, commandBuffer, attackerRef, defenderRef, runestone.itemId(),
+                runestone.damageFeeds(), runestone.manaFeeds());
+        if (!started) {
+            RuneDeltaDebug.logKv(attacker, "proc.failed", "reason", "abilityStartRejected");
+            return;
+        }
+        if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.itemId())) {
+            SoulReaperTracker.clear(attacker.getUuid());
+        }
+        boolean cooldownStored = storeRuneDeltaCooldown(weaponContext, runeCooldownMillis);
+        // Keep the proc throttled even if the weapon metadata update is not visible
+        // to the next hit immediately.
+        markResonanceCooldown(attacker.getUuid(), "w_rune_delta", runeCooldownMillis);
+        LoreVisuals.tryApplyVisualEffect(store, attackerRef, SHOCK_EFFECT_IDS);
+        RuneDeltaDebug.logKv(attacker, "proc.success",
+                "cooldownMs", runeCooldownMillis,
+                "weaponCooldownStored", cooldownStored);
     }
 
     private void applyArmorResonanceOnHit(Store<EntityStore> store,
@@ -712,7 +754,7 @@ public class SocketEffectEST extends DamageEventSystem {
         return true;
     }
 
-    private boolean isResonanceOnCooldown(UUID uuid, String key) {
+    private static boolean isResonanceOnCooldown(UUID uuid, String key) {
         if (uuid == null || key == null || key.isBlank()) {
             return false;
         }
@@ -722,7 +764,7 @@ public class SocketEffectEST extends DamageEventSystem {
         return until != null && until > now;
     }
 
-    private boolean isRuneDeltaCooldownActive(ItemStack weapon) {
+    private static boolean isRuneDeltaCooldownActive(ItemStack weapon) {
         if (weapon == null || weapon.isEmpty()) {
             return false;
         }
@@ -730,8 +772,8 @@ public class SocketEffectEST extends DamageEventSystem {
         return until != null && until > System.currentTimeMillis();
     }
 
-    private boolean storeRuneDeltaCooldown(PlayerInventoryUtils.HeldItemContext weaponContext,
-                                           long cooldownMillis) {
+    private static boolean storeRuneDeltaCooldown(PlayerInventoryUtils.HeldItemContext weaponContext,
+                                                  long cooldownMillis) {
         if (weaponContext == null || !weaponContext.isValid()
                 || weaponContext.getContainer() == null || weaponContext.getSlot() < 0) {
             return false;
@@ -752,7 +794,7 @@ public class SocketEffectEST extends DamageEventSystem {
         }
     }
 
-    private void markResonanceCooldown(UUID uuid, String key, long cooldownMillis) {
+    private static void markResonanceCooldown(UUID uuid, String key, long cooldownMillis) {
         if (uuid == null || key == null || key.isBlank() || cooldownMillis <= 0L) {
             return;
         }
@@ -1036,7 +1078,7 @@ public class SocketEffectEST extends DamageEventSystem {
         return queued;
     }
 
-    private boolean isSamePlayer(Player a, Player b) {
+    private static boolean isSamePlayer(Player a, Player b) {
         if (a == null || b == null) {
             return false;
         }

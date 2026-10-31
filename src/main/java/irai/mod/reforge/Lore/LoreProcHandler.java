@@ -107,6 +107,7 @@ import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
+import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Entity.VolleyHomingArrowEntity;
@@ -125,6 +126,7 @@ import it.unimi.dsi.fastutil.Pair;
 public final class LoreProcHandler {
     private static final boolean DEBUG_LORE_PROCS = LoreDebug.ENABLED;
     private static final Map<String, Long> COOLDOWNS = new ConcurrentHashMap<>();
+    private static final Map<String, Long> CORE_SUPPORT_DIAGNOSTIC_AT = new ConcurrentHashMap<>();
     private static final Map<String, Long> READY_NOTIFICATION_AT = new ConcurrentHashMap<>();
     private static final long READY_NOTIFICATION_MIN_COOLDOWN_MS = 1500L;
     private static final Map<String, Set<Ref<EntityStore>>> WOLF_SUMMONS = new ConcurrentHashMap<>();
@@ -1259,6 +1261,39 @@ public final class LoreProcHandler {
                                                   Set<String> usedSpirits,
                                                   ProcState procState,
                                                   CommandBuffer<EntityStore> commandBuffer) {
+        return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, false);
+    }
+
+    private static boolean applyModifierRunestones(Store<EntityStore> store,
+                                                   Player self,
+                                                   Ref<EntityStore> selfRef,
+                                                   Ref<EntityStore> otherRef,
+                                                   Damage damage,
+                                                   List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                   LoreTrigger trigger,
+                                                   boolean selfIsAttacker,
+                                                   Set<String> usedSpirits,
+                                                   ProcState procState,
+                                                   CommandBuffer<EntityStore> commandBuffer,
+                                                   boolean executeImmediately) {
+        return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, executeImmediately, false);
+    }
+
+    private static boolean applyModifierRunestones(Store<EntityStore> store,
+                                                   Player self,
+                                                   Ref<EntityStore> selfRef,
+                                                   Ref<EntityStore> otherRef,
+                                                   Damage damage,
+                                                   List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                   LoreTrigger trigger,
+                                                   boolean selfIsAttacker,
+                                                   Set<String> usedSpirits,
+                                                   ProcState procState,
+                                                   CommandBuffer<EntityStore> commandBuffer,
+                                                   boolean executeImmediately,
+                                                   boolean guaranteedOnHit) {
         if (runestones == null || runestones.isEmpty()) {
             return false;
         }
@@ -1276,8 +1311,9 @@ public final class LoreProcHandler {
             socket.setLevel(runestone.level());
             socket.setFeedTier(runestone.feedTier());
         }
-        return applyLoreSockets(store, self, selfRef, otherRef, damage, data, trigger,
-                selfIsAttacker, usedSpirits, procState, commandBuffer);
+        return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, executeImmediately, executeImmediately,
+                guaranteedOnHit);
     }
 
     /** Applies lore socket effects on weapon ability use; infused soulstones can trigger here. */
@@ -1305,11 +1341,47 @@ public final class LoreProcHandler {
                                                     ProcState procState,
                                                     CommandBuffer<EntityStore> commandBuffer,
                                                     boolean allowDuringAbility1) {
+        return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, allowDuringAbility1, false);
+    }
+
+    private static boolean applyLoreSocketsInternal(Store<EntityStore> store,
+                                                    Player self,
+                                                    Ref<EntityStore> selfRef,
+                                                    Ref<EntityStore> otherRef,
+                                                    Damage damage,
+                                                    LoreSocketData data,
+                                                    LoreTrigger trigger,
+                                                    boolean selfIsAttacker,
+                                                    Set<String> usedSpirits,
+                                                    ProcState procState,
+                                                    CommandBuffer<EntityStore> commandBuffer,
+                                                    boolean allowDuringAbility1,
+                                                    boolean executeImmediately) {
+        return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, allowDuringAbility1,
+                executeImmediately, false);
+    }
+
+    private static boolean applyLoreSocketsInternal(Store<EntityStore> store,
+                                                    Player self,
+                                                    Ref<EntityStore> selfRef,
+                                                    Ref<EntityStore> otherRef,
+                                                    Damage damage,
+                                                    LoreSocketData data,
+                                                    LoreTrigger trigger,
+                                                    boolean selfIsAttacker,
+                                                    Set<String> usedSpirits,
+                                                    ProcState procState,
+                                                    CommandBuffer<EntityStore> commandBuffer,
+                                                    boolean allowDuringAbility1,
+                                                    boolean executeImmediately,
+                                                    boolean guaranteedOnHit) {
         if (store == null || self == null || data == null || trigger == null) {
             return false;
         }
         ProcCollectResult result = collectSocketProcs(store, self, selfRef, otherRef, damage, data, trigger,
-                selfIsAttacker, usedSpirits, procState, allowDuringAbility1);
+                selfIsAttacker, usedSpirits, procState, allowDuringAbility1, guaranteedOnHit);
         if (result == null || result.pending.isEmpty()) {
             return false;
         }
@@ -1318,7 +1390,7 @@ public final class LoreProcHandler {
         }
         int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
         return applyPendingLoreProcs(store, self, selfRef, otherRef, damage, selfIsAttacker, data, result,
-                maxLevel, commandBuffer);
+                maxLevel, commandBuffer, executeImmediately);
     }
 
     private static ProcCollectResult collectSocketProcs(Store<EntityStore> store,
@@ -1331,7 +1403,8 @@ public final class LoreProcHandler {
                                                         boolean selfIsAttacker,
                                                         Set<String> usedSpirits,
                                                         ProcState procState,
-                                                        boolean allowDuringAbility1) {
+                                                        boolean allowDuringAbility1,
+                                                        boolean guaranteedOnHit) {
         if (store == null || self == null || data == null || trigger == null) {
             return null;
         }
@@ -1407,10 +1480,27 @@ public final class LoreProcHandler {
             result.eligible.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
             if (!canAttemptEffect(store, damage, resolved, socket.getLevel(), socket.getFeedTier(),
                     selfIsAttacker, selfRef, otherRef)) {
+                if (guaranteedOnHit && trigger == LoreTrigger.ON_HIT) {
+                    logCoreSupportDiagnostic(playerId, spiritId,
+                            "ineligible: " + explainCoreSupportEligibilityFailure(store, damage, resolved,
+                                    socket.getLevel(), socket.getFeedTier(), selfIsAttacker, selfRef, otherRef));
+                }
                 continue;
             }
-            if (!tryProc(playerId, spiritId, resolved, socket.getFeedTier())) {
+            boolean procSucceeded = guaranteedOnHit && trigger == LoreTrigger.ON_HIT
+                    ? tryProcAlwaysOn(playerId, spiritId, resolved, socket.getFeedTier())
+                    : tryProc(playerId, spiritId, resolved, socket.getFeedTier());
+            if (!procSucceeded) {
+                if (guaranteedOnHit && trigger == LoreTrigger.ON_HIT) {
+                    logCoreSupportDiagnostic(playerId, spiritId,
+                            "cooldown: " + resolveProcCooldownRemainingMs(playerId, spiritId) + "ms remaining");
+                }
                 continue;
+            }
+
+            if (guaranteedOnHit && trigger == LoreTrigger.ON_HIT) {
+                System.out.println("[SocketReforge] Core support proc selected: spirit=" + spiritId
+                        + ", effect=" + resolved.getEffectType());
             }
 
             result.pending.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
@@ -1506,7 +1596,8 @@ public final class LoreProcHandler {
                                                  LoreSocketData data,
                                                  ProcCollectResult result,
                                                  int maxLevel,
-                                                 CommandBuffer<EntityStore> commandBuffer) {
+                                                 CommandBuffer<EntityStore> commandBuffer,
+                                                 boolean executeImmediately) {
         if (store == null || self == null || data == null || result == null || result.pending.isEmpty()) {
             return false;
         }
@@ -1555,7 +1646,11 @@ public final class LoreProcHandler {
                     changed |= applyProcXp(data, modifier, maxLevel, self, xpAwarded);
                 }
             }
-            enqueueLoreBatch(batch);
+            if (executeImmediately) {
+                executeBatchInline(batch);
+            } else {
+                enqueueLoreBatch(batch);
+            }
         } else {
             long durationMs = estimateBatchDurationMs(result.pending, null, null, null);
             LoreProcBatch batch = new LoreProcBatch(store, selfRef, otherRef, selfIsAttacker, result.playerId,
@@ -1563,7 +1658,11 @@ public final class LoreProcHandler {
             for (PendingLoreProc proc : result.pending) {
                 changed |= applyProcXp(data, proc, maxLevel, self, xpAwarded);
             }
-            enqueueLoreBatch(batch);
+            if (executeImmediately) {
+                executeBatchInline(batch);
+            } else {
+                enqueueLoreBatch(batch);
+            }
         }
 
         return changed;
@@ -1934,6 +2033,78 @@ public final class LoreProcHandler {
         };
     }
 
+    private static String explainCoreSupportEligibilityFailure(Store<EntityStore> store,
+                                                               Damage damage,
+                                                               LoreAbility ability,
+                                                               int level,
+                                                               int feedTier,
+                                                               boolean selfIsAttacker,
+                                                               Ref<EntityStore> selfRef,
+                                                               Ref<EntityStore> otherRef) {
+        if (ability == null) {
+            return "missing ability mapping";
+        }
+        if (otherRef == null || !otherRef.isValid()) {
+            return "no valid hit target";
+        }
+        if (ability.getEffectType() == LoreEffectType.APPLY_BLEED) {
+            if (resolveNpcAilmentMultiplier(store, otherRef, "bleed") <= 0.0d) {
+                return "target is bleed immune";
+            }
+            if (!canAttemptBossCounterAilmentReadOnly(store, otherRef, "bleed")) {
+                return "target bleed reapply is blocked";
+            }
+            Ref<EntityStore> bleedSource = selfRef;
+            Player player = bleedSource == null ? null
+                    : store.getComponent(bleedSource, Player.getComponentType());
+            ItemStack weapon = player == null ? null : PlayerInventoryUtils.getHeldItem(player);
+            if (weapon == null || weapon.isEmpty()) {
+                return "bleed source has no held weapon";
+            }
+            if (!ReforgeEquip.isWeapon(weapon)) {
+                return "held item is not recognized as a weapon: " + weapon.getItemId();
+            }
+            int safeFeedTier = Math.max(0, feedTier);
+            float baseDamage = selfIsAttacker && damage != null && damage.getAmount() > 0f
+                    ? damage.getAmount() : (float) Math.max(0.0d, ability.getValueForLevel(level));
+            if (calculateBleedDamagePerTick(store, bleedSource, otherRef, baseDamage, safeFeedTier) <= 0f) {
+                return "calculated bleed damage is zero";
+            }
+        }
+        if (ability.getEffectType() == LoreEffectType.APPLY_FREEZE
+                && resolveNpcAilmentMultiplier(store, otherRef, "freeze") <= 0.0d) {
+            return "target is freeze immune";
+        }
+        return "effect target eligibility rejected";
+    }
+
+    private static long resolveProcCooldownRemainingMs(UUID playerId, String spiritId) {
+        if (playerId == null || spiritId == null) {
+            return 0L;
+        }
+        Long until = COOLDOWNS.get(playerId + "|" + LoreIds.normalizeSpiritId(spiritId));
+        return until == null ? 0L : Math.max(0L, until - System.currentTimeMillis());
+    }
+
+    private static void logCoreSupportDiagnostic(UUID playerId, String spiritId, String detail) {
+        if (playerId == null || spiritId == null || detail == null) {
+            return;
+        }
+        String key = playerId + "|" + LoreIds.normalizeSpiritId(spiritId);
+        long now = System.currentTimeMillis();
+        boolean[] shouldLog = new boolean[1];
+        CORE_SUPPORT_DIAGNOSTIC_AT.compute(key, (ignored, previous) -> {
+            if (previous == null || now - previous >= 1000L) {
+                shouldLog[0] = true;
+                return now;
+            }
+            return previous;
+        });
+        if (shouldLog[0]) {
+            System.out.println("[SocketReforge] Core support blocked: spirit=" + spiritId + ", " + detail);
+        }
+    }
+
     private static boolean tryProc(UUID playerId, String spiritId, LoreAbility ability, int feedTier) {
         if (playerId == null || spiritId == null || ability == null) {
             return false;
@@ -2175,13 +2346,25 @@ public final class LoreProcHandler {
                     long durationMs = scaleAilmentDuration(resolveStunFreezeDurationMs(value, safeFeedTier), ailmentMultiplier);
                     if (durationMs > 0L) {
                         if (!canApplyBossCounterAilment(store, opponentRef, "freeze")) {
+                            if (primaryProc) {
+                                System.out.println("[SocketReforge] Lore status not applied: spirit=" + spiritId
+                                        + ", effect=APPLY_FREEZE, reason=target-counter");
+                            }
                             break;
                         }
                         applyFrozenForDuration(store, opponentRef, durationMs);
                         onBossCounterAilmentApplied(store, opponentRef, "freeze");
                         applyFreezeModifierPulse(store, selfRef, opponentRef, damageAmount, safeFeedTier,
                                 Math.min(3, Math.max(1, (int) (durationMs / 1000L))));
+                        if (primaryProc) {
+                            System.out.println("[SocketReforge] Lore status applied: spirit=" + spiritId
+                                    + ", effect=APPLY_FREEZE, durationMs=" + durationMs);
+                        }
                     } else {
+                        if (primaryProc) {
+                            System.out.println("[SocketReforge] Lore status not applied: spirit=" + spiritId
+                                    + ", effect=APPLY_FREEZE, reason=zero-duration-or-immune");
+                        }
                         break;
                     }
                 }
@@ -2207,7 +2390,15 @@ public final class LoreProcHandler {
                 boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, bleedDamageBase,
                         safeFeedTier, ailmentMultiplier);
                 if (!bleedApplied) {
+                    if (primaryProc) {
+                        System.out.println("[SocketReforge] Lore status not applied: spirit=" + spiritId
+                                + ", effect=APPLY_BLEED, reason=target-counter-or-zero-damage");
+                    }
                     break;
+                }
+                if (primaryProc) {
+                    System.out.println("[SocketReforge] Lore status applied: spirit=" + spiritId
+                            + ", effect=APPLY_BLEED");
                 }
                 LoreVisuals.tryApplyVisualEffect(store, opponentRef, BLEED_EFFECT_IDS);
                 markFinaleTarget(SHRAPNEL_FINALE_MARKS, playerId, spiritId, opponentRef, store, damageAmount, safeFeedTier);
@@ -2617,7 +2808,7 @@ public final class LoreProcHandler {
                                                 String runestoneItemId,
                                                 int damageFeeds,
                                                 int manaFeeds) {
-        if (store == null || commandBuffer == null || attackerRef == null
+        if (store == null || attackerRef == null
                 || targetRef == null || runestoneItemId == null || runestoneItemId.isBlank()) {
             return false;
         }
@@ -4934,11 +5125,13 @@ public final class LoreProcHandler {
             }
         }
         float actualPerHit = sequence.perHit * multiplier;
+        // Apply on-hit support while the selected target is still alive; scripted lore damage
+        // can update health immediately and otherwise make status modifiers miss lethal hits.
+        applyCoreAbilitySupportRunestones(store, sequence.attackerRef, targetRef,
+                sequence.supportRunestones, LoreTrigger.ON_HIT);
         LoreDamageUtils.applyLoreDamage(store, sequence.attackerRef, targetRef, actualPerHit, sequence.skipRefine,
                 sequence.feedTier);
         queueAbilityHitWeaponLores(store, sequence.attackerRef, targetRef);
-        applyCoreAbilitySupportRunestones(store, sequence.attackerRef, targetRef,
-                sequence.supportRunestones, LoreTrigger.ON_HIT);
         tryApplyGroundslamAugment(store, sequence.attackerRef, targetRef);
         sequence.hitsApplied++;
         if (sequence.hitsApplied < sequence.totalHits) {
@@ -6330,10 +6523,11 @@ public final class LoreProcHandler {
                                             float damage,
                                             int feedTier,
                                             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, damage, true, feedTier);
-        queueAbilityHitWeaponLores(store, attackerRef, targetRef);
+        // Apply hit modifiers before scripted damage can kill or invalidate the target.
         applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
                 supportRunestones, LoreTrigger.ON_HIT);
+        LoreDamageUtils.applyLoreDamage(store, attackerRef, targetRef, damage, true, feedTier);
+        queueAbilityHitWeaponLores(store, attackerRef, targetRef);
     }
 
     private static void applyCoreAbilitySupportRunestones(
@@ -6400,7 +6594,7 @@ public final class LoreProcHandler {
         }
         for (String effectId : modifiers.onHitEffectIds) {
             if (effectId != null && !effectId.isBlank()) {
-                LoreVisuals.tryApplyVisualEffect(store, targetRef, effectId);
+                LoreVisuals.tryApplyCoreAbilityNativeHitEffect(store, targetRef, effectId);
             }
         }
     }
@@ -6526,10 +6720,10 @@ public final class LoreProcHandler {
         Set<String> used = new HashSet<>();
         ProcState procState = new ProcState();
         applyModifierRunestones(store, attacker, attackerRef, targetRef, damage,
-                supportRunestones, trigger, true, used, procState, commandBuffer);
+                supportRunestones, trigger, true, used, procState, commandBuffer, true, true);
         if (procState.hasTriggered()) {
             applyModifierRunestones(store, attacker, attackerRef, targetRef, damage,
-                    supportRunestones, LoreTrigger.ON_LORE_PROC, true, used, null, commandBuffer);
+                    supportRunestones, LoreTrigger.ON_LORE_PROC, true, used, null, commandBuffer, true, true);
         }
     }
 
@@ -7363,6 +7557,12 @@ public final class LoreProcHandler {
         float actualPerHit = sequence.perHit * multiplier;
         sequence.pendingTargetRef = null;
         sequence.pendingHitIndex = -1;
+        // The rune interaction snapshots core support runestones when cast, but each
+        // scripted slash must execute their ON_HIT effects explicitly. LoreDamageUtils
+        // routes native item effects through LoreEffectEST; this covers SocketReforge
+        // support runestones that the normal damage-event path does not dispatch.
+        applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
+                sequence.supportRunestones, LoreTrigger.ON_HIT);
         LoreDamageUtils.applyLoreWeaponAbilityDamage(store, attackerRef, targetRef,
                 actualPerHit, sequence.feedTier);
         captureOmnislashEnrageOrb(store, attackerRef, targetRef,
@@ -7410,6 +7610,8 @@ public final class LoreProcHandler {
         if (weapon == null || weapon.isEmpty() || !LoreSocketManager.isEquipment(weapon)) {
             return;
         }
+        SocketEffectEST.tryApplyRuneDeltaOnAbilityHit(store, attackerRef, targetRef,
+                weapon, context);
         captureVolleyRuneArrow(store, attackerRef, targetRef);
         LoreSocketData data = LoreSocketManager.getLoreSocketData(weapon);
         if (data == null) {

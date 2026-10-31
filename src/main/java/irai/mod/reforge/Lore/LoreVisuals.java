@@ -2,6 +2,8 @@ package irai.mod.reforge.Lore;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -28,6 +30,8 @@ import org.joml.Vector3d;
  */
 public final class LoreVisuals {
     private static final boolean DEBUG_LORE_PROCS = LoreDebug.ENABLED;
+    private static final long NATIVE_CORE_EFFECT_LOG_INTERVAL_MS = 5_000L;
+    private static final Map<String, Long> NATIVE_CORE_EFFECT_LOG_AT = new ConcurrentHashMap<>();
     private static volatile ScheduledExecutorService scheduler;
 
     private LoreVisuals() {}
@@ -46,6 +50,29 @@ public final class LoreVisuals {
         }
         EntityStore entityStore = store.getExternalData();
         Runnable task = () -> applyVisualEffectInternal(store, targetRef, effectIds);
+        if (entityStore != null && entityStore.getWorld() != null) {
+            entityStore.getWorld().execute(task);
+        } else {
+            task.run();
+        }
+    }
+
+    /** Applies a native SupportItemAbility effect and reports whether its EntityEffect asset resolved. */
+    public static void tryApplyCoreAbilityNativeHitEffect(Store<EntityStore> store,
+                                                          Ref<EntityStore> targetRef,
+                                                          String effectId) {
+        if (effectId == null || effectId.isBlank()) {
+            return;
+        }
+        if (store == null || targetRef == null || store.isShutdown()) {
+            if (shouldLogNativeCoreEffect(effectId)) {
+                System.out.println("[SocketReforge] Native core hit effect skipped: id=" + effectId
+                        + ", reason=invalid-store-or-target");
+            }
+            return;
+        }
+        EntityStore entityStore = store.getExternalData();
+        Runnable task = () -> applyVisualEffectInternal(store, targetRef, true, effectId);
         if (entityStore != null && entityStore.getWorld() != null) {
             entityStore.getWorld().execute(task);
         } else {
@@ -99,23 +126,59 @@ public final class LoreVisuals {
     private static void applyVisualEffectInternal(Store<EntityStore> store,
                                                   Ref<EntityStore> targetRef,
                                                   String... effectIds) {
+        applyVisualEffectInternal(store, targetRef, false, effectIds);
+    }
+
+    private static void applyVisualEffectInternal(Store<EntityStore> store,
+                                                  Ref<EntityStore> targetRef,
+                                                  boolean logNativeCoreEffect,
+                                                  String... effectIds) {
         try {
             EntityEffect effect = resolveEntityEffect(effectIds);
             if (effect == null) {
                 LoreDebug.logKv("vfx.missing", "ids", String.join(",", effectIds));
+                if (logNativeCoreEffect && shouldLogNativeCoreEffect(String.join(",", effectIds))) {
+                    System.out.println("[SocketReforge] Native core hit effect missing: ids="
+                            + String.join(",", effectIds));
+                }
                 return;
             }
             EffectControllerComponent controller =
                     store.ensureAndGetComponent(targetRef, EffectControllerComponent.getComponentType());
             if (controller == null) {
                 LoreDebug.log("vfx.skip", "reason=noEffectController");
+                if (logNativeCoreEffect && shouldLogNativeCoreEffect(effect.getId())) {
+                    System.out.println("[SocketReforge] Native core hit effect skipped: id=" + effect.getId()
+                            + ", reason=no-effect-controller");
+                }
                 return;
             }
             controller.addEffect(targetRef, effect, store);
             LoreDebug.logKv("vfx.apply", "id", effect.getId());
-        } catch (Throwable ignored) {
+            if (logNativeCoreEffect && shouldLogNativeCoreEffect(effect.getId())) {
+                System.out.println("[SocketReforge] Native core hit effect applied: id=" + effect.getId());
+            }
+        } catch (Throwable throwable) {
+            if (logNativeCoreEffect && shouldLogNativeCoreEffect(String.join(",", effectIds))) {
+                System.out.println("[SocketReforge] Native core hit effect failed: id="
+                        + String.join(",", effectIds) + ", reason=" + throwable.getClass().getSimpleName());
+            }
             // Optional.
         }
+    }
+
+    private static boolean shouldLogNativeCoreEffect(String effectId) {
+        String key = effectId == null ? "unknown" : effectId.toLowerCase(Locale.ROOT);
+        long now = System.currentTimeMillis();
+        boolean[] shouldLog = {false};
+        NATIVE_CORE_EFFECT_LOG_AT.compute(key, (ignored, previous) -> {
+            if (previous == null || now - previous >= NATIVE_CORE_EFFECT_LOG_INTERVAL_MS) {
+                shouldLog[0] = true;
+                return now;
+            }
+            return previous;
+        });
+        return shouldLog[0];
     }
 
     private static void applyTimedVisualEffectInternal(Store<EntityStore> store,
