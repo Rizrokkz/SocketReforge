@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Volley core rune** - Added a five-second arrow-gathering ability: hits store homing arrows that launch when the effect ends, with feed-tiered arrow counts and fork/ricochet behavior.
     - **Grand Slam rune** - Added a lower-tier, no-jump ground smash; the higher-tier rune keeps its leap-and-slam attack.
     - **Razorstrike core rune** - Added a targetless forward dash that damages enemies along its path and leaves six delayed rubble spikes that explode in sequence, with a dedicated dash animation and screen effect.
-
+    - **VortexStrike** - Vacuum enemies and spin kick to push them away. Distant pulled enemies receive more damage. 
 ### Changed
 - **Lore proc handling** - Preserved passive lore procs while allowing the new ability runes to be equipped and activated separately. Rune Delta continues to activate socketed runes through its existing system.
 - **Lore feedback and effects** - Added lore-ready naming and localized messages, plus configurable hit effects and animations for the new abilities.
