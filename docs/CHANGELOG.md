@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Razorstrike core rune** - Added a targetless forward dash that damages enemies along its path and leaves six delayed rubble spikes that explode in sequence, with a dedicated dash animation and screen effect.
     - **VortexStrike** - Vacuum enemies and spin kick to push them away. Distant pulled enemies receive more damage. 
 ### Changed
+- **Legacy lore migration** - Convert existing spirit sockets into matching infused Soulstones when a player joins or socketed equipment enters their inventory, keeping the socket's spirit and progression metadata for the Soulstone-based lore system.
+- **Legacy absorbed lore cleanup** - Clear deprecated player-level absorbed lore data on join and suppress procs from that obsolete source.
 - **Lore proc handling** - Preserved passive lore procs while allowing the new ability runes to be equipped and activated separately. Rune Delta continues to activate socketed runes through its existing system.
 - **Lore feedback and effects** - Added lore-ready naming and localized messages, plus configurable hit effects and animations for the new abilities.
 
