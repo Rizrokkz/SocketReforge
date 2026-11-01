@@ -63,7 +63,7 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
             return;
         }
 
-        captureCoreRuneCompatibility(store, playerRef, interaction, commandBuffer);
+        captureCoreRuneCompatibility(store, playerRef, interaction, event.getType(), commandBuffer);
 
         PlayerInventoryUtils.HeldItemContext heldContext = PlayerInventoryUtils.getHeldItemContext(player);
         if (heldContext == null || !heldContext.isValid()) {
@@ -106,6 +106,7 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
     private void captureCoreRuneCompatibility(Store<EntityStore> store,
                                               Ref<EntityStore> playerRef,
                                               InteractionContext interaction,
+                                              InteractionType interactionType,
                                               CommandBuffer<EntityStore> commandBuffer) {
         ItemStack coreRune = interaction.getHeldItem();
         if (coreRune == null || coreRune.isEmpty() || coreRune.getItem() == null
@@ -132,6 +133,7 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
         LoreProcHandler.beginForeignCoreAbilitySupport(store, playerRef,
                 interaction.getTargetEntity(),
                 CoreAbilityRune.readEquippedSupportRunestones(interaction, playerRef, store, coreRune),
+                interactionType,
                 commandBuffer);
     }
 

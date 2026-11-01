@@ -348,6 +348,12 @@ public final class LoreGemRegistry {
     public static Map<String, String> getSpiritColorMapSnapshot() {
         Map<String, String> map = spiritColorMap;
         if (map == null || map.isEmpty()) {
+            // The registry can initialize before NPC spawn assets are ready. Map
+            // commands are an explicit request, so retry the asset scan here.
+            refreshNpcPools(true);
+            map = spiritColorMap;
+        }
+        if (map == null || map.isEmpty()) {
             return Map.of();
         }
         return Map.copyOf(map);

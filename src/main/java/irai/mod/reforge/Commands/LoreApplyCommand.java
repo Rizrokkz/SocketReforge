@@ -20,6 +20,7 @@ import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreSoulstoneUtils;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
@@ -78,6 +79,11 @@ public class LoreApplyCommand extends CommandBase {
             context.sendMessage(Message.raw("Invalid spirit id."));
             return;
         }
+        ItemStack infusedSoulstone = LoreSoulstoneUtils.createInfusedSoulstone(spiritId);
+        if (infusedSoulstone == null || infusedSoulstone.isEmpty()) {
+            context.sendMessage(Message.raw("That spirit has no mapped infused soulstone color."));
+            return;
+        }
 
         int slotIndex = resolveSlotIndex(data, context);
         if (slotIndex < 0 || slotIndex >= data.getSocketCount()) {
@@ -94,20 +100,16 @@ public class LoreApplyCommand extends CommandBase {
             return;
         }
         String spiritColor = LoreGemRegistry.resolveSpiritColor(spiritId);
+        if (spiritColor == null || spiritColor.isBlank()) {
+            context.sendMessage(Message.raw("That spirit has no mapped soulstone color."));
+            return;
+        }
         if (socket.hasSpirit()) {
             context.sendMessage(Message.raw("That socket already has a spirit. Clear it first."));
             return;
         }
 
         if (socket.isEmpty()) {
-            if (spiritColor == null || spiritColor.isBlank()) {
-                spiritColor = "unknown";
-            }
-            String gemItemId = LoreGemRegistry.resolveGemItemIdForColor(spiritColor);
-            if (gemItemId == null || gemItemId.isBlank()) {
-                gemItemId = "lore_gem_" + spiritColor.toLowerCase(Locale.ROOT);
-            }
-            socket.setGemItemId(gemItemId);
             if (socket.getColor() == null || socket.getColor().isBlank()) {
                 socket.setColor(spiritColor.toLowerCase(Locale.ROOT));
             }
@@ -129,6 +131,9 @@ public class LoreApplyCommand extends CommandBase {
                 socket.setColor(gemColor.toLowerCase(Locale.ROOT));
             }
         }
+        // Match the normal socket UI: keep the infused soulstone item ID on the
+        // socket so soulstone-specific trigger and rune-mapping behavior applies.
+        socket.setGemItemId(infusedSoulstone.getItemId());
         socket.setSpiritId(spiritId);
         socket.setEffectOverride("");
         socket.setLevel(Math.max(1, socket.getLevel()));
@@ -154,8 +159,11 @@ public class LoreApplyCommand extends CommandBase {
         String effectLabel = ability == null || ability.getEffectType() == null
                 ? "unknown"
                 : ability.getEffectType().name();
-        context.sendMessage(Message.raw("Applied spirit " + spiritId + " to socket " + (slotIndex + 1)
-                + " (" + effectLabel + ")."));
+        String mappedRune = LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId,
+                Math.max(0, socket.getFeedTier()));
+        String detail = mappedRune == null ? effectLabel : effectLabel + ", mapped rune=" + mappedRune;
+        context.sendMessage(Message.raw("Applied infused soulstone " + spiritId + " to socket " + (slotIndex + 1)
+                + " (" + detail + ")."));
     }
 
     private int resolveSlotIndex(LoreSocketData data, CommandContext context) {

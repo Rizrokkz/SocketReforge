@@ -2,7 +2,6 @@ package irai.mod.reforge.Entity.Events;
 
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import com.hypixel.hytale.component.CommandBuffer;
@@ -22,7 +21,6 @@ import com.hypixel.hytale.server.npc.role.Role;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
-import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
@@ -149,7 +147,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         String zoneName = zoneInfo == null ? null : zoneInfo.zoneName();
         String regionName = zoneInfo == null ? null : zoneInfo.regionName();
         String biomeName = tracker == null ? null : tracker.getCurrentBiomeName();
-        boolean changed = assignSpirits(attacker, data, descriptor, npcRoleId, zoneName, regionName, biomeName);
+        boolean changed = assignSpirits(data, descriptor, npcRoleId, zoneName, regionName, biomeName);
         boolean firstKill = changed;
 
         Set<String> used = new HashSet<>();
@@ -164,13 +162,6 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
             changed |= LoreProcHandler.applySocketedModifierRunestones(store, attacker, attackerRef, ref,
                     null, weapon, LoreTrigger.ON_KILL, true, used, procState, commandBuffer);
         }
-        if (firstKill) {
-            LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, ref,
-                    null, LoreTrigger.ON_FIRST_KILL, true, used, procState, commandBuffer);
-        }
-        LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, ref,
-                null, LoreTrigger.ON_KILL, true, used, procState, commandBuffer);
-
         if (procState.hasTriggered()) {
             changed |= LoreProcHandler.applyLoreProcChain(store, attacker, attackerRef, ref,
                     null, data, true, used, commandBuffer);
@@ -183,14 +174,13 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
         }
     }
 
-    private boolean assignSpirits(Player attacker,
-                                  LoreSocketData data,
+    private boolean assignSpirits(LoreSocketData data,
                                   String descriptor,
                                   String npcRoleId,
                                   String zoneName,
                                   String regionName,
                                   String biomeName) {
-        if (attacker == null || data == null) {
+        if (data == null) {
             return false;
         }
         boolean changed = false;
@@ -244,7 +234,6 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
                 } else {
                 spiritId = pickSpiritForKill(descriptor, color, zoneName, regionName, biomeName);
             }
-                spiritId = ensureUniqueSpirit(attacker, spiritId, color, descriptor, zoneName, regionName, biomeName, i);
                 if (spiritId == null || spiritId.isBlank()) {
                     continue;
                 }
@@ -350,35 +339,6 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
 
     private String safeString(String value) {
         return value == null ? "" : value;
-    }
-
-    private String ensureUniqueSpirit(Player attacker,
-                                      String spiritId,
-                                      String color,
-                                      String descriptor,
-                                      String zoneName,
-                                      String regionName,
-                                      String biomeName,
-                                      int slotIndex) {
-        if (attacker == null || spiritId == null || spiritId.isBlank()) {
-            return spiritId;
-        }
-        if (!LoreAbsorptionStore.isAbsorbed(attacker.getUuid(), spiritId)) {
-            return spiritId;
-        }
-
-        List<String> pool = LoreGemRegistry.getAllowedSpirits(color, null, null, null);
-        for (String candidate : pool) {
-            if (!LoreAbsorptionStore.isAbsorbed(attacker.getUuid(), candidate)) {
-                return candidate;
-            }
-        }
-
-        if (descriptor == null || descriptor.isBlank()) {
-            return spiritId;
-        }
-        String suffix = Integer.toHexString(Math.abs((descriptor + slotIndex).hashCode()));
-        return spiritId + "_" + suffix;
     }
 
     private String resolveSpiritDescriptor(Store<EntityStore> store,
@@ -521,7 +481,7 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> EFFECT_TIER_4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
                     SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, RUNE_OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
-                    CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> EFFECT_TIER_5;
+                    CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE, CORE_ABILITY_RUNE -> EFFECT_TIER_5;
         };
     }
 

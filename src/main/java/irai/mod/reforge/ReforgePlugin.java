@@ -93,6 +93,7 @@ import irai.mod.reforge.Entity.Events.LootSocketRoller;
 import irai.mod.reforge.Entity.Events.LoreEffectEST;
 import irai.mod.reforge.Entity.Events.LoreKillEST;
 import irai.mod.reforge.Entity.Events.LorePlayerStateEST;
+import irai.mod.reforge.Entity.Events.LoreSoulstoneMigrationInventoryChangeEST;
 import irai.mod.reforge.Entity.Events.LoreSkillUseEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
@@ -177,6 +178,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final ResonantRecipeCraftingEST resonantRecipeCraftingEST;
     private final WeaponAffinityAppearanceInventoryEventEST weaponAffinityAppearanceInventoryEventEST;
     private final WeaponAffinityAppearanceInventoryChangeEST weaponAffinityAppearanceInventoryChangeEST;
+    private final LoreSoulstoneMigrationInventoryChangeEST loreSoulstoneMigrationInventoryChangeEST;
     private ReforgeEquip reforgeEquip;
 
     // Static reference for commands to access plugin
@@ -230,6 +232,7 @@ public class ReforgePlugin extends JavaPlugin {
         resonantRecipeCraftingEST = new ResonantRecipeCraftingEST();
         weaponAffinityAppearanceInventoryEventEST = new WeaponAffinityAppearanceInventoryEventEST();
         weaponAffinityAppearanceInventoryChangeEST = new WeaponAffinityAppearanceInventoryChangeEST();
+        loreSoulstoneMigrationInventoryChangeEST = new LoreSoulstoneMigrationInventoryChangeEST();
         this.configService = new ConfigService("ReforgePlugin");
         this.sfxconfig = this.withConfig("SFXConfig", SFXConfig.CODEC);
         this.refinementConfig = this.withConfig("RefinementConfig", RefinementConfig.CODEC);
@@ -443,6 +446,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(resonantRecipeCraftingEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryEventEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryChangeEST);
+        this.getEntityStoreRegistry().registerSystem(loreSoulstoneMigrationInventoryChangeEST);
 
         systemsRegistered = true;
         disableUnsafeBuiltinHitAnimation();

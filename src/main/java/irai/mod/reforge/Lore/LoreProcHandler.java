@@ -24,6 +24,7 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.RemoveReason;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import org.joml.Vector3d;
@@ -47,6 +48,7 @@ import com.hypixel.hytale.server.core.modules.entity.player.PlayerSettings;
 import com.hypixel.hytale.server.core.modules.entity.player.PlayerSkinComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
+import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.teleport.Teleport;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
@@ -112,6 +114,7 @@ import irai.mod.reforge.Socket.RuneDeltaDebug;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.LangLoader;
+import irai.mod.reforge.Util.MetadataKeys;
 
 import it.unimi.dsi.fastutil.Pair;
 
@@ -229,7 +232,8 @@ public final class LoreProcHandler {
     private static final long PUMMEL_RUNE_TIMEOUT_MS = 8000L;
     private static final long PUMMEL_RUNE_SEQUENCE_GUARD_MS = 900L;
     private static final long PUMMEL_RUNE_STUN_MS = 1200L;
-    private static final double PUMMEL_RUNE_TARGET_RADIUS = 8.0d;
+    private static final double PUMMEL_RUNE_MELEE_RANGE = 3.5d;
+    private static final double PUMMEL_RUNE_MIN_FACING_DOT = 0.7071067811865476d;
     private static final double PUMMEL_RUNE_KNOCKBACK_FORCE = 7.0d;
     private static final double BLOOD_RUSH_TARGET_RADIUS = 8.0d;
     private static final float BLOOD_RUSH_BASE_DAMAGE_PER_HIT = 0.30f;
@@ -696,6 +700,7 @@ public final class LoreProcHandler {
         final String spiritId;
         final int level;
         final int feedTier;
+        final String origin;
         int remainingHits;
         long expiresAt;
 
@@ -704,6 +709,7 @@ public final class LoreProcHandler {
                           String spiritId,
                           int level,
                           int feedTier,
+                          String origin,
                           int remainingHits,
                           long expiresAt) {
             this.playerId = playerId;
@@ -711,6 +717,7 @@ public final class LoreProcHandler {
             this.spiritId = spiritId;
             this.level = level;
             this.feedTier = feedTier;
+            this.origin = origin;
             this.remainingHits = remainingHits;
             this.expiresAt = expiresAt;
         }
@@ -722,26 +729,31 @@ public final class LoreProcHandler {
         final int level;
         final int feedTier;
         final int socketIndex;
+        final String origin;
 
-        PendingLoreProc(LoreAbility ability, String spiritId, int level, int feedTier, int socketIndex) {
+        PendingLoreProc(LoreAbility ability, String spiritId, int level, int feedTier,
+                        int socketIndex, String origin) {
             this.ability = ability;
             this.spiritId = spiritId;
             this.level = level;
             this.feedTier = feedTier;
             this.socketIndex = socketIndex;
+            this.origin = origin;
         }
     }
 
     private static final class ProcCollectResult {
         final UUID playerId;
         final boolean ability1Active;
+        final String origin;
         final List<PendingLoreProc> pending = new ArrayList<>();
         final List<PendingLoreProc> eligible = new ArrayList<>();
         boolean synergyCatalyst;
 
-        ProcCollectResult(UUID playerId, boolean ability1Active) {
+        ProcCollectResult(UUID playerId, boolean ability1Active, String origin) {
             this.playerId = playerId;
             this.ability1Active = ability1Active;
+            this.origin = origin;
         }
     }
 
@@ -934,13 +946,16 @@ public final class LoreProcHandler {
     private static final class ForeignCoreAbilitySupport {
         final Ref<EntityStore> ownerRef;
         final List<LoreSocketManager.SocketedModifierRunestone> runestones;
+        final InteractionType interactionType;
         final long expiresAtMs;
 
         ForeignCoreAbilitySupport(Ref<EntityStore> ownerRef,
                                   List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                  InteractionType interactionType,
                                   long expiresAtMs) {
             this.ownerRef = ownerRef;
             this.runestones = runestones == null || runestones.isEmpty() ? List.of() : List.copyOf(runestones);
+            this.interactionType = interactionType;
             this.expiresAtMs = expiresAtMs;
         }
     }
@@ -1129,7 +1144,8 @@ public final class LoreProcHandler {
         List<LoreSocketManager.SocketedModifierRunestone> runestones =
                 LoreSocketManager.getSocketedModifierRunestones(weapon);
         return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones,
-                trigger, selfIsAttacker, usedSpirits, procState, commandBuffer);
+                trigger, selfIsAttacker, usedSpirits, procState, commandBuffer, false, false,
+                "weapon_modifier_runestone");
     }
 
     /** Applies modifier runestones supplied by a Core ability's Support slots. */
@@ -1145,7 +1161,8 @@ public final class LoreProcHandler {
                                                   ProcState procState,
                                                   CommandBuffer<EntityStore> commandBuffer) {
         return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones, trigger,
-                selfIsAttacker, usedSpirits, procState, commandBuffer, false);
+                selfIsAttacker, usedSpirits, procState, commandBuffer, false, false,
+                "ability_support_runestone");
     }
 
     private static boolean applyModifierRunestones(Store<EntityStore> store,
@@ -1177,6 +1194,25 @@ public final class LoreProcHandler {
                                                    CommandBuffer<EntityStore> commandBuffer,
                                                    boolean executeImmediately,
                                                    boolean guaranteedOnHit) {
+        return applyModifierRunestones(store, self, selfRef, otherRef, damage, runestones, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, executeImmediately,
+                guaranteedOnHit, executeImmediately ? "ability_support_runestone" : "modifier_runestone");
+    }
+
+    private static boolean applyModifierRunestones(Store<EntityStore> store,
+                                                   Player self,
+                                                   Ref<EntityStore> selfRef,
+                                                   Ref<EntityStore> otherRef,
+                                                   Damage damage,
+                                                   List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                   LoreTrigger trigger,
+                                                   boolean selfIsAttacker,
+                                                   Set<String> usedSpirits,
+                                                   ProcState procState,
+                                                   CommandBuffer<EntityStore> commandBuffer,
+                                                   boolean executeImmediately,
+                                                   boolean guaranteedOnHit,
+                                                   String origin) {
         if (runestones == null || runestones.isEmpty()) {
             return false;
         }
@@ -1196,7 +1232,7 @@ public final class LoreProcHandler {
         }
         return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger,
                 selfIsAttacker, usedSpirits, procState, commandBuffer, executeImmediately, executeImmediately,
-                guaranteedOnHit);
+                guaranteedOnHit, origin);
     }
 
     /** Applies lore socket effects on weapon ability use; infused soulstones can trigger here. */
@@ -1209,7 +1245,8 @@ public final class LoreProcHandler {
                                                    ProcState procState,
                                                    CommandBuffer<EntityStore> commandBuffer) {
         return applyLoreSocketsInternal(store, self, selfRef, targetRef, null, data,
-                LoreTrigger.ON_SKILL_USE, true, usedSpirits, procState, commandBuffer, true);
+                LoreTrigger.ON_SKILL_USE, true, usedSpirits, procState, commandBuffer,
+                true, false, false, "weapon_lore_skill_use");
     }
 
     private static boolean applyLoreSocketsInternal(Store<EntityStore> store,
@@ -1260,11 +1297,31 @@ public final class LoreProcHandler {
                                                     boolean allowDuringAbility1,
                                                     boolean executeImmediately,
                                                     boolean guaranteedOnHit) {
+        return applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data, trigger,
+                selfIsAttacker, usedSpirits, procState, commandBuffer, allowDuringAbility1,
+                executeImmediately, guaranteedOnHit, "weapon_lore_slot");
+    }
+
+    private static boolean applyLoreSocketsInternal(Store<EntityStore> store,
+                                                    Player self,
+                                                    Ref<EntityStore> selfRef,
+                                                    Ref<EntityStore> otherRef,
+                                                    Damage damage,
+                                                    LoreSocketData data,
+                                                    LoreTrigger trigger,
+                                                    boolean selfIsAttacker,
+                                                    Set<String> usedSpirits,
+                                                    ProcState procState,
+                                                    CommandBuffer<EntityStore> commandBuffer,
+                                                    boolean allowDuringAbility1,
+                                                    boolean executeImmediately,
+                                                    boolean guaranteedOnHit,
+                                                    String origin) {
         if (store == null || self == null || data == null || trigger == null) {
             return false;
         }
         ProcCollectResult result = collectSocketProcs(store, self, selfRef, otherRef, damage, data, trigger,
-                selfIsAttacker, usedSpirits, procState, allowDuringAbility1, guaranteedOnHit);
+                selfIsAttacker, usedSpirits, procState, allowDuringAbility1, guaranteedOnHit, origin);
         if (result == null || result.pending.isEmpty()) {
             return false;
         }
@@ -1287,7 +1344,8 @@ public final class LoreProcHandler {
                                                         Set<String> usedSpirits,
                                                         ProcState procState,
                                                         boolean allowDuringAbility1,
-                                                        boolean guaranteedOnHit) {
+                                                        boolean guaranteedOnHit,
+                                                        String origin) {
         if (store == null || self == null || data == null || trigger == null) {
             return null;
         }
@@ -1299,7 +1357,12 @@ public final class LoreProcHandler {
         boolean onHitDuringAbility1 = trigger == LoreTrigger.ON_HIT;
         boolean blockLoreDuringAbility1 = ability1Active && !allowDuringAbility1
                 && !onHitDuringAbility1;
-        ProcCollectResult result = new ProcCollectResult(playerId, blockLoreDuringAbility1);
+        String resolvedOrigin = origin == null || origin.isBlank() ? "unknown" : origin;
+        ProcCollectResult result = new ProcCollectResult(playerId, blockLoreDuringAbility1, resolvedOrigin);
+        if (isLegacyAbsorbedLoreOrigin(resolvedOrigin)) {
+            clearBlockedLegacyAbsorbedProc(playerId, resolvedOrigin);
+            return result;
+        }
         if (blockLoreDuringAbility1) {
             LoreDebug.logKv("proc.skip", "reason", "Ability1Active", "player", playerId);
             return result;
@@ -1324,7 +1387,10 @@ public final class LoreProcHandler {
             if (triggerAbility == null) {
                 continue;
             }
-            LoreAbility resolved = applyEffectOverride(triggerAbility, socket.getEffectOverride());
+            LoreAbility resolved = triggerAbility != null
+                    && triggerAbility.getEffectType() == LoreEffectType.CORE_ABILITY_RUNE
+                    ? triggerAbility
+                    : applyEffectOverride(triggerAbility, socket.getEffectOverride());
             if (resolved == null || resolved.getTrigger() != trigger) {
                 continue;
             }
@@ -1360,7 +1426,8 @@ public final class LoreProcHandler {
                         "spirit", spiritId);
                 continue;
             }
-            result.eligible.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
+            result.eligible.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(),
+                    i, resolvedOrigin));
             if (!canAttemptEffect(store, damage, resolved, socket.getLevel(), socket.getFeedTier(),
                     selfIsAttacker, selfRef, otherRef)) {
                 if (guaranteedOnHit && trigger == LoreTrigger.ON_HIT) {
@@ -1381,12 +1448,18 @@ public final class LoreProcHandler {
                 continue;
             }
 
+            result.pending.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(),
+                    i, resolvedOrigin));
             if (guaranteedOnHit && trigger == LoreTrigger.ON_HIT) {
-                System.out.println("[SocketReforge] Core support proc selected: spirit=" + spiritId
-                        + ", effect=" + resolved.getEffectType());
+                System.out.println("[SocketReforge] Core support proc selected: origin=" + resolvedOrigin
+                        + ", slot=" + i + ", runeItem=" + socket.getRuneItemId()
+                        + ", spirit=" + spiritId + ", effect=" + resolved.getEffectType());
             }
-
-            result.pending.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
+            if (DEBUG_LORE_PROCS) {
+                LoreDebug.logKv("proc.selected", "origin", resolvedOrigin, "player", playerId,
+                        "slot", i, "runeItem", socket.getRuneItemId(), "gemItem", socket.getGemItemId(),
+                        "spirit", spiritId, "trigger", trigger, "effect", resolveLogEffectLabel(resolved));
+            }
             if (isSynergyCatalyst(resolved, spiritId)) {
                 result.synergyCatalyst = true;
             }
@@ -1404,7 +1477,23 @@ public final class LoreProcHandler {
     private static LoreAbility resolveSocketAbilityForTrigger(LoreSocketData.LoreSocket socket,
                                                                LoreAbility ability,
                                                                LoreTrigger trigger) {
-        if (ability == null || trigger == null) {
+        if (socket == null || trigger == null) {
+            return null;
+        }
+        if (LoreSoulstoneUtils.isInfusedSoulstoneId(socket.getGemItemId())) {
+            String runeItemId = LoreSocketManager.resolveCoreAbilityRunestoneItemId(
+                    socket.getSpiritId(), socket.getFeedTier());
+            if (runeItemId != null) {
+                if (trigger != LoreTrigger.ON_HIT && trigger != LoreTrigger.ON_SKILL_USE) {
+                    return null;
+                }
+                double procChance = ability == null ? 0.08d : ability.getProcChance();
+                long cooldownMs = ability == null ? 30000L : ability.getCooldownMs();
+                return new LoreAbility(socket.getSpiritId(), trigger, procChance, cooldownMs,
+                        LoreEffectType.CORE_ABILITY_RUNE, 0.0d, 0.0d);
+            }
+        }
+        if (ability == null) {
             return null;
         }
         if (ability.getTrigger() == trigger) {
@@ -1460,7 +1549,8 @@ public final class LoreProcHandler {
             if (!tryProcSynergy(result.playerId, spiritId, resolved, socket.getFeedTier())) {
                 continue;
             }
-            result.pending.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(), i));
+            result.pending.add(new PendingLoreProc(resolved, spiritId, socket.getLevel(), socket.getFeedTier(),
+                    i, result.origin));
             if (procState != null) {
                 procState.triggered = true;
             }
@@ -1509,24 +1599,24 @@ public final class LoreProcHandler {
                 int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
                 if (selfIsAttacker && grandSlam != null) {
                     armGrandSlamAugment(result.playerId, grandSlam, coreHits);
-                    changed |= applyProcXp(data, grandSlam, maxLevel, self, xpAwarded);
+                    changed |= applyProcXp(data, grandSlam, xpAwarded);
                 }
-                changed |= applyProcXp(data, core, maxLevel, self, xpAwarded);
+                changed |= applyProcXp(data, core, xpAwarded);
 
                 for (PendingLoreProc augment : augmentProcs) {
                     if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
-                    changed |= applyProcXp(data, augment, maxLevel, self, xpAwarded);
+                    changed |= applyProcXp(data, augment, xpAwarded);
                 }
                 for (PendingLoreProc augment : forcedAugments) {
                     if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
-                    changed |= applyProcXp(data, augment, maxLevel, self, xpAwarded);
+                    changed |= applyProcXp(data, augment, xpAwarded);
                 }
                 for (PendingLoreProc modifier : modifierProcs) {
-                    changed |= applyProcXp(data, modifier, maxLevel, self, xpAwarded);
+                    changed |= applyProcXp(data, modifier, xpAwarded);
                 }
             }
             if (executeImmediately) {
@@ -1539,7 +1629,7 @@ public final class LoreProcHandler {
             LoreProcBatch batch = new LoreProcBatch(store, selfRef, otherRef, selfIsAttacker, result.playerId,
                     result.pending, durationMs, damage, commandBuffer, true);
             for (PendingLoreProc proc : result.pending) {
-                changed |= applyProcXp(data, proc, maxLevel, self, xpAwarded);
+                changed |= applyProcXp(data, proc, xpAwarded);
             }
             if (executeImmediately) {
                 executeBatchInline(batch);
@@ -1670,7 +1760,8 @@ public final class LoreProcHandler {
                     armGrandSlamAugment(batch.playerId, batch.grandSlam, coreHits);
                 }
                 applyEffectWithSynergy(batch.store, commandBuffer, damage, core.ability, core.level, core.feedTier,
-                        batch.selfIsAttacker, batch.selfRef, batch.otherRef, batch.playerId, core.spiritId, 1);
+                        batch.selfIsAttacker, batch.selfRef, batch.otherRef, batch.playerId, core.spiritId,
+                        core.origin, 1);
 
                 if (batch.augmentProcs != null) {
                     for (PendingLoreProc augment : batch.augmentProcs) {
@@ -1679,7 +1770,7 @@ public final class LoreProcHandler {
                         }
                         applyEffectWithSynergy(batch.store, commandBuffer, damage, augment.ability, augment.level,
                                 augment.feedTier, batch.selfIsAttacker, batch.selfRef, batch.otherRef,
-                                batch.playerId, augment.spiritId, 1);
+                                batch.playerId, augment.spiritId, augment.origin, 1);
                     }
                 }
                 if (batch.forcedAugments != null) {
@@ -1689,14 +1780,14 @@ public final class LoreProcHandler {
                         }
                         applyEffectWithSynergy(batch.store, commandBuffer, damage, augment.ability, augment.level,
                                 augment.feedTier, batch.selfIsAttacker, batch.selfRef, batch.otherRef,
-                                batch.playerId, augment.spiritId, 1);
+                                batch.playerId, augment.spiritId, augment.origin, 1);
                     }
                 }
                 if (batch.modifierProcs != null) {
                     for (PendingLoreProc modifier : batch.modifierProcs) {
                         applyEffectWithSynergy(batch.store, commandBuffer, damage, modifier.ability, modifier.level,
                                 modifier.feedTier, batch.selfIsAttacker, batch.selfRef, batch.otherRef,
-                                batch.playerId, modifier.spiritId, 1);
+                                batch.playerId, modifier.spiritId, modifier.origin, 1);
                     }
                 }
                 if (batch.selfIsAttacker && batch.grandSlam != null && core.ability != null
@@ -1709,103 +1800,8 @@ public final class LoreProcHandler {
         if (batch.flatProcs != null) {
             for (PendingLoreProc proc : batch.flatProcs) {
                 applyEffectWithSynergy(batch.store, commandBuffer, damage, proc.ability, proc.level, proc.feedTier,
-                        batch.selfIsAttacker, batch.selfRef, batch.otherRef, batch.playerId, proc.spiritId, 1);
-            }
-        }
-    }
-
-    public static void applyAbsorbed(Store<EntityStore> store,
-                                     Player self,
-                                     Ref<EntityStore> selfRef,
-                                     Ref<EntityStore> otherRef,
-                                     Damage damage,
-                                     LoreTrigger trigger,
-                                     boolean selfIsAttacker,
-                                     Set<String> usedSpirits) {
-        applyAbsorbedInternal(store, self, selfRef, otherRef, damage, trigger, selfIsAttacker, usedSpirits,
-                null, null);
-    }
-
-    public static void applyAbsorbed(Store<EntityStore> store,
-                                     Player self,
-                                     Ref<EntityStore> selfRef,
-                                     Ref<EntityStore> otherRef,
-                                     Damage damage,
-                                     LoreTrigger trigger,
-                                     boolean selfIsAttacker,
-                                     Set<String> usedSpirits,
-                                     ProcState procState) {
-        applyAbsorbedInternal(store, self, selfRef, otherRef, damage, trigger, selfIsAttacker, usedSpirits,
-                procState, null);
-    }
-
-    public static void applyAbsorbed(Store<EntityStore> store,
-                                     Player self,
-                                     Ref<EntityStore> selfRef,
-                                     Ref<EntityStore> otherRef,
-                                     Damage damage,
-                                     LoreTrigger trigger,
-                                     boolean selfIsAttacker,
-                                     Set<String> usedSpirits,
-                                     ProcState procState,
-                                     CommandBuffer<EntityStore> commandBuffer) {
-        applyAbsorbedInternal(store, self, selfRef, otherRef, damage, trigger, selfIsAttacker, usedSpirits,
-                procState, commandBuffer);
-    }
-
-    private static void applyAbsorbedInternal(Store<EntityStore> store,
-                                              Player self,
-                                              Ref<EntityStore> selfRef,
-                                              Ref<EntityStore> otherRef,
-                                              Damage damage,
-                                              LoreTrigger trigger,
-                                              boolean selfIsAttacker,
-                                              Set<String> usedSpirits,
-                                              ProcState procState,
-                                              CommandBuffer<EntityStore> commandBuffer) {
-        if (store == null || self == null || trigger == null) {
-            return;
-        }
-        UUID playerId = self.getUuid();
-        if (playerId == null) {
-            return;
-        }
-        boolean ability1Active = isAbility1Active(store, selfRef);
-        if (ability1Active) {
-            LoreDebug.logKv("absorbed.skip", "reason", "Ability1Active", "player", playerId);
-            return;
-        }
-        int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
-        for (String spiritId : LoreAbsorptionStore.getAbsorbed(playerId)) {
-            if (spiritId == null || spiritId.isBlank()) {
-                continue;
-            }
-            String normalized = LoreIds.normalizeSpiritId(spiritId);
-            if (usedSpirits != null && usedSpirits.contains(normalized)) {
-                continue;
-            }
-            LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
-            if (ability == null || ability.getTrigger() != trigger) {
-                continue;
-            }
-            if (ability1Active && shouldBlockLoreDuringAbility1(ability)) {
-                LoreDebug.logKv("absorbed.skip", "reason", "Ability1Active", "effect", ability.getEffectType(),
-                        "spirit", spiritId);
-                continue;
-            }
-            if (!canAttemptEffect(store, damage, ability, maxLevel, 0, selfIsAttacker, selfRef, otherRef)) {
-                continue;
-            }
-            if (!tryProc(playerId, spiritId, ability, 0)) {
-                continue;
-            }
-            applyEffect(store, commandBuffer, damage, ability, maxLevel, 0, selfIsAttacker,
-                    selfRef, otherRef, playerId, spiritId);
-            if (procState != null) {
-                procState.triggered = true;
-            }
-            if (usedSpirits != null) {
-                usedSpirits.add(normalized);
+                        batch.selfIsAttacker, batch.selfRef, batch.otherRef, batch.playerId, proc.spiritId,
+                        proc.origin, 1);
             }
         }
     }
@@ -1847,10 +1843,9 @@ public final class LoreProcHandler {
         boolean changed = false;
         if (data != null) {
             changed = applyLoreSocketsInternal(store, self, selfRef, otherRef, damage, data,
-                    LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer, false);
+                    LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer,
+                    false, false, false, "weapon_lore_proc_chain");
         }
-        applyAbsorbedInternal(store, self, selfRef, otherRef, damage,
-                LoreTrigger.ON_LORE_PROC, selfIsAttacker, usedSpirits, null, commandBuffer);
         return changed;
     }
 
@@ -1877,6 +1872,7 @@ public final class LoreProcHandler {
                     APPLY_ROOT, APPLY_FEAR, VORTEXSTRIKE, MULTI_HIT, CRIT_CHARGE,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE, CHARGE_ATTACK,
                     OMNISLASH, OCTASLASH, RUNE_OCTASLASH, PUMMEL, BLOOD_RUSH -> opponentRef != null;
+            case CORE_ABILITY_RUNE -> selfIsAttacker && selfRef != null;
             case DAMAGE_ATTACKER -> attackerRef != null;
             case HEAL_SELF, HEAL_SELF_OVER_TIME, HEAL_AREA, HEAL_AREA_OVER_TIME,
                     LIFESTEAL, APPLY_HASTE, APPLY_INVISIBLE, APPLY_SHIELD,
@@ -2073,7 +2069,7 @@ public final class LoreProcHandler {
                                     UUID playerId,
                                     String spiritId) {
         applyEffectInternal(store, commandBuffer, damage, ability, level, feedTier, selfIsAttacker,
-                attackerOrSelfRef, otherRef, playerId, spiritId, true);
+                attackerOrSelfRef, otherRef, playerId, spiritId, true, "direct");
     }
 
     private static void applyEffectWithSynergy(Store<EntityStore> store,
@@ -2087,19 +2083,20 @@ public final class LoreProcHandler {
                                                Ref<EntityStore> otherRef,
                                                UUID playerId,
                                                String spiritId,
+                                               String origin,
                                                int repeatCount) {
         if (store == null || ability == null) {
             return;
         }
         int repeats = Math.max(1, repeatCount);
         boolean allowRepeats = applyEffectInternal(store, commandBuffer, damage, ability, level, feedTier,
-                selfIsAttacker, attackerOrSelfRef, otherRef, playerId, spiritId, true);
+                selfIsAttacker, attackerOrSelfRef, otherRef, playerId, spiritId, true, origin);
         if (!allowRepeats) {
             return;
         }
         for (int i = 1; i < repeats; i++) {
             applyEffectInternal(store, commandBuffer, damage, ability, level, feedTier, selfIsAttacker,
-                    attackerOrSelfRef, otherRef, playerId, spiritId, false);
+                    attackerOrSelfRef, otherRef, playerId, spiritId, false, origin);
         }
     }
 
@@ -2114,12 +2111,17 @@ public final class LoreProcHandler {
                                                Ref<EntityStore> otherRef,
                                                UUID playerId,
                                                String spiritId,
-                                               boolean primaryProc) {
+                                               boolean primaryProc,
+                                               String origin) {
         if (store == null || ability == null) {
             return false;
         }
+        if (isLegacyAbsorbedLoreOrigin(origin)) {
+            clearBlockedLegacyAbsorbedProc(playerId, origin);
+            return false;
+        }
         if (primaryProc) {
-            logProc(ability, level, feedTier, playerId, spiritId, selfIsAttacker);
+            logProc(ability, level, feedTier, playerId, spiritId, selfIsAttacker, origin);
         }
         int safeFeedTier = Math.max(0, feedTier);
         double value = Math.max(0.0d, ability.getValueForLevel(level));
@@ -2535,6 +2537,18 @@ public final class LoreProcHandler {
                             OCTASLASH_RUNE_ITEM_ID, 0, 0);
                 }
             }
+            case CORE_ABILITY_RUNE -> {
+                if (primaryProc && selfIsAttacker && attackerRef != null) {
+                    String runeItemId = LoreSocketManager.resolveCoreAbilityRunestoneItemId(
+                            spiritId, safeFeedTier);
+                    if (runeItemId != null) {
+                        LoreDebug.logKv("soulstone.rune.cast", "spirit", spiritId,
+                                "rune", runeItemId, "feedTier", safeFeedTier, "origin", origin);
+                        tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
+                                runeItemId, 0, 0, safeFeedTier);
+                    }
+                }
+            }
             case PUMMEL -> {
                 if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null
                         && !ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
@@ -2691,8 +2705,21 @@ public final class LoreProcHandler {
                                                 String runestoneItemId,
                                                 int damageFeeds,
                                                 int manaFeeds) {
+        return tryRunSocketedAbility(store, commandBuffer, attackerRef, targetRef,
+                runestoneItemId, damageFeeds, manaFeeds, 0);
+    }
+
+    public static boolean tryRunSocketedAbility(Store<EntityStore> store,
+                                                CommandBuffer<EntityStore> commandBuffer,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> targetRef,
+                                                String runestoneItemId,
+                                                int damageFeeds,
+                                                int manaFeeds,
+                                                int abilityFeedTier) {
         if (store == null || attackerRef == null
-                || targetRef == null || runestoneItemId == null || runestoneItemId.isBlank()) {
+                || (targetRef != null && !targetRef.isValid())
+                || runestoneItemId == null || runestoneItemId.isBlank()) {
             return false;
         }
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
@@ -2700,7 +2727,9 @@ public final class LoreProcHandler {
             return false;
         }
         RuneDeltaDebug.logKv(attacker, "ability.attempt", "rune", runestoneItemId);
-        ItemStack runestone = new ItemStack(runestoneItemId, 1);
+        ItemStack runestone = new ItemStack(runestoneItemId, 1)
+                .withMetadata(MetadataKeys.LORE_MODIFIER_RUNESTONE_FEED_TIER,
+                        Codec.INTEGER, Math.max(0, abilityFeedTier));
         Item item = runestone.getItem();
         if (item == null || item == Item.UNKNOWN || !(item.getAbility() instanceof CoreItemAbility ability)) {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "notCoreRunestone", "rune", runestoneItemId);
@@ -2781,7 +2810,8 @@ public final class LoreProcHandler {
                                                         int damageFeeds,
                                                         int manaFeeds) {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
-                || targetRef == null || !targetRef.isValid() || runestone == null || runestone.isEmpty()) {
+                || (targetRef != null && !targetRef.isValid())
+                || runestone == null || runestone.isEmpty()) {
             return;
         }
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
@@ -2804,7 +2834,9 @@ public final class LoreProcHandler {
             RuneDeltaDebug.logKv(attacker, "ability.skip", "reason", "contextConstructionFailed", "root", rootId);
             return;
         }
-        context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
+        if (targetRef != null) {
+            context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
+        }
         float damageMultiplier = LoreSocketManager.getRuneDamageMultiplier(damageFeeds);
         float manaCostMultiplier = LoreSocketManager.getRuneManaCostMultiplier(manaFeeds);
         float weaponDamageBonus = SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.getItemId())
@@ -4120,7 +4152,8 @@ public final class LoreProcHandler {
                                 int feedTier,
                                 UUID playerId,
                                 String spiritId,
-                                boolean selfIsAttacker) {
+                                boolean selfIsAttacker,
+                                String origin) {
         if (!DEBUG_LORE_PROCS || ability == null || playerId == null) {
             return;
         }
@@ -4132,6 +4165,7 @@ public final class LoreProcHandler {
         String side = selfIsAttacker ? "attacker" : "defender";
         LoreDebug.logKv("proc",
                 "player", playerId,
+                "origin", origin == null || origin.isBlank() ? "unknown" : origin,
                 "spirit", (spiritId == null ? "unknown" : spiritId),
                 "trigger", trigger,
                 "effect", effect,
@@ -4141,6 +4175,16 @@ public final class LoreProcHandler {
                 "chancePct", String.format(Locale.ROOT, "%.2f", chance),
                 "cooldownMs", cooldownMs,
                 "side", side);
+    }
+
+    private static boolean isLegacyAbsorbedLoreOrigin(String origin) {
+        return origin != null && origin.toLowerCase(Locale.ROOT).contains("absorbed");
+    }
+
+    private static void clearBlockedLegacyAbsorbedProc(UUID playerId, String origin) {
+        int cleared = LoreAbsorptionStore.clearAbsorbed(playerId);
+        LoreDebug.logKv("proc.blocked", "reason", "legacy_absorbed_lore_origin", "origin", origin,
+                "player", playerId, "clearedLegacyEntries", cleared);
     }
 
     private static String resolveLogEffectLabel(LoreAbility ability) {
@@ -4557,7 +4601,8 @@ public final class LoreProcHandler {
         if (!isCoreEffectType(type)) {
             return false;
         }
-        if (type == LoreEffectType.SUMMON_WOLF_PACK || type == LoreEffectType.OMNISLASH) {
+        if (type == LoreEffectType.SUMMON_WOLF_PACK || type == LoreEffectType.OMNISLASH
+                || type == LoreEffectType.CORE_ABILITY_RUNE) {
             return true;
         }
         return isCoreColorForSpirit(proc.spiritId);
@@ -4568,7 +4613,8 @@ public final class LoreProcHandler {
             return false;
         }
         return switch (type) {
-            case OMNISLASH, OCTASLASH, RUNE_OCTASLASH, CHARGE_ATTACK, SUMMON_WOLF_PACK,
+            case OMNISLASH, OCTASLASH, RUNE_OCTASLASH, CORE_ABILITY_RUNE,
+                    CHARGE_ATTACK, SUMMON_WOLF_PACK,
                     CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> true;
             default -> false;
         };
@@ -4724,7 +4770,7 @@ public final class LoreProcHandler {
         long spacing = Math.max(OMNISLASH_HIT_DELAY_MS, MULTIHIT_HIT_DELAY_MS);
         long expiresAt = now + (hits * spacing) + 1200L;
         GrandSlamContext ctx = new GrandSlamContext(playerId, proc.ability, proc.spiritId,
-                proc.level, proc.feedTier, hits, expiresAt);
+                proc.level, proc.feedTier, proc.origin, hits, expiresAt);
         GRAND_SLAM_CONTEXTS.put(playerId, ctx);
     }
 
@@ -4761,13 +4807,11 @@ public final class LoreProcHandler {
         }
         applySignatureFallbackVfx(store, attackerRef, targetRef, ctx.ability, ctx.feedTier);
         applyEffectInternal(store, null, null, ctx.ability, ctx.level, ctx.feedTier,
-                true, attackerRef, targetRef, playerId, ctx.spiritId, false);
+                true, attackerRef, targetRef, playerId, ctx.spiritId, false, ctx.origin);
     }
 
     private static boolean applyProcXp(LoreSocketData data,
                                        PendingLoreProc proc,
-                                       int maxLevel,
-                                       Player self,
                                        java.util.Set<Integer> awarded) {
         if (data == null || proc == null) {
             return false;
@@ -4775,18 +4819,7 @@ public final class LoreProcHandler {
         if (awarded != null && !awarded.add(proc.socketIndex)) {
             return false;
         }
-        boolean changed = LoreSocketManager.addProcXp(data, proc.socketIndex);
-        LoreSocketData.LoreSocket socket = data.getSocket(proc.socketIndex);
-        if (socket != null && socket.getLevel() >= maxLevel) {
-            // Keep extractable Lore socketed at max level; Ghastly Essence extracts its rune.
-            if (!LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())
-                    && !LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())
-                    && !LoreSocketManager.isBloodRushSpirit(socket.getSpiritId())) {
-                absorbSpirit(self, socket);
-                changed = true;
-            }
-        }
-        return changed;
+        return LoreSocketManager.addProcXp(data, proc.socketIndex);
     }
 
     private static boolean isSynergyEligible(LoreAbility ability) {
@@ -5152,6 +5185,7 @@ public final class LoreProcHandler {
                                                        Ref<EntityStore> ownerRef,
                                                        Ref<EntityStore> targetRef,
                                                        List<LoreSocketManager.SocketedModifierRunestone> runestones,
+                                                       InteractionType interactionType,
                                                        CommandBuffer<EntityStore> commandBuffer) {
         if (store == null || ownerRef == null || !ownerRef.isValid()) {
             return;
@@ -5162,14 +5196,14 @@ public final class LoreProcHandler {
         if (ownerUuid == null) {
             return;
         }
-        if (runestones == null || runestones.isEmpty()) {
+        if (runestones == null || runestones.isEmpty() || !isAbilityInteraction(interactionType)) {
             ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.remove(ownerUuid);
             return;
         }
         List<LoreSocketManager.SocketedModifierRunestone> snapshot = List.copyOf(runestones);
         long expiresAt = System.currentTimeMillis() + CORE_ABILITY_MODIFIER_WINDOW_MS;
         ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.put(ownerUuid,
-                new ForeignCoreAbilitySupport(ownerRef, snapshot, expiresAt));
+                new ForeignCoreAbilitySupport(ownerRef, snapshot, interactionType, expiresAt));
         applyAbilitySupportRunestones(store, owner, ownerRef, targetRef, null,
                 snapshot, LoreTrigger.ON_SKILL_USE, commandBuffer);
     }
@@ -5194,7 +5228,7 @@ public final class LoreProcHandler {
                                                             Damage damage,
                                                             CommandBuffer<EntityStore> commandBuffer) {
         if (store == null || sourceRef == null || !sourceRef.isValid()
-                || targetRef == null || !targetRef.isValid()) {
+                || targetRef == null || !targetRef.isValid() || damage == null) {
             return;
         }
         UUID ownerUuid = null;
@@ -5219,11 +5253,22 @@ public final class LoreProcHandler {
             ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT.remove(ownerUuid, support);
             return;
         }
+        InteractionType hitInteractionType = damage.getIfPresentMetaObject(Damage.INTERACTION_TYPE);
+        if (!isAbilityInteraction(hitInteractionType) || hitInteractionType != support.interactionType) {
+            return;
+        }
         Player owner = store.getComponent(support.ownerRef, Player.getComponentType());
         if (owner != null) {
             applyAbilitySupportRunestones(store, owner, support.ownerRef, targetRef, damage,
                     support.runestones, LoreTrigger.ON_HIT, commandBuffer);
         }
+    }
+
+    private static boolean isAbilityInteraction(InteractionType interactionType) {
+        return interactionType == InteractionType.Ability1
+                || interactionType == InteractionType.Ability2
+                || interactionType == InteractionType.Ability3
+                || interactionType == InteractionType.Ability4;
     }
 
     private static void applyAbilitySupportRunestones(
@@ -5540,15 +5585,12 @@ public final class LoreProcHandler {
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
-        List<Ref<EntityStore>> targets = LoreTargetingUtils.collectOmnislashTargets(
-                store, attackerRef, targetRef, PUMMEL_RUNE_TARGET_RADIUS,
-                PUMMEL_RUNE_TARGET_RADIUS * PUMMEL_RUNE_TARGET_RADIUS, "pummel.rune",
-                DEBUG_LORE_PROCS, 1, OMNISLASH_MAX_NPC_CHECKS);
-        if (targets.isEmpty()) {
+        Ref<EntityStore> pummelTarget = resolvePummelRuneTarget(store, attackerRef, targetRef);
+        if (pummelTarget == null) {
             return;
         }
 
-        applyCoreAbilitySupportRunestones(store, attackerRef, targets.get(0),
+        applyCoreAbilitySupportRunestones(store, attackerRef, pummelTarget,
                 supportRunestones, LoreTrigger.ON_SKILL_USE);
 
         LoreDamageUtils.DamageBaseResult baseResult =
@@ -5556,7 +5598,7 @@ public final class LoreProcHandler {
         if (baseResult.amount <= 0f) {
             return;
         }
-        PummelSequence sequence = new PummelSequence(store, attackerRef, targets.get(0),
+        PummelSequence sequence = new PummelSequence(store, attackerRef, pummelTarget,
                 baseResult.amount, baseResult.skipRefine, supportRunestones);
         if (ACTIVE_PUMMEL_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
             return;
@@ -5750,8 +5792,16 @@ public final class LoreProcHandler {
             return;
         }
         PummelSequence sequence = ACTIVE_PUMMEL_RUNE_SEQUENCES.get(attackerRef);
-        if (sequence == null || sequence.hitsApplied >= PUMMEL_RUNE_HITS
-                || sequence.targetRef == null || !isEntityAlive(store, sequence.targetRef)) {
+        if (sequence == null) {
+            return;
+        }
+        if (sequence.hitsApplied >= PUMMEL_RUNE_HITS) {
+            finishPummelRuneSequence(attackerRef, sequence);
+            return;
+        }
+        if (sequence.targetRef == null || !isEntityAlive(store, sequence.targetRef)
+                || !isPummelTargetInMeleeCone(store, attackerRef, sequence.targetRef)) {
+            sequence.hitsApplied = PUMMEL_RUNE_HITS;
             finishPummelRuneSequence(attackerRef, sequence);
             return;
         }
@@ -5761,6 +5811,9 @@ public final class LoreProcHandler {
         float hitDamage = sequence.baseDamage * damageScale;
         LoreDamageUtils.applyLoreDamage(store, attackerRef, sequence.targetRef,
                 hitDamage, sequence.skipRefine);
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        LoreVisuals.playSignatureSound(attacker, hitIndex == PUMMEL_RUNE_HITS - 1
+                ? "SFX_Mace_T2_Signature_Impact" : "SFX_Mace_T1_Impact");
         String impactParticleId = LoreVisuals.resolveParticleEffectId(PUMMEL_RUNE_HIT_PARTICLE_IDS);
         if (impactParticleId != null) {
             LoreVisuals.spawnSlashParticles(store, attackerRef, sequence.targetRef, impactParticleId, 0.95f);
@@ -5783,6 +5836,92 @@ public final class LoreProcHandler {
             }
             finishPummelRuneSequence(attackerRef, sequence);
         }
+    }
+
+    private static Ref<EntityStore> resolvePummelRuneTarget(Store<EntityStore> store,
+                                                             Ref<EntityStore> attackerRef,
+                                                             Ref<EntityStore> requestedTargetRef) {
+        if (requestedTargetRef != null) {
+            return requestedTargetRef.isValid()
+                    && isPummelTargetInMeleeCone(store, attackerRef, requestedTargetRef)
+                    ? requestedTargetRef : null;
+        }
+
+        List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectOmnislashTargets(
+                store, attackerRef, null, PUMMEL_RUNE_MELEE_RANGE,
+                PUMMEL_RUNE_MELEE_RANGE * PUMMEL_RUNE_MELEE_RANGE, "pummel.rune",
+                DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS);
+        Ref<EntityStore> closestTarget = null;
+        double closestDistanceSquared = Double.MAX_VALUE;
+        Vector3d attackerPosition = LoreTargetingUtils.getPosition(store, attackerRef);
+        if (attackerPosition == null) {
+            return null;
+        }
+        for (Ref<EntityStore> candidate : candidates) {
+            if (candidate == null || candidate.equals(attackerRef)
+                    || !isPummelTargetInMeleeCone(store, attackerRef, candidate)) {
+                continue;
+            }
+            Vector3d candidatePosition = LoreTargetingUtils.getPosition(store, candidate);
+            if (candidatePosition == null) {
+                continue;
+            }
+            double distanceSquared = attackerPosition.distanceSquared(candidatePosition);
+            if (distanceSquared < closestDistanceSquared) {
+                closestTarget = candidate;
+                closestDistanceSquared = distanceSquared;
+            }
+        }
+        return closestTarget;
+    }
+
+    private static boolean isPummelTargetInMeleeCone(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      Ref<EntityStore> targetRef) {
+        if (store == null || attackerRef == null || targetRef == null
+                || !attackerRef.isValid() || !targetRef.isValid()
+                || attackerRef.equals(targetRef) || !isEntityAlive(store, targetRef)) {
+            return false;
+        }
+        Vector3d attackerPosition = LoreTargetingUtils.getPosition(store, attackerRef);
+        Vector3d targetPosition = LoreTargetingUtils.getPosition(store, targetRef);
+        if (attackerPosition == null || targetPosition == null) {
+            return false;
+        }
+        Vector3d targetDirection = new Vector3d(targetPosition).sub(attackerPosition);
+        if (targetDirection.lengthSquared() > PUMMEL_RUNE_MELEE_RANGE * PUMMEL_RUNE_MELEE_RANGE) {
+            return false;
+        }
+        targetDirection.y = 0.0d;
+        if (targetDirection.lengthSquared() <= 1.0e-6d) {
+            return false;
+        }
+        targetDirection.normalize();
+
+        Vector3d facingDirection = null;
+        HeadRotation headRotation = store.getComponent(attackerRef, HeadRotation.getComponentType());
+        if (headRotation != null && headRotation.getDirection() != null) {
+            facingDirection = new Vector3d(headRotation.getDirection());
+        }
+        if (facingDirection == null || facingDirection.x * facingDirection.x
+                + facingDirection.z * facingDirection.z <= 1.0e-6d) {
+            TransformComponent attackerTransform = store.getComponent(
+                    attackerRef, TransformComponent.getComponentType());
+            Rotation3f lookRotation = resolveLookRotation(attackerTransform);
+            if (attackerTransform != null && attackerTransform.getPosition() != null && lookRotation != null) {
+                facingDirection = new Transform(
+                        new Vector3d(attackerTransform.getPosition()), lookRotation).getDirection();
+            }
+        }
+        if (facingDirection == null) {
+            return false;
+        }
+        facingDirection.y = 0.0d;
+        if (facingDirection.lengthSquared() <= 1.0e-6d) {
+            return false;
+        }
+        facingDirection.normalize();
+        return facingDirection.dot(targetDirection) >= PUMMEL_RUNE_MIN_FACING_DOT;
     }
 
     private static void applyPummelFinalKnockback(Store<EntityStore> store,
@@ -6157,14 +6296,16 @@ public final class LoreProcHandler {
         // This opt-in permits ordinary ON_HIT lores during the slash sequence. The
         // collector still rejects nested multi-hit abilities while Ability1 is active.
         changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
-                LoreTrigger.ON_HIT, true, used, procState, null, true);
+                LoreTrigger.ON_HIT, true, used, procState, null,
+                true, false, false, "weapon_lore_slot:ability_hit");
         if (runeDelta) {
             changed |= applySocketedModifierRunestones(store, attacker, attackerRef, targetRef, null,
                     weapon, LoreTrigger.ON_HIT, true, used, procState, null);
         }
         if (procState.hasTriggered()) {
             changed |= applyLoreSocketsInternal(store, attacker, attackerRef, targetRef, null, data,
-                    LoreTrigger.ON_LORE_PROC, true, used, null, null, true);
+                    LoreTrigger.ON_LORE_PROC, true, used, null, null,
+                    true, false, false, "weapon_lore_slot:ability_hit_chain");
             if (runeDelta) {
                 changed |= applySocketedModifierRunestones(store, attacker, attackerRef, targetRef, null,
                         weapon, LoreTrigger.ON_LORE_PROC, true, used, null, null);
@@ -7995,25 +8136,6 @@ public final class LoreProcHandler {
                 WOLF_SUPPORTS_BY_ENTITY.remove(wolfRef);
             }
         }
-    }
-
-    private static void absorbSpirit(Player player, LoreSocketData.LoreSocket socket) {
-        if (player == null || socket == null) {
-            return;
-        }
-        String spiritId = socket.getSpiritId();
-        if (spiritId == null || spiritId.isBlank()) {
-            return;
-        }
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
-        socket.setGemItemId("");
-        socket.setColor("");
-        socket.setSpiritId("");
-        socket.setEffectOverride("");
-        socket.setLevel(0);
-        socket.setXp(0);
-        socket.setFeedTier(0);
-        socket.setLocked(false);
     }
 
     private static LoreAbility applyEffectOverride(LoreAbility ability, String overrideRaw) {
@@ -9928,12 +10050,6 @@ public final class LoreProcHandler {
         LoreEffectType finaleType = resolveFinaleEffectType(markMap);
         if (finaleType == null) {
             return false;
-        }
-        for (String spiritId : LoreAbsorptionStore.getAbsorbed(playerId)) {
-            LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
-            if (ability != null && ability.getEffectType() == finaleType) {
-                return true;
-            }
         }
         Ref<EntityStore> playerRef = resolvePlayerRefByUuid(store, playerId);
         Player player = resolvePlayerFromRef(store, playerRef);

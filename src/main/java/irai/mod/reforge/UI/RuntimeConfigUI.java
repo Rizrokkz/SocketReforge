@@ -4390,7 +4390,7 @@ public final class RuntimeConfigUI {
         groups.add(new ControlGroup("lore_socket_rolls", "Lore Socket Rolls", "Controls how lore sockets appear on generated equipment.", socketRolls));
 
         List<ControlEntry> leveling = new ArrayList<>();
-        leveling.add(intControl("lore_max_level", CATEGORY_LORE, LORE_CONFIG_NAME, "Lore max level", "Maximum lore level before absorption.", () -> loreConfig().getMaxLevel(), delta -> loreConfig().setMaxLevel(clampInt(loreConfig().getMaxLevel() + (int) Math.round(delta), 1, 200))));
+        leveling.add(intControl("lore_max_level", CATEGORY_LORE, LORE_CONFIG_NAME, "Lore max level", "Maximum level a socketed lore can reach.", () -> loreConfig().getMaxLevel(), delta -> loreConfig().setMaxLevel(clampInt(loreConfig().getMaxLevel() + (int) Math.round(delta), 1, 200))));
         leveling.add(intControl("lore_xp_per_proc", CATEGORY_LORE, LORE_CONFIG_NAME, "Lore XP per proc", "XP gained per lore proc trigger.", () -> loreConfig().getXpPerProc(), delta -> loreConfig().setXpPerProc(clampInt(loreConfig().getXpPerProc() + (int) Math.round(delta), 1, 50))));
         leveling.add(intControl("lore_base_xp_per_level", CATEGORY_LORE, LORE_CONFIG_NAME, "Lore base XP per level", "Base XP required per level.", () -> loreConfig().getBaseXpPerLevel(), delta -> loreConfig().setBaseXpPerLevel(clampInt(loreConfig().getBaseXpPerLevel() + (int) Math.round(delta), 1, 500))));
         leveling.add(multiplierControl("lore_xp_growth", CATEGORY_LORE, LORE_CONFIG_NAME, "Lore XP growth", "Additional XP growth per level.", () -> loreConfig().getXpGrowthPerLevel(), delta -> loreConfig().setXpGrowthPerLevel(clamp(loreConfig().getXpGrowthPerLevel() + delta, 0.0, 10.0))));

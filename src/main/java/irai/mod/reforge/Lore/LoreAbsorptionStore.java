@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Properties;
@@ -13,7 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Persistent store of absorbed lore spirits per player.
+ * Reads legacy absorbed-lore records only so they can be removed when a player joins.
  */
 public final class LoreAbsorptionStore {
     private static final Map<UUID, Set<String>> ABSORBED = new ConcurrentHashMap<>();
@@ -29,39 +28,18 @@ public final class LoreAbsorptionStore {
         load();
     }
 
-    public static boolean isAbsorbed(UUID playerId, String spiritId) {
-        if (playerId == null || spiritId == null || spiritId.isBlank()) {
-            return false;
-        }
-        Set<String> set = ABSORBED.get(playerId);
-        if (set == null || set.isEmpty()) {
-            return false;
-        }
-        return set.contains(LoreIds.normalizeSpiritId(spiritId));
-    }
-
-    public static Set<String> getAbsorbed(UUID playerId) {
+    /** Clears deprecated absorbed-lores state for a player and persists only when something changed. */
+    public static int clearAbsorbed(UUID playerId) {
         if (playerId == null) {
-            return Set.of();
+            return 0;
         }
-        Set<String> set = ABSORBED.get(playerId);
-        if (set == null || set.isEmpty()) {
-            return Set.of();
+        Set<String> removed = ABSORBED.remove(playerId);
+        if (removed == null || removed.isEmpty()) {
+            return 0;
         }
-        return Collections.unmodifiableSet(set);
-    }
-
-    public static boolean addAbsorbed(UUID playerId, String spiritId) {
-        if (playerId == null || spiritId == null || spiritId.isBlank()) {
-            return false;
-        }
-        String normalized = LoreIds.normalizeSpiritId(spiritId);
-        Set<String> set = ABSORBED.computeIfAbsent(playerId, ignored -> new LinkedHashSet<>());
-        boolean added = set.add(normalized);
-        if (added) {
-            save();
-        }
-        return added;
+        int clearedCount = removed.size();
+        save();
+        return clearedCount;
     }
 
     private static void load() {
@@ -111,7 +89,7 @@ public final class LoreAbsorptionStore {
             props.setProperty(playerId.toString(), joined);
         }
         try (FileOutputStream out = new FileOutputStream(storeFile)) {
-            props.store(out, "Lore absorbed spirits");
+            props.store(out, "Legacy absorbed-lore data pending player cleanup");
         } catch (Exception ignored) {
             // Best-effort persistence.
         }

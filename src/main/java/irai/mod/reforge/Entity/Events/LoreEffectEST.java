@@ -159,17 +159,6 @@ public final class LoreEffectEST extends DamageEventSystem {
             }
         }
 
-        LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, defenderRef,
-                damage, LoreTrigger.ON_HIT, true, used, procState, commandBuffer);
-        if (isCrit) {
-            LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, defenderRef,
-                    damage, LoreTrigger.ON_CRIT, true, used, procState, commandBuffer);
-        }
-        if (isBlocked) {
-            LoreProcHandler.applyAbsorbed(store, attacker, attackerRef, defenderRef,
-                    damage, LoreTrigger.ON_BLOCKED, true, used, procState, commandBuffer);
-        }
-
         if (procState.hasTriggered()) {
             changed |= LoreProcHandler.applyLoreProcChain(store, attacker, attackerRef, defenderRef,
                     damage, data, true, used, commandBuffer);
@@ -239,17 +228,6 @@ public final class LoreEffectEST extends DamageEventSystem {
                 changed |= LoreProcHandler.applySocketedModifierRunestones(store, defender, defenderRef, attackerRef,
                         damage, weapon, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
             }
-        }
-
-        LoreProcHandler.applyAbsorbed(store, defender, defenderRef, attackerRef,
-                damage, LoreTrigger.ON_DAMAGED, false, used, procState, commandBuffer);
-        if (isBlocked) {
-            LoreProcHandler.applyAbsorbed(store, defender, defenderRef, attackerRef,
-                    damage, LoreTrigger.ON_BLOCK, false, used, procState, commandBuffer);
-        }
-        if (nearDeath) {
-            LoreProcHandler.applyAbsorbed(store, defender, defenderRef, attackerRef,
-                    damage, LoreTrigger.ON_NEAR_DEATH, false, used, procState, commandBuffer);
         }
 
         if (procState.hasTriggered()) {

@@ -238,9 +238,6 @@ public final class LorePlayerStateEST extends EntityTickingSystem<EntityStore> {
             }
         }
 
-        LoreProcHandler.applyAbsorbed(store, player, playerRef, null,
-                null, trigger, true, used, procState);
-
         if (procState.hasTriggered()) {
             if (entries.isEmpty()) {
                 LoreProcHandler.applyLoreProcChain(store, player, playerRef, null, null,

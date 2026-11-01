@@ -24,6 +24,8 @@ import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Lore.LoreAbsorptionStore;
+import irai.mod.reforge.Lore.LoreSoulstoneMigration;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 
 public class OpenGuiListener {
@@ -63,6 +65,16 @@ public class OpenGuiListener {
      * Scans player's inventory and registers tooltips for items with reforge/socket metadata
      */
     private static void scanAndRegisterTooltips(Player player) {
+        int clearedAbsorbedLores = LoreAbsorptionStore.clearAbsorbed(player.getUuid());
+        if (clearedAbsorbedLores > 0) {
+            System.out.println("[SocketReforge] Cleared " + clearedAbsorbedLores
+                    + " legacy absorbed lore entries on player join.");
+        }
+        int convertedLoreItems = LoreSoulstoneMigration.migratePlayerInventory(player);
+        if (convertedLoreItems > 0) {
+            System.out.println("[SocketReforge] Converted legacy lore sockets on "
+                    + convertedLoreItems + " inventory items to infused soulstones.");
+        }
         int migratedCount = 0;
         
         // Scan hotbar

@@ -12,6 +12,7 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Lore.LoreSoulstoneMigration;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -46,6 +47,7 @@ public final class NativeTooltipInventoryEventEST extends EntityEventSystem<Enti
         } catch (Exception ignored) {
         }
         if (container != null) {
+            LoreSoulstoneMigration.migrateSlot(container, event.getNewSlot());
             DynamicTooltipUtils.refreshContainerSlot(container, event.getNewSlot(), locale);
             return;
         }

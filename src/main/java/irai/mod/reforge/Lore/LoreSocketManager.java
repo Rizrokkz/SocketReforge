@@ -570,7 +570,7 @@ public final class LoreSocketManager {
             case APPLY_BURN, APPLY_SHOCK, APPLY_FREEZE, APPLY_ROOT -> EFFECT_TIER_4;
             case APPLY_STUN, APPLY_FEAR, DOUBLE_CAST, MULTI_HIT, CRIT_CHARGE, BERSERK,
                     SUMMON_WOLF_PACK, CHARGE_ATTACK, OMNISLASH, OCTASLASH, RUNE_OCTASLASH, VORTEXSTRIKE, PUMMEL, BLOOD_RUSH,
-                    CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE -> EFFECT_TIER_5;
+                    CAUSTIC_FINALE, SHRAPNEL_FINALE, BURN_FINALE, CORE_ABILITY_RUNE -> EFFECT_TIER_5;
         };
     }
 
@@ -841,7 +841,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        String spiritId = socket.getSpiritId();
         String[] essenceId = {GHASTLY_ESSENCE_ITEM_ID};
         if (!consumeFromInventory(player, essenceId, 1)) {
             return false;
@@ -854,7 +853,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -871,7 +869,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        String spiritId = socket.getSpiritId();
         if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
             return false;
         }
@@ -882,7 +879,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -899,7 +895,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        String spiritId = socket.getSpiritId();
         if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
             return false;
         }
@@ -910,7 +905,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -927,7 +921,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        String spiritId = socket.getSpiritId();
         if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
             return false;
         }
@@ -938,7 +931,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -955,7 +947,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        String spiritId = socket.getSpiritId();
         String runeItemId = resolveWolfPackRuneItemId(socket.getFeedTier());
         if (!consumeFromInventory(player, new String[]{GHASTLY_ESSENCE_ITEM_ID}, 1)) {
             return false;
@@ -966,7 +957,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -997,7 +987,6 @@ public final class LoreSocketManager {
             return false;
         }
 
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
@@ -1025,7 +1014,6 @@ public final class LoreSocketManager {
             UIInventoryUtils.addItemToInventory(player, new ItemStack(GHASTLY_ESSENCE_ITEM_ID, 1));
             return false;
         }
-        LoreAbsorptionStore.addAbsorbed(player.getUuid(), spiritId);
         clearSocketGem(socket);
         return true;
     }
