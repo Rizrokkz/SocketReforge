@@ -1,5 +1,7 @@
 {
-  "Interactions": ["Ability_Pummel_Rune_Cast"],
+  "Interactions": [
+    { "Type": "CoreRuneCost" },
+    "Ability_Pummel_Rune_Cast"],
   "RequireNewClick": false,
   "Tags": {"Attack": ["Melee"]}
 }

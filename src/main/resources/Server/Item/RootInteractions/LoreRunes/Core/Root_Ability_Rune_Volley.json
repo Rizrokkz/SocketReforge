@@ -1,5 +1,7 @@
 {
-  "Interactions": ["Ability_Rune_Volley_Cast"],
+  "Interactions": [
+    { "Type": "CoreRuneCost" },
+    "Ability_Rune_Volley_Cast"],
   "RequireNewClick": false,
   "Tags": {
     "Attack": ["Ranged"]

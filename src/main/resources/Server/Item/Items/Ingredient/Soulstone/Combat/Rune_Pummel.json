@@ -5,7 +5,7 @@
   },
   "Icon": "Icons/ItemsGenerated/Rune_Ability_Pummel.png",
   "ItemLevel": 1,
-  "Quality": "Epic",
+  "Quality": "Legendary",
   "Categories": ["Items.Ingredients"],
   "Model": "Items/Runes/Rune_Ability.blockymodel",
   "Texture": "Items/Runes/Rune_Ability_Pummel.png",
@@ -20,7 +20,7 @@
     "AbilityKeywords": ["Damage", "Melee", "Stun"],
     "Cooldown": 15,
     "Cast": "Root_Ability_Pummel_Rune",
-    "CostType": "Stamina"
+    "CostType": "Mana"
   },
   "Tags": {"Type": ["Ingredient"]}
 }

@@ -28,8 +28,7 @@
               "Effects": {
                 "ItemPlayerAnimationsId": "Mace",
                 "ItemAnimationId": "SwingDown",
-                "WaitForAnimationToFinish": false,
-                "WorldSoundEventId": "SFX_Goblin_Mace_Club_Slam_Impact"
+                "WaitForAnimationToFinish": true
               }
             },
             {
@@ -39,9 +38,13 @@
                 "Id": "Donut",
                 "Height": 1,
                 "Width": 0.75,
-                "MaxRadius": 4
+                "MaxRadius": 4,
+                "Offset": {
+                  "Z": 2.0
+                }
               },
               "Effects": {
+                "WorldSoundEventId": "SFX_Goblin_Mace_Club_Slam_Impact",
                 "Particles": [
                   {
                     "SystemId": "Dungeon_Goblin_Mace_Slam",
@@ -49,30 +52,19 @@
                     "TargetNodeName": "Origin",
                     "Scale": 0.2083,
                     "PositionOffset": {
-                      "Y": 0.1
+                      "Y": 0.1,
+                      "Z": 2.0
                     }
                   }
                 ],
                 "CameraEffect": "Impact"
               },
               "HitEntity": {
-                "Type": "DamageEntity",
-                "DamageCalculator": {
-                  "BaseDamage": {
-                    "Bludgeoning": 28
-                  },
-                  "RandomPercentageModifier": 0.1
-                },
-                "DamageAttribute": "Damage",
-                "DamageEffects": {
-                  "Knockback": {
-                    "Type": "Force",
-                    "Force": 8,
-                    "Direction": {
-                      "Y": 0.7
-                    }
+                "Interactions": [
+                  {
+                    "Type": "GrandSlamRuneDamage"
                   }
-                }
+                ]
               }
             }
           ]

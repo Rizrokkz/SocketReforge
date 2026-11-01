@@ -24,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
+import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
@@ -88,8 +89,8 @@ public final class LoreEffectEST extends DamageEventSystem {
         Player defender = targetRef == null ? null : store.getComponent(targetRef, Player.getComponentType());
 
         if (attacker != null) {
-            LoreProcHandler.recordVolleyRuneHit(store, attackerRef, targetRef);
-            LoreProcHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
+            CoreRuneHandler.recordVolleyRuneHit(store, attackerRef, targetRef);
+            CoreRuneHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
         }
 
         if (attacker != null && targetRef != null) {
@@ -180,7 +181,7 @@ public final class LoreEffectEST extends DamageEventSystem {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
             LoreHeldItemUpdateManager.applyOrQueue(store, attackerRef, attacker, ctx, updated);
         }
-        LoreProcHandler.addCriticalChargeFromHit(attacker, weapon);
+        CoreRuneHandler.addCriticalChargeFromHit(attacker, weapon);
     }
 
     private void applyDefenderLore(Store<EntityStore> store,

@@ -1,5 +1,7 @@
 {
-  "Interactions": ["Ability_WolfPack_Rune_Cast_2"],
+  "Interactions": [
+    { "Type": "CoreRuneCost" },
+    "Ability_WolfPack_Rune_Cast_2"],
   "RequireNewClick": false,
   "Tags": {"Attack": ["Melee"]}
 }

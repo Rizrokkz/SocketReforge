@@ -27,7 +27,7 @@
     ],
     "Cooldown": 18,
     "Cast": "Root_Ability_Rune_Whirlwind",
-    "CostType": "Stamina"
+    "CostType": "Mana"
   },
   "Tags": {
     "Type": [

@@ -1,5 +1,7 @@
 {
-  "Interactions": ["Ability_BloodRush_Rune_Cast"],
+  "Interactions": [
+    { "Type": "CoreRuneCost" },
+    "Ability_BloodRush_Rune_Cast"],
   "RequireNewClick": false,
   "Tags": {"Attack": ["Melee"]}
 }

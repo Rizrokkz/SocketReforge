@@ -1,5 +1,7 @@
 {
-  "Interactions": ["Ability_Omnislash_Rechain_Slam"],
+  "Interactions": [
+    { "Type": "CoreRuneCost" },
+    "Ability_Omnislash_Rechain_Slam"],
   "RequireNewClick": false,
   "Tags": {"Attack": ["Melee"]}
 }

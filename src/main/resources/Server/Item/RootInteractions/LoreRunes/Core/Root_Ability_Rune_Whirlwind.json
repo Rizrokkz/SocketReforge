@@ -1,5 +1,6 @@
 {
   "Interactions": [
+    { "Type": "CoreRuneCost" },
     "Ability_Rune_Whirlwind_Cast"
   ],
   "RequireNewClick": false,

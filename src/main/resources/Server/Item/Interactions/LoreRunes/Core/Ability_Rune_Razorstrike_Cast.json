@@ -73,9 +73,6 @@
               "Type": "Simple",
               "RunTime": 0.01,
               "Effects": {
-                "ItemPlayerAnimationsId": "Mace",
-                "ItemAnimationId": "SwingDown",
-                "WaitForAnimationToFinish": false,
                 "WorldSoundEventId": "SFX_Ability_Ground_Slam_Impact"
               }
             },

@@ -26,7 +26,7 @@
     ],
     "Cooldown": 24,
     "Cast": "Root_Ability_Rune_Vortexstrike",
-    "CostType": "Stamina"
+    "CostType": "Mana"
   },
   "Tags": {
     "Type": [

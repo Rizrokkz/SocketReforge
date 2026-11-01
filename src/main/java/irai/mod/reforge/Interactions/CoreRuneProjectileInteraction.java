@@ -14,7 +14,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Int
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Lore.CoreRuneHandler;
 
 /** Routes projectile contacts from core runes into their damage and bounce handlers. */
 public final class CoreRuneProjectileInteraction {
@@ -48,7 +48,7 @@ public final class CoreRuneProjectileInteraction {
                 return;
             }
             Store<EntityStore> store = ownerRef.getStore();
-            LoreProcHandler.handleCoreRuneProjectileHit(
+            CoreRuneHandler.handleCoreRuneProjectileHit(
                     store, ownerRef, context.getEntity(), targetRef, ability);
         }
     }
@@ -77,7 +77,7 @@ public final class CoreRuneProjectileInteraction {
                 return;
             }
             Store<EntityStore> store = ownerRef.getStore();
-            LoreProcHandler.handleCoreRuneProjectileMiss(
+            CoreRuneHandler.handleCoreRuneProjectileMiss(
                     store, ownerRef, context.getEntity(), ability);
         }
     }

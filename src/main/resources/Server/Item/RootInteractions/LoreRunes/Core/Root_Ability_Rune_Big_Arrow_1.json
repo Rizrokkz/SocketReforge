@@ -1,6 +1,7 @@
 {
     "Interactions":  [
-                         "Ability_Rune_Big_Arrow_1_Cast"
+      { "Type": "CoreRuneCost" },
+      "Ability_Rune_Big_Arrow_1_Cast"
                      ],
     "RequireNewClick":  false,
     "Tags":  {

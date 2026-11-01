@@ -5,7 +5,7 @@
   },
   "Icon": "Icons/ItemsGenerated/Rune_Ability_Volley.png",
   "ItemLevel": 1,
-  "Quality": "Epic",
+  "Quality": "Rare",
   "Categories": [
     "Items.Ingredients"
   ],
@@ -27,7 +27,7 @@
     ],
     "Cooldown": 20,
     "Cast": "Root_Ability_Rune_Volley_5",
-    "CostType": "Stamina"
+    "CostType": "Mana"
   },
   "Tags": {
     "Type": [

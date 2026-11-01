@@ -30,6 +30,7 @@ import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifie
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Lore.LoreSocketManager;
@@ -105,10 +106,10 @@ public final class CoreAbilityRune extends SimpleInteraction {
                     + ", supportRunestones=" + supportRunestones);
         }
         if (isInteractionAuthoredAbility(ability)) {
-            LoreProcHandler.activateCoreAbilityRuneSupport(
+            CoreRuneHandler.activateCoreAbilityRuneSupport(
                     store, ownerRef, targetRef, supportRunestones, ability, feedTier);
         } else {
-            LoreProcHandler.activateCoreAbilityRune(store, ownerRef, targetRef, ability, feedTier,
+            CoreRuneHandler.activateCoreAbilityRune(store, ownerRef, targetRef, ability, feedTier,
                     abilityAttributes == null ? Map.of() : abilityAttributes, supportRunestones);
         }
     }

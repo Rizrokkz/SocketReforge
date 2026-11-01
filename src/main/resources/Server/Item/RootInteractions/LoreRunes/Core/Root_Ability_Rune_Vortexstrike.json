@@ -1,5 +1,6 @@
 {
   "Interactions": [
+    { "Type": "CoreRuneCost" },
     "Ability_Rune_Vortexstrike_Cast"
   ],
   "RequireNewClick": false,

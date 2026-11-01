@@ -35,6 +35,7 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Lore.LoreDamageUtils;
+import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreProcHandler;
 import irai.mod.reforge.Util.DamageNumberFormatter;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
@@ -174,7 +175,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                         newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
                     }
 
-                    boolean chargedCrit = LoreProcHandler.consumeCriticalChargeGuarantee(attacker, weapon);
+                    boolean chargedCrit = CoreRuneHandler.consumeCriticalChargeGuarantee(attacker, weapon);
                     boolean isCrit = chargedCrit || (critChancePercent > 0.0
                             && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent);
                     if (isCrit) {

@@ -1,5 +1,6 @@
 {
   "Interactions": [
+    { "Type": "CoreRuneCost" },
     "Ability_Rune_Volley_5_Cast"
   ],
   "RequireNewClick": false,

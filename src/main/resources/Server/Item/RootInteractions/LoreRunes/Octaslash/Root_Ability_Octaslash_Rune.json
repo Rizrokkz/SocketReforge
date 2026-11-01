@@ -1,5 +1,6 @@
 {
   "Interactions": [
+    { "Type": "CoreRuneCost" },
     "Ability_Octaslash_Rune_Cast"
   ],
   "RequireNewClick": false,

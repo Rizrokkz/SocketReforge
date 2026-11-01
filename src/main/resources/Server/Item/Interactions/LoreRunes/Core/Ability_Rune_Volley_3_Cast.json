@@ -7,13 +7,39 @@
           "Type": "Simple",
           "RunTime": 0.1,
           "Effects": {
+            "ItemPlayerAnimationsId": "Bow",
+            "ItemAnimationId": "ShootCharging",
+            "WaitForAnimationToFinish": false,
+            "ClearAnimationOnFinish": false,
             "WorldSoundEventId": "SFX_Bow_T2_Draw",
-            "LocalSoundEventId": "SFX_Bow_T2_Draw_Local"
+            "LocalSoundEventId": "SFX_Bow_T2_Draw_Local",
+            "Particles": [
+              {
+                "SystemId": "Bow_Signature_Launch",
+                "TargetEntityPart": "PrimaryItem",
+                "TargetNodeName": "Handle",
+                "PositionOffset": {
+                  "X": 0.85
+                }
+              }
+            ]
           }
         },
         {
           "Type": "CoreAbilityRune",
           "Ability": "Volley_3"
+        },
+        {
+          "Type": "Simple",
+          "RunTime": 0.35,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Bow",
+            "ItemAnimationId": "ShootCharged",
+            "WaitForAnimationToFinish": false,
+            "ClearAnimationOnFinish": true,
+            "WorldSoundEventId": "SFX_Bow_T2_Signature_Shoot",
+            "LocalSoundEventId": "SFX_Bow_T2_Signature_Shoot_Local"
+          }
         }
       ]
     },

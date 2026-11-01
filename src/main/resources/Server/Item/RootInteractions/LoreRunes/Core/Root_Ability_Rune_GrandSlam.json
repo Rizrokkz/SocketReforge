@@ -1,5 +1,6 @@
 {
   "Interactions": [
+    { "Type": "CoreRuneCost" },
     "Ability_Rune_GrandSlam_Cast"
   ],
   "RequireNewClick": false,

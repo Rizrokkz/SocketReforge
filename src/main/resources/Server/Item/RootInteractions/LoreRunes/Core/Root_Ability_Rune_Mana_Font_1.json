@@ -1,6 +1,7 @@
 {
     "Interactions":  [
-                         "Ability_Rune_Mana_Font_1_Cast"
+      { "Type": "CoreRuneCost" },
+      "Ability_Rune_Mana_Font_1_Cast"
                      ],
     "RequireNewClick":  false,
     "Tags":  {
