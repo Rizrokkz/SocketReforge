@@ -1,0 +1,25 @@
+{
+  "Parent": "DamageEntityParent_Hit_Interrupt",
+  "DamageCalculator": {
+    "BaseDamage": { "Physical": 1.5 }
+  },
+  "DamageAttribute": "Damage",
+  "DamageEffects": {
+    "Knockback": {
+      "Type": "Point",
+      "Force": 3.0,
+      "VelocityY": 1.0,
+      "OffsetX": 0,
+      "OffsetZ": 0,
+      "VelocityType": "Add",
+      "VelocityConfig": {
+        "AirResistance": 0.97,
+        "AirResistanceMax": 0.96,
+        "GroundResistance": 0.94,
+        "GroundResistanceMax": 0.82,
+        "Threshold": 3.0,
+        "Style": "Exp"
+      }
+    }
+  }
+}

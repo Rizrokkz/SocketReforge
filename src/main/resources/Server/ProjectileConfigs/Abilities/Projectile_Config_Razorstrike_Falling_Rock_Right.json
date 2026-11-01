@@ -1,0 +1,36 @@
+{
+  "Model": "SocketReforge_Razorstrike_Rock_Projectile",
+  "Physics": {
+    "Type": "Standard",
+    "Gravity": 24,
+    "TerminalVelocityAir": 36,
+    "TerminalVelocityWater": 8,
+    "RotationMode": "Velocity",
+    "ComputePitch": true,
+    "Bounciness": 0
+  },
+  "LaunchForce": 19,
+  "DirectionalHitBox": { "Width": 1.8, "Depth": 1.2 },
+  "SpawnOffset": { "X": 1.4, "Y": 0.8, "Z": -0.5 },
+  "SpawnRotationOffset": { "Pitch": 38, "Yaw": 16, "Roll": 0 },
+  "Interactions": {
+    "ProjectileHit": {
+      "Interactions": [
+        { "Type": "CoreRuneProjectileHit", "Ability": "Razorstrike" },
+        "Ability_Rune_Razorstrike_Rock_Hit",
+        "Ability_Rune_Razorstrike_Rock_Explosion",
+        { "Type": "RazorstrikeTerrainRock" },
+        { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
+        { "Type": "RemoveEntity" }
+      ]
+    },
+    "ProjectileMiss": {
+      "Interactions": [
+        "Ability_Rune_Razorstrike_Rock_Explosion",
+        { "Type": "RazorstrikeTerrainRock" },
+        { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
+        { "Type": "RemoveEntity" }
+      ]
+    }
+  }
+}

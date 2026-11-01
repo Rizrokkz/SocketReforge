@@ -1,0 +1,27 @@
+{
+  "Type": "Selector",
+  "RunTime": 0.04,
+  "Selector": {
+    "Id": "Donut",
+    "Height": 1.2,
+    "Width": 0.75,
+    "MaxRadius": 4.0
+  },
+  "Effects": {
+    "WorldSoundEventId": "SFX_Goblin_Mace_Club_Slam_Impact",
+    "Particles": [
+      {
+        "SystemId": "Dungeon_Goblin_Mace_Slam",
+        "Scale": 0.2083,
+        "PositionOffset": { "Y": 0.1 }
+      }
+    ],
+    "CameraEffect": "Impact"
+  },
+  "HitEntity": {
+    "Interactions": [
+      { "Type": "CoreAbilityRuneHitSupport" },
+      "Ability_Rune_Razorstrike_Rock_Slam_Hit"
+    ]
+  }
+}

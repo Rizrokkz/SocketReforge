@@ -1,6 +1,7 @@
 {
   "Interactions": [
-    { "Type": "CoreRuneCost" },
+    { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+    { "Type": "ChangeStat", "UseAbilityCost": true },
     "Ability_WolfPack_Rune_Cast_3"],
   "RequireNewClick": false,
   "Tags": {"Attack": ["Melee"]}

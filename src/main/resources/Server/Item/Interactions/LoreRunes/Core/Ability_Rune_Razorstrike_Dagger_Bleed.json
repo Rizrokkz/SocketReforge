@@ -1,0 +1,6 @@
+{
+  "Type": "ApplyEffect",
+  "EffectId": "Lore_Bleed",
+  "Entity": "Target",
+  "Duration": 3.0
+}

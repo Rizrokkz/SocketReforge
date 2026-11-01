@@ -19,6 +19,7 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.FormattedMessage;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.asset.type.item.config.metadata.ItemDisplayMetadata;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEvent;
@@ -46,6 +47,7 @@ import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
 import irai.mod.reforge.Lore.LoreGemRegistry;
+import irai.mod.reforge.Lore.LoreSoulstoneUtils;
 import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.ResonanceSystem;
@@ -718,6 +720,12 @@ public class DynamicTooltipUtils {
         String effectiveItemId = baseItemId != null && !baseItemId.isBlank() ? baseItemId : itemId;
         boolean isSmithyChest = SmithyLegacyUtils.isSmithyChestId(effectiveItemId);
         boolean isEquipmentItem = ItemTypeUtils.isEquipmentItemId(effectiveItemId);
+        int loreRunestoneLevel = Math.max(0, extractIntValue(metadata,
+                MetadataKeys.LORE_MODIFIER_RUNESTONE_LEVEL));
+        int loreRunestoneFeedTier = Math.max(0, extractIntValue(metadata,
+                MetadataKeys.LORE_MODIFIER_RUNESTONE_FEED_TIER));
+        boolean hasCoreRunestoneProgression = (loreRunestoneLevel > 0 || loreRunestoneFeedTier > 0)
+                && LoreSocketManager.isAbilityRunestoneId(effectiveItemId);
         boolean isRecipeItem = "Resonant_Recipe".equalsIgnoreCase(effectiveItemId);
         String soulstoneSpiritId = extractStringValue(metadata, MetadataKeys.LORE_SOULSTONE_SPIRIT);
         boolean hasSoulstoneSpirit = soulstoneSpiritId != null && !soulstoneSpiritId.isBlank();
@@ -726,7 +734,8 @@ public class DynamicTooltipUtils {
         // If no supported metadata is present, return null
         if (reforgeLevel <= 0 && socketMax <= 0 && socketFilled <= 0 && partsProfileType == null
                 && !hasResonance && !hasCorruptionResonance && !hasRecipePattern && !hasRecipeType && !hasRecipeUsages
-                && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty && !hasSoulstoneSpirit) {
+                && !hasRecipeName && !isEquipmentItem && !hasSoftcorePenalty && !hasSoulstoneSpirit
+                && !hasCoreRunestoneProgression) {
             return null;
         }
         
@@ -735,6 +744,37 @@ public class DynamicTooltipUtils {
             String label = tr(langCode, "tooltip.lore_soulstone_spirit", "Infused Spirit");
             tooltipLines.add(COLOR_PURPLE + label + ": " + COLOR_WHITE
                     + localizeLoreSpiritName(soulstoneSpiritId, langCode));
+
+            if (!appendCoreAbilitySoulstoneTooltip(tooltipLines, soulstoneSpiritId, 0, langCode)) {
+                LoreAbility soulstoneAbility = LoreAbilityRegistry.getAbility(soulstoneSpiritId);
+                if (soulstoneAbility != null) {
+                    String abilityName = soulstoneAbility.resolveAbilityName(langCode);
+                    if (abilityName != null && !abilityName.isBlank()) {
+                        String abilityLabel = tr(langCode, "tooltip.lore_soulstone_ability", "Ability");
+                        tooltipLines.add(COLOR_PURPLE + abilityLabel + ": " + COLOR_WHITE + abilityName);
+                    }
+
+                    String effect = soulstoneAbility.describeEffectOnly(langCode, 1, 0);
+                    if (effect != null && !effect.isBlank()) {
+                        String effectLabel = tr(langCode, "tooltip.lore_soulstone_effect", "Effect");
+                        tooltipLines.add(COLOR_GRAY + effectLabel + ": " + effect);
+                    }
+
+                    String procDetails = soulstoneAbility.describeProcDetails(langCode, 0);
+                    if (procDetails != null && !procDetails.isBlank()) {
+                        tooltipLines.add(COLOR_GRAY + procDetails);
+                    }
+                }
+            }
+        }
+        if (hasCoreRunestoneProgression) {
+            String levelLabel = tr(langCode, "tooltip.lore_runestone_level", "Lore Level");
+            String feedLabel = tr(langCode, "tooltip.lore_runestone_feed_tier", "Lore Feed Tier");
+            String cooldownLabel = tr(langCode, "tooltip.lore_runestone_cooldown", "Lore Cooldown Reduction");
+            tooltipLines.add(COLOR_PURPLE + levelLabel + ": " + COLOR_WHITE + loreRunestoneLevel);
+            tooltipLines.add(COLOR_GRAY + feedLabel + ": " + loreRunestoneFeedTier);
+            tooltipLines.add(COLOR_GRAY + cooldownLabel + ": "
+                    + LoreSocketManager.getLoreCooldownReductionPercent(loreRunestoneFeedTier) + "%");
         }
         String metadataName = extractDisplayName(metadata);
         String metadataNameKey = extractDisplayNameKey(metadata);
@@ -1083,6 +1123,20 @@ public class DynamicTooltipUtils {
                     tooltipLines.add(COLOR_PURPLE + runestoneLabel + ": " + COLOR_WHITE
                             + tr(langCode, "tooltip.rune_delta_level", "{0} Lv.{1}", runestoneName,
                                     LoreSocketManager.getRuneUpgradeLevel(damageFeeds, manaFeeds)));
+                    int runeLevel = loreLevels != null && i < loreLevels.length
+                            ? Math.max(0, loreLevels[i]) : 0;
+                    int runeFeedTier = loreFeedTiers != null && i < loreFeedTiers.length
+                            ? Math.max(0, loreFeedTiers[i]) : 0;
+                    if (runeLevel > 0 || runeFeedTier > 0) {
+                        String runeLoreLevelLabel = tr(langCode, "tooltip.lore_runestone_level", "Lore Level");
+                        String feedLabel = tr(langCode, "tooltip.lore_runestone_feed_tier", "Lore Feed Tier");
+                        String cooldownLabel = tr(langCode, "tooltip.lore_runestone_cooldown",
+                                "Lore Cooldown Reduction");
+                        tooltipLines.add(COLOR_GRAY + runeLoreLevelLabel + ": " + runeLevel
+                                + " | " + feedLabel + ": " + runeFeedTier);
+                        tooltipLines.add(COLOR_GRAY + cooldownLabel + ": "
+                                + LoreSocketManager.getLoreCooldownReductionPercent(runeFeedTier) + "%");
+                    }
                     continue;
                 }
                 if (!hasSpirit && hasEntry) {
@@ -1094,14 +1148,17 @@ public class DynamicTooltipUtils {
                 tooltipLines.add(COLOR_PURPLE + loreLabel + ": " + COLOR_WHITE + spiritName
                         + " " + levelLabel + " " + Math.max(1, level));
 
+                int feedTier = loreFeedTiers != null && i < loreFeedTiers.length
+                        ? Math.max(0, loreFeedTiers[i]) : 0;
+                if (LoreSoulstoneUtils.isInfusedSoulstoneId(entry)
+                        && appendCoreAbilitySoulstoneTooltip(tooltipLines, spiritId, feedTier, langCode)) {
+                    continue;
+                }
+
                 LoreAbility ability = LoreAbilityRegistry.getAbility(spiritId);
                 String effectOverride = loreEffects != null && i < loreEffects.length ? loreEffects[i] : "";
                 ability = applyEffectOverride(ability, effectOverride);
                 if (ability != null) {
-                    int feedTier = loreFeedTiers != null && i < loreFeedTiers.length ? loreFeedTiers[i] : 0;
-                    if (feedTier < 0) {
-                        feedTier = 0;
-                    }
                     int safeLevel = Math.max(1, level);
                     tooltipLines.add(COLOR_GRAY + ability.describeEffectOnly(langCode, safeLevel, feedTier));
                     String procDetails = ability.describeProcDetails(langCode, feedTier);
@@ -4440,6 +4497,55 @@ public class DynamicTooltipUtils {
         }
         int namespaceSeparator = normalized.indexOf(':');
         return humanizeToken(namespaceSeparator >= 0 ? normalized.substring(namespaceSeparator + 1) : normalized);
+    }
+
+    /** Uses the mapped Core rune's real description instead of its retired lore-proc text. */
+    private static boolean appendCoreAbilitySoulstoneTooltip(List<String> tooltipLines,
+                                                             String spiritId,
+                                                             int feedTier,
+                                                             String langCode) {
+        if (tooltipLines == null) {
+            return false;
+        }
+        String runeItemId = LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId, feedTier);
+        if (runeItemId == null || runeItemId.isBlank()) {
+            return false;
+        }
+
+        String abilityLabel = tr(langCode, "tooltip.lore_soulstone_ability", "Ability");
+        tooltipLines.add(COLOR_PURPLE + abilityLabel + ": " + COLOR_WHITE
+                + localizeLoreRunestoneName(runeItemId, langCode));
+
+        String description = resolveItemDescription(runeItemId, langCode);
+        if (description != null && !description.isBlank()) {
+            String effectLabel = tr(langCode, "tooltip.lore_soulstone_effect", "Effect");
+            tooltipLines.add(COLOR_GRAY + effectLabel + ": " + description);
+        }
+
+        if (feedTier > 0) {
+            String feedLabel = tr(langCode, "tooltip.lore_runestone_feed_tier", "Lore Feed Tier");
+            String cooldownLabel = tr(langCode, "tooltip.lore_runestone_cooldown",
+                    "Lore Cooldown Reduction");
+            tooltipLines.add(COLOR_GRAY + feedLabel + ": " + feedTier
+                    + " | " + cooldownLabel + ": "
+                    + LoreSocketManager.getLoreCooldownReductionPercent(feedTier) + "%");
+        }
+        return true;
+    }
+
+    private static String resolveItemDescription(String itemId, String langCode) {
+        String descriptionKey = null;
+        ItemStack stack = new ItemStack(itemId, 1);
+        Item item = stack.getItem();
+        if (item != null && item != Item.UNKNOWN) {
+            descriptionKey = item.getDescriptionTranslationKey();
+        }
+        if (descriptionKey == null || descriptionKey.isBlank()) {
+            descriptionKey = "irai.items." + itemId + ".description";
+        }
+        String description = LangLoader.getTranslationForLanguage(descriptionKey, langCode);
+        return description == null || description.isBlank() || description.equals(descriptionKey)
+                ? null : description;
     }
 
     private static LoreAbility applyEffectOverride(LoreAbility ability, String overrideRaw) {

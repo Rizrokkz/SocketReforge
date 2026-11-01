@@ -1,0 +1,161 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Vortexstrike_Push" },
+        {
+          "Type": "Serial",
+          "Interactions": [
+            {
+              "Type": "Simple",
+              "RunTime": 0.45,
+              "Effects": {
+                "ItemPlayerAnimationsId": "Mace",
+                "ItemAnimationId": "SwingDown",
+                "WaitForAnimationToFinish": true,
+                "ClearAnimationOnFinish": false,
+                "WorldSoundEventId": "SFX_Sword_T2_Signature_Part_1",
+                "LocalSoundEventId": "SFX_Sword_T2_Signature_Part_1_Local",
+                "Particles": [
+                  {
+                    "SystemId": "Totem_Slow_AoE",
+                    "TargetEntityPart": "Entity",
+                    "TargetNodeName": "Origin",
+                    "Scale": 0.45
+                  }
+                ]
+              }
+            },
+            {
+              "Type": "Selector",
+              "RunTime": 0.05,
+              "Selector": { "Id": "AOECircle", "Range": 6.0 },
+              "HitEntity": { "Interactions": ["Ability_Rune_Vortexstrike_Pull_Hit"] }
+            },
+            { "Type": "Simple", "RunTime": 0.40, "Effects": {} },
+            {
+              "Type": "Parallel",
+              "Interactions": [
+                {
+                  "Interactions": [
+                    {
+                      "Type": "Simple",
+                      "RunTime": 0.24,
+                      "Effects": {
+                        "ItemPlayerAnimationsId": "Pummel",
+                        "ItemAnimationId": "Kick_Spinning_Right",
+                        "WaitForAnimationToFinish": false,
+                        "ClearAnimationOnFinish": false,
+                        "WorldSoundEventId": "SFX_Sword_T2_Signature_Part_2",
+                        "LocalSoundEventId": "SFX_Sword_T2_Signature_Part_2_Local",
+                        "Particles": [
+                          {
+                            "SystemId": "Impact_Sword_Signature_Spin",
+                            "TargetEntityPart": "Entity",
+                            "TargetNodeName": "Origin",
+                            "Scale": 1.2
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Interactions": [
+                    {
+                      "Type": "Selector",
+                      "RunTime": 0.05,
+                      "Selector": { "Id": "AOECircle", "Range": 6.0 },
+                      "HitEntity": { "Interactions": ["Ability_Rune_Vortexstrike_Push_Hit"] }
+                    }
+                  ]
+                }
+              ]
+            },
+            { "Type": "Simple", "RunTime": 0.21, "Effects": {} },
+            {
+              "Type": "Parallel",
+              "Interactions": [
+                {
+                  "Interactions": [
+                    {
+                      "Type": "ApplyForce",
+                      "Direction": { "X": 0, "Y": 0, "Z": -1 },
+                      "AdjustVertical": false,
+                      "WaitForGround": false,
+                      "Force": 22.5,
+                      "ChangeVelocityType": "Add",
+                      "VelocityConfig": {
+                        "AirResistance": 0.97,
+                        "AirResistanceMax": 0.96,
+                        "GroundResistance": 0.94,
+                        "GroundResistanceMax": 0.928,
+                        "Threshold": 5,
+                        "Style": "Exp"
+                      },
+                      "Effects": {
+                        "ItemPlayerAnimationsId": "Omnislash",
+                        "ItemAnimationId": "DashForward",
+                        "WaitForAnimationToFinish": false,
+                        "ClearAnimationOnFinish": false
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Interactions": [
+                    {
+                      "Type": "Selector",
+                      "RunTime": 0.25,
+                      "Selector": {
+                        "Id": "Stab",
+                        "EndDistance": 5,
+                        "ExtendTop": 2,
+                        "ExtendBottom": 2,
+                        "ExtendLeft": 2,
+                        "ExtendRight": 2
+                      },
+                      "HitEntity": {
+                        "Interactions": ["Ability_Rune_Vortexstrike_Chase_Hit"]
+                      },
+                      "Next": { "Type": "Simple", "RunTime": 0.06 }
+                    }
+                  ]
+                },
+                {
+                  "Interactions": [
+                    { "Type": "Simple", "RunTime": 0.12, "Effects": {} },
+                    {
+                      "Type": "Simple",
+                      "RunTime": 0.18,
+                      "Effects": {
+                        "ItemPlayerAnimationsId": "Omnislash",
+                        "ItemAnimationId": "SlashUpLeft",
+                        "WaitForAnimationToFinish": false,
+                        "WorldSoundEventId": "SFX_Ability_Wind_Strike_Slash",
+                        "Particles": [
+                          {
+                            "SystemId": "Impact_Sword_Signature_Spin",
+                            "TargetEntityPart": "Entity",
+                            "TargetNodeName": "Origin",
+                            "Scale": 0.9
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
+      ]
+    }
+  ]
+}

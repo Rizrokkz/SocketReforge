@@ -1,0 +1,35 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Pummel_3.name",
+    "Description": "irai.items.Rune_Pummel_3.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_Pummel.png",
+  "ItemLevel": 1,
+  "Quality": "Legendary",
+  "Categories": ["Items.Ingredients"],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_Pummel.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Attributes": {
+      "Damage": 1.3,
+      "Cooldown": 1.0,
+      "Cost": 1.0,
+      "Speed": 1.0,
+      "Duration": 1.0,
+      "AoeScale": 1.0,
+      "ProjectileSize": 1.0
+    },
+    "Slot": "Core",
+    "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
+    "Cost": 34,
+    "Tags": ["mechanic.melee"],
+    "AbilityKeywords": ["Damage", "Melee", "Stun"],
+    "Cooldown": 32,
+    "Cast": "Root_Ability_Pummel_Rune_3",
+    "CostType": "Mana"
+  },
+  "Tags": {"Type": ["Ingredient"]}
+}

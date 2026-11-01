@@ -1,0 +1,33 @@
+{
+  "Model": "Lore_Cross_Slash_Projectile",
+  "Physics": {
+    "Type": "Standard",
+    "Gravity": 0,
+    "TerminalVelocityAir": 48,
+    "TerminalVelocityWater": 20,
+    "RotationMode": "Velocity",
+    "ComputePitch": true,
+    "Bounciness": 0
+  },
+  "LaunchForce": 28,
+  "DirectionalHitBox": { "Width": 0.8, "Depth": 0.55 },
+  "SpawnOffset": { "X": 0.42, "Y": 0.2, "Z": -0.55 },
+  "SpawnRotationOffset": { "Pitch": 0, "Yaw": 3, "Roll": 10 },
+  "Interactions": {
+    "ProjectileHit": {
+      "Interactions": [
+        { "Type": "CoreRuneProjectileHit", "Ability": "Razorstrike" },
+        "Ability_Rune_Razorstrike_Dagger_Hit",
+        "Ability_Rune_Razorstrike_Dagger_Bleed",
+        "Common_Projectile_Impact_Effects",
+        { "Type": "RemoveEntity" }
+      ]
+    },
+    "ProjectileMiss": {
+      "Interactions": [
+        "Common_Projectile_Miss",
+        { "Type": "RemoveEntity" }
+      ]
+    }
+  }
+}

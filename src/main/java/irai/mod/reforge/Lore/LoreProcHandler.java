@@ -132,6 +132,7 @@ public final class LoreProcHandler {
     private static final Map<Ref<EntityStore>, TimedAbilitySupport> ACTIVE_OCTASLASH_SUPPORT = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, CoreAbilityNativeModifiers> ACTIVE_CORE_ABILITY_NATIVE_MODIFIERS =
             new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> ACTIVE_PUMMEL_NATIVE_CASTS = new ConcurrentHashMap<>();
     private static final Map<UUID, ForeignCoreAbilitySupport> ACTIVE_FOREIGN_CORE_ABILITY_SUPPORT =
             new ConcurrentHashMap<>();
     private static final Set<String> WOLF_SPAWN_FAILURES_LOGGED = ConcurrentHashMap.newKeySet();
@@ -140,6 +141,7 @@ public final class LoreProcHandler {
     private static final long WOLF_CREATIVE_NOTICE_COOLDOWN_MS = 5000L;
     private static final long OCTASLASH_SUPPORT_WINDOW_MS = 6000L;
     private static final long CORE_ABILITY_MODIFIER_WINDOW_MS = 8000L;
+    private static final long PUMMEL_NATIVE_CAST_GUARD_MS = 6000L;
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
@@ -157,8 +159,6 @@ public final class LoreProcHandler {
     private static final Set<Ref<EntityStore>> OMNISLASH_OWNED_IFRAME_COMPONENTS =
             ConcurrentHashMap.newKeySet();
     private static final Map<Ref<EntityStore>, BloodRushSequence> ACTIVE_BLOOD_RUSH_RUNE_SEQUENCES =
-            new ConcurrentHashMap<>();
-    private static final Map<Ref<EntityStore>, PummelSequence> ACTIVE_PUMMEL_RUNE_SEQUENCES =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, OmnislashRuneChain> ACTIVE_OMNISLASH_RUNE_CHAINS =
             new ConcurrentHashMap<>();
@@ -229,12 +229,6 @@ public final class LoreProcHandler {
     private static final long BLOOD_RUSH_RUNE_HIT_INTERVAL_MS = 350L;
     private static final long BLOOD_RUSH_RUNE_TIMEOUT_MS = 10000L;
     private static final int PUMMEL_RUNE_HITS = 5;
-    private static final long PUMMEL_RUNE_TIMEOUT_MS = 8000L;
-    private static final long PUMMEL_RUNE_SEQUENCE_GUARD_MS = 900L;
-    private static final long PUMMEL_RUNE_STUN_MS = 1200L;
-    private static final double PUMMEL_RUNE_MELEE_RANGE = 3.5d;
-    private static final double PUMMEL_RUNE_MIN_FACING_DOT = 0.7071067811865476d;
-    private static final double PUMMEL_RUNE_KNOCKBACK_FORCE = 7.0d;
     private static final double BLOOD_RUSH_TARGET_RADIUS = 8.0d;
     private static final float BLOOD_RUSH_BASE_DAMAGE_PER_HIT = 0.30f;
     private static final float BLOOD_RUSH_MISSING_HEALTH_BONUS_PER_HIT = 0.30f;
@@ -245,16 +239,7 @@ public final class LoreProcHandler {
     static final int CORE_RUNE_MAX_TARGETS = 48;
     static final int CORE_RUNE_MAX_NPC_CHECKS = 512;
     private static final String BLOOD_RUSH_RUNE_ITEM_ID = LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
-    private static final String PUMMEL_RUNE_ITEM_ID = LoreSocketManager.PUMMEL_RUNE_ITEM_ID;
-    private static final String[] PUMMEL_RUNE_HIT_PARTICLE_IDS = {"Impact_Unarmed"};
     private static final String BLOOD_RUSH_SWEEP_EFFECT_ID = "Lore_BloodRush_Sweep_Weapon";
-    private static final String[] PUMMEL_SWEEP_EFFECT_IDS_BY_HIT = {
-            "Lore_Pummel_Sweep_Left_Hand",
-            "Lore_Pummel_Sweep_Right_Hand",
-            "Lore_Pummel_Sweep_Right_Foot",
-            "Lore_Pummel_Sweep_Right_Foot",
-            "Lore_Pummel_Sweep_Left_Foot"
-    };
     private static final String[] BLOOD_RUSH_HIT_PARTICLE_IDS = {
             "Combat/Mace/Signature/Impact_Mace_Signature",
             "Impact_Mace_Signature"
@@ -1031,31 +1016,6 @@ public final class LoreProcHandler {
                           float baseDamage,
                           boolean skipRefine,
                           List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-            this.store = store;
-            this.attackerRef = attackerRef;
-            this.targetRef = targetRef;
-            this.baseDamage = Math.max(0f, baseDamage);
-            this.skipRefine = skipRefine;
-            this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
-                    ? List.of() : List.copyOf(supportRunestones);
-        }
-    }
-
-    private static final class PummelSequence {
-        final Store<EntityStore> store;
-        final Ref<EntityStore> attackerRef;
-        final Ref<EntityStore> targetRef;
-        final float baseDamage;
-        final boolean skipRefine;
-        final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
-        int hitsApplied;
-
-        PummelSequence(Store<EntityStore> store,
-                       Ref<EntityStore> attackerRef,
-                       Ref<EntityStore> targetRef,
-                       float baseDamage,
-                       boolean skipRefine,
-                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
             this.store = store;
             this.attackerRef = attackerRef;
             this.targetRef = targetRef;
@@ -2150,6 +2110,23 @@ public final class LoreProcHandler {
         float damageAmount = amount * damageMultiplier;
         boolean ranSignature = false;
         try {
+            String mappedRuneItemId = primaryProc
+                    ? resolveMappedRuneProcItemId(ability.getEffectType(), spiritId, level, safeFeedTier)
+                    : null;
+            if (mappedRuneItemId != null && selfRef != null) {
+                if (ability.getEffectType() == LoreEffectType.PUMMEL
+                        && isPummelNativeCastActive(selfRef)) {
+                    return false;
+                }
+                LoreDebug.logKv("rune.proc.dispatch", "rune", mappedRuneItemId,
+                        "spirit", spiritId, "feedTier", safeFeedTier, "origin", origin);
+                tryRunSocketedAbility(store, commandBuffer, selfRef, opponentRef,
+                        mappedRuneItemId, 0, 0, safeFeedTier);
+                // A mapped proc belongs to its native rune root. Do not also run the
+                // legacy scripted effect for the same proc if the root rejects it.
+                return false;
+            }
+
             // Lore abilities should not execute built-in signature chains.
             if (!LORE_DISABLE_SIGNATURE_EFFECTS && isSignatureStyle && !isVortexstrike) {
                 if (primaryProc) {
@@ -2520,53 +2497,15 @@ public final class LoreProcHandler {
                 applyChargeAttack(store, attackerRef, opponentRef, selfIsAttacker, damage, amount, value, safeFeedTier,
                         damageMultiplier, commandBuffer);
             }
-            case OMNISLASH -> {
-                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null) {
-                    String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(level, safeFeedTier);
-                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef, runeItemId, 0, 0);
-                }
+            case OMNISLASH, RUNE_OCTASLASH, CORE_ABILITY_RUNE,
+                    PUMMEL, BLOOD_RUSH, SUMMON_WOLF_PACK -> {
+                // Mapped rune roots are dispatched once before this legacy effect switch.
             }
             case OCTASLASH -> applyMultiHitSingleTarget(store, attackerRef, opponentRef, selfIsAttacker, damage, amount,
                     LoreAbility.scaleEffectValue(value, safeFeedTier),
                     resolveFeedScaledHits(OCTASLASH_BASE_HITS, OCTASLASH_MAX_HITS, safeFeedTier), 0.12d, 0.55d,
                     OMNISLASH_SLASH_PARTICLE_IDS, OCTASLASH_FINAL_MULTIPLIER, OCTASLASH_RAMP_PER_HIT,
                     damageMultiplier, safeFeedTier);
-            case RUNE_OCTASLASH -> {
-                if (primaryProc && attackerRef != null && opponentRef != null) {
-                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
-                            OCTASLASH_RUNE_ITEM_ID, 0, 0);
-                }
-            }
-            case CORE_ABILITY_RUNE -> {
-                if (primaryProc && selfIsAttacker && attackerRef != null) {
-                    String runeItemId = LoreSocketManager.resolveCoreAbilityRunestoneItemId(
-                            spiritId, safeFeedTier);
-                    if (runeItemId != null) {
-                        LoreDebug.logKv("soulstone.rune.cast", "spirit", spiritId,
-                                "rune", runeItemId, "feedTier", safeFeedTier, "origin", origin);
-                        tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
-                                runeItemId, 0, 0, safeFeedTier);
-                    }
-                }
-            }
-            case PUMMEL -> {
-                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null
-                        && !ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
-                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
-                            PUMMEL_RUNE_ITEM_ID, 0, 0);
-                }
-            }
-            case BLOOD_RUSH -> {
-                if (primaryProc && selfIsAttacker && attackerRef != null && opponentRef != null) {
-                    tryRunSocketedAbility(store, commandBuffer, attackerRef, opponentRef,
-                            BLOOD_RUSH_RUNE_ITEM_ID, 0, 0);
-                }
-            }
-            case SUMMON_WOLF_PACK -> LoreWorldTasks.queue(store, () -> {
-                if (!store.isShutdown() && attackerOrSelfRef != null && attackerOrSelfRef.isValid()) {
-                    trySummonWolfPack(store, attackerOrSelfRef, playerId, safeFeedTier, opponentRef);
-                }
-            });
             default -> {
                 // no-op
             }
@@ -2575,6 +2514,26 @@ public final class LoreProcHandler {
         } finally {
             preserveSignatureEnergyIfConsumed(store, signatureOwnerRef, signatureSnapshot, ranSignature);
         }
+    }
+
+    private static String resolveMappedRuneProcItemId(LoreEffectType effectType,
+                                                       String spiritId,
+                                                       int level,
+                                                       int feedTier) {
+        if (effectType == null) {
+            return null;
+        }
+        return switch (effectType) {
+            case CORE_ABILITY_RUNE -> LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId, feedTier);
+            case OMNISLASH -> LoreSocketManager.resolveOmnislashRuneItemId(level, feedTier);
+            case RUNE_OCTASLASH -> LoreSocketManager.OCTASLASH_RUNE_ITEM_ID;
+            case PUMMEL -> LoreSocketManager.PUMMEL_RUNE_ITEM_ID;
+            case BLOOD_RUSH -> LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
+            case SUMMON_WOLF_PACK -> feedTier >= 1
+                    ? LoreSocketManager.resolveWolfPackRuneItemId(feedTier)
+                    : null;
+            default -> null;
+        };
     }
 
     private static boolean tryRunBuiltInSignature(Store<EntityStore> store,
@@ -2837,11 +2796,15 @@ public final class LoreProcHandler {
         if (targetRef != null) {
             context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
         }
+        if ("Rune_GrandSlam_1".equalsIgnoreCase(runestone.getItemId())) {
+            float damageBase = LoreDamageUtils.resolveGrandSlamRuneOneDamageBase(store, attackerRef);
+            RuneDeltaCastSnapshotEST.setRuneDamageBase(context, damageBase);
+            RuneDeltaDebug.logKv(attacker, "ability.damageBase", "rune", runestone.getItemId(),
+                    "damageBase", damageBase);
+        }
         float damageMultiplier = LoreSocketManager.getRuneDamageMultiplier(damageFeeds);
         float manaCostMultiplier = LoreSocketManager.getRuneManaCostMultiplier(manaFeeds);
-        float weaponDamageBonus = SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(runestone.getItemId())
-                ? LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 0.0f) * 0.30f
-                : 0.0f;
+        float weaponDamageBonus = resolveSocketedRuneWeaponDamageBonus(store, attackerRef, runestone);
         RuneDeltaCastSnapshotEST.setRuneDeltaMultipliers(
                 context, damageMultiplier, manaCostMultiplier, weaponDamageBonus);
         InteractionChain chain = manager.initChain(SOCKETED_RUNE_INTERACTION_TYPE, context, root, false);
@@ -2859,6 +2822,19 @@ public final class LoreProcHandler {
                 "costMultiplier", manaCostMultiplier,
                 "rulesPassed", rulesPassed);
         manager.queueExecuteChain(chain);
+    }
+
+    private static float resolveSocketedRuneWeaponDamageBonus(Store<EntityStore> store,
+                                                              Ref<EntityStore> attackerRef,
+                                                              ItemStack runestone) {
+        float weaponDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
+        if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(
+                runestone == null ? null : runestone.getItemId())) {
+            // Keep Soul Reaper's existing refined-damage bonus in addition to the
+            // base-weapon contribution shared by mapped lore-proc casts.
+            weaponDamage += LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 0.0f) * 0.30f;
+        }
+        return weaponDamage;
     }
 
     private static InteractionContext createSocketedAbilityContext(InteractionManager manager,
@@ -5125,6 +5101,57 @@ public final class LoreProcHandler {
                 System.currentTimeMillis() + CORE_ABILITY_MODIFIER_WINDOW_MS));
     }
 
+    /** Prevents a Pummel rune's own native combo hits from recursively triggering its mapped lore proc. */
+    public static void markPummelNativeCast(Ref<EntityStore> ownerRef) {
+        if (ownerRef != null && ownerRef.isValid()) {
+            long expiresAt = System.currentTimeMillis() + PUMMEL_NATIVE_CAST_GUARD_MS;
+            ACTIVE_PUMMEL_NATIVE_CASTS.put(ownerRef, expiresAt);
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> ACTIVE_PUMMEL_NATIVE_CASTS.remove(ownerRef, expiresAt),
+                    PUMMEL_NATIVE_CAST_GUARD_MS, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Keeps native core-rune finisher stun behavior behind the existing ailment immunity checks. */
+    public static void applyCoreAbilityRuneStun(Store<EntityStore> store,
+                                                Ref<EntityStore> attackerRef,
+                                                Ref<EntityStore> targetRef,
+                                                long durationMs) {
+        if (store == null || store.isShutdown() || attackerRef == null || targetRef == null
+                || !attackerRef.isValid() || !targetRef.isValid() || durationMs <= 0L) {
+            return;
+        }
+        Runnable apply = () -> {
+            if (store.isShutdown() || !isEntityAlive(store, attackerRef)
+                    || !isEntityAlive(store, targetRef) || attackerRef.equals(targetRef)
+                    || isNpcAilmentImmune(store, targetRef, "stun")
+                    || !canApplyBossCounterAilment(store, targetRef, "stun")) {
+                return;
+            }
+            applyStunForDuration(store, targetRef, durationMs);
+            onBossCounterAilmentApplied(store, targetRef, "stun");
+            spawnStunParticles(store, targetRef, attackerRef);
+        };
+        if (!LoreWorldTasks.queue(store, apply)) {
+            apply.run();
+        }
+    }
+
+    private static boolean isPummelNativeCastActive(Ref<EntityStore> ownerRef) {
+        if (ownerRef == null || !ownerRef.isValid()) {
+            return false;
+        }
+        Long expiresAt = ACTIVE_PUMMEL_NATIVE_CASTS.get(ownerRef);
+        if (expiresAt == null) {
+            return false;
+        }
+        if (expiresAt > System.currentTimeMillis()) {
+            return true;
+        }
+        ACTIVE_PUMMEL_NATIVE_CASTS.remove(ownerRef, expiresAt);
+        return false;
+    }
+
     /** Applies the generic native Damage attribute to scripted Core rune hits. */
     public static float applyCoreAbilityNativeDamageModifier(Ref<EntityStore> ownerRef, float damage) {
         CoreAbilityNativeModifiers modifiers = getActiveCoreAbilityNativeModifiers(ownerRef);
@@ -5564,58 +5591,6 @@ public final class LoreProcHandler {
                 BLOOD_RUSH_RUNE_HIT_INTERVAL_MS * 3L, TimeUnit.MILLISECONDS);
     }
 
-    /** Starts the five-strike native-animation Pummel combination. */
-    public static void startPummelRune(Store<EntityStore> store,
-                                       Ref<EntityStore> attackerRef,
-                                       Ref<EntityStore> targetRef) {
-        startPummelRune(store, attackerRef, targetRef, List.of());
-    }
-
-    public static void startPummelRune(Store<EntityStore> store,
-                                       Ref<EntityStore> attackerRef,
-                                       Ref<EntityStore> targetRef,
-                                       List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
-                || ACTIVE_PUMMEL_RUNE_SEQUENCES.containsKey(attackerRef)) {
-            return;
-        }
-        if (store.getComponent(attackerRef, Player.getComponentType()) == null) {
-            return;
-        }
-        if (targetRef != null && !targetRef.isValid()) {
-            targetRef = null;
-        }
-        Ref<EntityStore> pummelTarget = resolvePummelRuneTarget(store, attackerRef, targetRef);
-        if (pummelTarget == null) {
-            return;
-        }
-
-        applyCoreAbilitySupportRunestones(store, attackerRef, pummelTarget,
-                supportRunestones, LoreTrigger.ON_SKILL_USE);
-
-        LoreDamageUtils.DamageBaseResult baseResult =
-                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
-        if (baseResult.amount <= 0f) {
-            return;
-        }
-        PummelSequence sequence = new PummelSequence(store, attackerRef, pummelTarget,
-                baseResult.amount, baseResult.skipRefine, supportRunestones);
-        if (ACTIVE_PUMMEL_RUNE_SEQUENCES.putIfAbsent(attackerRef, sequence) != null) {
-            return;
-        }
-        OMNISLASH_SCHEDULER.schedule(
-                () -> ACTIVE_PUMMEL_RUNE_SEQUENCES.remove(attackerRef, sequence),
-                PUMMEL_RUNE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-    }
-
-    /** Applies one JSON-configured Pummel strike from the world task queue. */
-    public static void applyPummelRuneStep(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
-        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
-            return;
-        }
-        LoreWorldTasks.queue(store, () -> applyPummelRuneStepOnWorldThread(store, attackerRef));
-    }
-
     /** Summons the pack tier represented by an equipped Soulstone Wolf rune. */
     public static void startWolfPackRune(Store<EntityStore> store,
                                          Ref<EntityStore> ownerRef,
@@ -5784,180 +5759,6 @@ public final class LoreProcHandler {
                 // A role without a marked-target slot simply keeps following its AI.
             }
         }
-    }
-
-    private static void applyPummelRuneStepOnWorldThread(Store<EntityStore> store,
-                                                          Ref<EntityStore> attackerRef) {
-        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
-            return;
-        }
-        PummelSequence sequence = ACTIVE_PUMMEL_RUNE_SEQUENCES.get(attackerRef);
-        if (sequence == null) {
-            return;
-        }
-        if (sequence.hitsApplied >= PUMMEL_RUNE_HITS) {
-            finishPummelRuneSequence(attackerRef, sequence);
-            return;
-        }
-        if (sequence.targetRef == null || !isEntityAlive(store, sequence.targetRef)
-                || !isPummelTargetInMeleeCone(store, attackerRef, sequence.targetRef)) {
-            sequence.hitsApplied = PUMMEL_RUNE_HITS;
-            finishPummelRuneSequence(attackerRef, sequence);
-            return;
-        }
-
-        int hitIndex = sequence.hitsApplied;
-        float damageScale = hitIndex == PUMMEL_RUNE_HITS - 1 ? 0.80f : 0.30f;
-        float hitDamage = sequence.baseDamage * damageScale;
-        LoreDamageUtils.applyLoreDamage(store, attackerRef, sequence.targetRef,
-                hitDamage, sequence.skipRefine);
-        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        LoreVisuals.playSignatureSound(attacker, hitIndex == PUMMEL_RUNE_HITS - 1
-                ? "SFX_Mace_T2_Signature_Impact" : "SFX_Mace_T1_Impact");
-        String impactParticleId = LoreVisuals.resolveParticleEffectId(PUMMEL_RUNE_HIT_PARTICLE_IDS);
-        if (impactParticleId != null) {
-            LoreVisuals.spawnSlashParticles(store, attackerRef, sequence.targetRef, impactParticleId, 0.95f);
-        }
-        if (hitIndex >= 0 && hitIndex < PUMMEL_SWEEP_EFFECT_IDS_BY_HIT.length) {
-            LoreVisuals.tryApplyVisualEffect(store, attackerRef, PUMMEL_SWEEP_EFFECT_IDS_BY_HIT[hitIndex]);
-        }
-        queueAbilityHitWeaponLores(store, attackerRef, sequence.targetRef);
-        applyCoreAbilitySupportRunestones(store, attackerRef, sequence.targetRef,
-                sequence.supportRunestones, LoreTrigger.ON_HIT);
-
-        sequence.hitsApplied++;
-        if (sequence.hitsApplied >= PUMMEL_RUNE_HITS) {
-            applyPummelFinalKnockback(store, attackerRef, sequence.targetRef);
-            if (!isNpcAilmentImmune(store, sequence.targetRef, "stun")
-                    && canApplyBossCounterAilment(store, sequence.targetRef, "stun")) {
-                applyStunForDuration(store, sequence.targetRef, PUMMEL_RUNE_STUN_MS);
-                onBossCounterAilmentApplied(store, sequence.targetRef, "stun");
-                spawnStunParticles(store, sequence.targetRef, attackerRef);
-            }
-            finishPummelRuneSequence(attackerRef, sequence);
-        }
-    }
-
-    private static Ref<EntityStore> resolvePummelRuneTarget(Store<EntityStore> store,
-                                                             Ref<EntityStore> attackerRef,
-                                                             Ref<EntityStore> requestedTargetRef) {
-        if (requestedTargetRef != null) {
-            return requestedTargetRef.isValid()
-                    && isPummelTargetInMeleeCone(store, attackerRef, requestedTargetRef)
-                    ? requestedTargetRef : null;
-        }
-
-        List<Ref<EntityStore>> candidates = LoreTargetingUtils.collectOmnislashTargets(
-                store, attackerRef, null, PUMMEL_RUNE_MELEE_RANGE,
-                PUMMEL_RUNE_MELEE_RANGE * PUMMEL_RUNE_MELEE_RANGE, "pummel.rune",
-                DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, OMNISLASH_MAX_NPC_CHECKS);
-        Ref<EntityStore> closestTarget = null;
-        double closestDistanceSquared = Double.MAX_VALUE;
-        Vector3d attackerPosition = LoreTargetingUtils.getPosition(store, attackerRef);
-        if (attackerPosition == null) {
-            return null;
-        }
-        for (Ref<EntityStore> candidate : candidates) {
-            if (candidate == null || candidate.equals(attackerRef)
-                    || !isPummelTargetInMeleeCone(store, attackerRef, candidate)) {
-                continue;
-            }
-            Vector3d candidatePosition = LoreTargetingUtils.getPosition(store, candidate);
-            if (candidatePosition == null) {
-                continue;
-            }
-            double distanceSquared = attackerPosition.distanceSquared(candidatePosition);
-            if (distanceSquared < closestDistanceSquared) {
-                closestTarget = candidate;
-                closestDistanceSquared = distanceSquared;
-            }
-        }
-        return closestTarget;
-    }
-
-    private static boolean isPummelTargetInMeleeCone(Store<EntityStore> store,
-                                                      Ref<EntityStore> attackerRef,
-                                                      Ref<EntityStore> targetRef) {
-        if (store == null || attackerRef == null || targetRef == null
-                || !attackerRef.isValid() || !targetRef.isValid()
-                || attackerRef.equals(targetRef) || !isEntityAlive(store, targetRef)) {
-            return false;
-        }
-        Vector3d attackerPosition = LoreTargetingUtils.getPosition(store, attackerRef);
-        Vector3d targetPosition = LoreTargetingUtils.getPosition(store, targetRef);
-        if (attackerPosition == null || targetPosition == null) {
-            return false;
-        }
-        Vector3d targetDirection = new Vector3d(targetPosition).sub(attackerPosition);
-        if (targetDirection.lengthSquared() > PUMMEL_RUNE_MELEE_RANGE * PUMMEL_RUNE_MELEE_RANGE) {
-            return false;
-        }
-        targetDirection.y = 0.0d;
-        if (targetDirection.lengthSquared() <= 1.0e-6d) {
-            return false;
-        }
-        targetDirection.normalize();
-
-        Vector3d facingDirection = null;
-        HeadRotation headRotation = store.getComponent(attackerRef, HeadRotation.getComponentType());
-        if (headRotation != null && headRotation.getDirection() != null) {
-            facingDirection = new Vector3d(headRotation.getDirection());
-        }
-        if (facingDirection == null || facingDirection.x * facingDirection.x
-                + facingDirection.z * facingDirection.z <= 1.0e-6d) {
-            TransformComponent attackerTransform = store.getComponent(
-                    attackerRef, TransformComponent.getComponentType());
-            Rotation3f lookRotation = resolveLookRotation(attackerTransform);
-            if (attackerTransform != null && attackerTransform.getPosition() != null && lookRotation != null) {
-                facingDirection = new Transform(
-                        new Vector3d(attackerTransform.getPosition()), lookRotation).getDirection();
-            }
-        }
-        if (facingDirection == null) {
-            return false;
-        }
-        facingDirection.y = 0.0d;
-        if (facingDirection.lengthSquared() <= 1.0e-6d) {
-            return false;
-        }
-        facingDirection.normalize();
-        return facingDirection.dot(targetDirection) >= PUMMEL_RUNE_MIN_FACING_DOT;
-    }
-
-    private static void applyPummelFinalKnockback(Store<EntityStore> store,
-                                                  Ref<EntityStore> attackerRef,
-                                                  Ref<EntityStore> targetRef) {
-        if (store == null || attackerRef == null || targetRef == null) {
-            return;
-        }
-        TransformComponent attackerTransform = store.getComponent(attackerRef, TransformComponent.getComponentType());
-        TransformComponent targetTransform = store.getComponent(targetRef, TransformComponent.getComponentType());
-        if (attackerTransform == null || targetTransform == null
-                || attackerTransform.getPosition() == null || targetTransform.getPosition() == null) {
-            return;
-        }
-        Vector3d direction = new Vector3d(targetTransform.getPosition())
-                .sub(attackerTransform.getPosition());
-        direction.set(direction.x, 0.0d, direction.z);
-        if (direction.lengthSquared() <= 1.0e-6d) {
-            return;
-        }
-        direction.normalize().mul(PUMMEL_RUNE_KNOCKBACK_FORCE).add(0.0d, 2.0d, 0.0d);
-        Velocity velocity = store.ensureAndGetComponent(targetRef, Velocity.getComponentType());
-        if (velocity != null) {
-            velocity.addInstruction(direction, VORTEXSTRIKE_LUNGE_CONFIG,
-                    com.hypixel.hytale.protocol.ChangeVelocityType.Add);
-        }
-    }
-
-    private static void finishPummelRuneSequence(Ref<EntityStore> attackerRef, PummelSequence sequence) {
-        if (attackerRef == null || sequence == null) {
-            return;
-        }
-        // Keep the in-flight guard while deferred weapon-lore hit callbacks drain.
-        OMNISLASH_SCHEDULER.schedule(
-                () -> ACTIVE_PUMMEL_RUNE_SEQUENCES.remove(attackerRef, sequence),
-                PUMMEL_RUNE_SEQUENCE_GUARD_MS, TimeUnit.MILLISECONDS);
     }
 
     /** Starts the reusable Omnislash combo from a rune interaction. */
@@ -6676,6 +6477,8 @@ public final class LoreProcHandler {
         if (targetRef != null && targetRef.isValid()) {
             context.getMetaStore().putMetaObject(Interaction.TARGET_ENTITY, targetRef);
         }
+        RuneDeltaCastSnapshotEST.setRuneWeaponDamageBonus(context,
+                resolveSocketedRuneWeaponDamageBonus(store, attackerRef, runestone));
         if (rechainFinale) {
             // Arm protection before queuing the cast: the first jump/impact tick can
             // occur before the custom jump interaction is processed.

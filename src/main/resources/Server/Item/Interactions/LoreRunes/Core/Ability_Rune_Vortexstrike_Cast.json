@@ -3,9 +3,37 @@
   "Interactions": [
     {
       "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Vortexstrike" },
         {
-          "Type": "CoreAbilityRune",
-          "Ability": "Vortexstrike"
+          "Type": "Serial",
+          "Interactions": [
+            {
+              "Type": "Simple",
+              "RunTime": 0.45,
+              "Effects": {
+                "ItemPlayerAnimationsId": "Mace",
+                "ItemAnimationId": "SwingDown",
+                "WaitForAnimationToFinish": true,
+                "ClearAnimationOnFinish": false,
+                "WorldSoundEventId": "SFX_Sword_T2_Signature_Part_1",
+                "LocalSoundEventId": "SFX_Sword_T2_Signature_Part_1_Local",
+                "Particles": [
+                  {
+                    "SystemId": "Totem_Slow_AoE",
+                    "TargetEntityPart": "Entity",
+                    "TargetNodeName": "Origin",
+                    "Scale": 0.45
+                  }
+                ]
+              }
+            },
+            {
+              "Type": "Selector",
+              "RunTime": 0.05,
+              "Selector": { "Id": "AOECircle", "Range": 6.0 },
+              "HitEntity": { "Interactions": ["Ability_Rune_Vortexstrike_Pull_Hit"] }
+            }
+          ]
         }
       ]
     },

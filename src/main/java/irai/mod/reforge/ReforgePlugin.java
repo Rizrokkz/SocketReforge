@@ -115,12 +115,16 @@ import irai.mod.reforge.Interactions.CorruptionInteraction;
 import irai.mod.reforge.Interactions.EssenceSocketBench;
 import irai.mod.reforge.Interactions.LoreSocketBench;
 import irai.mod.reforge.Interactions.OmnislashRune;
-import irai.mod.reforge.Interactions.PummelRune;
+import irai.mod.reforge.Interactions.CoreAbilityRuneHitSupport;
+import irai.mod.reforge.Interactions.CoreAbilityRuneStun;
 import irai.mod.reforge.Interactions.CoreAbilityRune;
 import irai.mod.reforge.Interactions.CoreRuneCost;
 import irai.mod.reforge.Interactions.OctaslashRuneSupport;
 import irai.mod.reforge.Interactions.CoreRuneProjectileInteraction;
-import irai.mod.reforge.Interactions.GrandSlamRuneDamage;
+import irai.mod.reforge.Interactions.RazorstrikeRockDaggerBurst;
+import irai.mod.reforge.Interactions.RazorstrikeTerrainRock;
+import irai.mod.reforge.Interactions.GrandSlamRuneHitSupport;
+import irai.mod.reforge.Interactions.VortexstrikeGravityHold;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Interactions.ResonantCompendiumUse;
 import irai.mod.reforge.Interactions.ResonantRecipeCombineUse;
@@ -351,18 +355,26 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCodecRegistry(Interaction.CODEC).register("OmnislashRuneSlamDive", OmnislashRune.RechainSlamDive.class, OmnislashRune.RechainSlamDive.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("BloodRushRune", BloodRushRune.Cast.class, BloodRushRune.Cast.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("BloodRushRuneStep", BloodRushRune.Step.class, BloodRushRune.Step.CODEC);
-        this.getCodecRegistry(Interaction.CODEC).register("PummelRune", PummelRune.Cast.class, PummelRune.Cast.CODEC);
-        this.getCodecRegistry(Interaction.CODEC).register("PummelRuneStep", PummelRune.Step.class, PummelRune.Step.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register(
+                "CoreAbilityRuneHitSupport", CoreAbilityRuneHitSupport.class, CoreAbilityRuneHitSupport.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register(
+                "CoreAbilityRuneStun", CoreAbilityRuneStun.class, CoreAbilityRuneStun.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("CoreAbilityRune", CoreAbilityRune.class, CoreAbilityRune.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("CoreRuneCost", CoreRuneCost.class, CoreRuneCost.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register(
-                "GrandSlamRuneDamage", GrandSlamRuneDamage.class, GrandSlamRuneDamage.CODEC);
+                "GrandSlamRuneHitSupport", GrandSlamRuneHitSupport.class, GrandSlamRuneHitSupport.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register(
+                "VortexstrikeGravityHold", VortexstrikeGravityHold.class, VortexstrikeGravityHold.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("OctaslashRuneSupport",
                 OctaslashRuneSupport.class, OctaslashRuneSupport.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("CoreRuneProjectileHit",
                 CoreRuneProjectileInteraction.Hit.class, CoreRuneProjectileInteraction.Hit.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("CoreRuneProjectileMiss",
                 CoreRuneProjectileInteraction.Miss.class, CoreRuneProjectileInteraction.Miss.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeRockDaggerBurst",
+                RazorstrikeRockDaggerBurst.class, RazorstrikeRockDaggerBurst.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeTerrainRock",
+                RazorstrikeTerrainRock.class, RazorstrikeTerrainRock.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune1", WolfPackRune.One.class, WolfPackRune.One.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune2", WolfPackRune.Two.class, WolfPackRune.Two.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune3", WolfPackRune.Three.class, WolfPackRune.Three.CODEC);
@@ -425,6 +437,10 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(refineEST);
         this.getEntityStoreRegistry().registerSystem(socketEffectEST);
         this.getEntityStoreRegistry().registerSystem(loreEffectEST);
+        // LoreSkillUseEST contributes metadata consumed by this cast snapshot system.
+        // Register the dependency first because the registry validates dependencies
+        // immediately when each system is registered.
+        this.getEntityStoreRegistry().registerSystem(runeDeltaCastSnapshotEST);
         this.getEntityStoreRegistry().registerSystem(loreSkillUseEST);
         this.getEntityStoreRegistry().registerSystem(enemyElementalShieldEST);
         if (customCombatTextEnabled) {
@@ -442,7 +458,6 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);
         this.getEntityStoreRegistry().registerSystem(npcLootSocketDropEST);
         this.getEntityStoreRegistry().registerSystem(nativeTooltipInventoryEventEST);
-        this.getEntityStoreRegistry().registerSystem(runeDeltaCastSnapshotEST);
         this.getEntityStoreRegistry().registerSystem(resonantRecipeCraftingEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryEventEST);
         this.getEntityStoreRegistry().registerSystem(weaponAffinityAppearanceInventoryChangeEST);

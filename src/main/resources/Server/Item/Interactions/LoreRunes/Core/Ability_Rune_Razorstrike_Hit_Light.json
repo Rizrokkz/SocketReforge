@@ -1,0 +1,12 @@
+{
+  "Parent": "DamageEntityParent_Hit_Interrupt",
+  "DamageCalculator": {
+    "BaseDamage": { "Physical": 0.12 }
+  },
+  "DamageAttribute": "Damage",
+  "DamageEffects": {
+    "WorldParticles": [
+      { "SystemId": "Impact_Sword_Basic" }
+    ]
+  }
+}

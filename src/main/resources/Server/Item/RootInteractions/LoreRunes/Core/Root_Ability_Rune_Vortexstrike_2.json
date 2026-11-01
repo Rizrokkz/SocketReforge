@@ -1,0 +1,13 @@
+{
+  "Interactions": [
+    { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+    { "Type": "ChangeStat", "UseAbilityCost": true },
+    "Ability_Rune_Vortexstrike_2_Cast"
+  ],
+  "RequireNewClick": false,
+  "Tags": {
+    "Attack": [
+      "Melee"
+    ]
+  }
+}

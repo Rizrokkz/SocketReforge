@@ -3,10 +3,10 @@
   "Interactions": [
     {
       "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Pummel" },
         {
           "Type": "Serial",
           "Interactions": [
-            {"Type": "PummelRune"},
             "Ability_Pummel_Rune_Hit_01",
             "Ability_Pummel_Rune_Hit_02",
             "Ability_Pummel_Rune_Hit_03",
@@ -18,10 +18,7 @@
     },
     {
       "Interactions": [
-        {
-          "Type": "TriggerCooldown",
-          "UseAbilityCooldown": true
-        }
+        { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
       ]
     }
   ]

@@ -66,6 +66,8 @@ public final class CoreRuneHandler {
             new ConcurrentHashMap<>();
     private static final Map<UUID, Long> BERSERK_RUNE_UNTIL = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> CRITICAL_CHARGE_HITS = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> VORTEXSTRIKE_AIR_HOLD_UNTIL = new ConcurrentHashMap<>();
+    private static final Set<Ref<EntityStore>> ACTIVE_VORTEXSTRIKE_AIR_HOLDS = ConcurrentHashMap.newKeySet();
 
     private static final long VOLLEY_RUNE_BUFF_DURATION_MS = 5000L;
     private static final long VOLLEY_ARROW_GATHER_MS = 350L;
@@ -79,15 +81,13 @@ public final class CoreRuneHandler {
     private static final int VOLLEY_ARROW_MAX_BOUNCES = 8;
 
     private static final double CORE_VORTEXSTRIKE_PULL_RADIUS = 6.0d;
-    private static final long CORE_VORTEXSTRIKE_PULL_DURATION_MS = 450L;
-    private static final double CORE_VORTEXSTRIKE_PULL_FORCE_MAX = 12.0d;
-    private static final double CORE_VORTEXSTRIKE_PUSH_DISTANCE = 5.0d;
+    private static final long CORE_VORTEXSTRIKE_PUSH_DELAY_MS = 900L;
+    private static final long CORE_VORTEXSTRIKE_PUSH_TRAIL_DURATION_MS = 450L;
     private static final String CORE_VORTEXSTRIKE_PUSH_TRAIL_PARTICLE = "Ability_GroundSlam_Line";
     private static final long CORE_VORTEXSTRIKE_PUSH_TRAIL_INTERVAL_MS = 45L;
     private static final float CORE_VORTEXSTRIKE_PUSH_TRAIL_SCALE = 1.2f;
     private static final float CORE_VORTEXSTRIKE_PHASE_DAMAGE_MULTIPLIER = 0.275f;
     private static final float CORE_VORTEXSTRIKE_MAX_PUSH_BONUS_MULTIPLIER = 1.0f;
-
     private record VortexstrikePulledTarget(Ref<EntityStore> targetRef, double pullDistance) {}
 
     private static final String BIG_ARROW_IMPLOSION_PARTICLE_ID = "Lore_Big_Arrow_Implosion";
@@ -138,18 +138,12 @@ public final class CoreRuneHandler {
     }
 
     private static final class BigArrowRuneShot {
-        final float damage;
-        final int feedTier;
         final long expiresAtMs;
         final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         final Set<Ref<EntityStore>> hitTargets = ConcurrentHashMap.newKeySet();
 
-        BigArrowRuneShot(float damage,
-                         int feedTier,
-                         long expiresAtMs,
+        BigArrowRuneShot(long expiresAtMs,
                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-            this.damage = damage;
-            this.feedTier = feedTier;
             this.expiresAtMs = expiresAtMs;
             this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
                     ? List.of() : List.copyOf(supportRunestones);
@@ -157,18 +151,12 @@ public final class CoreRuneHandler {
     }
 
     private static final class RazorstrikeRuneShot {
-        final float damage;
-        final int feedTier;
         final long expiresAtMs;
         final List<LoreSocketManager.SocketedModifierRunestone> supportRunestones;
         final Set<Ref<EntityStore>> hitTargets = ConcurrentHashMap.newKeySet();
 
-        RazorstrikeRuneShot(float damage,
-                            int feedTier,
-                            long expiresAtMs,
+        RazorstrikeRuneShot(long expiresAtMs,
                             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-            this.damage = damage;
-            this.feedTier = feedTier;
             this.expiresAtMs = expiresAtMs;
             this.supportRunestones = supportRunestones == null || supportRunestones.isEmpty()
                     ? List.of() : List.copyOf(supportRunestones);
@@ -253,7 +241,6 @@ public final class CoreRuneHandler {
                 .replace('-', '_').replace(' ', '_');
         if (normalizedAbility.equals("razorstrike") || normalizedAbility.equals("razor_strike")) {
             RazorstrikeRuneShot shot = new RazorstrikeRuneShot(
-                    resolveCoreRuneWeaponDamage(store, attackerRef), Math.max(0, feedTier),
                     System.currentTimeMillis() + 3000L, supportSnapshot);
             ACTIVE_RAZORSTRIKE_RUNE_SHOTS.put(attackerRef, shot);
             OMNISLASH_SCHEDULER.schedule(
@@ -309,10 +296,11 @@ public final class CoreRuneHandler {
         switch (normalizedAbility) {
             case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier, supportRunestones);
             case "vortexstrike", "vortex_strike" ->
-                    castVortexstrikeRune(store, attackerRef, feedTier, supportRunestones);
+                    castVortexstrikeRune(store, attackerRef, feedTier, supportRunestones, false);
+            case "vortexstrike_push", "vortex_strike_push" ->
+                    castVortexstrikeRune(store, attackerRef, feedTier, supportRunestones, true);
             case "big_arrow", "bigarrow", "big_arrow_1", "big_arrow_2", "big_arrow_3" ->
-                    castBigArrowRune(store, attackerRef, feedTier,
-                            parseCoreRuneTier(normalizedAbility, "big_arrow"), supportRunestones);
+                    castBigArrowRune(store, attackerRef, feedTier, supportRunestones);
             case "volley", "volley_3", "volley_4", "volley_5", "volley_6" ->
                     castVolleyRune(store, attackerRef, targetRef, feedTier,
                             parseCoreRuneTier(normalizedAbility, "volley"), abilityAttributes, supportRunestones);
@@ -369,7 +357,8 @@ public final class CoreRuneHandler {
     private static void castVortexstrikeRune(Store<EntityStore> store,
                                              Ref<EntityStore> attackerRef,
                                              int feedTier,
-                                             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+                                             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones,
+                                             boolean addPushPhase) {
         Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
         if (center == null) {
             return;
@@ -390,13 +379,15 @@ public final class CoreRuneHandler {
                 continue;
             }
             double distance = Math.sqrt(center.distanceSquared(targetPosition));
-            double pullForce = Math.min(CORE_VORTEXSTRIKE_PULL_FORCE_MAX, Math.max(1.0d, distance * 2.0d));
-            applyCoreRuneDamage(store, attackerRef, target, phaseDamage, feedTier, supportRunestones);
-            applyCoreRuneVelocity(store, target, center, -pullForce, 0.25d,
-                    com.hypixel.hytale.protocol.ChangeVelocityType.Add);
+            applyCoreAbilitySupportRunestones(store, attackerRef, target,
+                    supportRunestones, LoreTrigger.ON_HIT);
             pulledTargets.add(new VortexstrikePulledTarget(target, distance));
         }
         if (pulledTargets.isEmpty()) {
+            return;
+        }
+
+        if (!addPushPhase) {
             return;
         }
 
@@ -409,8 +400,6 @@ public final class CoreRuneHandler {
             if (pushCenter == null) {
                 return;
             }
-            double pushForce = CORE_VORTEXSTRIKE_PUSH_DISTANCE
-                    / (CORE_VORTEXSTRIKE_PULL_DURATION_MS / 1000.0d);
             for (VortexstrikePulledTarget pulledTarget : capturedTargets) {
                 Ref<EntityStore> target = pulledTarget.targetRef();
                 if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
@@ -432,11 +421,59 @@ public final class CoreRuneHandler {
                 float pushDamage = phaseDamage * (1.0f
                         + (float) (distanceScale * CORE_VORTEXSTRIKE_MAX_PUSH_BONUS_MULTIPLIER));
                 applyCoreRuneDamage(store, attackerRef, target, pushDamage, feedTier, supportRunestones);
-                applyCoreRuneVelocity(store, target, pushCenter, pushForce, 1.2d,
-                        com.hypixel.hytale.protocol.ChangeVelocityType.Add);
                 scheduleVortexstrikePushTrail(store, target, pushCenter, pushDirection);
             }
-        }), CORE_VORTEXSTRIKE_PULL_DURATION_MS, TimeUnit.MILLISECONDS);
+        }), CORE_VORTEXSTRIKE_PUSH_DELAY_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** Counters target gravity briefly so the Vortexstrike IV airborne combo can connect. */
+    public static void holdVortexstrikeTargetGravity(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      long durationMs) {
+        if (store == null || store.isShutdown() || targetRef == null || !targetRef.isValid()
+                || !isEntityAlive(store, targetRef)) {
+            return;
+        }
+        long duration = Math.max(100L, Math.min(2000L, durationMs));
+        VORTEXSTRIKE_AIR_HOLD_UNTIL.merge(targetRef, System.currentTimeMillis() + duration, Math::max);
+        if (ACTIVE_VORTEXSTRIKE_AIR_HOLDS.add(targetRef)) {
+            scheduleVortexstrikeGravityHoldTick(store, targetRef);
+        }
+    }
+
+    /** Ends the brief target lift so the final slam can send the enemy back down. */
+    public static void releaseVortexstrikeTargetGravity(Ref<EntityStore> targetRef) {
+        if (targetRef == null) {
+            return;
+        }
+        VORTEXSTRIKE_AIR_HOLD_UNTIL.remove(targetRef);
+        ACTIVE_VORTEXSTRIKE_AIR_HOLDS.remove(targetRef);
+    }
+
+    private static void scheduleVortexstrikeGravityHoldTick(Store<EntityStore> store,
+                                                             Ref<EntityStore> targetRef) {
+        OMNISLASH_SCHEDULER.schedule(() -> {
+            boolean queued = LoreWorldTasks.queue(store, () -> {
+                Long holdUntil = VORTEXSTRIKE_AIR_HOLD_UNTIL.get(targetRef);
+                if (store.isShutdown() || !targetRef.isValid()
+                        || !isEntityAlive(store, targetRef) || holdUntil == null
+                        || holdUntil <= System.currentTimeMillis()) {
+                    VORTEXSTRIKE_AIR_HOLD_UNTIL.remove(targetRef);
+                    ACTIVE_VORTEXSTRIKE_AIR_HOLDS.remove(targetRef);
+                    return;
+                }
+                Velocity velocity = store.ensureAndGetComponent(targetRef, Velocity.getComponentType());
+                if (velocity != null) {
+                    velocity.setY(0.0d);
+                    velocity.setClient(velocity.getX(), 0.0d, velocity.getZ());
+                }
+                scheduleVortexstrikeGravityHoldTick(store, targetRef);
+            });
+            if (!queued) {
+                VORTEXSTRIKE_AIR_HOLD_UNTIL.remove(targetRef);
+                ACTIVE_VORTEXSTRIKE_AIR_HOLDS.remove(targetRef);
+            }
+        }, 40L, TimeUnit.MILLISECONDS);
     }
 
     /** Leaves the same ground line used by Razorstrike along each target's actual push movement. */
@@ -450,9 +487,9 @@ public final class CoreRuneHandler {
         Vector3d origin = new Vector3d(pushCenter);
         Vector3d fallback = new Vector3d(fallbackDirection).normalize();
         int samples = (int) Math.ceil(
-                CORE_VORTEXSTRIKE_PULL_DURATION_MS / (double) CORE_VORTEXSTRIKE_PUSH_TRAIL_INTERVAL_MS);
+                CORE_VORTEXSTRIKE_PUSH_TRAIL_DURATION_MS / (double) CORE_VORTEXSTRIKE_PUSH_TRAIL_INTERVAL_MS);
         for (int sample = 0; sample <= samples; sample++) {
-            long delayMs = Math.min(CORE_VORTEXSTRIKE_PULL_DURATION_MS,
+            long delayMs = Math.min(CORE_VORTEXSTRIKE_PUSH_TRAIL_DURATION_MS,
                     sample * CORE_VORTEXSTRIKE_PUSH_TRAIL_INTERVAL_MS);
             OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
                 if (store.isShutdown() || !isEntityAlive(store, targetRef)) {
@@ -479,7 +516,6 @@ public final class CoreRuneHandler {
     private static void castBigArrowRune(Store<EntityStore> store,
                                          Ref<EntityStore> attackerRef,
                                          int feedTier,
-                                         int abilityTier,
                                          List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         TransformComponent transform = store.getComponent(attackerRef, TransformComponent.getComponentType());
         Transform look = null;
@@ -503,11 +539,7 @@ public final class CoreRuneHandler {
             return;
         }
         double distance = 24.0d;
-        int bonusTier = abilityTier >= 1 ? Math.min(3, abilityTier)
-                : Math.max(1, Math.min(3, 1 + Math.max(0, feedTier) / 2));
-        float bonusWeaponDamage = resolveCoreRuneWeaponDamage(store, attackerRef) * (0.10f * bonusTier);
-        float damage = resolveCoreRuneWeaponDamage(store, attackerRef) + bonusWeaponDamage;
-        BigArrowRuneShot shot = new BigArrowRuneShot(damage, feedTier,
+        BigArrowRuneShot shot = new BigArrowRuneShot(
                 System.currentTimeMillis() + 4500L, supportRunestones);
         ACTIVE_BIG_ARROW_RUNE_SHOTS.put(attackerRef, shot);
         OMNISLASH_SCHEDULER.schedule(
@@ -549,7 +581,6 @@ public final class CoreRuneHandler {
         RazorstrikeRuneShot shot = ACTIVE_RAZORSTRIKE_RUNE_SHOTS.get(attackerRef);
         if (shot == null) {
             RazorstrikeRuneShot fallback = new RazorstrikeRuneShot(
-                    resolveCoreRuneWeaponDamage(store, attackerRef), 0,
                     System.currentTimeMillis() + 3000L, List.of());
             RazorstrikeRuneShot existing = ACTIVE_RAZORSTRIKE_RUNE_SHOTS.putIfAbsent(attackerRef, fallback);
             shot = existing == null ? fallback : existing;
@@ -567,8 +598,8 @@ public final class CoreRuneHandler {
                 || !isEntityAlive(store, targetRef) || !shot.hitTargets.add(targetRef)) {
             return;
         }
-        applyCoreRuneDamage(store, attackerRef, targetRef, shot.damage,
-                shot.feedTier, shot.supportRunestones);
+        applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
+                shot.supportRunestones, LoreTrigger.ON_HIT);
     }
 
     public static void handleCoreRuneProjectileMiss(Store<EntityStore> store,
@@ -598,8 +629,8 @@ public final class CoreRuneHandler {
                 || !shot.hitTargets.add(targetRef)) {
             return;
         }
-        applyCoreRuneDamage(store, attackerRef, targetRef, shot.damage, shot.feedTier,
-                shot.supportRunestones);
+        applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
+                shot.supportRunestones, LoreTrigger.ON_HIT);
     }
 
     private static void applyVolleyProjectileHit(Store<EntityStore> store,
@@ -1628,12 +1659,20 @@ public final class CoreRuneHandler {
         return Math.max(1.0f, damage);
     }
 
-    /** Adds one full refined weapon hit to Grand Slam I's flat slam damage. */
-    public static void applyGrandSlamRuneDamage(
+    /** Keeps Socket Reforge support runestones and weapon lore procs on native Grand Slam hits. */
+    public static void applyGrandSlamRuneHitSupport(
             Store<EntityStore> store,
             Ref<EntityStore> attackerRef,
             Ref<EntityStore> targetRef,
-            int feedTier,
+            List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
+        applyCoreAbilityRuneHitSupport(store, attackerRef, targetRef, supportRunestones);
+    }
+
+    /** Applies Socket Reforge modifier runestones to a native core-rune hit interaction. */
+    public static void applyCoreAbilityRuneHitSupport(
+            Store<EntityStore> store,
+            Ref<EntityStore> attackerRef,
+            Ref<EntityStore> targetRef,
             List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
         if (store == null || store.isShutdown() || attackerRef == null || targetRef == null
                 || !attackerRef.isValid() || !targetRef.isValid()) {
@@ -1647,14 +1686,8 @@ public final class CoreRuneHandler {
                     || !isEntityAlive(store, targetRef) || attackerRef.equals(targetRef)) {
                 return;
             }
-            Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
-            if (center == null) {
-                return;
-            }
-            float damage = 28.0f + resolveCoreRuneWeaponDamage(store, attackerRef);
-            applyCoreRuneDamage(store, attackerRef, targetRef, damage,
-                    Math.max(0, feedTier), supportSnapshot);
-            applyCoreRuneVelocity(store, targetRef, center, 3.0d, 5.6d);
+            applyCoreAbilitySupportRunestones(store, attackerRef, targetRef,
+                    supportSnapshot, LoreTrigger.ON_HIT);
         };
         if (!LoreWorldTasks.queue(store, apply)) {
             apply.run();

@@ -1076,6 +1076,11 @@ public final class LoreSocketBenchUI {
             }
             if (materialKind(support) == MaterialKind.CLEAR) {
                 LoreSocketData.LoreSocket socket = resolveSelectedSocket(equipment, slotKey);
+                if (isRuneDeltaEquipment(equipment) && socket != null && socket.hasRune()
+                        && LoreSocketManager.isAbilityRunestoneId(socket.getRuneItemId())) {
+                    return LangLoader.getUITranslation(player,
+                            "ui.lore_socket.process_rune_delta_extract_button");
+                }
                 if (socket != null && LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())) {
                     String actionKey = LoreSocketManager.isMaxLevelOctaslashLore(socket)
                             ? "ui.lore_socket.process_octaslash_extract_button"
@@ -1111,9 +1116,9 @@ public final class LoreSocketBenchUI {
                     return LangLoader.getUITranslation(player, actionKey);
                 }
                 if (socket != null && LoreSocketManager.isCoreAbilityRunestoneSpirit(socket.getSpiritId())) {
-                    String actionKey = LoreSocketManager.isMaxLevelCoreAbilityLore(socket)
+                    String actionKey = LoreSocketManager.isExtractableCoreAbilityLore(socket)
                             ? "ui.lore_socket.process_core_rune_extract_button"
-                            : "ui.lore_socket.process_core_rune_max_required_button";
+                            : "ui.lore_socket.process_core_rune_feed_required_button";
                     return LangLoader.getUITranslation(player, actionKey);
                 }
                 if (socket != null && LoreSocketManager.isModifierRunestoneSpirit(socket.getSpiritId())) {
@@ -1736,9 +1741,14 @@ public final class LoreSocketBenchUI {
                 socket.setLevel(LoreSocketManager.getModifierRunestoneLevel(gem.item));
                 socket.setFeedTier(LoreSocketManager.getModifierRunestoneFeedTier(gem.item));
             } else {
-                socket.setLevel(0);
+                boolean hasLoreProgression = LoreSocketManager.hasCoreAbilityRunestoneProgression(gem.item);
+                socket.setLevel(hasLoreProgression
+                        ? LoreSocketManager.getCoreAbilityRunestoneLevel(gem.item) : 0);
                 socket.setXp(0);
-                socket.setFeedTier(0);
+                socket.setFeedTier(hasLoreProgression
+                        ? LoreSocketManager.getCoreAbilityRunestoneFeedTier(gem.item) : 0);
+                socket.setRuneDamageFeeds(LoreSocketManager.getRunestoneDamageFeeds(gem.item));
+                socket.setRuneManaFeeds(LoreSocketManager.getRunestoneManaFeeds(gem.item));
             }
             saveEquipment(player, equipment, data);
 
@@ -1950,6 +1960,26 @@ public final class LoreSocketBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_socket"));
         }
 
+        if (LoreSocketManager.isRuneDeltaActive(equipmentItem) && socket.hasRune()
+                && LoreSocketManager.isAbilityRunestoneId(socket.getRuneItemId())) {
+            if (supportItemId == null
+                    || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_rune_delta_extract_requires_ghastly"));
+            }
+            if (!hasEnoughItem(player, LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID, 1)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_no_clear_item"));
+            }
+            if (!LoreSocketManager.tryExtractRuneDeltaAbilityRunestone(player, data, slotIndex)) {
+                return new ProcessResult(LangLoader.getUITranslation(player,
+                        "ui.lore_feed.status_rune_delta_extract_no_space"));
+            }
+            saveEquipment(player, equipment, data);
+            return new ProcessResult(LangLoader.getUITranslation(player,
+                    "ui.lore_feed.status_rune_delta_extracted"));
+        }
+
         if (LoreSocketManager.isOctaslashSpirit(socket.getSpiritId())) {
             if (!LoreSocketManager.isMaxLevelOctaslashLore(socket)) {
                 return new ProcessResult(LangLoader.getUITranslation(player,
@@ -2060,9 +2090,9 @@ public final class LoreSocketBenchUI {
         }
 
         if (LoreSocketManager.isCoreAbilityRunestoneSpirit(socket.getSpiritId())) {
-            if (!LoreSocketManager.isMaxLevelCoreAbilityLore(socket)) {
+            if (!LoreSocketManager.isExtractableCoreAbilityLore(socket)) {
                 return new ProcessResult(LangLoader.getUITranslation(player,
-                        "ui.lore_feed.status_core_rune_max_required"));
+                        "ui.lore_feed.status_core_rune_feed_required"));
             }
             if (supportItemId == null || !supportItemId.equalsIgnoreCase(LoreSocketManager.GHASTLY_ESSENCE_ITEM_ID)) {
                 return new ProcessResult(LangLoader.getUITranslation(player,

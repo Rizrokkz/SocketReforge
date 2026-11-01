@@ -1,6 +1,7 @@
 {
   "Interactions": [
-    { "Type": "CoreRuneCost" },
+    { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+    { "Type": "ChangeStat", "UseAbilityCost": true },
     "Ability_Rune_GrandSlam_Cast"
   ],
   "RequireNewClick": false,

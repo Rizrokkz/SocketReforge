@@ -15,6 +15,15 @@
   "ItemSoundSetId": "ISS_Items_Gems",
   "MaxStack": 1,
   "Ability": {
+    "Attributes": {
+      "Damage": 1.0,
+      "Cooldown": 1.0,
+      "Cost": 1.0,
+      "Speed": 1.0,
+      "Duration": 1.0,
+      "AoeScale": 1.0,
+      "ProjectileSize": 1.0
+    },
     "Slot": "Core",
     "Weapons": ["Bow", "Crossbow", "Gun", "Staff", "Spellbook", "Wand"],
     "Cost": 22,

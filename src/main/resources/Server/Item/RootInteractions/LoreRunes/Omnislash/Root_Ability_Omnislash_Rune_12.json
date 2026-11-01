@@ -1,3 +1,4 @@
 {"Interactions":[
-  { "Type": "CoreRuneCost" },
+  { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+  { "Type": "ChangeStat", "UseAbilityCost": true },
   "Ability_Omnislash_Rune_Cast_12"],"RequireNewClick":false,"Tags":{"Attack":["Melee"]}}

@@ -17,10 +17,10 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreSocketManager;
 
-/** Applies Grand Slam I damage using the held weapon's refined damage. */
-public final class GrandSlamRuneDamage extends SimpleInteraction {
-    public static final BuilderCodec<GrandSlamRuneDamage> CODEC =
-            BuilderCodec.builder(GrandSlamRuneDamage.class, GrandSlamRuneDamage::new,
+/** Preserves Socket Reforge on-hit support callbacks for Grand Slam I. */
+public final class GrandSlamRuneHitSupport extends SimpleInteraction {
+    public static final BuilderCodec<GrandSlamRuneHitSupport> CODEC =
+            BuilderCodec.builder(GrandSlamRuneHitSupport.class, GrandSlamRuneHitSupport::new,
                     SimpleInteraction.CODEC).build();
 
     @Override
@@ -48,8 +48,7 @@ public final class GrandSlamRuneDamage extends SimpleInteraction {
         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
                 CoreAbilityRune.readEquippedSupportRunestones(
                         context, ownerRef, store, context.getHeldItem());
-        int feedTier = LoreSocketManager.getModifierRunestoneFeedTier(context.getHeldItem());
-        CoreRuneHandler.applyGrandSlamRuneDamage(
-                store, ownerRef, targetRef, feedTier, supportRunestones);
+        CoreRuneHandler.applyGrandSlamRuneHitSupport(
+                store, ownerRef, targetRef, supportRunestones);
     }
 }

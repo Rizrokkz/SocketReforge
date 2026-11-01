@@ -27,7 +27,8 @@
                                                                      {
                                                                          "Type":  "CoreRuneProjectileHit",
                                                                          "Ability":  "Razorstrike"
-                                                                     }
+                                                                     },
+                                                                     "Ability_Rune_Razorstrike_Hit"
                                                                  ]
                                             },
                          "ProjectileMiss":  {

@@ -1,0 +1,18 @@
+{
+  "Type": "Simple",
+  "RunTime": 0.04,
+  "Effects": {
+    "WorldSoundEventId": "SFX_Ability_Ground_Slam_Impact",
+    "Particles": [
+      {
+        "SystemId": "Ability_GroundSlam_Line",
+        "Scale": 0.65
+      },
+      {
+        "SystemId": "Impact_Sword_Signature_Spin",
+        "Scale": 0.8
+      }
+    ],
+    "CameraEffect": "Impact"
+  }
+}

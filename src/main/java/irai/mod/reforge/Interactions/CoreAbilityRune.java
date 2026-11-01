@@ -66,6 +66,9 @@ public final class CoreAbilityRune extends SimpleInteraction {
         if (!canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
             return;
         }
+        if (ability != null && ability.trim().toLowerCase(Locale.ROOT).startsWith("pummel")) {
+            LoreProcHandler.markPummelNativeCast(ownerRef);
+        }
         Ref<EntityStore> targetRef = context.getTargetEntity();
         if (targetRef == null) {
             targetRef = context.getMetaStore().getIfPresentMetaObject(Interaction.TARGET_ENTITY);
@@ -121,7 +124,9 @@ public final class CoreAbilityRune extends SimpleInteraction {
         String normalized = ability.trim().toLowerCase(Locale.ROOT)
                 .replace('-', '_').replace(' ', '_');
         return normalized.equals("grandslam") || normalized.equals("grand_slam")
-                || normalized.equals("razorstrike") || normalized.equals("razor_strike");
+                || normalized.equals("razorstrike") || normalized.equals("razor_strike")
+                || normalized.equals("pummel") || normalized.startsWith("pummel_")
+                || normalized.equals("vortexstrike") || normalized.equals("vortex_strike");
     }
 
     public static boolean canUseWithHeldWeapon(Store<EntityStore> store,

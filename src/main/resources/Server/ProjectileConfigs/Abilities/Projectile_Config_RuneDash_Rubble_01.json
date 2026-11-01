@@ -30,6 +30,10 @@
                                                                          "Next":  "Ability_GroundSlam_Spike"
                                                                      },
                                                                      {
+                                                                         "Type":  "CoreRuneProjectileHit",
+                                                                         "Ability":  "Razorstrike"
+                                                                     },
+                                                                     {
                                                                          "Type":  "RemoveEntity"
                                                                      }
                                                                  ]

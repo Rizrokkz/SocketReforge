@@ -1,0 +1,28 @@
+{
+  "Parent": "DamageEntityParent_Hit_Interrupt",
+  "DamageCalculator": {
+    "BaseDamage": { "Physical": 0.40 }
+  },
+  "DamageAttribute": "Damage",
+  "DamageEffects": {
+    "Knockback": {
+      "Type": "Point",
+      "Force": 0.5,
+      "VelocityY": 9.0,
+      "OffsetX": 0,
+      "OffsetZ": 0,
+      "VelocityType": "Add",
+      "VelocityConfig": {
+        "AirResistance": 0.985,
+        "AirResistanceMax": 0.98,
+        "GroundResistance": 0.94,
+        "GroundResistanceMax": 0.82,
+        "Threshold": 3.0,
+        "Style": "Exp"
+      }
+    },
+    "WorldParticles": [
+      { "SystemId": "Impact_Sword_Basic" }
+    ]
+  }
+}

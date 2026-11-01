@@ -1,0 +1,48 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.28,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Pummel",
+            "ItemAnimationId": "Kick_Tornado_Right",
+            "WorldSoundEventId": "SFX_Mace_T1_Impact",
+            "Particles": [
+              {
+                "SystemId": "Impact_Sword_Signature_Spin",
+                "TargetEntityPart": "Entity",
+                "TargetNodeName": "Origin",
+                "Scale": 0.45
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Selector",
+          "RunTime": 0.19,
+          "Selector": {
+            "Id": "Stab",
+            "EndDistance": 3.5,
+            "ExtendTop": 3,
+            "ExtendBottom": 2,
+            "ExtendLeft": 2,
+            "ExtendRight": 2
+          },
+          "HitEntity": {
+            "Interactions": [
+              { "Type": "CoreAbilityRuneHitSupport" },
+              "Ability_Rune_Razorstrike_Uppercut_Damage"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

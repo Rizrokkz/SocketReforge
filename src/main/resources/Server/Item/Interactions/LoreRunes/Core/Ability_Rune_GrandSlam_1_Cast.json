@@ -62,8 +62,9 @@
               "HitEntity": {
                 "Interactions": [
                   {
-                    "Type": "GrandSlamRuneDamage"
-                  }
+                    "Type": "GrandSlamRuneHitSupport"
+                  },
+                  "Ability_Rune_GrandSlam_1_Hit"
                 ]
               }
             }

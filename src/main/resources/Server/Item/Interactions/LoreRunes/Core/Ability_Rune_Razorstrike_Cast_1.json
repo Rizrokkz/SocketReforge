@@ -1,0 +1,22 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Razorstrike" },
+        {
+          "Type": "Serial",
+          "Interactions": [
+            "Ability_Rune_Razorstrike_Hit_Uppercut",
+            "Ability_Rune_Razorstrike_Dash"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
+      ]
+    }
+  ]
+}

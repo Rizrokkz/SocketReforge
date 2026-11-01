@@ -1,0 +1,30 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Pummel" },
+        {
+          "Type": "Serial",
+          "Interactions": [
+            "Ability_Pummel_Rune_Hit_01",
+            "Ability_Pummel_Rune_Hit_02",
+            "Ability_Pummel_Rune_Hit_03",
+            "Ability_Pummel_Rune_Hit_04",
+            "Ability_Pummel_Rune_Hit_01",
+            "Ability_Pummel_Rune_Hit_02",
+            "Ability_Pummel_Rune_Hit_06",
+            "Ability_Pummel_Rune_Hit_08",
+            "Ability_Pummel_Rune_Hit_09",
+            "Ability_Pummel_Rune_Hit_10"
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
+      ]
+    }
+  ]
+}

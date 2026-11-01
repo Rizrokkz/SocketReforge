@@ -1,0 +1,45 @@
+{
+  "TranslationProperties": {
+    "Name": "irai.items.Rune_Vortexstrike_2.name",
+    "Description": "irai.items.Rune_Vortexstrike_2.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Rune_Ability_VortexStrike.png",
+  "ItemLevel": 1,
+  "Quality": "Legendary",
+  "Categories": [
+    "Items.Ingredients"
+  ],
+  "Model": "Items/Runes/Rune_Ability.blockymodel",
+  "Texture": "Items/Runes/Rune_Ability_VortexStrike.png",
+  "PlayerAnimationsId": "Item",
+  "ItemSoundSetId": "ISS_Items_Gems",
+  "MaxStack": 1,
+  "Ability": {
+    "Attributes": {
+      "Damage": 1.0,
+      "Cooldown": 1.0,
+      "Cost": 1.0,
+      "Speed": 1.0,
+      "Duration": 1.0,
+      "AoeScale": 1.0,
+      "ProjectileSize": 1.0
+    },
+    "Slot": "Core",
+    "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
+    "Cost": 40,
+    "AbilityKeywords": [
+      "Damage",
+      "Melee",
+      "Aoe",
+      "Elemental"
+    ],
+    "Cooldown": 40,
+    "Cast": "Root_Ability_Rune_Vortexstrike_2",
+    "CostType": "Mana"
+  },
+  "Tags": {
+    "Type": [
+      "Ingredient"
+    ]
+  }
+}

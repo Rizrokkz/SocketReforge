@@ -1,0 +1,114 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "ApplyForce",
+          "RunTime": 0.215,
+          "Direction": { "Z": -1 },
+          "Force": 36,
+          "Duration": 0.215,
+          "WaitForGround": true
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.01,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Daggers",
+            "ItemAnimationId": "RazorstrikeLunge",
+            "WaitForAnimationToFinish": false
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        { "Type": "ApplyEffect", "EffectId": "SocketReforge_Razorstrike_Dash_Screen" }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Serial",
+          "Interactions": [
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Path",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 7.74,
+              "Lifetime": 0.215,
+              "TrailParticles": "Ability_GroundSlam_Line",
+              "TrailInterval": 0.015,
+              "TrailScale": 1.2,
+              "TrailColor": "#8a5a2c"
+            },
+            {
+              "Type": "Simple",
+              "RunTime": 0.01,
+              "Effects": { "WorldSoundEventId": "SFX_Ability_Ground_Slam_Impact" }
+            },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_01",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            },
+            { "Type": "Simple", "RunTime": 0.04 },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_02",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            },
+            { "Type": "Simple", "RunTime": 0.04 },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_03",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            },
+            { "Type": "Simple", "RunTime": 0.04 },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_04",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            },
+            { "Type": "Simple", "RunTime": 0.04 },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_05",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            },
+            { "Type": "Simple", "RunTime": 0.04 },
+            {
+              "Type": "LaunchAbilityProjectile",
+              "Projectile": "Projectile_Config_RuneDash_Rubble_06",
+              "IgnorePitch": true,
+              "Pierce": true,
+              "Distance": 0.6,
+              "Lifetime": 0.5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

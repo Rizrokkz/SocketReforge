@@ -64,9 +64,8 @@ public class LoreApplyCommand extends CommandBase {
         }
 
         LoreSocketData data = LoreSocketManager.getLoreSocketData(heldItem);
-        if (data == null || data.getSocketCount() == 0) {
-            data = new LoreSocketData(1);
-            data.ensureSocketCount(1);
+        if (data == null) {
+            data = new LoreSocketData(0);
         }
 
         String spiritRaw = spiritArg.get(context);
@@ -85,7 +84,18 @@ public class LoreApplyCommand extends CommandBase {
             return;
         }
 
-        int slotIndex = resolveSlotIndex(data, context);
+        String spiritColor = LoreGemRegistry.resolveSpiritColor(spiritId);
+        if (spiritColor == null || spiritColor.isBlank()) {
+            context.sendMessage(Message.raw("That spirit has no mapped soulstone color."));
+            return;
+        }
+
+        if (data.getSocketCount() == 0) {
+            data.setMaxSockets(1);
+            data.ensureSocketCount(1);
+        }
+
+        int slotIndex = resolveSlotIndex(data, context, spiritColor);
         if (slotIndex < 0 || slotIndex >= data.getSocketCount()) {
             return;
         }
@@ -99,37 +109,31 @@ public class LoreApplyCommand extends CommandBase {
             context.sendMessage(Message.raw("That socket is locked. Clear it first if needed."));
             return;
         }
-        String spiritColor = LoreGemRegistry.resolveSpiritColor(spiritId);
-        if (spiritColor == null || spiritColor.isBlank()) {
-            context.sendMessage(Message.raw("That spirit has no mapped soulstone color."));
-            return;
-        }
         if (socket.hasSpirit()) {
             context.sendMessage(Message.raw("That socket already has a spirit. Clear it first."));
             return;
         }
 
-        if (socket.isEmpty()) {
-            if (socket.getColor() == null || socket.getColor().isBlank()) {
-                socket.setColor(spiritColor.toLowerCase(Locale.ROOT));
-            }
-        } else {
-            String gemColor = LoreGemRegistry.resolveColor(socket.getGemItemId());
-            if (gemColor == null || gemColor.isBlank()) {
-                gemColor = socket.getColor();
-            }
-            if (gemColor == null || gemColor.isBlank()) {
-                context.sendMessage(Message.raw("Socket color is unknown. Insert a lore gem first."));
-                return;
-            }
-            if (spiritColor != null && !spiritColor.isBlank()
-                    && !spiritColor.equalsIgnoreCase(gemColor)) {
-                context.sendMessage(Message.raw("Spirit color mismatch. Spirit=" + spiritColor + ", Gem=" + gemColor));
-                return;
-            }
-            if (socket.getColor() == null || socket.getColor().isBlank()) {
-                socket.setColor(gemColor.toLowerCase(Locale.ROOT));
-            }
+        boolean emptySocket = socket.isEmpty();
+        String socketColor = socket.getColor();
+        String gemColor = LoreGemRegistry.resolveColor(socket.getGemItemId());
+        if (gemColor != null && !gemColor.isBlank()) {
+            socketColor = gemColor;
+        }
+        if (!emptySocket && (socketColor == null || socketColor.isBlank())) {
+            context.sendMessage(Message.raw("Socket color is unknown. Insert a lore gem first."));
+            return;
+        }
+        if (socketColor != null && !socketColor.isBlank()
+                && !spiritColor.equalsIgnoreCase(socketColor)) {
+            context.sendMessage(Message.raw("Spirit color mismatch. Spirit=" + spiritColor + ", Socket=" + socketColor));
+            return;
+        }
+        if (emptySocket && (socketColor == null || socketColor.isBlank())) {
+            socket.setColor(spiritColor.toLowerCase(Locale.ROOT));
+        } else if (socketColor != null && !socketColor.isBlank()
+                && (socket.getColor() == null || socket.getColor().isBlank())) {
+            socket.setColor(socketColor.toLowerCase(Locale.ROOT));
         }
         // Match the normal socket UI: keep the infused soulstone item ID on the
         // socket so soulstone-specific trigger and rune-mapping behavior applies.
@@ -166,7 +170,7 @@ public class LoreApplyCommand extends CommandBase {
                 + " (" + detail + ")."));
     }
 
-    private int resolveSlotIndex(LoreSocketData data, CommandContext context) {
+    private int resolveSlotIndex(LoreSocketData data, CommandContext context, String spiritColor) {
         if (data == null || data.getSocketCount() == 0) {
             return -1;
         }
@@ -177,27 +181,42 @@ public class LoreApplyCommand extends CommandBase {
                 return -1;
             }
             if (slot > data.getSocketCount()) {
-                data.ensureSocketCount(slot);
-                if (data.getMaxSockets() < data.getSocketCount()) {
-                    data.setMaxSockets(data.getSocketCount());
+                if (slot != data.getSocketCount() + 1) {
+                    context.sendMessage(Message.raw("Only the next socket can be added by this command."));
+                    return -1;
                 }
+                data.ensureSocketCount(slot);
+                data.setMaxSockets(Math.max(data.getMaxSockets(), data.getSocketCount()));
             }
             return slot - 1;
         }
 
         for (int i = 0; i < data.getSocketCount(); i++) {
             LoreSocketData.LoreSocket socket = data.getSocket(i);
-            if (socket == null || socket.isLocked() || socket.isEmpty() || socket.hasSpirit()) {
+            if (socket == null || socket.isLocked() || socket.hasSpirit() || socket.hasRune()) {
+                continue;
+            }
+            String color = socket.getColor();
+            String gemColor = LoreGemRegistry.resolveColor(socket.getGemItemId());
+            if (gemColor != null && !gemColor.isBlank()) {
+                color = gemColor;
+            }
+            if (!socket.isEmpty() && (color == null || color.isBlank())) {
+                continue;
+            }
+            if (color != null && !color.isBlank()
+                    && spiritColor != null && !spiritColor.equalsIgnoreCase(color)) {
                 continue;
             }
             return i;
         }
-        int nextIndex = data.getSocketCount();
-        data.ensureSocketCount(nextIndex + 1);
-        if (data.getMaxSockets() < data.getSocketCount()) {
-            data.setMaxSockets(data.getSocketCount());
-        }
-        return nextIndex;
+        // The command is an administrative apply helper: if every existing
+        // socket is occupied or color-incompatible, add one socket and return
+        // that new slot so the lore is written directly into it below.
+        int newIndex = data.getSocketCount();
+        data.ensureSocketCount(newIndex + 1);
+        data.setMaxSockets(Math.max(data.getMaxSockets(), data.getSocketCount()));
+        return newIndex;
     }
 
     private String resolveSpiritId(String input) {

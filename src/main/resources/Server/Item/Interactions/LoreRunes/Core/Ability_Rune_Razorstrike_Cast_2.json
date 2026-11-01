@@ -1,0 +1,80 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        { "Type": "CoreAbilityRune", "Ability": "Razorstrike" },
+        {
+          "Type": "Parallel",
+          "Interactions": [
+            {
+              "Interactions": [
+                "Ability_Rune_Razorstrike_Dash"
+              ]
+            },
+            {
+              "Interactions": [
+                { "Type": "Simple", "RunTime": 0.025 },
+                {
+                  "Type": "Simple",
+                  "RunTime": 0.01,
+                  "Effects": {
+                    "Particles": [
+                      { "SystemId": "Ability_GroundSlam_Spike", "Scale": 0.65 }
+                    ]
+                  }
+                },
+                {
+                  "Type": "LaunchAbilityProjectile",
+                  "Projectile": "Projectile_Config_Razorstrike_Falling_Rock_Left",
+                  "IgnorePitch": true,
+                  "Distance": 12,
+                  "Lifetime": 1.8
+                },
+                { "Type": "Simple", "RunTime": 0.07 },
+                {
+                  "Type": "Simple",
+                  "RunTime": 0.01,
+                  "Effects": {
+                    "Particles": [
+                      { "SystemId": "Ability_GroundSlam_Spike", "Scale": 0.65 }
+                    ]
+                  }
+                },
+                {
+                  "Type": "LaunchAbilityProjectile",
+                  "Projectile": "Projectile_Config_Razorstrike_Falling_Rock_Center",
+                  "IgnorePitch": true,
+                  "Distance": 12,
+                  "Lifetime": 1.8
+                },
+                { "Type": "Simple", "RunTime": 0.07 },
+                {
+                  "Type": "Simple",
+                  "RunTime": 0.01,
+                  "Effects": {
+                    "Particles": [
+                      { "SystemId": "Ability_GroundSlam_Spike", "Scale": 0.65 }
+                    ]
+                  }
+                },
+                {
+                  "Type": "LaunchAbilityProjectile",
+                  "Projectile": "Projectile_Config_Razorstrike_Falling_Rock_Right",
+                  "IgnorePitch": true,
+                  "Distance": 12,
+                  "Lifetime": 1.8
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
+      ]
+    }
+  ]
+}

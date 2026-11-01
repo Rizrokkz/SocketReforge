@@ -1,6 +1,7 @@
 {
     "Interactions":  [
-      { "Type": "CoreRuneCost" },
+      { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+      { "Type": "ChangeStat", "UseAbilityCost": true },
       "Ability_Rune_Big_Arrow_1_Cast"
                      ],
     "RequireNewClick":  false,

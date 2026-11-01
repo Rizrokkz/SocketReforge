@@ -1,0 +1,25 @@
+{
+  "$Comment": "Native force-only impact; CoreRuneHandler retains the distance-scaled push damage.",
+  "Parent": "DamageEntityParent_Hit_Interrupt",
+  "DamageCalculator": {
+    "BaseDamage": { "Physical": 0.0 }
+  },
+  "DamageEffects": {
+    "Knockback": {
+      "Type": "Point",
+      "Force": 11.1,
+      "VelocityY": 0,
+      "OffsetX": 0,
+      "OffsetZ": 0,
+      "VelocityType": "Add",
+      "VelocityConfig": {
+        "AirResistance": 0.97,
+        "AirResistanceMax": 0.96,
+        "GroundResistance": 0.94,
+        "GroundResistanceMax": 0.82,
+        "Threshold": 3.0,
+        "Style": "Exp"
+      }
+    }
+  }
+}

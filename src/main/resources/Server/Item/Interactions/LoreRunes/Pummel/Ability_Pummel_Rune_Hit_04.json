@@ -1,15 +1,48 @@
 {
-  "Type": "Serial",
+  "Type": "Parallel",
   "Interactions": [
     {
-      "Type": "Simple",
-      "RunTime": 0.24,
-      "Effects": {
-        "ItemPlayerAnimationsId": "Pummel",
-        "ItemAnimationId": "Kick_Tornado_Right",
-        "WorldSoundEventId": "SFX_Shield_T1_Swing"
-      }
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.24,
+          "Effects": {
+            "ItemPlayerAnimationsId": "Pummel",
+            "ItemAnimationId": "Kick_Tornado_Right",
+            "WorldSoundEventId": "SFX_Shield_T1_Swing",
+            "Particles": [
+              {
+                "SystemId": "Impact_Sword_Signature_Spin",
+                "TargetEntityPart": "Entity",
+                "TargetNodeName": "Origin",
+                "Scale": 0.35
+              }
+            ]
+          }
+        }
+      ]
     },
-    {"Type": "PummelRuneStep", "RunTime": 0.15}
+    {
+      "Interactions": [
+        {
+          "Type": "Selector",
+          "RunTime": 0.18,
+          "Selector": {
+            "Id": "Stab",
+            "EndDistance": 3.5,
+            "ExtendTop": 2,
+            "ExtendBottom": 2,
+            "ExtendLeft": 2,
+            "ExtendRight": 2
+          },
+          "HitEntity": {
+            "Interactions": [
+              { "Type": "CoreAbilityRuneHitSupport" },
+              "Ability_Pummel_Rune_Hit_Light"
+            ]
+          }
+        }
+      ]
+    }
   ]
 }

@@ -1,0 +1,9 @@
+{
+  "Interactions": [
+    { "Type": "StatsCondition", "UseAbilityCost": true, "Failed": "Ability_Cast_Fail" },
+    { "Type": "ChangeStat", "UseAbilityCost": true },
+    "Ability_Pummel_Rune_Cast_3"
+  ],
+  "RequireNewClick": false,
+  "Tags": { "Attack": ["Melee"] }
+}

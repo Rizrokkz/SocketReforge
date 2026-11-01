@@ -303,6 +303,11 @@ public final class LoreDamageUtils {
         return (float) base;
     }
 
+    public static float resolveGrandSlamRuneOneDamageBase(Store<EntityStore> store,
+                                                          Ref<EntityStore> attackerRef) {
+        return 28.0f + Math.max(1.0f, resolveWeaponBaseDamage(store, attackerRef));
+    }
+
     public static float resolveSignatureDamageBase(Store<EntityStore> store,
                                                    Ref<EntityStore> attackerRef,
                                                    boolean selfIsAttacker,
