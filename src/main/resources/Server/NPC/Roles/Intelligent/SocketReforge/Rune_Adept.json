@@ -1,0 +1,39 @@
+{
+  "Type": "Variant",
+  "Reference": "Template_Trork_Hybrid",
+  "Modify": {
+    "Appearance": "Outlander_Hunter",
+    "Weapons": [
+      "Weapon_Shortbow_Doomed",
+      "Weapon_Daggers_Fang_Doomed"
+    ],
+    "DropList": "Drop_Outlander_Hunter",
+    "AttackSequence": "Component_Instruction_Attack_Sequence_SocketReforge_Rune_Adept_Melee",
+    "RangedAttack": "Root_NPC_SocketReforge_Rune_Adept_Big_Arrow_3",
+    "RangedAttackSequence": "Component_Instruction_Attack_Sequence_SocketReforge_Rune_Adept_Ranged",
+    "TargetGroups": [
+      "Outlander"
+    ],
+    "DisableDamageGroups": [
+      "Self",
+      "Outlander"
+    ],
+    "AttitudeGroup": "Outlander_Ranged",
+    "HearingRange": 10,
+    "ViewSector": 300,
+    "AttackDistance": 24.0,
+    "BreakOffRange": 32,
+    "MaxHealth": 650,
+    "MaxSpeed": 10,
+    "CombatBackOffAfterAttack": false,
+    "NameTranslationKey": {
+      "Compute": "NameTranslationKey"
+    }
+  },
+  "Parameters": {
+    "NameTranslationKey": {
+      "Value": "server.npcRoles.SocketReforge_Rune_Adept.name",
+      "Description": "Display name for the Socket Reforge Rune Adept"
+    }
+  }
+}

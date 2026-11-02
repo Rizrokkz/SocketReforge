@@ -8,7 +8,6 @@ import com.hypixel.hytale.component.AddReason;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Holder;
 import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.protocol.BlockMaterial;
 import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.RotationTuple;
@@ -19,22 +18,20 @@ import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
 import com.hypixel.hytale.server.core.modules.time.TimeResource;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
-import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-import irai.mod.reforge.Common.WorldBlockUtils;
-
-/** Drops a short-lived copy of the terrain block below a Razorstrike rock impact. */
-public final class RazorstrikeTerrainRock extends SimpleInteraction {
-    public static final com.hypixel.hytale.codec.builder.BuilderCodec<RazorstrikeTerrainRock> CODEC =
+/** Drops a short-lived Wood_Stripped_Deco block as the Razorstrike rock impact visual. */
+public final class RazorstrikeRockVisual extends SimpleInteraction {
+    public static final com.hypixel.hytale.codec.builder.BuilderCodec<RazorstrikeRockVisual> CODEC =
             com.hypixel.hytale.codec.builder.BuilderCodec.builder(
-                    RazorstrikeTerrainRock.class, RazorstrikeTerrainRock::new,
+                    RazorstrikeRockVisual.class, RazorstrikeRockVisual::new,
                     SimpleInteraction.CODEC).build();
 
-    private static final int MAX_GROUND_SEARCH = 20;
+    private static final String ROCK_BLOCK_ID = "Wood_Stripped_Deco";
     private static final double DROP_HEIGHT = 2.4d;
     private static final double INITIAL_DOWNWARD_SPEED = 5.0d;
     private static final double MIN_PLAYER_CLEARANCE_SQUARED = 2.25d;
+    private static final double PLAYER_CLEARANCE = 1.75d;
     private static final float VISUAL_LIFETIME_SECONDS = 1.6f;
 
     @Override
@@ -57,41 +54,50 @@ public final class RazorstrikeTerrainRock extends SimpleInteraction {
             return;
         }
 
-        EntityStore entityStore = commandBuffer.getExternalData();
-        World world = entityStore == null ? null : entityStore.getWorld();
         TimeResource timeResource = commandBuffer.getResource(TimeResource.getResourceType());
-        if (world == null || timeResource == null) {
+        if (timeResource == null) {
             return;
         }
 
         Vector3d impact = projectileTransform.getPosition();
-        int blockX = floor(impact.x);
-        int blockZ = floor(impact.z);
-        int firstY = floor(impact.y);
         Ref<EntityStore> ownerRef = context.getOwningEntity();
         TransformComponent ownerTransform = ownerRef == null || !ownerRef.isValid()
                 ? null : commandBuffer.getComponent(ownerRef, TransformComponent.getComponentType());
-        if (ownerTransform != null && ownerTransform.getPosition() != null) {
-            Vector3d ownerPosition = ownerTransform.getPosition();
-            double dx = ownerPosition.x - (blockX + 0.5d);
-            double dz = ownerPosition.z - (blockZ + 0.5d);
-            // A full terrain block dropped over the caster can occlude their model and camera.
-            if (dx * dx + dz * dz < MIN_PLAYER_CLEARANCE_SQUARED) {
-                return;
-            }
-        }
-        int terrainY = findSolidBlockY(world, blockX, firstY, blockZ);
-        if (terrainY == Integer.MIN_VALUE) {
-            return;
-        }
-        BlockType terrain = WorldBlockUtils.getBlockType(world, blockX, terrainY, blockZ);
-        if (terrain == null) {
+        BlockType rockBlock = BlockType.getAssetMap().getAsset(ROCK_BLOCK_ID);
+        if (rockBlock == null || rockBlock.isUnknown()) {
             return;
         }
 
-        Vector3d spawnPosition = new Vector3d(blockX + 0.5d, terrainY + DROP_HEIGHT, blockZ + 0.5d);
+        double spawnX = impact.x;
+        double spawnZ = impact.z;
+        if (ownerTransform != null && ownerTransform.getPosition() != null) {
+            Vector3d ownerPosition = ownerTransform.getPosition();
+            double dx = spawnX - ownerPosition.x;
+            double dz = spawnZ - ownerPosition.z;
+            double distanceSquared = dx * dx + dz * dz;
+            if (distanceSquared < MIN_PLAYER_CLEARANCE_SQUARED) {
+                // Keep the rock when it lands near the dash start; shifting the visual is
+                // safer than dropping the entire follow-up or clipping it into the caster.
+                if (distanceSquared < 0.0001d && ownerTransform.getRotation() != null) {
+                    Vector3d forward = ownerTransform.getRotation()
+                            .transform(new Vector3d(0.0d, 0.0d, -1.0d));
+                    dx = forward.x;
+                    dz = forward.z;
+                    distanceSquared = dx * dx + dz * dz;
+                }
+                if (distanceSquared < 0.0001d) {
+                    dx = 0.0d;
+                    dz = 1.0d;
+                    distanceSquared = 1.0d;
+                }
+                double scale = PLAYER_CLEARANCE / Math.sqrt(distanceSquared);
+                spawnX = ownerPosition.x + dx * scale;
+                spawnZ = ownerPosition.z + dz * scale;
+            }
+        }
+        Vector3d spawnPosition = new Vector3d(spawnX, impact.y + DROP_HEIGHT, spawnZ);
         Holder<EntityStore> rock = FallingBlock.generateFallingBlock(
-                terrain, spawnPosition, RotationTuple.NONE, null);
+                rockBlock, spawnPosition, RotationTuple.NONE, null);
         if (rock == null) {
             return;
         }
@@ -106,20 +112,5 @@ public final class RazorstrikeTerrainRock extends SimpleInteraction {
         rock.addComponent(DespawnComponent.getComponentType(),
                 DespawnComponent.despawnInSeconds(timeResource, VISUAL_LIFETIME_SECONDS));
         commandBuffer.addEntity(rock, AddReason.SPAWN);
-    }
-
-    private static int findSolidBlockY(World world, int x, int startY, int z) {
-        for (int offset = 0; offset <= MAX_GROUND_SEARCH; offset++) {
-            int y = startY - offset;
-            BlockType block = WorldBlockUtils.getBlockType(world, x, y, z);
-            if (block != null && !block.isUnknown() && block.getMaterial() == BlockMaterial.Solid) {
-                return y;
-            }
-        }
-        return Integer.MIN_VALUE;
-    }
-
-    private static int floor(double value) {
-        return (int) Math.floor(value);
     }
 }

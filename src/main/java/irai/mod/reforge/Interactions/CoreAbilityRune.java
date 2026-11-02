@@ -30,6 +30,7 @@ import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifie
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
 import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreProcHandler;
@@ -60,12 +61,30 @@ public final class CoreAbilityRune extends SimpleInteraction {
             return;
         }
         Store<EntityStore> store = ownerRef.getStore();
-        if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
+        if (store == null) {
+            return;
+        }
+        if (store.getComponent(ownerRef, Player.getComponentType()) == null) {
+            ItemStack rune = context.getHeldItem();
+            DamageStackDelayEST.markCoreRuneCast(ownerRef, ability,
+                    rune == null || rune.isEmpty() ? null : rune.getItemId(),
+                    coreRuneTraceWindowMillis(rune));
+            CoreRuneDamageContext.captureCast(store, ownerRef, ability,
+                    coreRuneTraceWindowMillis(rune));
+            if (!isInteractionAuthoredAbility(ability)) {
+                CoreRuneHandler.activateNpcCoreAbility(store, ownerRef, ability);
+            }
             return;
         }
         if (!canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
             return;
         }
+        ItemStack rune = context.getHeldItem();
+        DamageStackDelayEST.markCoreRuneCast(ownerRef, ability,
+                rune == null || rune.isEmpty() ? null : rune.getItemId(),
+                coreRuneTraceWindowMillis(rune));
+        CoreRuneDamageContext.captureCast(store, ownerRef, ability,
+                coreRuneTraceWindowMillis(rune));
         if (ability != null && ability.trim().toLowerCase(Locale.ROOT).startsWith("pummel")) {
             LoreProcHandler.markPummelNativeCast(ownerRef);
         }
@@ -76,7 +95,6 @@ public final class CoreAbilityRune extends SimpleInteraction {
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
-        ItemStack rune = context.getHeldItem();
         int feedTier = LoreSocketManager.getModifierRunestoneFeedTier(rune);
         ImpactModifiers modifiers = ImpactModifiers.collect(context, ownerRef, store);
         Map<String, Float> abilityAttributes = modifiers == null
@@ -126,7 +144,21 @@ public final class CoreAbilityRune extends SimpleInteraction {
         return normalized.equals("grandslam") || normalized.equals("grand_slam")
                 || normalized.equals("razorstrike") || normalized.equals("razor_strike")
                 || normalized.equals("pummel") || normalized.startsWith("pummel_")
-                || normalized.equals("vortexstrike") || normalized.equals("vortex_strike");
+                || normalized.equals("vortexstrike") || normalized.equals("vortex_strike")
+                || normalized.equals("whirlwind");
+    }
+
+    private static long coreRuneTraceWindowMillis(ItemStack rune) {
+        float durationSeconds = 3.0f;
+        if (rune != null && !rune.isEmpty() && rune.getItem() != null
+                && rune.getItem().getAbility() instanceof CoreItemAbility coreAbility
+                && coreAbility.getAttributes() != null) {
+            Float configuredDuration = coreAbility.getAttributes().get("Duration");
+            if (configuredDuration != null && Float.isFinite(configuredDuration) && configuredDuration > 0.0f) {
+                durationSeconds = configuredDuration;
+            }
+        }
+        return Math.max(1200L, Math.min(10000L, (long) (durationSeconds * 1000.0f) + 750L));
     }
 
     public static boolean canUseWithHeldWeapon(Store<EntityStore> store,

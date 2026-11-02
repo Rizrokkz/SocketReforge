@@ -1,20 +1,10 @@
 {
-  "Model": "Items/Projectiles/Projectile.blockymodel",
-  "Texture": "Items/Projectiles/Projectile_default.png",
-  "MinScale": 1,
-  "MaxScale": 1,
-  "AnimationSets": {
-    "FlyIdle": {
-      "Animations": [
-        {
-          "Animation": "Items/Animations/Fly/Fly_Diagonal_Right.blockyanim",
-          "BlendingDuration": 0
-        }
-      ]
-    }
-  },
+  "Model": "Items/Projectiles/SocketReforge_Razorstrike_Rock.blockymodel",
+  "Texture": "Items/Projectiles/SocketReforge_Razorstrike_Rock_Texture.png",
+  "MinScale": 0.75,
+  "MaxScale": 0.95,
   "HitBox": {
-    "Max": { "X": 0.18, "Y": 0.18, "Z": 0.65 },
-    "Min": { "X": -0.18, "Y": -0.18, "Z": -0.65 }
+    "Max": { "X": 0.5, "Y": 0.5, "Z": 0.5 },
+    "Min": { "X": -0.5, "Y": -0.5, "Z": -0.5 }
   }
 }

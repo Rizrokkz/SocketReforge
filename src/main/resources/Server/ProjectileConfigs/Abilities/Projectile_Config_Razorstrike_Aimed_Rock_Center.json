@@ -11,16 +11,17 @@
   },
   "LaunchForce": 23,
   "DirectionalHitBox": { "Width": 1.7, "Depth": 1.0 },
-  "SpawnOffset": { "X": 0, "Y": 0.8, "Z": -0.5 },
+  "SpawnOffset": { "X": 0, "Y": 0, "Z": 0 },
   "SpawnRotationOffset": { "Pitch": 5, "Yaw": 0, "Roll": 0 },
   "Interactions": {
     "ProjectileHit": {
       "Interactions": [
         { "Type": "CoreRuneProjectileHit", "Ability": "Razorstrike" },
-        "Ability_Rune_Razorstrike_Rock_Hit",
-        "Ability_Rune_Razorstrike_Rock_Explosion",
+        { "Type": "RazorstrikeDamageDebug", "Stage": "rock-direct-hit", "BasePhysical": 0.05, "DamageAttribute": "Damage" },
+        "Ability_Rune_Razorstrike_Aimed_Rock_Hit",
         { "Type": "RazorstrikeRockDaggerBurst" },
-        { "Type": "RazorstrikeTerrainRock" },
+        "Ability_Rune_Razorstrike_Rock_Explosion",
+        { "Type": "RazorstrikeRockVisual" },
         { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
         { "Type": "RemoveEntity" }
       ]
@@ -28,7 +29,7 @@
     "ProjectileMiss": {
       "Interactions": [
         "Ability_Rune_Razorstrike_Rock_Explosion",
-        { "Type": "RazorstrikeTerrainRock" },
+        { "Type": "RazorstrikeRockVisual" },
         { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
         { "Type": "RemoveEntity" }
       ]

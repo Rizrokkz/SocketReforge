@@ -16,6 +16,59 @@
           "UseAbilityCooldown": true
         }
       ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Repeat",
+          "Repeat": 8,
+          "ForkInteractions": {
+            "Interactions": [
+              {
+                "Type": "Simple",
+                "RunTime": 0.32,
+                "Effects": {
+                  "ItemPlayerAnimationsId": "Battleaxe",
+                  "ItemAnimationId": "WhirlwindChargedSpin",
+                  "WaitForAnimationToFinish": false,
+                  "ClearAnimationOnFinish": true,
+                  "WorldSoundEventId": "SFX_Battleaxe_T2_Signature_Swing",
+                  "LocalSoundEventId": "SFX_Battleaxe_T2_Signature_Swing_Local",
+                  "CameraEffect": "Battleaxe_Whirlwind"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.2
+        },
+        {
+          "Type": "Repeat",
+          "Repeat": 7,
+          "ForkInteractions": {
+            "Interactions": [
+              "Ability_Rune_Whirlwind_Damage",
+              { "Type": "Simple", "RunTime": 0.33 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "ApplyEffect",
+          "EffectId": "SocketReforge_Whirlwind_Tornado",
+          "Entity": "User",
+          "Duration": 2.75
+        }
+      ]
     }
   ]
 }

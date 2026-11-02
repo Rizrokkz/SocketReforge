@@ -1,0 +1,7 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    { "Type": "CoreAbilityRune", "Ability": "WolfPack" },
+    "Ability_WolfPack_Rune_Cast_3"
+  ]
+}

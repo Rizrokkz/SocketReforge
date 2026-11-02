@@ -39,10 +39,11 @@ public final class BloodRushRune {
                 return;
             }
             Store<EntityStore> store = ownerRef.getStore();
-            if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
+            if (store == null) {
                 return;
             }
-            if (!CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
+            Player player = store.getComponent(ownerRef, Player.getComponentType());
+            if (player != null && !CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
                 return;
             }
             Ref<EntityStore> targetRef = context.getTargetEntity();

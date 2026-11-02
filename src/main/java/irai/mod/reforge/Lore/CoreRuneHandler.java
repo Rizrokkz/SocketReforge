@@ -19,6 +19,7 @@ import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.modules.entity.AllLegacyLivingEntityTypesQuery;
 import com.hypixel.hytale.server.core.modules.entity.component.HeadRotation;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
@@ -34,7 +35,9 @@ import com.hypixel.hytale.server.core.entity.entities.ProjectileComponent;
 import com.hypixel.hytale.server.core.modules.projectile.ProjectileModule;
 import com.hypixel.hytale.server.core.modules.projectile.config.ProjectileConfig;
 import com.hypixel.hytale.server.core.util.TargetUtil;
+import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import irai.mod.reforge.Entity.VolleyHomingArrowEntity;
+import irai.mod.reforge.Interactions.CoreRuneDamageContext;
 
 import static irai.mod.reforge.Lore.LoreProcHandler.CORE_RUNE_MAX_NPC_CHECKS;
 import static irai.mod.reforge.Lore.LoreProcHandler.CORE_RUNE_MAX_TARGETS;
@@ -294,7 +297,6 @@ public final class CoreRuneHandler {
         applyCoreAbilitySupportRunestones(store, attackerRef, targetRef, supportRunestones,
                 LoreTrigger.ON_SKILL_USE);
         switch (normalizedAbility) {
-            case "whirlwind" -> castWhirlwindRune(store, attackerRef, feedTier, supportRunestones);
             case "vortexstrike", "vortex_strike" ->
                     castVortexstrikeRune(store, attackerRef, feedTier, supportRunestones, false);
             case "vortexstrike_push", "vortex_strike_push" ->
@@ -312,6 +314,25 @@ public final class CoreRuneHandler {
         }
     }
 
+    /** Runs the handler-backed parts of a native rune cast for NPC owners. */
+    public static void activateNpcCoreAbility(Store<EntityStore> store,
+                                              Ref<EntityStore> ownerRef,
+                                              String abilityId) {
+        if (store == null || store.isShutdown() || ownerRef == null || !isEntityAlive(store, ownerRef)
+                || store.getComponent(ownerRef, NPCEntity.getComponentType()) == null
+                || abilityId == null) {
+            return;
+        }
+        String normalizedAbility = abilityId.trim().toLowerCase(Locale.ROOT)
+                .replace('-', '_').replace(' ', '_');
+        switch (normalizedAbility) {
+            case "berserk" -> castBerserkRune(store, ownerRef);
+            case "mana_font", "manafont", "mana_font_1", "mana_font_2", "mana_font_3", "mana_font_4" ->
+                    castManaFontRune(store, ownerRef, 0, parseCoreRuneTier(normalizedAbility, "mana_font"));
+            default -> { }
+        }
+    }
+
     private static int parseCoreRuneTier(String abilityId, String baseName) {
         if (abilityId == null || baseName == null || !abilityId.startsWith(baseName + "_")) {
             return 0;
@@ -320,37 +341,6 @@ public final class CoreRuneHandler {
             return Integer.parseInt(abilityId.substring(baseName.length() + 1));
         } catch (NumberFormatException ignored) {
             return 0;
-        }
-    }
-
-    private static void castWhirlwindRune(Store<EntityStore> store,
-                                         Ref<EntityStore> attackerRef,
-                                         int feedTier,
-                                         List<LoreSocketManager.SocketedModifierRunestone> supportRunestones) {
-        int pulses = 6;
-        float perPulse = resolveCoreRuneWeaponDamage(store, attackerRef) * 0.22f;
-        double radius = Math.min(6.0d, 3.5d + feedTier * 0.2d);
-        for (int pulse = 0; pulse < pulses; pulse++) {
-            final int hitIndex = pulse;
-            OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
-                if (!isEntityAlive(store, attackerRef)) {
-                    return;
-                }
-                Vector3d center = LoreTargetingUtils.getPosition(store, attackerRef);
-                if (center == null) {
-                    return;
-                }
-                List<Ref<EntityStore>> targets = LoreTargetingUtils.collectTargetsAtPosition(
-                        store, attackerRef, center, radius, radius * radius,
-                        "core.whirlwind", DEBUG_LORE_PROCS, CORE_RUNE_MAX_TARGETS, CORE_RUNE_MAX_NPC_CHECKS);
-                for (Ref<EntityStore> target : targets) {
-                    if (target != null && !target.equals(attackerRef) && isEntityAlive(store, target)) {
-                        applyCoreRuneDamage(store, attackerRef, target, perPulse, feedTier, supportRunestones);
-                    }
-                }
-                LoreAnimationUtils.playSwingAnimation(store, attackerRef, hitIndex);
-                LoreVisuals.queueSignatureParticles(store, center, (float) radius, SIGNATURE_VORTEXSTRIKE_PARTICLE_IDS);
-            }), pulse * 425L, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -1561,16 +1551,19 @@ public final class CoreRuneHandler {
 
     private static void castBerserkRune(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
         Player player = store.getComponent(attackerRef, Player.getComponentType());
-        UUID playerId = player == null ? null : player.getUuid();
-        if (playerId == null) {
+        UUIDComponent uuidComponent = player == null
+                ? store.getComponent(attackerRef, UUIDComponent.getComponentType()) : null;
+        UUID entityId = player != null ? player.getUuid()
+                : uuidComponent == null ? null : uuidComponent.getUuid();
+        if (entityId == null) {
             return;
         }
-        BERSERK_RUNE_UNTIL.put(playerId, System.currentTimeMillis() + 15_000L);
+        BERSERK_RUNE_UNTIL.put(entityId, System.currentTimeMillis() + 15_000L);
         LoreVisuals.tryApplyTimedVisualEffectOverride(store, attackerRef, 15_000L,
                 new String[]{"Lore/Berserk_Haste", "Berserk_Haste", "Lore_Berserk_Haste"});
     }
 
-    /** Adds the low-health Berserk bonus to real player attack events while the rune buff is active. */
+    /** Adds the low-health Berserk bonus while the rune buff is active. */
     public static void applyBerserkRuneDamageBonus(Store<EntityStore> store,
                                                    Ref<EntityStore> attackerRef,
                                                    Damage damage) {
@@ -1578,14 +1571,17 @@ public final class CoreRuneHandler {
             return;
         }
         Player player = store.getComponent(attackerRef, Player.getComponentType());
-        UUID playerId = player == null ? null : player.getUuid();
-        Long until = playerId == null ? null : BERSERK_RUNE_UNTIL.get(playerId);
+        UUIDComponent uuidComponent = player == null
+                ? store.getComponent(attackerRef, UUIDComponent.getComponentType()) : null;
+        UUID entityId = player != null ? player.getUuid()
+                : uuidComponent == null ? null : uuidComponent.getUuid();
+        Long until = entityId == null ? null : BERSERK_RUNE_UNTIL.get(entityId);
         long now = System.currentTimeMillis();
         if (until == null) {
             return;
         }
         if (now >= until) {
-            BERSERK_RUNE_UNTIL.remove(playerId, until);
+            BERSERK_RUNE_UNTIL.remove(entityId, until);
             return;
         }
         float maxHealth = LoreDamageUtils.resolveMaxHealth(store, attackerRef);
@@ -1598,7 +1594,10 @@ public final class CoreRuneHandler {
             return;
         }
         double scale = Math.max(0.0d, Math.min(1.0d, (0.25d - healthRatio) / 0.24d));
-        damage.setAmount(damage.getAmount() * (float) (1.10d + scale * 0.20d));
+        double bonusPercent = 0.10d + scale * 0.20d;
+        float baseDamage = irai.mod.reforge.Entity.Events.DamageStackDelayEST
+                .getBonusBaseDamage(damage, damage.getAmount());
+        damage.setAmount(Math.max(0.0f, damage.getAmount() + (float) (baseDamage * bonusPercent)));
     }
 
     public static boolean consumeCriticalChargeGuarantee(Player player, ItemStack weapon) {
@@ -1655,7 +1654,10 @@ public final class CoreRuneHandler {
     }
 
     private static float resolveCoreRuneWeaponDamage(Store<EntityStore> store, Ref<EntityStore> attackerRef) {
-        float damage = LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 10.0f);
+        float damage = CoreRuneDamageContext.getCapturedWeaponBaseDamage(store, attackerRef);
+        if (damage <= 0.0f) {
+            damage = LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 10.0f);
+        }
         return Math.max(1.0f, damage);
     }
 

@@ -1,0 +1,51 @@
+{
+  "Class": "Instruction",
+  "Interface": "Hytale.Instruction.AttackSequence",
+  "Parameters": {
+    "AttackDistance": {
+      "Value": 24,
+      "Description": "Maximum ranged rune attack distance"
+    },
+    "CombatRelativeTurnSpeed": {
+      "Value": 1.5,
+      "Description": "Combat turning speed"
+    }
+  },
+  "Content": {
+    "Sensor": {
+      "Type": "Target",
+      "Range": { "Compute": "AttackDistance" },
+      "Filters": [
+        { "Type": "LineOfSight" }
+      ]
+    },
+    "ActionsBlocking": true,
+    "Actions": [
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Big_Arrow_3",
+        "AimingTimeRange": [ 0.3, 0.55 ],
+        "AttackPauseRange": [ 2.5, 3.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Volley",
+        "AimingTimeRange": [ 0.25, 0.45 ],
+        "AttackPauseRange": [ 3.0, 4.0 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Soul_Reaper",
+        "AimingTimeRange": [ 0.3, 0.5 ],
+        "AttackPauseRange": [ 3.5, 4.5 ]
+      }
+    ],
+    "HeadMotion": {
+      "Type": "Aim",
+      "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" },
+      "HitProbability": 0.75,
+      "Spread": 0.25
+    }
+  },
+  "Type": "Component"
+}

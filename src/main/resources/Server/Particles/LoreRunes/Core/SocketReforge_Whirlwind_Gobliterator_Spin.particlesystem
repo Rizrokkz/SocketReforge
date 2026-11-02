@@ -1,0 +1,13 @@
+{
+  "Spawners": [
+    {
+      "SpawnerId": "SocketReforge_Whirlwind_Gobliterator_Trails"
+    },
+    {
+      "SpawnerId": "SocketReforge_Whirlwind_Gobliterator_Trails_Soft"
+    }
+  ],
+  "BoundingRadius": 8,
+  "CullDistance": 128,
+  "IsImportant": false
+}

@@ -17,6 +17,7 @@
     "ProjectileHit": {
       "Interactions": [
         { "Type": "CoreRuneProjectileHit", "Ability": "Razorstrike" },
+        { "Type": "RazorstrikeDamageDebug", "Stage": "dagger-hit", "BasePhysical": 0.15, "DamageAttribute": "Damage" },
         "Ability_Rune_Razorstrike_Dagger_Hit",
         "Ability_Rune_Razorstrike_Dagger_Bleed",
         "Common_Projectile_Impact_Effects",

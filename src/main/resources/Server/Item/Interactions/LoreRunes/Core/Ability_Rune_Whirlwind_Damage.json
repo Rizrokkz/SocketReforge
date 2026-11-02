@@ -1,0 +1,15 @@
+{
+  "Type": "Selector",
+  "RunTime": 0.05,
+  "Selector": {
+    "Id": "AOECircle",
+    "Range": 3.4,
+    "SizeAttribute": "AoeScale"
+  },
+  "HitEntity": {
+    "Interactions": [
+      { "Type": "CoreAbilityRuneHitSupport" },
+      "Ability_Rune_Whirlwind_Hit"
+    ]
+  }
+}

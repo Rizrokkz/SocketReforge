@@ -1,0 +1,7 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    { "Type": "CoreAbilityRune", "Ability": "Soul_Reaper" },
+    "Ability_Soul_Reaper_Cast"
+  ]
+}

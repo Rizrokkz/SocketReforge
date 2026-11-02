@@ -15,6 +15,13 @@
   "ItemSoundSetId": "ISS_Items_Gems",
   "MaxStack": 1,
   "Ability": {
+    "Attributes": {
+      "Damage": 1.0,
+      "Cooldown": 1.0,
+      "Cost": 1.0,
+      "Duration": 2.55,
+      "AoeScale": 1.0
+    },
     "Slot": "Core",
     "Weapons": ["Sword", "Longsword", "Axe", "Battleaxe", "Mace", "Dagger", "Spear", "Club"],
     "Cost": 22,
@@ -23,7 +30,8 @@
       "Melee",
       "Aoe",
       "Wind",
-      "Elemental"
+      "Elemental",
+      "Duration"
     ],
     "Cooldown": 18,
     "Cast": "Root_Ability_Rune_Whirlwind",

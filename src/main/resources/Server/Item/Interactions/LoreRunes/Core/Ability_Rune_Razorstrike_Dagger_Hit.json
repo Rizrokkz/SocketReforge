@@ -1,7 +1,7 @@
 {
   "Parent": "DamageEntityParent_Hit_Interrupt",
   "DamageCalculator": {
-    "BaseDamage": { "Physical": 0.7 }
+    "BaseDamage": { "Physical": 0.15 }
   },
   "DamageAttribute": "Damage",
   "DamageEffects": {

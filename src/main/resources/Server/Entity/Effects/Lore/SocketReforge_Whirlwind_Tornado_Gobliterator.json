@@ -1,0 +1,19 @@
+{
+  "Duration": 3.4,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Overwrite",
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "SocketReforge_Whirlwind_Gobliterator_Spin",
+        "TargetNodeName": "Chest",
+        "Scale": 0.7,
+        "PositionOffset": {
+          "X": 0,
+          "Y": -1,
+          "Z": 0
+        }
+      }
+    ]
+  }
+}

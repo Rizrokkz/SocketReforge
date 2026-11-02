@@ -132,21 +132,17 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
             } else if (isBigArrowRune(coreAbility.getCastRootId())) {
                 int feedTier = LoreSocketManager.getModifierRunestoneFeedTier(coreRune);
                 int bonusTier = resolveBigArrowBonusTier(coreRune.getItemId(), feedTier);
-                float weaponDamage = Math.max(1.0f,
-                        LoreDamageUtils.resolveWeaponRefinedDamage(store, playerRef, 10.0f));
+                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
                 RuneDeltaCastSnapshotEST.setRuneDamageBase(
                         interaction, weaponDamage * (1.0f + 0.10f * bonusTier));
             } else if (isRazorstrikeRune(coreAbility.getCastRootId())) {
-                float weaponDamage = Math.max(1.0f,
-                        LoreDamageUtils.resolveWeaponRefinedDamage(store, playerRef, 10.0f));
+                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
                 RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage);
             } else if (isVortexstrikeRune(coreAbility.getCastRootId())) {
-                float weaponDamage = Math.max(1.0f,
-                        LoreDamageUtils.resolveWeaponRefinedDamage(store, playerRef, 10.0f));
+                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
                 RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage * 0.275f);
             } else if (isPummelRune(coreAbility.getCastRootId())) {
-                float weaponDamage = Math.max(1.0f,
-                        LoreDamageUtils.resolveWeaponRefinedDamage(store, playerRef, 10.0f));
+                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
                 RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage);
             }
             int damageFeeds = LoreSocketManager.getRunestoneDamageFeeds(coreRune);
@@ -182,6 +178,15 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
                 CoreAbilityRune.readEquippedSupportRunestones(interaction, playerRef, store, coreRune),
                 interactionType,
                 commandBuffer);
+    }
+
+    /**
+     * Rune cast snapshots must start with unrefined weapon damage. EquipmentRefineEST applies
+     * refinement, ascension, sockets, parts, and other equipped bonuses to the resulting hit.
+     */
+    private float resolveRuneWeaponBaseDamage(Store<EntityStore> store, Ref<EntityStore> playerRef) {
+        float weaponDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, playerRef);
+        return weaponDamage > 0.0f && Float.isFinite(weaponDamage) ? weaponDamage : 10.0f;
     }
 
     private boolean isSocketReforgeCoreRoot(String rootId) {

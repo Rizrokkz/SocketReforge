@@ -1,13 +1,13 @@
 {
   "Spawners": [
     {
-      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin"
+      "SpawnerId": "SocketReforge_Whirlwind_Lore_Spin"
     },
     {
-      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin2"
+      "SpawnerId": "SocketReforge_Whirlwind_Lore_Spin2"
     },
     {
-      "SpawnerId": "Battleaxe_Signature_Whirlwind_Spin_Soft"
+      "SpawnerId": "SocketReforge_Whirlwind_Lore_Spin_Soft"
     }
   ],
   "BoundingRadius": 8,

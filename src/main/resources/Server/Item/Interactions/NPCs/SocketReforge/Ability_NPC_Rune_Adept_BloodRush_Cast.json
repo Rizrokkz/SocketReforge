@@ -1,0 +1,7 @@
+{
+  "Type": "Serial",
+  "Interactions": [
+    { "Type": "CoreAbilityRune", "Ability": "BloodRush" },
+    "Ability_BloodRush_Rune_Cast"
+  ]
+}

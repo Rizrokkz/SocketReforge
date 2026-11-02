@@ -40,7 +40,7 @@ public abstract class WolfPackRune extends SimpleInteraction {
             return;
         }
         Store<EntityStore> store = ownerRef.getStore();
-        if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
+        if (store == null) {
             return;
         }
 

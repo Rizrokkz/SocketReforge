@@ -28,6 +28,7 @@ import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Interactions.CoreRuneDamageContext;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.EssenceEffect;
@@ -121,6 +122,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        float amountBeforeFilter = damage == null ? 0.0f : damage.getAmount();
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         if (LoreProcHandler.shouldCancelOmnislashRechainSlamDamage(store, targetRef, damage)) {
             damage.setCancelled(true);
@@ -134,23 +136,62 @@ public class EquipmentRefineEST extends DamageEventSystem {
         // Get target (entity receiving damage)
         // Get damage source
         Damage.Source source = damage.getSource();
-        if (!(source instanceof Damage.EntitySource entitySource)) {
+        Ref<EntityStore> attackerRef;
+        boolean projectileSource = source instanceof Damage.ProjectileSource;
+        if (source instanceof Damage.EntitySource entitySource) {
+            attackerRef = entitySource.getRef();
+        } else if (source instanceof Damage.ProjectileSource projectileDamageSource) {
+            attackerRef = projectileDamageSource.getRef();
+        } else {
+            return;
+        }
+        if (attackerRef == null || !attackerRef.isValid()) {
             return;
         }
 
-        Ref<EntityStore> attackerRef = entitySource.getRef();
-        LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
-        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
+        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+        boolean runeWeaponBaseApplied = CoreRuneDamageContext.applyWeaponBaseDamage(
+                store, attackerRef, damage);
+        boolean npcRuneDamage = attacker == null && runeWeaponBaseApplied;
+        // Player projectile damage follows its own native pipeline. NPC rune projectiles are
+        // admitted here only after their cast snapshot has supplied the missing weapon base.
+        if (projectileSource && !runeWeaponBaseApplied) {
+            return;
+        }
+        if (!npcRuneDamage) {
+            LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
+            LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
+        }
+        Float rawAmount = damage.getIfPresentMetaObject(DamageStackDelayEST.META_RAW_AMOUNT);
+        float baseDamage = runeWeaponBaseApplied
+                ? damage.getAmount()
+                : rawAmount != null && rawAmount > 0.0f ? rawAmount : damage.getAmount();
+        if (runeWeaponBaseApplied) {
+            damage.putMetaObject(DamageStackDelayEST.META_BONUS_BASE_AMOUNT, baseDamage);
+            DamageStackDelayEST.logDamageStage("core-rune:weapon-base", damage,
+                    rawAmount == null ? amountBeforeFilter : rawAmount, baseDamage,
+                    "native rune coefficient scaled by weapon base before equipment bonuses");
+        }
+        boolean shattered = false;
+        if (!loreDamage && attacker != null && targetRef != null) {
+            // Shatter changes only the incoming base hit; bonuses are calculated afterwards.
+            shattered = LoreProcHandler.tryApplyFrozenShatter(store, attackerRef, targetRef, damage);
+            if (shattered) {
+                baseDamage = damage.getAmount();
+            }
+        }
+        damage.putMetaObject(DamageStackDelayEST.META_BONUS_BASE_AMOUNT, baseDamage);
+        DamageStackDelayEST.logDamageStage("equipment:frozen-shatter", damage,
+                rawAmount == null ? amountBeforeFilter : rawAmount, baseDamage,
+                "triggered=" + shattered);
         boolean skipRefine = (loreDamage && !applyLoreEquipmentBonuses)
                 || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE));
 
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
         if (!skipRefine) {
-            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
             if (attacker != null) {
                 ItemStack weapon = findWeaponInHotbar(attacker);
                 if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
-                    float baseDamage = damage.getAmount();
                     int upgradeLevel = ReforgeEquip.getLevelFromItem(weapon);
                     int clampedLevel = clampLevel(upgradeLevel);
                     double refinementMultiplier = getDamageMultiplier(clampedLevel);
@@ -164,17 +205,6 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     double critChancePercent = calculateSocketCritChancePercent(weapon);
                     double critDamagePercent = calculateSocketCritDamagePercent(weapon);
 
-                    float newDamage = (float) ((baseDamage
-                            * refinementMultiplier
-                            * ascensionMultiplier
-                            * softcoreMultiplier
-                            * socketMultiplier
-                            * partsMultiplier) + socketFlat);
-                    if (attackSpeedPercent > 0.0) {
-                        // Runtime fallback: convert attack speed bonus into effective DPS multiplier.
-                        newDamage = (float) (newDamage * (1.0 + (attackSpeedPercent / 100.0)));
-                    }
-
                     boolean chargedCrit = CoreRuneHandler.consumeCriticalChargeGuarantee(attacker, weapon);
                     boolean isCrit = chargedCrit || (critChancePercent > 0.0
                             && ThreadLocalRandom.current().nextDouble(100.0) < critChancePercent);
@@ -184,9 +214,20 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     double effectiveCritDamagePercent = chargedCrit
                             ? Math.max(50.0d, critDamagePercent)
                             : critDamagePercent;
-                    if (isCrit && effectiveCritDamagePercent > 0.0) {
-                        newDamage = (float) (newDamage * (1.0 + (effectiveCritDamagePercent / 100.0)));
-                    }
+                    // Calculate each percentage from the same post-Shatter base.
+                    double additivePercent = (refinementMultiplier - 1.0d)
+                            + (ascensionMultiplier - 1.0d)
+                            + (softcoreMultiplier - 1.0d)
+                            + (socketMultiplier - 1.0d)
+                            + (partsMultiplier - 1.0d)
+                            + (attackSpeedPercent / 100.0d)
+                            + (isCrit ? effectiveCritDamagePercent / 100.0d : 0.0d);
+                    // Flat socket damage is balanced around a normal 1.0-base hit. Applying the
+                    // full flat amount to every tiny multi-hit ability hit lets low coefficients
+                    // (for example Razorstrike's repeated rock spikes) outscale a single hit.
+                    double socketFlatScale = Math.min(1.0d, Math.max(0.0d, baseDamage));
+                    double appliedSocketFlat = socketFlat * socketFlatScale;
+                    float newDamage = (float) (baseDamage + (baseDamage * additivePercent) + appliedSocketFlat);
 
                     int equippedVoidEssenceCount = countEquippedVoidEssences(attacker, weapon);
                     float bloodPactDamage = applyVoidTierFiveBloodPact(store, attackerRef, voidTier, equippedVoidEssenceCount);
@@ -195,7 +236,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     }
 
                     WeaponElementalDamageUtils.AffinityDamage affinityDamage =
-                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, newDamage, store, targetRef);
+                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, baseDamage, store, targetRef);
                     if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
                         damage.putMetaObject(META_WEAPON_ELEMENTAL_DAMAGE, affinityDamage.elementDamagePayload());
                     }
@@ -205,8 +246,21 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     }
                     double brokenWeaponMultiplier = EquipmentDurabilityPenaltyUtils.weaponMultiplier(attacker, weapon);
                     if (brokenWeaponMultiplier != 1.0d) {
-                        newDamage = (float) Math.max(0.0d, newDamage * brokenWeaponMultiplier);
+                        newDamage += (float) (baseDamage * (brokenWeaponMultiplier - 1.0d));
                     }
+                    newDamage = Math.max(0.0f, newDamage);
+
+                    DamageStackDelayEST.logDamageStage("equipment:weapon", damage, baseDamage, newDamage,
+                            String.format(java.util.Locale.ROOT,
+                                    "weapon=%s shattered=%s refine=%.4f ascension=%.4f softcore=%.4f socket=%.4f parts=%.4f "
+                                            + "socketFlat=%.4f socketFlatScale=%.4f socketFlatApplied=%.4f "
+                                            + "attackSpeedPct=%.2f crit=%s critDamagePct=%.2f "
+                                            + "additivePercent=%.4f bloodPact=%.4f affinity=%s affinityDelta=%.4f broken=%.4f",
+                                    weapon.getItemId(), shattered, refinementMultiplier, ascensionMultiplier, softcoreMultiplier,
+                                    socketMultiplier, partsMultiplier, socketFlat, socketFlatScale, appliedSocketFlat,
+                                    attackSpeedPercent, isCrit,
+                                    effectiveCritDamagePercent, additivePercent, bloodPactDamage, affinityDamage.type(),
+                                    affinityDamage.damageDelta(), brokenWeaponMultiplier));
 
                     damage.setAmount(newDamage);
 
@@ -241,13 +295,13 @@ public class EquipmentRefineEST extends DamageEventSystem {
 
         // ── Defender armor bonus (defense / damage reduction) ─────────────────
         if (skipRefine && !isPhysicalBleedLoreDamage(damage)) {
-            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
             if (attacker != null) {
                 ItemStack weapon = findWeaponInHotbar(attacker);
                 if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
                     float newDamage = damage.getAmount();
+                    float bonusBase = DamageStackDelayEST.getBonusBaseDamage(damage, newDamage);
                     WeaponElementalDamageUtils.AffinityDamage affinityDamage =
-                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, newDamage, store, targetRef);
+                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, bonusBase, store, targetRef);
                     if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
                         damage.putMetaObject(META_WEAPON_ELEMENTAL_DAMAGE,
                                 WeaponElementalDamageUtils.mergeElementDamagePayload(
@@ -260,9 +314,9 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     }
                     double brokenWeaponMultiplier = EquipmentDurabilityPenaltyUtils.weaponMultiplier(attacker, weapon);
                     if (brokenWeaponMultiplier != 1.0d) {
-                        newDamage = (float) Math.max(0.0d, newDamage * brokenWeaponMultiplier);
+                        newDamage += (float) (bonusBase * (brokenWeaponMultiplier - 1.0d));
                     }
-                    damage.setAmount(newDamage);
+                    damage.setAmount(Math.max(0.0f, newDamage));
                 }
             }
         }
@@ -289,7 +343,13 @@ public class EquipmentRefineEST extends DamageEventSystem {
             }
         }
 
-        LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.after");
+        if (!npcRuneDamage) {
+            LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.after");
+        }
+        DamageStackDelayEST.logDamageStage("equipment:filter-total", damage,
+                amountBeforeFilter, damage.getAmount(),
+                "loreDamage=" + loreDamage + ",applyLoreEquipmentBonuses=" + applyLoreEquipmentBonuses
+                        + ",skipRefine=" + skipRefine);
     }
 
     /**

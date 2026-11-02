@@ -10,6 +10,9 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.SystemGroup;
+import com.hypixel.hytale.component.dependency.Dependency;
+import com.hypixel.hytale.component.dependency.Order;
+import com.hypixel.hytale.component.dependency.SystemDependency;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -54,6 +57,11 @@ public final class LoreEffectEST extends DamageEventSystem {
     }
 
     @Override
+    public Set<Dependency<EntityStore>> getDependencies() {
+        return Set.of(new SystemDependency<>(Order.AFTER, SocketEffectEST.class));
+    }
+
+    @Override
     public void handle(int index,
                        ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store,
@@ -62,6 +70,7 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (store == null || damage == null) {
             return;
         }
+        float amountBeforeFilter = damage.getAmount();
         boolean loreDamage = Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
@@ -73,14 +82,22 @@ public final class LoreEffectEST extends DamageEventSystem {
 
         if (loreDamage) {
             LoreProcHandler.applyCoreAbilityNativeOnHitEffects(store, attackerRef, targetRef);
+            DamageStackDelayEST.logDamageStage("lore:native-hit-effects", damage,
+                    amountBeforeFilter, damage.getAmount(), "loreDamage=true");
             return;
         }
 
+        float beforeForeignSupport = damage.getAmount();
         LoreProcHandler.applyForeignCoreAbilitySupportOnHit(
                 store, attackerRef, targetRef, damage, commandBuffer);
+        DamageStackDelayEST.logDamageStage("lore:foreign-core-support", damage,
+                beforeForeignSupport, damage.getAmount(), "");
 
+        float beforeWolfSupport = damage.getAmount();
         LoreProcHandler.applyWolfPackAbilitySupportRunestones(
                 store, attackerRef, targetRef, damage, commandBuffer);
+        DamageStackDelayEST.logDamageStage("lore:wolf-support", damage,
+                beforeWolfSupport, damage.getAmount(), "");
 
         LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
         LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "LoreEffectEST.before");
@@ -90,21 +107,26 @@ public final class LoreEffectEST extends DamageEventSystem {
 
         if (attacker != null) {
             CoreRuneHandler.recordVolleyRuneHit(store, attackerRef, targetRef);
-            CoreRuneHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
         }
+        float beforeBerserk = damage.getAmount();
+        CoreRuneHandler.applyBerserkRuneDamageBonus(store, attackerRef, damage);
+        DamageStackDelayEST.logDamageStage("lore:berserk-rune", damage,
+                beforeBerserk, damage.getAmount(), "");
 
-        if (attacker != null && targetRef != null) {
-            LoreProcHandler.tryApplyFrozenShatter(store, attackerRef, targetRef, damage);
-        }
-
+        float beforeLoreProcs = damage.getAmount();
         if (attacker != null) {
             applyAttackerLore(store, attacker, attackerRef, targetRef, damage, commandBuffer);
         }
         if (defender != null) {
             applyDefenderLore(store, defender, targetRef, attackerRef, damage, commandBuffer);
         }
+        DamageStackDelayEST.logDamageStage("lore:socketed-procs", damage,
+                beforeLoreProcs, damage.getAmount(), "attacker=" + (attacker != null)
+                        + ",defender=" + (defender != null));
 
         LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "LoreEffectEST.after");
+        DamageStackDelayEST.logDamageStage("lore:filter-total", damage,
+                amountBeforeFilter, damage.getAmount(), "loreDamage=false");
     }
 
     private void applyAttackerLore(Store<EntityStore> store,

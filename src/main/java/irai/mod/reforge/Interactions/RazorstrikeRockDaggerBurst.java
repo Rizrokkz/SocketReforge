@@ -3,6 +3,8 @@ package irai.mod.reforge.Interactions;
 import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 import org.joml.Vector3d;
 
+import com.hypixel.hytale.builtin.abilities.trigger.AbilityProjectileLaunchData;
+import com.hypixel.hytale.builtin.abilities.trigger.AbilityProjectileLauncher;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.protocol.InteractionType;
@@ -13,8 +15,7 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHa
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
 import com.hypixel.hytale.server.core.modules.physics.component.Velocity;
-import com.hypixel.hytale.server.core.modules.projectile.ProjectileModule;
-import com.hypixel.hytale.server.core.modules.projectile.config.ProjectileConfig;
+import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /** Spawns the two Razorstrike dagger follow-ups from the rock impact toward its hit target. */
@@ -27,6 +28,8 @@ public final class RazorstrikeRockDaggerBurst extends SimpleInteraction {
     private static final String LEFT_DAGGER_CONFIG = "Projectile_Config_Razorstrike_Dagger_Left";
     private static final String RIGHT_DAGGER_CONFIG = "Projectile_Config_Razorstrike_Dagger_Right";
     private static final double SPAWN_BACKOFF = 1.15d;
+    private static final double MIN_OWNER_CLEARANCE = 1.25d;
+    private static final double SPAWN_HEIGHT_OFFSET = 0.45d;
     private static final double SPREAD_RADIANS = Math.toRadians(8.0d);
 
     @Override
@@ -57,19 +60,22 @@ public final class RazorstrikeRockDaggerBurst extends SimpleInteraction {
         }
 
         Vector3d impactPosition = new Vector3d(rockTransform.getPosition());
+        Vector3d targetPosition = null;
         Vector3d towardTarget = null;
         if (isValid(targetRef)) {
             TransformComponent targetTransform = commandBuffer.getComponent(
                     targetRef, TransformComponent.getComponentType());
             if (targetTransform != null && targetTransform.getPosition() != null) {
-                towardTarget = new Vector3d(targetTransform.getPosition())
-                        .add(0.0d, 0.8d, 0.0d).sub(impactPosition);
+                targetPosition = new Vector3d(targetTransform.getPosition()).add(0.0d, 0.8d, 0.0d);
+                towardTarget = new Vector3d(targetPosition).sub(impactPosition);
+                towardTarget.y = 0.0d;
             }
         }
         if (towardTarget == null || towardTarget.lengthSquared() < 0.04d) {
             Velocity rockVelocity = commandBuffer.getComponent(rockRef, Velocity.getComponentType());
             if (rockVelocity != null) {
                 towardTarget = new Vector3d(rockVelocity.getVelocity());
+                towardTarget.y = 0.0d;
             }
         }
         if (towardTarget == null || towardTarget.lengthSquared() < 0.04d) {
@@ -86,29 +92,66 @@ public final class RazorstrikeRockDaggerBurst extends SimpleInteraction {
         }
         towardTarget.normalize();
         Vector3d startPosition = new Vector3d(impactPosition).fma(-SPAWN_BACKOFF, towardTarget);
-        ProjectileModule projectileModule = ProjectileModule.get();
-        if (projectileModule == null) {
-            return;
+        TransformComponent ownerTransform = commandBuffer.getComponent(
+                ownerRef, TransformComponent.getComponentType());
+        if (ownerTransform != null && ownerTransform.getPosition() != null) {
+            Vector3d ownerPosition = ownerTransform.getPosition();
+            double dx = startPosition.x - ownerPosition.x;
+            double dz = startPosition.z - ownerPosition.z;
+            if (dx * dx + dz * dz < MIN_OWNER_CLEARANCE * MIN_OWNER_CLEARANCE) {
+                // Point-blank impacts can put the dagger models inside the caster. Offset the
+                // pair sideways, then aim them back toward the hit target.
+                Vector3d lateral = new Vector3d(-towardTarget.z, 0.0d, towardTarget.x);
+                if (lateral.lengthSquared() < 1.0e-6d) {
+                    lateral.set(1.0d, 0.0d, 0.0d);
+                } else {
+                    lateral.normalize();
+                }
+                startPosition.set(ownerPosition).fma(MIN_OWNER_CLEARANCE, lateral)
+                        .add(0.0d, SPAWN_HEIGHT_OFFSET, 0.0d);
+                if (targetPosition != null) {
+                    Vector3d adjustedDirection = new Vector3d(targetPosition).sub(startPosition);
+                    adjustedDirection.y = 0.0d;
+                    if (adjustedDirection.lengthSquared() > 1.0e-6d) {
+                        towardTarget.set(adjustedDirection).normalize();
+                    }
+                }
+            }
         }
-
-        spawnDagger(projectileModule, commandBuffer, ownerRef, LEFT_DAGGER_CONFIG,
-                startPosition, rotateYaw(towardTarget, -SPREAD_RADIANS));
-        spawnDagger(projectileModule, commandBuffer, ownerRef, RIGHT_DAGGER_CONFIG,
-                startPosition, rotateYaw(towardTarget, SPREAD_RADIANS));
+        ImpactModifiers resolvedModifiers = ImpactModifiers.resolve(context, rockRef, commandBuffer);
+        spawnDagger(commandBuffer, ownerRef, LEFT_DAGGER_CONFIG,
+                startPosition, rotateYaw(towardTarget, -SPREAD_RADIANS), resolvedModifiers);
+        spawnDagger(commandBuffer, ownerRef, RIGHT_DAGGER_CONFIG,
+                startPosition, rotateYaw(towardTarget, SPREAD_RADIANS), resolvedModifiers);
     }
 
-    private static void spawnDagger(ProjectileModule projectileModule,
-                                   CommandBuffer<EntityStore> commandBuffer,
-                                   Ref<EntityStore> ownerRef,
-                                   String configId,
-                                   Vector3d startPosition,
-                                   Vector3d direction) {
-        ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset(configId);
-        if (config == null) {
-            return;
-        }
-        projectileModule.spawnProjectile(ownerRef, commandBuffer, config,
-                new Vector3d(startPosition), direction, 1.0f, 1.0f);
+    private static void spawnDagger(CommandBuffer<EntityStore> commandBuffer,
+                                    Ref<EntityStore> ownerRef,
+                                    String configId,
+                                    Vector3d startPosition,
+                                    Vector3d direction,
+                                    ImpactModifiers impactModifiers) {
+        var attributes = impactModifiers == null ? null : impactModifiers.getAttributes();
+        String[] onHitEffectIds = impactModifiers == null ? null : impactModifiers.getOnHitEffectIds();
+        String elementalCauseId = impactModifiers == null ? null : impactModifiers.getElementalCauseId();
+        AbilityProjectileLaunchData launchData = new AbilityProjectileLaunchData(
+                configId,
+                false,
+                false,
+                0.0d,
+                4.0f,
+                false,
+                1.0f,
+                1.0f,
+                attributes,
+                onHitEffectIds,
+                elementalCauseId,
+                null,
+                0.0f,
+                1.0f,
+                null);
+        AbilityProjectileLauncher.launch(ownerRef, commandBuffer, launchData,
+                new Vector3d(startPosition), new Vector3d(direction), null);
     }
 
     private static Vector3d rotateYaw(Vector3d direction, double radians) {

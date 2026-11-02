@@ -1,0 +1,86 @@
+{
+  "Class": "Instruction",
+  "Interface": "Hytale.Instruction.AttackSequence",
+  "Parameters": {
+    "AttackDistance": {
+      "Value": 24.0,
+      "Description": "Long engagement range for Rune Adept dash openers"
+    },
+    "CombatRelativeTurnSpeed": {
+      "Value": 1.5,
+      "Description": "Combat turning speed"
+    }
+  },
+  "Content": {
+    "Sensor": {
+      "Type": "Target",
+      "Range": { "Compute": "AttackDistance" },
+      "Filters": [
+        { "Type": "LineOfSight" }
+      ]
+    },
+    "ActionsBlocking": true,
+    "Actions": [
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Omnislash",
+        "AttackPauseRange": [ 4.0, 5.0 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Razorstrike",
+        "AttackPauseRange": [ 3.0, 4.0 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_BloodRush",
+        "AttackPauseRange": [ 2.5, 3.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Vortexstrike",
+        "AttackPauseRange": [ 2.5, 3.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_WolfPack",
+        "AttackPauseRange": [ 1.0, 1.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Berserk",
+        "AttackPauseRange": [ 1.0, 1.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Octaslash",
+        "AttackPauseRange": [ 3.0, 4.0 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_GrandSlam",
+        "AttackPauseRange": [ 2.5, 3.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Pummel",
+        "AttackPauseRange": [ 1.5, 2.5 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Whirlwind",
+        "AttackPauseRange": [ 3.0, 4.0 ]
+      },
+      {
+        "Type": "Attack",
+        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Mana_Font",
+        "AttackPauseRange": [ 4.0, 5.0 ]
+      }
+    ],
+    "HeadMotion": {
+      "Type": "Aim",
+      "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" }
+    }
+  },
+  "Type": "Component"
+}

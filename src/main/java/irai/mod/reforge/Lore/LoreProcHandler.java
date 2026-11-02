@@ -37,6 +37,7 @@ import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.InteractionManager;
 import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.UUIDComponent;
 import com.hypixel.hytale.server.core.entity.entities.player.CameraManager;
 import com.hypixel.hytale.server.core.entity.movement.MovementStatesComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -106,6 +107,7 @@ import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Interactions.CoreAbilityRune;
+import irai.mod.reforge.Interactions.CoreRuneDamageContext;
 import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -2372,7 +2374,10 @@ public final class LoreProcHandler {
                 }
             }
             case DOUBLE_CAST -> {
-                float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                float base = selfIsAttacker && damage != null
+                        ? irai.mod.reforge.Entity.Events.DamageStackDelayEST
+                                .getBonusBaseDamage(damage, amount)
+                        : amount;
                 base *= damageMultiplier;
                 double scaledValue = LoreAbility.scaleEffectValue(value, safeFeedTier);
                 double pct = clampPercentDamage(scaledValue, 0.25d, 1.0d);
@@ -2391,7 +2396,10 @@ public final class LoreProcHandler {
                 if (opponentRef == null) {
                     return true;
                 }
-                float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                float base = selfIsAttacker && damage != null
+                        ? irai.mod.reforge.Entity.Events.DamageStackDelayEST
+                                .getBonusBaseDamage(damage, amount)
+                        : amount;
                 base *= damageMultiplier;
                 boolean skipRefine = selfIsAttacker && damage != null;
                 double pct = clampPercentDamage(value, 0.15d, 0.75d);
@@ -2402,7 +2410,10 @@ public final class LoreProcHandler {
                 }
             }
             case CRIT_CHARGE -> {
-                float base = selfIsAttacker && damage != null ? damage.getAmount() : amount;
+                float base = selfIsAttacker && damage != null
+                        ? irai.mod.reforge.Entity.Events.DamageStackDelayEST
+                                .getBonusBaseDamage(damage, amount)
+                        : amount;
                 base *= damageMultiplier;
                 double pct = clampPercentDamage(value, 0.20d, 1.25d);
                 float extra = (float) (base * pct);
@@ -2830,9 +2841,10 @@ public final class LoreProcHandler {
         float weaponDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
         if (SoulReaperTracker.RUNE_ITEM_ID.equalsIgnoreCase(
                 runestone == null ? null : runestone.getItemId())) {
-            // Keep Soul Reaper's existing refined-damage bonus in addition to the
-            // base-weapon contribution shared by mapped lore-proc casts.
-            weaponDamage += LoreDamageUtils.resolveWeaponRefinedDamage(store, attackerRef, 0.0f) * 0.30f;
+            // Keep Soul Reaper's 30% weapon bonus in the cast snapshot as base damage.
+            // EquipmentRefineEST applies refinement, ascension, sockets, and parts once
+            // when the native rune hit enters the shared damage pipeline.
+            weaponDamage *= 1.30f;
         }
         return weaponDamage;
     }
@@ -5479,9 +5491,9 @@ public final class LoreProcHandler {
             return;
         }
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        if (attacker == null) {
-            return;
-        }
+        float npcBaseDamage = attacker == null
+                ? CoreRuneDamageContext.getCapturedWeaponBaseDamage(store, attackerRef)
+                : 0.0f;
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
@@ -5496,10 +5508,11 @@ public final class LoreProcHandler {
         applyCoreAbilitySupportRunestones(store, attackerRef, targets.get(0),
                 supportRunestones, LoreTrigger.ON_SKILL_USE);
 
-        LoreDamageUtils.DamageBaseResult baseResult =
-                LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
+        LoreDamageUtils.DamageBaseResult baseResult = attacker == null
+                ? new LoreDamageUtils.DamageBaseResult(npcBaseDamage, false)
+                : LoreDamageUtils.resolveLoreDamageBaseResult(store, attackerRef, true, null, 10f);
         if (baseResult.amount <= 0f) {
-            return;
+            baseResult = new LoreDamageUtils.DamageBaseResult(10.0f, false);
         }
         BloodRushSequence sequence = new BloodRushSequence(store, attackerRef, targets.get(0),
                 baseResult.amount, baseResult.skipRefine, supportRunestones);
@@ -5608,10 +5621,13 @@ public final class LoreProcHandler {
             return;
         }
         Player owner = store.getComponent(ownerRef, Player.getComponentType());
-        if (owner == null || owner.getUuid() == null) {
+        UUIDComponent ownerUuidComponent = owner == null
+                ? store.getComponent(ownerRef, UUIDComponent.getComponentType()) : null;
+        UUID ownerId = owner != null ? owner.getUuid()
+                : ownerUuidComponent == null ? null : ownerUuidComponent.getUuid();
+        if (ownerId == null) {
             return;
         }
-        UUID ownerId = owner.getUuid();
         List<LoreSocketManager.SocketedModifierRunestone> supportSnapshot =
                 supportRunestones == null || supportRunestones.isEmpty()
                         ? List.of() : List.copyOf(supportRunestones);
@@ -5619,12 +5635,13 @@ public final class LoreProcHandler {
             if (store.isShutdown() || !ownerRef.isValid()) {
                 return;
             }
-            if (targetRef != null && targetRef.isValid()
-                    && store.getComponent(targetRef, NPCEntity.getComponentType()) != null) {
+            if (targetRef != null && targetRef.isValid() && !targetRef.equals(ownerRef)) {
                 commandSummonedWolvesToAttackOnWorldThread(store, ownerId, targetRef);
             }
-            applyCoreAbilitySupportRunestones(store, ownerRef, targetRef,
-                    supportSnapshot, LoreTrigger.ON_SKILL_USE);
+            if (owner != null) {
+                applyCoreAbilitySupportRunestones(store, ownerRef, targetRef,
+                        supportSnapshot, LoreTrigger.ON_SKILL_USE);
+            }
             Set<Ref<EntityStore>> activeWolves = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
             if (activeWolves != null) {
                 WolfPackSupport wolfSupport = new WolfPackSupport(ownerRef, supportSnapshot);
@@ -5717,10 +5734,14 @@ public final class LoreProcHandler {
         }
         Player owner = store.getComponent(ownerRef, Player.getComponentType());
         NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
-        if (owner == null || owner.getUuid() == null || target == null || target.isReservedBy(owner.getUuid())) {
+        UUIDComponent ownerUuidComponent = owner == null
+                ? store.getComponent(ownerRef, UUIDComponent.getComponentType()) : null;
+        UUID ownerId = owner != null ? owner.getUuid()
+                : ownerUuidComponent == null ? null : ownerUuidComponent.getUuid();
+        if (ownerId == null || (target != null && target.isReservedBy(ownerId))
+                || !isEntityAlive(store, targetRef)) {
             return;
         }
-        UUID ownerId = owner.getUuid();
         Set<Ref<EntityStore>> activeWolves = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
         if (activeWolves == null || activeWolves.isEmpty()) {
             return;
@@ -5732,11 +5753,11 @@ public final class LoreProcHandler {
                                                                     UUID ownerId,
                                                                     Ref<EntityStore> targetRef) {
         if (store == null || store.isShutdown() || ownerId == null || targetRef == null
-                || !targetRef.isValid() || store.getComponent(targetRef, NPCEntity.getComponentType()) == null) {
+                || !targetRef.isValid()) {
             return;
         }
         NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
-        if (target == null || target.isReservedBy(ownerId)) {
+        if ((target != null && target.isReservedBy(ownerId)) || !isEntityAlive(store, targetRef)) {
             return;
         }
         Set<Ref<EntityStore>> summons = WOLF_SUMMONS.get(wolfSummonKey(ownerId));
@@ -5784,11 +5805,11 @@ public final class LoreProcHandler {
             queueRemoveOmnislashTrail(store, attackerRef);
         }
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        if (attacker == null) {
-            return;
-        }
-
-        float weaponBaseDamage = LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
+        float npcWeaponBaseDamage = attacker == null
+                ? CoreRuneDamageContext.getCapturedWeaponBaseDamage(store, attackerRef)
+                : 0.0f;
+        float weaponBaseDamage = attacker == null ? npcWeaponBaseDamage
+                : LoreDamageUtils.resolveWeaponBaseDamage(store, attackerRef);
         if (weaponBaseDamage <= 0f) {
             weaponBaseDamage = 10f;
         }
@@ -8415,7 +8436,10 @@ public final class LoreProcHandler {
         if (!isFrozenActive(store, targetRef)) {
             return false;
         }
-        damage.setAmount(damage.getAmount() * 2.0f);
+        Float rawAmount = damage.getIfPresentMetaObject(
+                irai.mod.reforge.Entity.Events.DamageStackDelayEST.META_RAW_AMOUNT);
+        float baseDamage = rawAmount != null && rawAmount > 0.0f ? rawAmount : damage.getAmount();
+        damage.setAmount(baseDamage * 2.0f);
         queueFrozenShatter(store, targetRef, attackerRef);
         LoreDebug.log("freeze.shatter", "doubleDamage=true");
         return true;
@@ -8649,16 +8673,16 @@ public final class LoreProcHandler {
             }
             joinSummonedWolfToOwnerFlock(store, summonerRef, spawned);
             summons.add(spawned);
-            if (supportRunestones != null && !supportRunestones.isEmpty()) {
+            if (summoner != null && supportRunestones != null && !supportRunestones.isEmpty()) {
                 WOLF_SUPPORTS_BY_ENTITY.put(spawned, new WolfPackSupport(summonerRef, supportRunestones));
             } else {
                 WOLF_SUPPORTS_BY_ENTITY.remove(spawned);
             }
             scheduleWolfDespawn(store, key, spawned, lifetimeMs);
-            if (targetRef != null && targetRef.isValid()) {
+            if (targetRef != null && targetRef.isValid() && !targetRef.equals(summonerRef)) {
                 NPCEntity target = store.getComponent(targetRef, NPCEntity.getComponentType());
                 NPCEntity wolf = store.getComponent(spawned, NPCEntity.getComponentType());
-                if (target != null && !target.isReservedBy(playerId) && wolf != null) {
+                if ((target == null || !target.isReservedBy(playerId)) && wolf != null) {
                     try {
                         wolf.onFlockSetTarget(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
                     } catch (Throwable ignored) {
@@ -8720,18 +8744,26 @@ public final class LoreProcHandler {
 
         NPCEntity wolf = store.getComponent(wolfRef, NPCEntity.getComponentType());
         Role wolfRole = wolf == null ? null : wolf.getRole();
+        NPCEntity ownerNpc = store.getComponent(ownerRef, NPCEntity.getComponentType());
+        String ownerRoleName = ownerNpc == null ? null : ownerNpc.getRoleName();
 
         try {
             Ref<EntityStore> ownerFlock = FlockPlugin.getFlockReference(ownerRef, store);
             Ref<EntityStore> wolfFlock = FlockPlugin.getFlockReference(wolfRef, store);
-            Ref<EntityStore> flockRef = isValidRef(ownerFlock) ? ownerFlock
-                    : isValidRef(wolfFlock) ? wolfFlock : null;
+            Ref<EntityStore> flockRef = isValidRef(ownerFlock) ? ownerFlock : null;
             if (flockRef == null || !flockRef.isValid()) {
-                if (wolfRole != null) {
+                List<String> allowedRoles = new ArrayList<>();
+                allowedRoles.add(WOLF_SUMMON_ROLE);
+                if (ownerRoleName != null && !ownerRoleName.isBlank()
+                        && !ownerRoleName.equals(WOLF_SUMMON_ROLE)) {
+                    allowedRoles.add(ownerRoleName);
+                }
+                flockRef = FlockPlugin.createFlock(store, null, allowedRoles.toArray(String[]::new));
+                if (!isValidRef(flockRef) && wolfRole != null) {
                     flockRef = FlockPlugin.createFlock(store, wolfRole);
                 }
-                if (!isValidRef(flockRef)) {
-                    flockRef = FlockPlugin.createFlock(store, null, new String[] { WOLF_SUMMON_ROLE });
+                if (!isValidRef(flockRef) && isValidRef(wolfFlock)) {
+                    flockRef = wolfFlock;
                 }
             }
             if (!isValidRef(flockRef)) {

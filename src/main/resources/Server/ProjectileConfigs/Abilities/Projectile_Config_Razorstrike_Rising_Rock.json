@@ -1,0 +1,24 @@
+{
+  "Model": "SocketReforge_Razorstrike_Rising_Rock",
+  "Physics": {
+    "Type": "Standard",
+    "Gravity": 12,
+    "TerminalVelocityAir": 0.1,
+    "TerminalVelocityWater": 0.001,
+    "RotationMode": "VelocityDamped",
+    "ComputeYaw": false,
+    "ComputePitch": false,
+    "Bounciness": 0,
+    "BounceCount": 0
+  },
+  "LaunchForce": 10,
+  "DirectionalHitBox": { "Width": 1.0, "Depth": 0.8 },
+  "Interactions": {
+    "ProjectileSpawn": {
+      "Interactions": [
+        { "Type": "Simple", "RunTime": 0.5 }
+      ]
+    }
+  },
+  "UseModelScale": true
+}

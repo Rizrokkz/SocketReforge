@@ -85,6 +85,8 @@ import irai.mod.reforge.Config.WorldRepairConfig;
 import irai.mod.reforge.Entity.Events.AscensionStatueListener;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
+import irai.mod.reforge.Entity.Events.DamageCalculationAuditEST;
+import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
 import irai.mod.reforge.Entity.Events.EnemyElementalShieldEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.HatchetThrowEST;
@@ -122,7 +124,9 @@ import irai.mod.reforge.Interactions.CoreRuneCost;
 import irai.mod.reforge.Interactions.OctaslashRuneSupport;
 import irai.mod.reforge.Interactions.CoreRuneProjectileInteraction;
 import irai.mod.reforge.Interactions.RazorstrikeRockDaggerBurst;
-import irai.mod.reforge.Interactions.RazorstrikeTerrainRock;
+import irai.mod.reforge.Interactions.RazorstrikeDamageDebug;
+import irai.mod.reforge.Interactions.RazorstrikeSpikeRockLauncher;
+import irai.mod.reforge.Interactions.RazorstrikeRockVisual;
 import irai.mod.reforge.Interactions.GrandSlamRuneHitSupport;
 import irai.mod.reforge.Interactions.VortexstrikeGravityHold;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -168,6 +172,8 @@ public class ReforgePlugin extends JavaPlugin {
     private final LoreSkillUseEST loreSkillUseEST;
     private final EnemyElementalShieldEST enemyElementalShieldEST;
     private final DamageNumberEST damageNumberEST;
+    private final DamageCalculationAuditEST damageCalculationAuditEST;
+    private final DamageStackDelayEST damageStackDelayEST;
     private final LoreKillEST loreKillEST;
     private final LorePlayerStateEST lorePlayerStateEST;
     private final SocketStatSystem socketStatSystem;
@@ -222,6 +228,8 @@ public class ReforgePlugin extends JavaPlugin {
         loreSkillUseEST = new LoreSkillUseEST();
         enemyElementalShieldEST = new EnemyElementalShieldEST();
         damageNumberEST = new DamageNumberEST();
+        damageCalculationAuditEST = new DamageCalculationAuditEST();
+        damageStackDelayEST = new DamageStackDelayEST();
         loreKillEST = new LoreKillEST();
         lorePlayerStateEST = new LorePlayerStateEST();
         socketStatSystem = new SocketStatSystem();
@@ -373,8 +381,12 @@ public class ReforgePlugin extends JavaPlugin {
                 CoreRuneProjectileInteraction.Miss.class, CoreRuneProjectileInteraction.Miss.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeRockDaggerBurst",
                 RazorstrikeRockDaggerBurst.class, RazorstrikeRockDaggerBurst.CODEC);
-        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeTerrainRock",
-                RazorstrikeTerrainRock.class, RazorstrikeTerrainRock.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeDamageDebug",
+                RazorstrikeDamageDebug.class, RazorstrikeDamageDebug.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeSpikeRockLauncher",
+                RazorstrikeSpikeRockLauncher.class, RazorstrikeSpikeRockLauncher.CODEC);
+        this.getCodecRegistry(Interaction.CODEC).register("RazorstrikeRockVisual",
+                RazorstrikeRockVisual.class, RazorstrikeRockVisual.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune1", WolfPackRune.One.class, WolfPackRune.One.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune2", WolfPackRune.Two.class, WolfPackRune.Two.CODEC);
         this.getCodecRegistry(Interaction.CODEC).register("WolfPackRune3", WolfPackRune.Three.class, WolfPackRune.Three.CODEC);
@@ -443,6 +455,8 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(runeDeltaCastSnapshotEST);
         this.getEntityStoreRegistry().registerSystem(loreSkillUseEST);
         this.getEntityStoreRegistry().registerSystem(enemyElementalShieldEST);
+        this.getEntityStoreRegistry().registerSystem(damageStackDelayEST);
+        this.getEntityStoreRegistry().registerSystem(damageCalculationAuditEST);
         if (customCombatTextEnabled) {
             registerDamageNumberSystem();
         } else {

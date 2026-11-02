@@ -20,6 +20,7 @@
   },
   "HitEntity": {
     "Interactions": [
+        { "Type": "RazorstrikeDamageDebug", "Stage": "rock-slam-hit", "BasePhysical": 0.1, "DamageAttribute": "Damage" },
       { "Type": "CoreAbilityRuneHitSupport" },
       "Ability_Rune_Razorstrike_Rock_Slam_Hit"
     ]

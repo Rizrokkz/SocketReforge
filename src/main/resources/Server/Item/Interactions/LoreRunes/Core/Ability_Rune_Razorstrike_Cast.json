@@ -35,11 +35,12 @@
       "Interactions": [
         {
           "Type": "Simple",
-          "RunTime": 0.01,
+          "RunTime": 0.215,
           "Effects": {
             "ItemPlayerAnimationsId": "Daggers",
-            "ItemAnimationId": "RazorstrikeLunge",
-            "WaitForAnimationToFinish": false
+            "ItemAnimationId": "Razorstrike_Lunge",
+            "WaitForAnimationToFinish": false,
+            "ClearAnimationOnFinish": true
           }
         }
       ]

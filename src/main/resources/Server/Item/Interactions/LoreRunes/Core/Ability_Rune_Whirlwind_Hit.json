@@ -1,0 +1,16 @@
+{
+  "Parent": "DamageEntityParent",
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 1.0
+    }
+  },
+  "DamageAttribute": "Damage",
+  "DamageEffects": {
+    "WorldParticles": [
+      {
+        "SystemId": "Impact_Sword_Basic"
+      }
+    ]
+  }
+}

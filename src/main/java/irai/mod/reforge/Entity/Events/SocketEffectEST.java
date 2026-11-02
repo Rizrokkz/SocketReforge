@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -14,6 +15,9 @@ import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.SystemGroup;
+import com.hypixel.hytale.component.dependency.Dependency;
+import com.hypixel.hytale.component.dependency.Order;
+import com.hypixel.hytale.component.dependency.SystemDependency;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
@@ -137,6 +141,11 @@ public class SocketEffectEST extends DamageEventSystem {
     }
 
     @Override
+    public Set<Dependency<EntityStore>> getDependencies() {
+        return Set.of(new SystemDependency<>(Order.AFTER, EquipmentRefineEST.class));
+    }
+
+    @Override
     public void handle(int index,
                        ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store,
@@ -146,6 +155,7 @@ public class SocketEffectEST extends DamageEventSystem {
             if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
                 return;
             }
+            float amountBeforeFilter = damage.getAmount();
             float beforeDefenderSocketDamage = damage.getAmount();
             // Get target (entity receiving damage)
             Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
@@ -320,6 +330,10 @@ public class SocketEffectEST extends DamageEventSystem {
                 LoreProcHandler.commandSummonedWolvesToAttack(store, attackerRef, targetRef);
             }
             LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.after");
+            DamageStackDelayEST.logDamageStage("socket:filter-total", damage,
+                    amountBeforeFilter, damage.getAmount(),
+                    "resonance=" + attackerResonanceType + ",weapon="
+                            + (attackerWeapon == null ? "none" : attackerWeapon.getItemId()));
         } catch (Throwable t) {
             System.err.println("[SocketReforge] SocketEffectEST handle error: " + t.getMessage());
             t.printStackTrace();
@@ -383,13 +397,14 @@ public class SocketEffectEST extends DamageEventSystem {
         if (dealt <= 0f) {
             return;
         }
+        float bonusBase = DamageStackDelayEST.getBonusBaseDamage(damage, dealt);
 
         switch (resonanceType) {
             case BURN_ON_CRIT -> {
                 if (ThreadLocalRandom.current().nextDouble() < 0.22
                         && !isResonanceOnCooldown(attacker.getUuid(), "w_burn")) {
                     markResonanceCooldown(attacker.getUuid(), "w_burn", 700L);
-                    damage.setAmount((float) (damage.getAmount() + Math.max(1.0f, dealt * 0.08f)));
+                    damage.setAmount((float) (damage.getAmount() + Math.max(1.0f, bonusBase * 0.08f)));
                     tryApplyVisualEffect(store, defenderRef, BURN_EFFECT_IDS);
                 }
             }
@@ -406,7 +421,7 @@ public class SocketEffectEST extends DamageEventSystem {
             case EXECUTE -> {
                 float healthRatio = getHealthRatio(store, defenderRef);
                 if (healthRatio > 0f && healthRatio <= 0.25f) {
-                    damage.setAmount((float) (damage.getAmount() * 1.20f));
+                    damage.setAmount((float) (damage.getAmount() + bonusBase * 0.20f));
                     tryApplyVisualEffect(store, defenderRef, BURN_EFFECT_IDS);
                 }
             }
@@ -414,7 +429,7 @@ public class SocketEffectEST extends DamageEventSystem {
                 if (ThreadLocalRandom.current().nextDouble() < 0.30
                         && !isResonanceOnCooldown(attacker.getUuid(), "w_shred")) {
                     markResonanceCooldown(attacker.getUuid(), "w_shred", 900L);
-                    damage.setAmount((float) (damage.getAmount() * 1.10f));
+                    damage.setAmount((float) (damage.getAmount() + bonusBase * 0.10f));
                     tryApplyVisualEffect(store, defenderRef, SHOCK_EFFECT_IDS);
                 }
             }
@@ -422,7 +437,7 @@ public class SocketEffectEST extends DamageEventSystem {
                 if (ThreadLocalRandom.current().nextDouble() < 0.20
                         && !isResonanceOnCooldown(attacker.getUuid(), "w_thunder")) {
                     markResonanceCooldown(attacker.getUuid(), "w_thunder", 1200L);
-                    damage.setAmount((float) (damage.getAmount() + Math.max(1.0f, dealt * 0.10f)));
+                    damage.setAmount((float) (damage.getAmount() + Math.max(1.0f, bonusBase * 0.10f)));
                     tryApplyVisualEffect(store, defenderRef, SHOCK_EFFECT_IDS);
                 }
             }

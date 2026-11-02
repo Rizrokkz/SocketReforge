@@ -1,0 +1,92 @@
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "CoreAbilityRune",
+          "Ability": "Whirlwind"
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "TriggerCooldown",
+          "UseAbilityCooldown": true
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Repeat",
+          "Repeat": 10,
+          "ForkInteractions": {
+            "Interactions": [
+              {
+                "Type": "Simple",
+                "RunTime": 0.32,
+                "Effects": {
+                  "ItemPlayerAnimationsId": "Battleaxe",
+                  "ItemAnimationId": "WhirlwindChargedSpin",
+                  "WaitForAnimationToFinish": false,
+                  "ClearAnimationOnFinish": true,
+                  "WorldSoundEventId": "SFX_Battleaxe_T2_Signature_Swing",
+                  "LocalSoundEventId": "SFX_Battleaxe_T2_Signature_Swing_Local",
+                  "CameraEffect": "Battleaxe_Whirlwind"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.2
+        },
+        {
+          "Type": "Repeat",
+          "Repeat": 11,
+          "ForkInteractions": {
+            "Interactions": [
+              "Ability_Rune_Whirlwind_Damage",
+              { "Type": "Simple", "RunTime": 0.25 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "RunTime": 0.2
+        },
+        {
+          "Type": "Repeat",
+          "Repeat": 16,
+          "ForkInteractions": {
+            "Interactions": [
+              "Ability_Rune_Whirlwind_Pull_2",
+              { "Type": "Simple", "RunTime": 0.15 }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "ApplyEffect",
+          "EffectId": "SocketReforge_Whirlwind_Tornado_Gobliterator",
+          "Entity": "User",
+          "Duration": 3.4
+        }
+      ]
+    }
+  ]
+}

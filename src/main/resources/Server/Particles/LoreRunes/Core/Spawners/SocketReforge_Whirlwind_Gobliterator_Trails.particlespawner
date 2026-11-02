@@ -1,0 +1,111 @@
+{
+    "RenderMode":  "Erosion",
+    "EmitOffset":  {
+                       "X":  {
+                                 "Min":  0,
+                                 "Max":  0
+                             },
+                       "Y":  {
+                                 "Min":  0,
+                                 "Max":  0.25
+                             },
+                       "Z":  {
+                                 "Min":  0,
+                                 "Max":  0
+                             }
+                   },
+    "ParticleRotationInfluence":  "None",
+    "LinearFiltering":  true,
+    "LightInfluence":  0,
+    "ParticleRotateWithSpawner":  false,
+    "TrailSpawnerPositionMultiplier":  1,
+    "TrailSpawnerRotationMultiplier":  1,
+    "MaxConcurrentParticles":  12,
+    "ParticleLifeSpan":  {
+                             "Min":  0.4,
+                             "Max":  0.4
+                         },
+    "SpawnRate":  {
+                      "Min":  8,
+                      "Max":  8
+                  },
+    "Particle":  {
+                     "Texture":  "Particles/Textures/Circles/Signature_Spin7_GS.png",
+                     "ScaleRatioConstraint":  "OneToOne",
+                     "SoftParticles":  "Disable",
+                     "UVOption":  "RandomFlipU",
+                     "Animation":  {
+                                       "0":  {
+                                                 "Rotation":  {
+                                                                  "X":  {
+                                                                            "Min":  0,
+                                                                            "Max":  0
+                                                                        },
+                                                                  "Y":  {
+                                                                            "Min":  0,
+                                                                            "Max":  0
+                                                                        },
+                                                                  "Z":  {
+                                                                            "Min":  0,
+                                                                            "Max":  0
+                                                                        }
+                                                              },
+                                                 "Scale":  {
+                                                               "X":  {
+                                                                         "Min":  1,
+                                                                         "Max":  1
+                                                                     }
+                                                           },
+                                                 "Opacity":  0,
+                                                 "Color":  "#ffffff"
+                                             },
+                                       "10":  {
+                                                  "Opacity":  1
+                                              },
+                                       "30":  {
+                                                  "Opacity":  1,
+                                                  "Color":  "#ffeeaf"
+                                              },
+                                       "70":  {
+                                                  "Color":  "#ffeeaf"
+                                              },
+                                       "100":  {
+                                                   "Opacity":  0,
+                                                   "Scale":  {
+                                                                 "X":  {
+                                                                           "Min":  2,
+                                                                           "Max":  2
+                                                                       }
+                                                             },
+                                                   "Rotation":  {
+                                                                    "Z":  {
+                                                                              "Min":  -360,
+                                                                              "Max":  -360
+                                                                          }
+                                                                },
+                                                   "Color":  "#ffcd74"
+                                               }
+                                   },
+                     "InitialAnimationFrame":  {
+                                                   "Scale":  {
+                                                                 "X":  {
+                                                                           "Min":  1,
+                                                                           "Max":  1
+                                                                       }
+                                                             },
+                                                   "Opacity":  0.796,
+                                                   "Rotation":  {
+                                                                    "X":  {
+                                                                              "Min":  80,
+                                                                              "Max":  100
+                                                                          }
+                                                                }
+                                               }
+                 },
+    "IsLowRes":  true,
+    "SpawnBurst":  false,
+    "WaveDelay":  {
+                      "Min":  0.25,
+                      "Max":  0.25
+                  }
+}

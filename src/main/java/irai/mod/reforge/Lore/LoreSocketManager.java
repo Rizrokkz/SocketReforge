@@ -761,6 +761,11 @@ public final class LoreSocketManager {
             int rank = resolveFeedRank(feedTier, 2);
             return rank == 1 ? CORE_RUNESTONE_PREFIX + "GrandSlam_1" : GRAND_SLAM_RUNE_ITEM_ID;
         }
+        if (spiritId != null && spiritId.equalsIgnoreCase("Skeleton_Burnt_Praetorian")) {
+            int rank = resolveFeedRank(feedTier, 3);
+            return rank == 1 ? CORE_RUNESTONE_PREFIX + "Whirlwind"
+                    : CORE_RUNESTONE_PREFIX + "Whirlwind_" + (rank - 1);
+        }
         return resolveCoreAbilityRunestoneItemId(spiritId);
     }
 
@@ -793,6 +798,10 @@ public final class LoreSocketManager {
             }
             if ("Razorstrike".equals(runestone.abilityId())
                     && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_razorstrike(?:_[1-3])?")) {
+                return runestone.spiritId();
+            }
+            if ("Whirlwind".equals(runestone.abilityId())
+                    && itemId.trim().toLowerCase(Locale.ROOT).matches("rune_whirlwind(?:_[1-2])?")) {
                 return runestone.spiritId();
             }
             if ((CORE_RUNESTONE_PREFIX + runestone.abilityId()).equalsIgnoreCase(itemId.trim())) {

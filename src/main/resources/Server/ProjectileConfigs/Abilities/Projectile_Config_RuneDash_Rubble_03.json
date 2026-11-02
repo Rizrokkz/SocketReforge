@@ -26,7 +26,7 @@
                                                 "Interactions":  [
                                                                      {
                                                                          "Type":  "Simple",
-                                                                         "RunTime":  2.15,
+                                                                         "RunTime":  0.04,
                                                                          "Next":  "Ability_GroundSlam_Spike"
                                                                      },
                                                                      {
@@ -42,7 +42,7 @@
                                                 "Interactions":  [
                                                                      {
                                                                          "Type":  "Simple",
-                                                                         "RunTime":  2.15,
+                                                                         "RunTime":  0.04,
                                                                          "Next":  "Ability_GroundSlam_Spike"
                                                                      },
                                                                      {

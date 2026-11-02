@@ -11,6 +11,7 @@ import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
+import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
@@ -47,10 +48,15 @@ public abstract class OmnislashRune extends SimpleInteraction {
             return;
         }
         Store<EntityStore> store = ownerRef.getStore();
-        if (store == null || store.getComponent(ownerRef, Player.getComponentType()) == null) {
+        if (store == null) {
             return;
         }
-        if (!CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
+        Player player = store.getComponent(ownerRef, Player.getComponentType());
+        boolean npc = store.getComponent(ownerRef, NPCEntity.getComponentType()) != null;
+        if (player == null && !npc) {
+            return;
+        }
+        if (player != null && !CoreAbilityRune.canUseWithHeldWeapon(store, ownerRef, context.getHeldItem())) {
             return;
         }
 
@@ -61,10 +67,10 @@ public abstract class OmnislashRune extends SimpleInteraction {
         if (targetRef != null && !targetRef.isValid()) {
             targetRef = null;
         }
-        ImpactModifiers nativeModifiers = ImpactModifiers.collect(context, ownerRef, store);
+        ImpactModifiers nativeModifiers = player == null ? null : ImpactModifiers.collect(context, ownerRef, store);
         Map<String, Float> nativeAttributes = nativeModifiers == null
                 ? Map.of() : nativeModifiers.getAttributes();
-        if (nativeAttributes == null || nativeAttributes.isEmpty()) {
+        if (player != null && (nativeAttributes == null || nativeAttributes.isEmpty())) {
             nativeAttributes = CoreAbilityRune.readEquippedSupportAttributes(
                     context, ownerRef, store, context.getHeldItem());
         }
@@ -72,8 +78,8 @@ public abstract class OmnislashRune extends SimpleInteraction {
                 nativeModifiers == null ? null : nativeModifiers.getOnHitEffectIds(),
                 nativeModifiers == null ? null : nativeModifiers.getElementalCauseId());
 
-        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones =
-                CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
+        List<LoreSocketManager.SocketedModifierRunestone> supportRunestones = player == null ? List.of()
+                : CoreAbilityRune.readEquippedSupportRunestones(context, ownerRef, store, context.getHeldItem());
         String[] nativeOnHitEffects = nativeModifiers == null
                 ? null : nativeModifiers.getOnHitEffectIds();
         if ((nativeAttributes != null && !nativeAttributes.isEmpty())

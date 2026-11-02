@@ -19,7 +19,7 @@
         { "Type": "CoreRuneProjectileHit", "Ability": "Razorstrike" },
         "Ability_Rune_Razorstrike_Rock_Hit",
         "Ability_Rune_Razorstrike_Rock_Explosion",
-        { "Type": "RazorstrikeTerrainRock" },
+        { "Type": "RazorstrikeRockVisual" },
         { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
         { "Type": "RemoveEntity" }
       ]
@@ -27,7 +27,7 @@
     "ProjectileMiss": {
       "Interactions": [
         "Ability_Rune_Razorstrike_Rock_Explosion",
-        { "Type": "RazorstrikeTerrainRock" },
+        { "Type": "RazorstrikeRockVisual" },
         { "Type": "Simple", "RunTime": 0.4, "Next": "Ability_Rune_Razorstrike_Rock_Slam" },
         { "Type": "RemoveEntity" }
       ]

@@ -1,0 +1,18 @@
+{
+  "Duration": 3.4,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Overwrite",
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Lore_Whirlwind_Spin",
+        "TargetNodeName": "Chest",
+        "PositionOffset": {
+          "X": 0,
+          "Y": -1,
+          "Z": 0
+        }
+      }
+    ]
+  }
+}

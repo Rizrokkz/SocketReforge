@@ -21,6 +21,8 @@ import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifie
 import com.hypixel.hytale.server.core.modules.projectile.system.AbilityCastSnapshotSystem;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
+import irai.mod.reforge.Interactions.RazorstrikeProjectileDamage;
+
 /** Applies Rune Delta feed multipliers after Hytale snapshots the ability's base modifiers. */
 public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStore, InteractionChainStartEvent> {
     private static final MetaKey<Float> RUNE_DAMAGE_MULTIPLIER =
@@ -140,6 +142,24 @@ public final class RuneDeltaCastSnapshotEST extends EntityEventSystem<EntityStor
                         attributes,
                         base == null ? new String[0] : base.getOnHitEffectIds(),
                         base == null ? null : base.getElementalCauseId()));
+        com.hypixel.hytale.server.core.inventory.ItemStack heldItem = context.getHeldItem();
+        String heldItemId = heldItem == null || heldItem.isEmpty() ? null : heldItem.getItemId();
+        if (damageBase != null && heldItemId != null
+                && heldItemId.toLowerCase(java.util.Locale.ROOT).startsWith("rune_razorstrike")) {
+            RazorstrikeProjectileDamage.registerRazorstrikeCast(
+                    context.getOwningEntity(), damageBase, finalDamageAttribute * damageScale);
+        }
+        if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
+            String itemId = heldItem == null || heldItem.isEmpty() ? "unknown" : heldItem.getItemId();
+            System.out.printf(java.util.Locale.ROOT,
+                    "[SocketReforge][DamageCalc] stage=rune-snapshot item=%s baseDamage=%.4f "
+                            + "nativeDamage=%.4f feedMultiplier=%.4f finalDamageAttribute=%.4f%n",
+                    itemId,
+                    damageBase == null ? 0.0f : damageBase,
+                    baseDamageAttribute,
+                    damageScale,
+                    finalDamageAttribute * damageScale);
+        }
         context.getMetaStore().removeMetaObject(RUNE_DAMAGE_MULTIPLIER);
         context.getMetaStore().removeMetaObject(RUNE_DAMAGE_BASE);
         context.getMetaStore().removeMetaObject(RUNE_COST_MULTIPLIER);
