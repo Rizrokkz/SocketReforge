@@ -30,6 +30,6 @@ public class EnemyElementalShieldEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
-        EnemyElementalShieldUtils.applyToDamage(store, chunk.getReferenceTo(index), damage);
+        EnemyElementalShieldUtils.applyToDamage(store, commandBuffer, chunk.getReferenceTo(index), damage);
     }
 }

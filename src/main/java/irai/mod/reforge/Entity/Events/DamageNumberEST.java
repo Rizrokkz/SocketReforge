@@ -54,6 +54,7 @@ import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
 import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
+import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Lore.LoreTargetingUtils;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.UI.DamagePopupHudUI;
@@ -77,7 +78,7 @@ public class DamageNumberEST extends DamageEventSystem {
     private static final HytaleLogger ROOT_LOGGER = HytaleLogger.getLogger();
     private static final Level DEBUG_LOG_LEVEL = Level.WARNING;
     private static final long CULL_BUCKET_TTL_MS = 10_000L;
-    private static volatile boolean customCombatTextEnabled = true;
+    private static volatile boolean customCombatTextEnabled = false;
     private static volatile boolean cullingEnabled = true;
     private static volatile int cullingWindowMs = 500;
     private static volatile int cullingMaxPerTarget = 6;
@@ -208,16 +209,23 @@ public class DamageNumberEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        if (damage != null && Boolean.TRUE.equals(damage.getIfPresentMetaObject(
+                EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
+            return;
+        }
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         Damage.Source source = damage.getSource();
         Ref<EntityStore> attackerRef = source instanceof Damage.EntitySource entitySource
                 ? entitySource.getRef() : null;
         double shieldDamage = safeDouble(
                 damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ABSORBED_DAMAGE));
+        double elementalShieldDamage = safeDouble(
+                damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ELEMENTAL_ABSORBED_DAMAGE));
         boolean shieldActiveHit = Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ACTIVE_HIT));
         String kindId = resolveKind(damage);
-        boolean skipCombatText = DamageNumberMeta.shouldSkipCombatText(damage);
+        boolean skipCombatText = DamageNumberMeta.shouldSkipCombatText(damage)
+                || LoreDamageUtils.isStatusDamage(damage);
         boolean showAffinityDamageGroup = isAffinityDamageGroupEnabled() && !skipCombatText;
         EnemyAffinityHudUI.showDamage(
                 store,
@@ -256,7 +264,8 @@ public class DamageNumberEST extends DamageEventSystem {
             debug("[DamageNumberEST] skip via meta");
             return;
         }
-        if (damage.getAmount() <= 0f && shieldDamage <= 0.0001d && !shieldActiveHit) {
+        if (damage.getAmount() <= 0f && shieldDamage <= 0.0001d
+                && elementalShieldDamage <= 0.0001d && !shieldActiveHit) {
             debug("[DamageNumberEST] skip amount <= 0");
             return;
         }
@@ -271,7 +280,8 @@ public class DamageNumberEST extends DamageEventSystem {
         } else {
             debug("[DamageNumberEST] visibleComponentType is null");
         }
-        float displayAmount = resolveDisplayAmount(damage.getAmount(), shieldDamage, shieldActiveHit);
+        float displayAmount = resolveDisplayAmount(
+                damage.getAmount(), elementalShieldDamage, shieldActiveHit);
         if (displayAmount <= 0f) {
             debug("[DamageNumberEST] skip combat text for guarded zero display");
             return;

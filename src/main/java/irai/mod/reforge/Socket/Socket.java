@@ -8,6 +8,7 @@ public class Socket {
     private int    slotIndex;
     private String essenceId; // null = empty socket
     private String mutationElement; // null = use essence type for affinity
+    private String statusMutation; // independent status bonus, e.g. BLEED_BASE_1
     private boolean locked;    // true = socket is locked (failed to add essence)
     private boolean broken;    // true = socket was broken during punching
 
@@ -15,6 +16,7 @@ public class Socket {
         this.slotIndex = slotIndex;
         this.essenceId = essenceId;
         this.mutationElement = null;
+        this.statusMutation = null;
         this.locked = false;
         this.broken = false;
     }
@@ -24,6 +26,7 @@ public class Socket {
     public void   setEssenceId(String id)    {
         if (!Objects.equals(this.essenceId, id)) {
             this.mutationElement = null;
+            this.statusMutation = null;
         }
         this.essenceId = id;
         if (id == null || id.isBlank()) {
@@ -39,6 +42,14 @@ public class Socket {
         }
         this.mutationElement = mutationElement.trim().toUpperCase(Locale.ROOT);
     }
+    public String getStatusMutation()       { return statusMutation; }
+    public void   setStatusMutation(String statusMutation) {
+        if (statusMutation == null || statusMutation.isBlank()) {
+            this.statusMutation = null;
+            return;
+        }
+        this.statusMutation = statusMutation.trim().toUpperCase(Locale.ROOT);
+    }
     public boolean isLocked()                 { return locked; }
     public void   setLocked(boolean locked)   { this.locked = locked; }
     public boolean isBroken()                 { return broken; }
@@ -46,6 +57,7 @@ public class Socket {
         this.broken = broken;
         if (broken) {
             this.mutationElement = null;
+            this.statusMutation = null;
         }
     }
 }

@@ -434,7 +434,7 @@ public final class LoreAbility {
                 fallback = "Bleeds target";
                 String effect = formatEffect(langCode, key, fallback, formatted);
                 long durationMs = scaleDurationMs(BASE_BLEED_DURATION_MS, safeFeedTier);
-                return effect + " (" + formatDamageSuffix(langCode, describeBleedDamage(safeFeedTier)) + ", "
+                return effect + " (" + formatDamageSuffix(langCode, describeBleedDamage(value, safeFeedTier)) + ", "
                         + formatDurationSuffix(langCode, durationMs) + ")";
             }
             case APPLY_POISON -> {
@@ -651,11 +651,8 @@ public final class LoreAbility {
         return label + ": " + formatSeconds(durationMs) + "s";
     }
 
-    private String describeBleedDamage(int feedTier) {
-        double elementalRatePct = scaleEffectValue(
-                irai.mod.reforge.Common.WeaponElementalDamageUtils.DAMAGE_RATE_PER_SOCKET_WEIGHT * 100.0d,
-                feedTier);
-        return formatPercent(elementalRatePct) + "% affinity-scaled elemental output/tick (physical)";
+    private String describeBleedDamage(double statusBaseDamage, int feedTier) {
+        return formatValue(scaleEffectValue(statusBaseDamage, feedTier)) + " total base damage";
     }
 
     private static String formatValue(double value) {

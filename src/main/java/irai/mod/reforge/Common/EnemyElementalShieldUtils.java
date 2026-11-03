@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.entity.entities.Player;
@@ -14,6 +15,8 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Entity.Events.NativeAffinityDamageMergeEST;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 import irai.mod.reforge.Socket.Essence;
@@ -35,6 +38,17 @@ public final class EnemyElementalShieldUtils {
     public static final MetaKey<Double> META_SHIELD_ABSORBED_DAMAGE =
             Damage.META_REGISTRY.registerMetaObject(d -> 0.0d, false,
                     "socketreforge:elemental_shield_absorbed_damage", Codec.DOUBLE);
+    /** Elemental portion absorbed by the shield, kept separate from physical shield drain. */
+    public static final MetaKey<Double> META_SHIELD_ELEMENTAL_ABSORBED_DAMAGE =
+            Damage.META_REGISTRY.registerMetaObject(d -> 0.0d, false,
+                    "socketreforge:elemental_shield_elemental_absorbed_damage", Codec.DOUBLE);
+    /** Display-only amount restored after health application for Hytale's built-in combat text. */
+    public static final MetaKey<Double> META_NATIVE_SHIELD_FEEDBACK_AMOUNT =
+            Damage.META_REGISTRY.registerMetaObject(d -> 0.0d, false,
+                    "socketreforge:native_elemental_shield_feedback_amount", Codec.DOUBLE);
+    public static final MetaKey<Boolean> META_NATIVE_SHIELD_FEEDBACK_EVENT =
+            Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
+                    "socketreforge:native_elemental_shield_feedback_event", Codec.BOOLEAN);
     public static final MetaKey<Boolean> META_SHIELD_ACTIVE_HIT =
             Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
                     "socketreforge:elemental_shield_active_hit", Codec.BOOLEAN);
@@ -51,8 +65,14 @@ public final class EnemyElementalShieldUtils {
 
     private EnemyElementalShieldUtils() {}
 
-    public static double applyToDamage(Store<EntityStore> store, Ref<EntityStore> targetRef, Damage damage) {
+    public static double applyToDamage(Store<EntityStore> store,
+                                       CommandBuffer<EntityStore> commandBuffer,
+                                       Ref<EntityStore> targetRef,
+                                       Damage damage) {
         if (store == null || targetRef == null || damage == null || damage.getAmount() <= 0f) {
+            return 0.0d;
+        }
+        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
             return 0.0d;
         }
         NPCEntity npc = NPCEntity.getComponentType() == null
@@ -76,6 +96,7 @@ public final class EnemyElementalShieldUtils {
         long now = System.currentTimeMillis();
         rechargeIfEligible(state, profile, now);
         boolean shieldActiveBeforeHit = state.current > 0.0001d;
+        double shieldBeforeHit = state.current;
         if (shieldActiveBeforeHit) {
             damage.putMetaObject(META_SHIELD_ACTIVE_HIT, Boolean.TRUE);
         }
@@ -83,10 +104,16 @@ public final class EnemyElementalShieldUtils {
         double absorbed = 0.0d;
 
         double totalElementalDamage = totalElementalDamage(damage);
+        boolean elementalComponent = Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT));
         double processed = safeDouble(damage.getIfPresentMetaObject(META_SHIELD_PROCESSED_ELEMENTAL_DAMAGE));
         double newElementalDamage = Math.max(0.0d, totalElementalDamage - processed);
         boolean hasNewElementalDamage = newElementalDamage > 0.0001d;
         boolean hasShieldSunder = hasShieldSunder(store, damage);
+        double elementalShieldDamage = elementalComponent && shieldActiveBeforeHit && hasNewElementalDamage
+                ? Math.min(shieldBeforeHit,
+                        newElementalDamage * (hasShieldSunder ? SHIELD_SUNDER_DAMAGE_MULTIPLIER : 1.0d))
+                : 0.0d;
         if (shieldActiveBeforeHit && newElementalDamage > 0.0001d) {
             absorbed = Math.min(state.current, newElementalDamage);
             state.current = Math.max(0.0d, state.current - absorbed);
@@ -144,10 +171,39 @@ public final class EnemyElementalShieldUtils {
             damage.putMetaObject(META_SHIELD_ABSORBED_DAMAGE,
                     safeDouble(damage.getIfPresentMetaObject(META_SHIELD_ABSORBED_DAMAGE)) + absorbed);
         }
+        if (elementalShieldDamage > 0.0001d) {
+            damage.putMetaObject(META_SHIELD_ELEMENTAL_ABSORBED_DAMAGE,
+                    safeDouble(damage.getIfPresentMetaObject(META_SHIELD_ELEMENTAL_ABSORBED_DAMAGE))
+                            + elementalShieldDamage);
+            queueNativeShieldFeedback(commandBuffer, targetRef, damage, elementalShieldDamage);
+        }
         updateDepletionState(state, now);
 
         cleanupIfDead(store, targetRef, key);
         return absorbed;
+    }
+
+    /**
+     * Dispatches a zero-amount native Damage event. Its amount is restored in the inspect group,
+     * after ApplyDamage has already run, so Hytale renders its normal elemental number without
+     * applying the shielded amount to health a second time.
+     */
+    private static void queueNativeShieldFeedback(CommandBuffer<EntityStore> commandBuffer,
+                                                  Ref<EntityStore> targetRef,
+                                                  Damage originalDamage,
+                                                  double displayAmount) {
+        if (commandBuffer == null || targetRef == null || !targetRef.isValid()
+                || originalDamage == null || displayAmount <= 0.0001d
+                || !(originalDamage.getSource() instanceof Damage.EntitySource source)
+                || source.getRef() == null || !source.getRef().isValid()) {
+            return;
+        }
+        Damage feedback = new Damage(source, originalDamage.getDamageCauseIndex(), 0.0f);
+        NativeAffinityDamageMergeEST.registerShieldFeedback(originalDamage, feedback);
+        feedback.putMetaObject(META_NATIVE_SHIELD_FEEDBACK_AMOUNT, displayAmount);
+        feedback.putMetaObject(META_NATIVE_SHIELD_FEEDBACK_EVENT, Boolean.TRUE);
+        DamageNumberMeta.markSkipCombatText(feedback);
+        commandBuffer.invoke(targetRef, feedback);
     }
 
     public static double currentShield(Store<EntityStore> store, Ref<EntityStore> targetRef) {

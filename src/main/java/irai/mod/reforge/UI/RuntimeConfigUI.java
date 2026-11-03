@@ -4081,7 +4081,7 @@ public final class RuntimeConfigUI {
                 CATEGORY_DAMAGE_NUMBERS,
                 DAMAGE_NUMBER_CONFIG_NAME,
                 "Use custom damage numbers",
-                "Enabled: SocketReforge combat text. Disabled: built-in combat text.",
+                "Legacy setting. Socket Reforge custom damage rendering is disabled; native Hytale combat text is forced on.",
                 () -> damageNumberConfig().isUseCustomCombatText(),
                 value -> damageNumberConfig().setUseCustomCombatText(value)));
         modeControls.add(selectControl(
@@ -4089,11 +4089,11 @@ public final class RuntimeConfigUI {
                 CATEGORY_DAMAGE_NUMBERS,
                 DAMAGE_NUMBER_CONFIG_NAME,
                 "Render mode",
-                "COMBAT_TEXT uses entity combat text, HUD_POPUP uses the new screen-space popup labels, PARTICLE_DIGITS uses particle digits, OFF hides custom damage numbers.",
+                "Legacy custom-renderer setting; native Hytale combat text is used for damage events.",
                 DAMAGE_NUMBER_RENDER_MODES,
                 () -> normalizeDamageNumberRenderMode(damageNumberConfig().getDamageNumberRenderMode()),
                 value -> damageNumberConfig().setDamageNumberRenderMode(normalizeDamageNumberRenderMode(value))));
-        groups.add(new ControlGroup("damage_numbers_mode", "Combat Text Mode", "Toggle custom vs built-in combat text rendering and choose the custom display mode.", modeControls));
+        groups.add(new ControlGroup("damage_numbers_mode", "Native Combat Text", "Damage events use native Hytale combat text. The legacy Socket Reforge renderer is forced off.", modeControls));
 
         return new CategorySection(
                 CATEGORY_DAMAGE_NUMBERS,
@@ -4405,9 +4405,8 @@ public final class RuntimeConfigUI {
         groups.add(new ControlGroup("lore_feeding", "Lore Feeding and Clearing", "Feed cadence, feed cost, and material item ID lists.", feeding));
 
         List<ControlEntry> bleed = new ArrayList<>();
-        bleed.add(multiplierControl("lore_bleed_ramp", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed ramp per tick", "Additional bleed distribution weight each tick. Bleed tick baseline comes from equipped Void essence output.", () -> loreConfig().getBleedRampPerTick(), delta -> loreConfig().setBleedRampPerTick(clamp(loreConfig().getBleedRampPerTick() + delta, 0.0, 10.0))));
-        bleed.add(chanceControl("lore_bleed_weapon_base_cap", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed weapon base cap pct", "Optional per-tick cap based on weapon base damage. Zero disables this cap.", () -> loreConfig().getBleedWeaponBaseCapPct(), delta -> loreConfig().setBleedWeaponBaseCapPct(clampChance(loreConfig().getBleedWeaponBaseCapPct() + delta))));
-        groups.add(new ControlGroup("lore_bleed", "Lore Bleed Scaling", "Bleed ticks use Void elemental output from socketed essences, then apply ailment resistance and tick ramping.", bleed));
+        bleed.add(multiplierControl("lore_bleed_ramp", CATEGORY_LORE, LORE_CONFIG_NAME, "Bleed ramp per tick", "Distributes the bleed's own configured total damage budget across later ticks. It does not scale from weapon damage.", () -> loreConfig().getBleedRampPerTick(), delta -> loreConfig().setBleedRampPerTick(clamp(loreConfig().getBleedRampPerTick() + delta, 0.0, 10.0))));
+        groups.add(new ControlGroup("lore_bleed", "Lore Bleed Scaling", "Bleed uses its own configured damage, then applies native physical resistance and ailment resistance.", bleed));
 
         groups.add(new ControlGroup(GROUP_LORE_STATUS_RULES, "Lore Status Rules", "Resistance, counter, and reapply rules for lore statuses.", List.of()));
         groups.addAll(buildLoreMappingGroups());

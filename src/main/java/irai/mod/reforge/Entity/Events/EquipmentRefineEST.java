@@ -24,6 +24,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
@@ -128,6 +129,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        if (damage != null && Boolean.TRUE.equals(damage.getIfPresentMetaObject(
+                EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
+            return;
+        }
         float amountBeforeFilter = damage == null ? 0.0f : damage.getAmount();
         Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         if (LoreProcHandler.shouldCancelOmnislashRechainSlamDamage(store, targetRef, damage)) {
@@ -136,6 +141,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         boolean loreDamage = Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
+        boolean statusDamage = LoreDamageUtils.isStatusDamage(damage);
+        if (statusDamage) {
+            damage.putMetaObject(LoreDamageUtils.META_STATUS_DAMAGE, Boolean.TRUE);
+        }
         boolean applyLoreEquipmentBonuses = Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(LoreDamageUtils.META_APPLY_EQUIPMENT_DAMAGE_BONUSES));
         boolean elementalComponent = Boolean.TRUE.equals(
@@ -158,15 +167,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        boolean runeWeaponBaseApplied = !elementalComponent
+        boolean runeWeaponBaseApplied = !statusDamage && !elementalComponent
                 && CoreRuneDamageContext.applyWeaponBaseDamage(store, attackerRef, damage);
         boolean npcRuneDamage = attacker == null && runeWeaponBaseApplied;
-        // Player projectile damage follows its own native pipeline. NPC rune projectiles are
-        // admitted here only after their cast snapshot has supplied the missing weapon base.
-        if (projectileSource && !runeWeaponBaseApplied && !elementalComponent) {
-            return;
-        }
-        if (!npcRuneDamage && !elementalComponent) {
+        if (!statusDamage && !npcRuneDamage && !elementalComponent) {
             LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
             LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.before");
         }
@@ -181,7 +185,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     "native rune coefficient scaled by weapon base before equipment bonuses");
         }
         boolean shattered = false;
-        if (!loreDamage && attacker != null && targetRef != null) {
+        if (!statusDamage && !loreDamage && attacker != null && targetRef != null) {
             // Shatter changes only the incoming base hit; bonuses are calculated afterwards.
             shattered = LoreProcHandler.tryApplyFrozenShatter(store, attackerRef, targetRef, damage);
             if (shattered) {
@@ -192,7 +196,17 @@ public class EquipmentRefineEST extends DamageEventSystem {
         DamageStackDelayEST.logDamageStage("equipment:frozen-shatter", damage,
                 rawAmount == null ? amountBeforeFilter : rawAmount, baseDamage,
                 "triggered=" + shattered);
-        boolean skipRefine = (loreDamage && !applyLoreEquipmentBonuses)
+        ItemStack attackerWeapon = attacker == null ? null : findWeaponInHotbar(attacker);
+        if (!statusDamage && !elementalComponent && !shattered
+                && attackerWeapon != null && ReforgeEquip.isWeapon(attackerWeapon)) {
+            LoreProcHandler.addWeaponFreezeBuildup(store, targetRef, attackerWeapon, damage.getAmount());
+        }
+        // Player projectile damage otherwise follows the native pipeline unchanged. Run the
+        // weapon's freeze buildup and Frozen Shatter checks above so projectile hits participate too.
+        if (projectileSource && !runeWeaponBaseApplied && !elementalComponent) {
+            return;
+        }
+        boolean skipRefine = statusDamage || (loreDamage && !applyLoreEquipmentBonuses)
                 || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE))
                 || elementalComponent;
 
@@ -250,8 +264,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     }
                     newDamage = Math.max(0.0f, newDamage);
 
+                    // Essence and resonance affinity add a percent of the original hit base;
+                    // weapon refinement, socket bonuses, and crit must not inflate that base.
                     WeaponElementalDamageUtils.AffinityDamage affinityDamage =
-                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, newDamage, store, targetRef);
+                            WeaponElementalDamageUtils.calculateAffinityDamage(weapon, baseDamage, store, targetRef);
                     if (affinityDamage.type() != null) {
                         damage.putMetaObject(META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
                     }
@@ -302,7 +318,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
         }
 
         // ── Defender armor bonus (defense / damage reduction) ─────────────────
-        if (skipRefine && !elementalComponent && !isPhysicalBleedLoreDamage(damage)) {
+        if (skipRefine && !statusDamage && !elementalComponent && !isPhysicalBleedLoreDamage(damage)) {
             if (attacker != null) {
                 ItemStack weapon = findWeaponInHotbar(attacker);
                 if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
@@ -346,7 +362,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
             }
         }
 
-        if (!npcRuneDamage && !elementalComponent) {
+        if (!statusDamage && !npcRuneDamage && !elementalComponent) {
             LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "EquipmentRefineEST.after");
         }
         DamageStackDelayEST.logDamageStage("equipment:filter-total", damage,

@@ -25,6 +25,7 @@ public final class MetadataKeys {
     public static final String SOCKET_MAX = "SocketReforge.Socket.Max";
     public static final String SOCKET_VALUES = "SocketReforge.Socket.Values";
     public static final String SOCKET_MUTATIONS = "SocketReforge.Socket.Mutations";
+    public static final String SOCKET_STATUS_MUTATIONS = "SocketReforge.Socket.StatusMutations";
     public static final String SOCKET_EFFECTS = "SocketReforge.Socket.Effects";
 
     // Essence system

@@ -1,0 +1,17 @@
+{
+  "Duration": 3.0,
+  "Debuff": true,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#220000",
+    "EntityTopTint": "#b00000",
+    "Particles": [
+      {
+        "SystemId": "Impact_Mace_Signature",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": { "Y": 0.5, "Z": 0 }
+      }
+    ]
+  }
+}

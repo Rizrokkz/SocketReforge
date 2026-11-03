@@ -1408,8 +1408,11 @@ ui.essence_bench.error_mutation_pick_slot = Select a filled socket to mutate.
 ui.essence_bench.error_mutation_filled_slot = Selected socket must contain an essence to mutate.
 ui.essence_bench.error_mutation_support_changed = Resonant Essence stack changed. Retry.
 ui.essence_bench.error_mutation_failed = Socket mutation failed.
+ui.essence_bench.error_status_mutation_weapon = Status mutations require a weapon.
 ui.essence_bench.status_socket_mutated = Slot {0} affinity mutated to {1}.
+ui.essence_bench.status_socket_status_mutated = Slot {0} mutated: {1} base damage +{2}.
 ui.essence_bench.material_desc_resonant_mutation = Rerolls the selected filled socket affinity.
+ui.essence_bench.material_desc_status_mutation = Adds +{1} {0} base damage to status effects applied by this weapon.
 
 # Statuen-Bestaetigungs-UI
 statue.confirm_title = Aufstieg bestaetigen

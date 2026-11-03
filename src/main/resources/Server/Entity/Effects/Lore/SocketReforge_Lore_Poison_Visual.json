@@ -1,0 +1,17 @@
+{
+  "Duration": 3.0,
+  "Debuff": true,
+  "RemovalBehavior": "Duration",
+  "OverlapBehavior": "Extend",
+  "ApplicationEffects": {
+    "EntityBottomTint": "#00330f",
+    "EntityTopTint": "#33cc66",
+    "Particles": [
+      {
+        "SystemId": "Effect_Poison",
+        "TargetEntityPart": "Entity",
+        "PositionOffset": { "Y": 0.1, "Z": 0 }
+      }
+    ]
+  }
+}

@@ -99,6 +99,10 @@ import irai.mod.reforge.Entity.Events.LoreSoulstoneMigrationInventoryChangeEST;
 import irai.mod.reforge.Entity.Events.LoreSkillUseEST;
 import irai.mod.reforge.Entity.Events.NPCLootSocketDropEST;
 import irai.mod.reforge.Entity.Events.NativeTooltipInventoryEventEST;
+import irai.mod.reforge.Entity.Events.NativeAffinityDamageMergeEST;
+import irai.mod.reforge.Entity.Events.NativeAffinityDamageMergeCleanupEST;
+import irai.mod.reforge.Entity.Events.NativeShieldDamageFeedbackEST;
+import irai.mod.reforge.Entity.Events.NativeShieldDamageFeedbackCleanupEST;
 import irai.mod.reforge.Entity.Events.OpenGuiListener;
 import irai.mod.reforge.Entity.Events.ResonantRecipeCraftingEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
@@ -173,6 +177,10 @@ public class ReforgePlugin extends JavaPlugin {
     private final LoreSkillUseEST loreSkillUseEST;
     private final EnemyElementalShieldEST enemyElementalShieldEST;
     private final DamageNumberEST damageNumberEST;
+    private final NativeShieldDamageFeedbackEST nativeShieldDamageFeedbackEST;
+    private final NativeShieldDamageFeedbackCleanupEST nativeShieldDamageFeedbackCleanupEST;
+    private final NativeAffinityDamageMergeEST nativeAffinityDamageMergeEST;
+    private final NativeAffinityDamageMergeCleanupEST nativeAffinityDamageMergeCleanupEST;
     private final DamageCalculationAuditEST damageCalculationAuditEST;
     private final DamageStackDelayEST damageStackDelayEST;
     private final LoreKillEST loreKillEST;
@@ -216,7 +224,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<AscensionConfig> ascensionConfig;
     private final Config<CorruptionConfig> corruptionConfig;
     private final ConfigService configService;
-    private boolean customCombatTextEnabled = true;
+    private boolean customCombatTextEnabled = false;
     private boolean systemsRegistered = false;
     private boolean damageNumberSystemRegistered = false;
 
@@ -229,6 +237,10 @@ public class ReforgePlugin extends JavaPlugin {
         loreSkillUseEST = new LoreSkillUseEST();
         enemyElementalShieldEST = new EnemyElementalShieldEST();
         damageNumberEST = new DamageNumberEST();
+        nativeShieldDamageFeedbackEST = new NativeShieldDamageFeedbackEST();
+        nativeShieldDamageFeedbackCleanupEST = new NativeShieldDamageFeedbackCleanupEST();
+        nativeAffinityDamageMergeEST = new NativeAffinityDamageMergeEST();
+        nativeAffinityDamageMergeCleanupEST = new NativeAffinityDamageMergeCleanupEST();
         damageCalculationAuditEST = new DamageCalculationAuditEST();
         damageStackDelayEST = new DamageStackDelayEST();
         loreKillEST = new LoreKillEST();
@@ -461,6 +473,10 @@ public class ReforgePlugin extends JavaPlugin {
         // DamageNumberEST also refreshes the enemy affinity/health HUD. Keep the listener
         // registered when custom combat text is off; it gates only the damage groups.
         registerDamageNumberSystem();
+        this.getEntityStoreRegistry().registerSystem(nativeShieldDamageFeedbackEST);
+        this.getEntityStoreRegistry().registerSystem(nativeShieldDamageFeedbackCleanupEST);
+        this.getEntityStoreRegistry().registerSystem(nativeAffinityDamageMergeEST);
+        this.getEntityStoreRegistry().registerSystem(nativeAffinityDamageMergeCleanupEST);
         this.getEntityStoreRegistry().registerSystem(loreKillEST);
         this.getEntityStoreRegistry().registerSystem(lorePlayerStateEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
@@ -499,19 +515,21 @@ public class ReforgePlugin extends JavaPlugin {
     private void applyDamageNumberConfig(DamageNumberConfig cfg) {
         DamageNumbers.applyConfig(cfg);
         DamageNumberEST.applyConfig(cfg);
-        boolean useCustom = cfg == null || cfg.isUseCustomCombatText();
-        customCombatTextEnabled = useCustom;
-        DamageNumberEST.setCustomCombatTextEnabled(useCustom);
+        // Keep Socket Reforge's custom number renderer out of the main damage path. The
+        // listener remains registered for the affinity/health HUD, while native Hytale
+        // combat text renders weapon hits, elemental components, and status ticks.
+        if (cfg != null && cfg.isUseCustomCombatText()) {
+            cfg.setUseCustomCombatText(false);
+            System.out.println("[SocketReforge] Legacy custom combat text is disabled; using native combat text.");
+        }
+        customCombatTextEnabled = false;
+        DamageNumberEST.setCustomCombatTextEnabled(false);
         EnemyAffinityHudUI.setLastDamageVisible(DamageNumberEST.isAffinityDamageGroupEnabled());
         if (systemsRegistered) {
             registerDamageNumberSystem();
         }
-        if (useCustom) {
-            disableBuiltinCombatText();
-        } else {
-            enableBuiltinCombatText();
-            DamageNumberEST.resetCombatTextComponentsForAllViewers();
-        }
+        enableBuiltinCombatText();
+        DamageNumberEST.resetCombatTextComponentsForAllViewers();
     }
 
     private void disableBuiltinCombatText() {

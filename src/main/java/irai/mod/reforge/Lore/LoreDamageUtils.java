@@ -42,6 +42,9 @@ public final class LoreDamageUtils {
     public static final MetaKey<Boolean> META_APPLY_EQUIPMENT_DAMAGE_BONUSES =
             Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
                     "socketreforge:lore_equipment_damage_bonuses", Codec.BOOLEAN);
+    public static final MetaKey<Boolean> META_STATUS_DAMAGE =
+            Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
+                    "socketreforge:status_effect_damage", Codec.BOOLEAN);
     private static final boolean DEBUG_SIGNATURE_ENERGY = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.signatureEnergy", "false"));
     private static final boolean DEBUG_SIGNATURE_ENERGY_STACK = Boolean.parseBoolean(
@@ -135,6 +138,45 @@ public final class LoreDamageUtils {
                                                     int feedTier) {
         applyCombatDamage(store, sourceRef, targetRef, rawDamage, false, true,
                 true, feedTier, null, false, true);
+    }
+
+    /**
+     * Applies one independently calculated status tick through Hytale's damage pipeline.
+     * The status keeps its own raw amount and damage cause; equipment refinement, weapon
+     * affinity, and on-hit proc listeners must not fold it back into the triggering hit.
+     */
+    public static void applyStatusDamage(Store<EntityStore> store,
+                                         Ref<EntityStore> sourceRef,
+                                         Ref<EntityStore> targetRef,
+                                         float rawDamage,
+                                         DamageCause cause,
+                                         DamageNumberFormatter.DamageKind kind) {
+        if (store == null || targetRef == null || rawDamage <= 0.0f || !Float.isFinite(rawDamage)) {
+            return;
+        }
+        Damage.Source source = sourceRef != null && sourceRef.isValid()
+                ? new Damage.EntitySource(sourceRef)
+                : Damage.NULL_SOURCE;
+        Damage damage = new Damage(source, cause == null ? DamageCause.PHYSICAL : cause, rawDamage);
+        damage.putMetaObject(META_STATUS_DAMAGE, Boolean.TRUE);
+        damage.putMetaObject(EquipmentRefineEST.META_SKIP_REFORGE, Boolean.TRUE);
+        if (kind != null && kind != DamageNumberFormatter.DamageKind.FLAT) {
+            DamageNumberMeta.markKind(damage, kind);
+        }
+        // Status ticks use Hytale's native damage text, even while the optional custom
+        // floating-number renderer is enabled.
+        DamageNumberMeta.markSkipCombatText(damage);
+        try {
+            store.invoke(targetRef, damage);
+        } catch (Throwable ignored) {
+            // A stale target or shutting-down world should not break the status scheduler.
+        }
+    }
+
+    /** Returns true for explicit Socket Reforge status ticks and native entity-effect ticks. */
+    public static boolean isStatusDamage(Damage damage) {
+        return damage != null && (Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_STATUS_DAMAGE))
+                || damage.getSource() instanceof Damage.EntityEffectSource);
     }
 
     public static void applyCombatDamage(Store<EntityStore> store,

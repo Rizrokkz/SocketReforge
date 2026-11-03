@@ -1329,8 +1329,11 @@ ui.essence_bench.error_mutation_pick_slot = Selecione um soquete preenchido para
 ui.essence_bench.error_mutation_filled_slot = O soquete selecionado deve conter uma essência para mutar.
 ui.essence_bench.error_mutation_support_changed = A pilha de Essência Ressonante mudou. Tente novamente.
 ui.essence_bench.error_mutation_failed = Falha na mutação do soquete.
+ui.essence_bench.error_status_mutation_weapon = Mutações de status exigem uma arma.
 ui.essence_bench.status_socket_mutated = Afinidade do slot {0} mutada para {1}.
+ui.essence_bench.status_socket_status_mutated = Slot {0} mutado: dano base de {1} +{2}.
 ui.essence_bench.material_desc_resonant_mutation = Rerrola a afinidade do soquete preenchido selecionado.
+ui.essence_bench.material_desc_status_mutation = Adiciona +{1} de dano base de {0} aos efeitos de status aplicados por esta arma.
 
 irai.items.Tool_Hammer_Irainium.name = Martelo de Irainium do Construtor
 irai.items.Tool_Hammer_Irainium.description = Um martelo lendário do construtor que reduz drasticamente a chance de quebra no refinamento, consumindo muita durabilidade por uso.

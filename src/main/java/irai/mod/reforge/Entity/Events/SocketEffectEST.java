@@ -40,6 +40,7 @@ import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
@@ -68,7 +69,6 @@ public class SocketEffectEST extends DamageEventSystem {
     private static final boolean DEBUG_DAMAGE_LOG = Boolean.parseBoolean(
             System.getProperty("socketreforge.debug.damage", "false"));
     private static final Map<UUID, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
-    private static final long FREEZE_DURATION_MILLIS = 2000L;
     private static final double FREEZE_DAMAGE_PENALTY = 0.30d;
     private static final double ICE_SLOW_DAMAGE_PENALTY_CAP = 50.0d;
     private static final double FIRE_BURN_REFLECT_RATIO = 0.05d;
@@ -152,6 +152,13 @@ public class SocketEffectEST extends DamageEventSystem {
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
         try {
+            if (damage != null && Boolean.TRUE.equals(damage.getIfPresentMetaObject(
+                    EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
+                return;
+            }
+            if (LoreDamageUtils.isStatusDamage(damage)) {
+                return;
+            }
             boolean elementalComponent = Boolean.TRUE.equals(
                     damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT));
             if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
@@ -199,12 +206,6 @@ public class SocketEffectEST extends DamageEventSystem {
             // Apply defender socket bonuses (damage reduction from armor sockets)
             Player defenderPlayer = store.getComponent(targetRef, Player.getComponentType());
             if (defenderPlayer != null) {
-                // Apply Ice Freeze effect on hit if attacker has Max Tier Ice Essence.
-                // This is independent of defender armor and is applied as a short debuff.
-                if (attacker != null && !elementalComponent) {
-                    applyIceFreezeOnHit(attacker, defenderPlayer);
-                }
-
                 boolean blurActive = LoreStatusTracker.isBlurActive(defenderPlayer.getUuid());
                 if (blurActive && ThreadLocalRandom.current().nextDouble(100.0) < BLUR_EVASION_PERCENT) {
                     damage.setAmount(0f);
@@ -978,36 +979,6 @@ public class SocketEffectEST extends DamageEventSystem {
 
         float burnDamage = Math.max(FIRE_BURN_MIN_DAMAGE, (float) (finalIncomingDamage * FIRE_BURN_REFLECT_RATIO));
         applyDirectHealthLoss(store, attackerRef, burnDamage);
-    }
-
-    /**
-     * Applies Freeze effect to defender if attacker has Max Tier Ice Essence.
-     */
-    private void applyIceFreezeOnHit(Player attacker, Player defender) {
-        if (attacker == null || defender == null) {
-            return;
-        }
-        if (isSamePlayer(attacker, defender)) {
-            return;
-        }
-
-        // Check if attacker has weapon with Ice Essence Tier 5
-        ItemStack weapon = findWeaponInHotbar(attacker);
-        if (weapon == null || weapon.isEmpty() || !ReforgeEquip.isWeapon(weapon)) {
-            return;
-        }
-
-        SocketData socketData = SocketManager.getSocketData(weapon);
-        if (socketData != null && socketData.getMaxSockets() > 0) {
-             Map<Essence.Type, Integer> tierMap = SocketManager.calculateConsecutiveTiers(socketData);
-             Integer iceTier = tierMap.get(Essence.Type.ICE);
-             if (iceTier != null && iceTier >= 5) {
-                 UUID defenderUuid = defender.getUuid();
-                 if (defenderUuid != null) {
-                     FROZEN_UNTIL.put(defenderUuid, System.currentTimeMillis() + FREEZE_DURATION_MILLIS);
-                 }
-             }
-        }
     }
 
     private void applyFreezePenaltyIfPresent(Player attacker, Damage damage) {

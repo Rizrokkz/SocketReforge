@@ -100,7 +100,6 @@ import com.hypixel.hytale.server.core.util.NotificationUtil;
 import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
-import irai.mod.reforge.Common.ElementalAffinityUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
@@ -112,9 +111,9 @@ import irai.mod.reforge.Entity.OmnislashAfterimageEntity;
 import irai.mod.reforge.Entity.OmnislashFireOrbEntity;
 import irai.mod.reforge.Interactions.ReforgeEquip;
 import irai.mod.reforge.Socket.Essence;
-import irai.mod.reforge.Socket.RuneDeltaDebug;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
+import irai.mod.reforge.Socket.RuneDeltaDebug;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.MetadataKeys;
 
@@ -145,6 +144,20 @@ public final class LoreProcHandler {
     private static final long CORE_ABILITY_MODIFIER_WINDOW_MS = 8000L;
     private static final long PUMMEL_NATIVE_CAST_GUARD_MS = 6000L;
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, FreezeBuildup> WEAPON_FREEZE_BUILDUP = new ConcurrentHashMap<>();
+    private static final double WEAPON_FREEZE_BUILDUP_THRESHOLD = 100.0d;
+    private static final double WEAPON_FREEZE_BUILDUP_PER_SOCKET_WEIGHT = 20.0d;
+    private static final long WEAPON_FREEZE_BUILDUP_DECAY_MS = 6000L;
+    private static final long WEAPON_FREEZE_DURATION_MS = 1600L;
+    private static final class FreezeBuildup {
+        final double amount;
+        final long lastHitAt;
+
+        FreezeBuildup(double amount, long lastHitAt) {
+            this.amount = amount;
+            this.lastHitAt = lastHitAt;
+        }
+    }
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_BLOCKED_APPLICATIONS =
@@ -198,15 +211,12 @@ public final class LoreProcHandler {
     private static final long BLEED_BASE_DURATION_MS = 3000L;
     private static final double BLEED_RAMP_PER_TICK = 0.08d;
     private static final double BLEED_BASE_MAX_HP_PCT = 0.005d;
-    private static final double BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER = 1.0d;
     private static final long DRAIN_DOT_TICK_MS = 300L;
     private static final long DRAIN_BASE_DURATION_MS = 3000L;
     private static final long BURN_DOT_TICK_MS = 1000L;
     private static final long BURN_BASE_DURATION_MS = 3000L;
     private static final long POISON_DOT_TICK_MS = 1000L;
     private static final long POISON_BASE_DURATION_MS = 5000L;
-    private static final double BURN_DOT_MIN_WEAPON_PCT = 0.12d;
-    private static final double POISON_DOT_MIN_WEAPON_PCT = 0.08d;
     private static final int POISON_DOT_MAX_STACKS = 3;
     private static final long POISON_STACK_BONUS_MS = 1000L;
     private static final long BURN_VFX_DURATION_MS = 3000L;
@@ -235,6 +245,7 @@ public final class LoreProcHandler {
     private static final float BLOOD_RUSH_BASE_DAMAGE_PER_HIT = 0.30f;
     private static final float BLOOD_RUSH_MISSING_HEALTH_BONUS_PER_HIT = 0.30f;
     private static final double BLOOD_RUSH_SELF_BLEED_CHANCE = 0.25d;
+    private static final float BLOOD_RUSH_SELF_BLEED_DAMAGE = 2.2f;
     private static final double BLOOD_RUSH_SELF_HEAL_CHANCE = 0.25d;
     private static final float BLOOD_RUSH_SELF_HEAL_DAMAGE_FRACTION = 0.25f;
     private static final double CORE_RUNE_MAX_RADIUS = 24.0d;
@@ -386,6 +397,7 @@ public final class LoreProcHandler {
     private static volatile Constructor<InteractionContext> socketedAbilityContextConstructor;
 
     private static final String[] BURN_EFFECT_IDS = {
+            "SocketReforge_Lore_Burn_Visual",
             "Lore/Lore_Burn",
             "Lore_Burn",
             "Status/Burn", "Status/Lava_Burn", "Weapons/Flame_Staff_Burn",
@@ -393,6 +405,7 @@ public final class LoreProcHandler {
             "EntityEffect_Burning", "EntityEffect_Burn", "Effect_Burn", "Burning"
     };
     private static final String[] BURN_VFX_IDS = {
+            "SocketReforge_Lore_Burn_Visual",
             "Lore/Lore_Burn",
             "Lore_Burn"
     };
@@ -429,6 +442,7 @@ public final class LoreProcHandler {
             "EntityEffect_Shocked", "EntityEffect_Shock", "Effect_Shock"
     };
     private static final String[] BLEED_EFFECT_IDS = {
+            "SocketReforge_Lore_Bleed_Visual",
             "Lore/Lore_Bleed",
             "Lore_Bleed",
             "Status/Bleed",
@@ -436,6 +450,7 @@ public final class LoreProcHandler {
             "EntityEffect_Bleed", "EntityEffect_Bleeding", "Effect_Bleed"
     };
     private static final String[] POISON_EFFECT_IDS = {
+            "SocketReforge_Lore_Poison_Visual",
             "Lore/Lore_Poison",
             "Lore_Poison",
             "Status/Poison", "Status/Poison_T1", "Status/Poison_T2", "Status/Poison_T3",
@@ -443,6 +458,7 @@ public final class LoreProcHandler {
             "EntityEffect_Poison", "Effect_Poison"
     };
     private static final String[] POISON_VFX_IDS = {
+            "SocketReforge_Lore_Poison_Visual",
             "Lore/Lore_Poison",
             "Lore_Poison"
     };
@@ -1861,14 +1877,10 @@ public final class LoreProcHandler {
                             resolveNpcAilmentMultiplier(store, opponentRef, "stun")) > 0L
                     && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "stun");
             case APPLY_BLEED -> {
-                Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
-                float bleedDamageBase = selfIsAttacker && damage != null && damage.getAmount() > 0f
-                        ? damage.getAmount()
-                        : amount;
                 yield opponentRef != null
                         && resolveNpcAilmentMultiplier(store, opponentRef, "bleed") > 0.0d
                         && canAttemptBossCounterAilmentReadOnly(store, opponentRef, "bleed")
-                        && calculateBleedDamagePerTick(store, bleedSource, opponentRef, bleedDamageBase, safeFeedTier) > 0f;
+                        && calculateBleedDamageTotal(amount, safeFeedTier) > 0f;
             }
             case DOUBLE_CAST -> opponentRef != null;
             case BERSERK -> true;
@@ -1896,20 +1908,9 @@ public final class LoreProcHandler {
             if (!canAttemptBossCounterAilmentReadOnly(store, otherRef, "bleed")) {
                 return "target bleed reapply is blocked";
             }
-            Ref<EntityStore> bleedSource = selfRef;
-            Player player = bleedSource == null ? null
-                    : store.getComponent(bleedSource, Player.getComponentType());
-            ItemStack weapon = player == null ? null : PlayerInventoryUtils.getHeldItem(player);
-            if (weapon == null || weapon.isEmpty()) {
-                return "bleed source has no held weapon";
-            }
-            if (!ReforgeEquip.isWeapon(weapon)) {
-                return "held item is not recognized as a weapon: " + weapon.getItemId();
-            }
             int safeFeedTier = Math.max(0, feedTier);
-            float baseDamage = selfIsAttacker && damage != null && damage.getAmount() > 0f
-                    ? damage.getAmount() : (float) Math.max(0.0d, ability.getValueForLevel(level));
-            if (calculateBleedDamagePerTick(store, bleedSource, otherRef, baseDamage, safeFeedTier) <= 0f) {
+            float baseDamage = (float) Math.max(0.0d, ability.getValueForLevel(level));
+            if (calculateBleedDamageTotal(baseDamage, safeFeedTier) <= 0f) {
                 return "calculated bleed damage is zero";
             }
         }
@@ -2219,7 +2220,8 @@ public final class LoreProcHandler {
                         }
                         applyFrozenForDuration(store, opponentRef, durationMs);
                         onBossCounterAilmentApplied(store, opponentRef, "freeze");
-                        applyFreezeModifierPulse(store, selfRef, opponentRef, damageAmount, safeFeedTier,
+                        Ref<EntityStore> freezeSource = selfRef != null ? selfRef : attackerRef;
+                        applyFreezeModifierPulse(store, freezeSource, opponentRef, damageAmount, safeFeedTier,
                                 Math.min(3, Math.max(1, (int) (durationMs / 1000L))));
                         if (primaryProc) {
                             System.out.println("[SocketReforge] Lore status applied: spirit=" + spiritId
@@ -2249,10 +2251,7 @@ public final class LoreProcHandler {
             case APPLY_BLEED -> {
                 double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "bleed");
                 Ref<EntityStore> bleedSource = selfRef != null ? selfRef : attackerRef;
-                float bleedDamageBase = selfIsAttacker && damage != null && damage.getAmount() > 0f
-                        ? damage.getAmount()
-                        : damageAmount;
-                boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, bleedDamageBase,
+                boolean bleedApplied = applyBleedOverTime(store, bleedSource, opponentRef, damageAmount,
                         safeFeedTier, ailmentMultiplier);
                 if (!bleedApplied) {
                     if (primaryProc) {
@@ -3484,7 +3483,9 @@ public final class LoreProcHandler {
             if (target == null || target.equals(attackerRef) || !isEntityAlive(store, target)) {
                 continue;
             }
-            LoreDamageUtils.applyLoreDamage(store, attackerRef, target, burstDamage, false, feedTier);
+            LoreDamageUtils.applyStatusDamage(store, attackerRef, target, burstDamage,
+                    resolveNativeStatusDamageCause("Lightning", DamageCause.PHYSICAL),
+                    irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.SHOCK);
             if (!isNpcAilmentImmune(store, target, "shock") && canApplyBossCounterAilment(store, target, "shock")) {
                 applyStunForDuration(store, target, 450L);
                 onBossCounterAilmentApplied(store, target, "shock");
@@ -3506,6 +3507,7 @@ public final class LoreProcHandler {
             return;
         }
         float perPulse = Math.max(0.5f, procDamage * 0.12f);
+        ItemStack sourceWeapon = getStatusSourceWeapon(store, attackerRef);
         for (int tick = 0; tick < ticks; tick++) {
             long delay = tick * 1000L;
             OMNISLASH_SCHEDULER.schedule(() -> LoreWorldTasks.queue(store, () -> {
@@ -3521,7 +3523,11 @@ public final class LoreProcHandler {
                         "modifier.freeze", false, 16, CORE_RUNE_MAX_NPC_CHECKS);
                 for (Ref<EntityStore> target : targets) {
                     if (target != null && !target.equals(attackerRef) && isEntityAlive(store, target)) {
-                        LoreDamageUtils.applyLoreDamage(store, attackerRef, target, perPulse, false, feedTier);
+                        float iceBonus = WeaponElementalDamageUtils.calculateAffinityBonusForType(
+                                sourceWeapon, Essence.Type.ICE, perPulse, store, target);
+                        LoreDamageUtils.applyStatusDamage(store, attackerRef, target, perPulse + iceBonus,
+                                resolveNativeStatusDamageCause("Ice", DamageCause.PHYSICAL),
+                                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.ICE);
                     }
                 }
             }), delay, TimeUnit.MILLISECONDS);
@@ -5583,7 +5589,8 @@ public final class LoreProcHandler {
         double roll = ThreadLocalRandom.current().nextDouble();
         if (roll < BLOOD_RUSH_SELF_BLEED_CHANCE) {
             double ailmentMultiplier = resolveNpcAilmentMultiplier(store, attackerRef, "bleed");
-            if (applyBleedOverTime(store, attackerRef, attackerRef, hitDamage, 0, ailmentMultiplier)) {
+            if (applyBleedOverTime(store, attackerRef, attackerRef,
+                    BLOOD_RUSH_SELF_BLEED_DAMAGE, 0, ailmentMultiplier)) {
                 LoreVisuals.tryApplyVisualEffect(store, attackerRef, BLEED_EFFECT_IDS);
             }
             return;
@@ -8565,6 +8572,51 @@ public final class LoreProcHandler {
         return true;
     }
 
+    /** Adds ICE-affinity buildup from a player's weapon; a completed buildup freezes the target. */
+    public static void addWeaponFreezeBuildup(Store<EntityStore> store,
+                                              Ref<EntityStore> targetRef,
+                                              ItemStack weapon,
+                                              float hitDamage) {
+        if (store == null || targetRef == null || weapon == null || weapon.isEmpty() || hitDamage <= 0f) return;
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        double iceWeight = WeaponElementalDamageUtils.getAffinityWeight(socketData, Essence.Type.ICE);
+        if (iceWeight <= 0.0d) return;
+        if (isFrozenActive(store, targetRef)) {
+            WEAPON_FREEZE_BUILDUP.remove(targetRef);
+            return;
+        }
+
+        double ailmentMultiplier = resolveNpcAilmentMultiplier(store, targetRef, "freeze");
+        if (ailmentMultiplier <= 0.0d) {
+            WEAPON_FREEZE_BUILDUP.remove(targetRef);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        FreezeBuildup previous = WEAPON_FREEZE_BUILDUP.get(targetRef);
+        double current = previous == null || now - previous.lastHitAt > WEAPON_FREEZE_BUILDUP_DECAY_MS
+                ? 0.0d : previous.amount;
+        double buildup = current + iceWeight * WEAPON_FREEZE_BUILDUP_PER_SOCKET_WEIGHT;
+        if (buildup < WEAPON_FREEZE_BUILDUP_THRESHOLD) {
+            FreezeBuildup next = new FreezeBuildup(buildup, now);
+            WEAPON_FREEZE_BUILDUP.put(targetRef, next);
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> WEAPON_FREEZE_BUILDUP.remove(targetRef, next),
+                    WEAPON_FREEZE_BUILDUP_DECAY_MS, TimeUnit.MILLISECONDS);
+            LoreDebug.logKv("freeze.buildup", "current", Math.round(buildup),
+                    "threshold", (int) WEAPON_FREEZE_BUILDUP_THRESHOLD);
+            return;
+        }
+
+        WEAPON_FREEZE_BUILDUP.remove(targetRef);
+        if (!canApplyBossCounterAilment(store, targetRef, "freeze")) return;
+        long durationMs = scaleAilmentDuration(WEAPON_FREEZE_DURATION_MS, ailmentMultiplier);
+        if (durationMs <= 0L) return;
+        applyFrozenForDuration(store, targetRef, durationMs);
+        onBossCounterAilmentApplied(store, targetRef, "freeze");
+        LoreDebug.logKv("freeze.buildup", "completed", true, "durationMs", durationMs);
+    }
+
     private static boolean isFrozenActive(Store<EntityStore> store, Ref<EntityStore> targetRef) {
         if (store == null || targetRef == null) {
             return false;
@@ -9011,27 +9063,14 @@ public final class LoreProcHandler {
         double bleedRampPerTick = loreConfig != null
                 ? loreConfig.getBleedRampPerTick()
                 : BLEED_RAMP_PER_TICK;
-        double bleedWeaponBaseCapPct = loreConfig != null
-                ? loreConfig.getBleedWeaponBaseCapPct()
-                : 0.0d;
         long duration = LoreAbility.scaleDurationMs(BLEED_BASE_DURATION_MS, feedTier);
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
 
-        float bleedPerTick = calculateBleedDamagePerTick(store, sourceRef, targetRef, damageOutput, feedTier);
-        float totalBleed = bleedPerTick * ticks;
-        totalBleed *= (float) ailmentMultiplier;
+        float statusBase = addSocketStatusMutationBase(store, sourceRef, damageOutput, "BLEED");
+        float totalBleed = calculateBleedDamageTotal(statusBase, feedTier) * (float) ailmentMultiplier;
         if (totalBleed <= 0f) {
             return false;
-        }
-
-        float weaponCapPerTick = 0f;
-        if (bleedWeaponBaseCapPct > 0.0d) {
-            float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
-            if (weaponBase > 0f) {
-                weaponCapPerTick = (float) LoreAbility.scaleEffectValue(weaponBase * bleedWeaponBaseCapPct, feedTier);
-                weaponCapPerTick *= (float) ailmentMultiplier;
-            }
         }
 
         double totalWeight = 0.0d;
@@ -9052,9 +9091,6 @@ public final class LoreProcHandler {
             long delay = i * BLEED_DOT_TICK_MS;
             double weight = Math.max(0.0d, 1.0d + (bleedRampPerTick * i));
             float perTick = (float) (totalBleed * (weight / totalWeight));
-            if (weaponCapPerTick > 0f) {
-                perTick = Math.min(perTick, weaponCapPerTick);
-            }
             final float perTickFinal = perTick;
             OMNISLASH_SCHEDULER.schedule(() -> queueBleedTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
                     delay, TimeUnit.MILLISECONDS);
@@ -9062,49 +9098,45 @@ public final class LoreProcHandler {
         return true;
     }
 
-    private static float calculateBleedDamagePerTick(Store<EntityStore> store,
-                                                     Ref<EntityStore> sourceRef,
-                                                     Ref<EntityStore> targetRef,
-                                                     float damageOutput,
-                                                     int feedTier) {
-        if (store == null || sourceRef == null) {
-            return 0f;
-        }
+    private static ItemStack getStatusSourceWeapon(Store<EntityStore> store, Ref<EntityStore> sourceRef) {
+        if (store == null || sourceRef == null) return null;
         Player player = store.getComponent(sourceRef, Player.getComponentType());
-        if (player == null) {
-            return 0f;
-        }
-        ItemStack weapon = PlayerInventoryUtils.getHeldItem(player);
-        if (weapon == null || weapon.isEmpty() || !ReforgeEquip.isWeapon(weapon)) {
-            return 0f;
-        }
+        if (player == null) return null;
+        ItemStack held = PlayerInventoryUtils.getHeldItem(player);
+        if (held != null && !held.isEmpty() && ReforgeEquip.isWeapon(held)) return held;
+        ItemStack fallback = PlayerInventoryUtils.findFirstInHotbar(player, ReforgeEquip::isWeapon);
+        return fallback != null && !fallback.isEmpty() ? fallback : null;
+    }
 
-        float weaponDamageOutput = damageOutput > 0f
-                ? damageOutput
-                : LoreDamageUtils.resolveWeaponRefinedDamage(store, sourceRef, 0f);
-        if (weaponDamageOutput <= 0f) {
-            return 0f;
-        }
+    private static float addSocketStatusMutationBase(Store<EntityStore> store,
+                                                     Ref<EntityStore> sourceRef,
+                                                     float baseDamage,
+                                                     String status) {
+        if (baseDamage <= 0f) return baseDamage;
+        ItemStack weapon = getStatusSourceWeapon(store, sourceRef);
+        if (weapon == null) return baseDamage;
+        double bonus = SocketManager.getSocketStatusBaseBonus(SocketManager.getSocketData(weapon), status);
+        return baseDamage + (float) Math.max(0.0d, bonus);
+    }
 
-        SocketData socketData = SocketManager.getSocketData(weapon);
-        double elementalDamage = 0.0d;
-        for (WeaponElementalDamageUtils.ElementDamage elementDamage :
-                WeaponElementalDamageUtils.calculateElementDamage(socketData, weaponDamageOutput)) {
-            if (elementDamage.type() == null || elementDamage.damage() <= 0.0d) {
-                continue;
-            }
-            double effectivenessMultiplier = ElementalAffinityUtils.effectivenessMultiplier(
-                    elementDamage.type(),
-                    store,
-                    targetRef);
-            elementalDamage += elementDamage.damage() * effectivenessMultiplier;
+    private static float calculateBleedDamageTotal(float statusBaseDamage, int feedTier) {
+        // Bleed's own authored proc value is its total damage budget. It is deliberately
+        // independent of weapon base, socket affinity, refinement, and crit bonuses.
+        return statusBaseDamage > 0f
+                ? (float) LoreAbility.scaleEffectValue(statusBaseDamage, feedTier)
+                : 0f;
+    }
+
+    private static DamageCause resolveNativeStatusDamageCause(String causeId, DamageCause fallback) {
+        if (causeId == null || causeId.isBlank() || DamageCause.getAssetMap() == null) {
+            return fallback;
         }
-        // Elemental sockets keep their affinity-scaled bleed. Purely physical weapons
-        // should still be able to apply bleed, so use their base damage in that case.
-        double perTickDamage = elementalDamage > 0.0d
-                ? elementalDamage * BLEED_ELEMENTAL_OUTPUT_PER_TICK_MULTIPLIER
-                : weaponDamageOutput * WeaponElementalDamageUtils.DAMAGE_RATE_PER_SOCKET_WEIGHT;
-        return (float) LoreAbility.scaleEffectValue(perTickDamage, feedTier);
+        try {
+            DamageCause cause = DamageCause.getAssetMap().getAsset(causeId);
+            return cause == null ? fallback : cause;
+        } catch (Throwable ignored) {
+            return fallback;
+        }
     }
 
     private static void scheduleBleedExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
@@ -9162,8 +9194,8 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
-                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BLEED, feedTier);
+        LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
+                DamageCause.PHYSICAL, irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BLEED);
         LoreVisuals.spawnBleedParticles(store, sourceRef, targetRef, BLEED_PARTICLE_IDS);
         spawnHitParticle(store, sourceRef, targetRef, BLEED_PARTICLE_IDS);
     }
@@ -9186,18 +9218,13 @@ public final class LoreProcHandler {
         long duration = LoreAbility.scaleDurationMs(BURN_BASE_DURATION_MS, feedTier);
         int ticks = (int) Math.ceil((double) duration / (double) BURN_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
-        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
+        ItemStack sourceWeapon = getStatusSourceWeapon(store, sourceRef);
+        float fireBonus = WeaponElementalDamageUtils.calculateAffinityBonusForType(
+                sourceWeapon, Essence.Type.FIRE, totalAmount, store, targetRef);
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount + fireBonus, feedTier);
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {
             return false;
-        }
-        float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
-        if (weaponBase > 0f) {
-            float minPerTick = (float) (weaponBase * BURN_DOT_MIN_WEAPON_PCT);
-            if (minPerTick > 0f) {
-                minPerTick = (float) LoreAbility.scaleEffectValue(minPerTick, feedTier);
-                perTick = Math.max(perTick, minPerTick);
-            }
         }
         perTick *= (float) ailmentMultiplier;
         if (perTick <= 0f) {
@@ -9274,8 +9301,9 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
-                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN, feedTier);
+        LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
+                resolveNativeStatusDamageCause("Fire", DamageCause.PHYSICAL),
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN);
     }
 
     private static boolean applyPoisonOverTime(Store<EntityStore> store,
@@ -9300,20 +9328,13 @@ public final class LoreProcHandler {
         long totalDuration = baseDuration + bonusDuration;
         int ticks = (int) Math.ceil((double) totalDuration / (double) POISON_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
-        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount, feedTier);
+        float statusBase = addSocketStatusMutationBase(store, sourceRef, totalAmount, "POISON");
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(statusBase, feedTier);
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {
             return false;
         }
         perTick *= stackCount;
-        float weaponBase = LoreDamageUtils.resolveWeaponBaseDamage(store, sourceRef);
-        if (weaponBase > 0f) {
-            float minPerTick = (float) (weaponBase * POISON_DOT_MIN_WEAPON_PCT * stackCount);
-            if (minPerTick > 0f) {
-                minPerTick = (float) LoreAbility.scaleEffectValue(minPerTick, feedTier);
-                perTick = Math.max(perTick, minPerTick);
-            }
-        }
         perTick *= (float) ailmentMultiplier;
         if (perTick <= 0f) {
             return false;
@@ -9392,9 +9413,8 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true,
-                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.POISON, true, feedTier);
-        DamageNumberEST.queueCombatTextDirect(store, targetRef, perTick,
+        LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
+                resolveNativeStatusDamageCause("Poison", DamageCause.PHYSICAL),
                 irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.POISON);
     }
 
@@ -9634,7 +9654,8 @@ public final class LoreProcHandler {
         if (System.currentTimeMillis() > expectedUntil) {
             return;
         }
-        LoreDamageUtils.applyLoreDamage(store, sourceRef, targetRef, perTick, true, feedTier);
+        LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
+                DamageCause.PHYSICAL, irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.FLAT);
         if (sourceRef != null && isEntityAlive(store, sourceRef)) {
             LoreDamageUtils.applyHeal(store, sourceRef, perTick);
         }

@@ -26,6 +26,7 @@ import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntitySta
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
+import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreProcHandler;
@@ -70,8 +71,15 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (store == null || damage == null) {
             return;
         }
+        if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(
+                EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
+            return;
+        }
         if (Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT))) {
+            return;
+        }
+        if (LoreDamageUtils.isStatusDamage(damage)) {
             return;
         }
         float amountBeforeFilter = damage.getAmount();

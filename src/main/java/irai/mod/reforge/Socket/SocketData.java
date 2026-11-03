@@ -353,6 +353,7 @@ public class SocketData {
             String[] lines = statLines.toArray(new String[0]);
             DynamicTooltipUtils.registerTooltip(itemId, "socket_stats", lines);
         }
+        registerStatusMutationTooltip(itemId);
 
         // Add individual essence info for display with colors
         for (Map.Entry<Essence.Type, Integer> entry : tierMap.entrySet()) {
@@ -408,6 +409,7 @@ public class SocketData {
         if (!statLines.isEmpty()) {
             DynamicTooltipUtils.registerTooltip(itemId, "socket_stats", statLines.toArray(new String[0]));
         }
+        registerStatusMutationTooltip(itemId);
 
         // Note: The no-ItemStack overload can't read item metadata, so some tooltip
         // details available in the ItemStack version won't be available here.
@@ -433,6 +435,19 @@ public class SocketData {
             case VOID: return "<color is=\"#AA55FF\">";    // Purple
             case WATER: return "<color is=\"#5555FF\">";    // Blue
             default: return "<color is=\"#FFFFFF\">";     // White
+        }
+    }
+
+    private void registerStatusMutationTooltip(String itemId) {
+        List<String> lines = new ArrayList<>();
+        double bleed = SocketManager.getSocketStatusBaseBonus(this, "BLEED");
+        double poison = SocketManager.getSocketStatusBaseBonus(this, "POISON");
+        if (bleed > 0.0d) lines.add("Bleed base damage: +" + (int) bleed);
+        if (poison > 0.0d) lines.add("Poison base damage: +" + (int) poison);
+        if (lines.isEmpty()) {
+            DynamicTooltipUtils.clearTooltip(itemId, "socket_status_mutations");
+        } else {
+            DynamicTooltipUtils.registerTooltip(itemId, "socket_status_mutations", lines.toArray(String[]::new));
         }
     }
 

@@ -18,6 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
 import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Entity.Events.NativeAffinityDamageMergeEST;
 import irai.mod.reforge.Util.DamageNumberFormatter;
 
 import irai.mod.reforge.Socket.Essence;
@@ -140,6 +141,30 @@ public final class WeaponElementalDamageUtils {
         return weights;
     }
 
+    /** Returns the aggregate socket weight for one effective weapon affinity. */
+    public static double getAffinityWeight(SocketData socketData, Essence.Type type) {
+        if (type == null) return 0.0d;
+        return calculateAffinityWeights(socketData).getOrDefault(type, 0.0d);
+    }
+
+    /**
+     * Calculates only the matching essence's bonus for a status damage instance.
+     * This uses the same per-socket rate and target effectiveness as weapon affinity damage.
+     */
+    public static float calculateAffinityBonusForType(ItemStack weapon,
+                                                      Essence.Type type,
+                                                      double baseDamage,
+                                                      Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef) {
+        if (weapon == null || weapon.isEmpty() || type == null || baseDamage <= 0.0d) return 0.0f;
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        double weight = getAffinityWeight(socketData, type);
+        if (weight <= 0.0d) return 0.0f;
+        double rate = Math.min(1.0d, weight * DAMAGE_RATE_PER_SOCKET_WEIGHT);
+        double effectiveness = ElementalAffinityUtils.effectivenessMultiplier(type, store, targetRef);
+        return (float) (baseDamage * rate * effectiveness);
+    }
+
     /**
      * Dispatches the affinity bonus as a separately typed native damage event. This keeps the
      * weapon's physical hit intact while allowing native DamageCause resistance, element reactions,
@@ -162,6 +187,12 @@ public final class WeaponElementalDamageUtils {
 
         Damage elementalDamage = new Damage(
                 originalDamage.getSource(), resolution.cause(), affinityDamage.elementalDamage());
+        long affinityGroupId = NativeAffinityDamageMergeEST.registerElementalComponent(originalDamage);
+        elementalDamage.putMetaObject(NativeAffinityDamageMergeEST.META_AFFINITY_GROUP_ID, affinityGroupId);
+        Integer expectedComponents = originalDamage.getIfPresentMetaObject(
+                NativeAffinityDamageMergeEST.META_EXPECTED_ELEMENTAL_COMPONENTS);
+        elementalDamage.putMetaObject(NativeAffinityDamageMergeEST.META_EXPECTED_ELEMENTAL_COMPONENTS,
+                expectedComponents == null ? 1 : expectedComponents);
         elementalDamage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT, Boolean.TRUE);
         elementalDamage.putMetaObject(EquipmentRefineEST.META_SKIP_REFORGE, Boolean.TRUE);
         elementalDamage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);

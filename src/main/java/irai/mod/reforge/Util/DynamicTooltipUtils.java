@@ -879,9 +879,11 @@ public class DynamicTooltipUtils {
         boolean isArmorItem = isArmorType(baseItemId, itemId);
         String[] socketEntries = extractSocketEntries(metadata);
         String[] socketMutations = extractSocketMutations(metadata);
+        String[] socketStatusMutations = extractSocketStatusMutations(metadata);
         SocketData parsedSocketData = itemSocketData != null
                 ? itemSocketData
-                : buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries, socketMutations);
+                : buildSocketDataFromMetadata(socketMax, socketFilled, socketEntries, socketMutations,
+                        socketStatusMutations);
         boolean hasRefineOrSocketedEssence = reforgeLevel > 0
                 || hasSocketedEssence(socketEntries)
                 || hasSocketedEssence(parsedSocketData)
@@ -1579,7 +1581,14 @@ public class DynamicTooltipUtils {
         return values == null ? new String[0] : values;
     }
 
-    private static SocketData buildSocketDataFromMetadata(int socketMax, int socketFilled, String[] socketEntries, String[] socketMutations) {
+    private static String[] extractSocketStatusMutations(String metadata) {
+        String[] values = extractStringArray(metadata, MetadataKeys.SOCKET_STATUS_MUTATIONS);
+        return values == null ? new String[0] : values;
+    }
+
+    private static SocketData buildSocketDataFromMetadata(int socketMax, int socketFilled,
+                                                          String[] socketEntries, String[] socketMutations,
+                                                          String[] socketStatusMutations) {
         int resolvedMax = Math.max(0, socketMax);
         int entryCount = socketEntries == null ? 0 : socketEntries.length;
         int maxSockets = Math.max(resolvedMax, Math.max(socketFilled, entryCount));
@@ -1603,6 +1612,13 @@ public class DynamicTooltipUtils {
                 Essence.Type mutationType = SocketManager.parseEssenceType(normalizeSocketEntry(socketMutations[i]));
                 if (mutationType != null) {
                     socketData.getSockets().get(i).setMutationElement(mutationType.name());
+                }
+            }
+            if (socketStatusMutations != null && i < socketStatusMutations.length) {
+                SocketManager.StatusMutation statusMutation =
+                        SocketManager.parseStatusMutation(normalizeSocketEntry(socketStatusMutations[i]));
+                if (statusMutation != null) {
+                    socketData.getSockets().get(i).setStatusMutation(statusMutation.name());
                 }
             }
         }
@@ -1766,7 +1782,8 @@ public class DynamicTooltipUtils {
                 extractSocketMax(metadata),
                 extractSocketFilled(metadata),
                 extractSocketEntries(metadata),
-                extractSocketMutations(metadata));
+                extractSocketMutations(metadata),
+                extractSocketStatusMutations(metadata));
         if (socketData != null) {
             Integer rawVoidTier = SocketManager.calculateRawConsecutiveTiers(socketData).get(Essence.Type.VOID);
             if (rawVoidTier != null && rawVoidTier >= 5) {

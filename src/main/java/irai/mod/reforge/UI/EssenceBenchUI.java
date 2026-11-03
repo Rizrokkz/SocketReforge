@@ -397,7 +397,8 @@ public final class EssenceBenchUI {
     }
 
     private static boolean isMutationSupportItem(String itemId) {
-        return itemId != null && RESONANT_ESSENCE_ID.equalsIgnoreCase(itemId);
+        return itemId != null && (RESONANT_ESSENCE_ID.equalsIgnoreCase(itemId)
+                || SocketManager.resolveStatusMutationSupport(itemId) != null);
     }
 
     private static boolean isCompletedRecipeSupport(ItemStack stack) {
@@ -1345,6 +1346,11 @@ public final class EssenceBenchUI {
                     ? LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_thorium_hammer")
                     : LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_hammer");
         }
+        SocketManager.StatusMutation statusMutation = SocketManager.resolveStatusMutationSupport(itemId);
+        if (statusMutation != null) {
+            return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_status_mutation",
+                    formatEssenceTypeName(player, statusMutation.status()), statusMutation.baseDamage());
+        }
         if (isMutationSupportItem(itemId)) {
             return LangLoader.getUITranslation(player, "ui.essence_bench.material_desc_resonant_mutation");
         }
@@ -2035,6 +2041,8 @@ public final class EssenceBenchUI {
     private static boolean canMutateSelectedSlot(Entry equipment, Entry support, String slotKey) {
         if (equipment == null || support == null) return false;
         if (!isMutationSupportItem(support.itemId)) return false;
+        if (SocketManager.resolveStatusMutationSupport(support.itemId) != null
+                && !ReforgeEquip.isWeapon(equipment.item)) return false;
         SocketData sd = SocketManager.getSocketData(equipment.item);
         if (sd == null || sd.getSockets().isEmpty()) return false;
         int slotIndex = resolveSlotIndex(slotKey, sd);
@@ -2419,6 +2427,28 @@ public final class EssenceBenchUI {
             }
             if (target.isEmpty()) {
                 return new ProcessResult(t(player, "ui.essence_bench.error_mutation_filled_slot"), 100);
+            }
+            SocketManager.StatusMutation statusMutation =
+                    SocketManager.resolveStatusMutationSupport(support.itemId);
+            if (statusMutation != null) {
+                if (!isWeapon) {
+                    return new ProcessResult(t(player, "ui.essence_bench.error_status_mutation_weapon"), 100);
+                }
+                if (!SocketManager.applyStatusMutation(socketData, selectedSlot, statusMutation)) {
+                    return new ProcessResult(t(player, "ui.essence_bench.error_mutation_failed"), 100);
+                }
+                if (!consumeMaterial(player, support, 1)) {
+                    return new ProcessResult(t(player, "ui.essence_bench.error_mutation_support_changed"), 0);
+                }
+                ItemStack updated = SocketManager.withSocketData(item, socketData);
+                writeStack(player, equipment, updated);
+                socketData.registerTooltips(updated, updated.getItemId(), isWeapon);
+                DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
+                sfxConfig.playSuccess(player);
+                return new ProcessResult(t(player, "ui.essence_bench.status_socket_status_mutated",
+                        selectedSlot + 1,
+                        formatEssenceTypeName(player, statusMutation.status()),
+                        statusMutation.baseDamage()), 100);
             }
             if (!consumeMaterial(player, support, 1)) {
                 return new ProcessResult(t(player, "ui.essence_bench.error_mutation_support_changed"), 0);

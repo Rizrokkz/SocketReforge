@@ -135,6 +135,7 @@ public class SocketManager {
         Integer maxFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_MAX, Codec.INTEGER);
         String[] socketsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY);
         String[] mutationsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_MUTATIONS, Codec.STRING_ARRAY);
+        String[] statusMutationsFromMeta = item.getFromMetadataOrNull(MetadataKeys.SOCKET_STATUS_MUTATIONS, Codec.STRING_ARRAY);
 
         int defaultMax = isWeapon
                 ? config.getMaxSocketsWeapon()
@@ -162,6 +163,12 @@ public class SocketManager {
                             socketData.getSockets().get(i).setMutationElement(mutationType.name());
                         }
                     }
+                    if (statusMutationsFromMeta != null && i < statusMutationsFromMeta.length) {
+                        StatusMutation statusMutation = parseStatusMutation(statusMutationsFromMeta[i]);
+                        if (statusMutation != null) {
+                            socketData.getSockets().get(i).setStatusMutation(statusMutation.name());
+                        }
+                    }
                 }
             }
         }
@@ -179,6 +186,7 @@ public class SocketManager {
 
         String[] encoded = encodeSockets(socketData);
         String[] mutations = encodeSocketMutations(socketData);
+        String[] statusMutations = encodeSocketStatusMutations(socketData);
         boolean isWeapon = ReforgeEquip.isWeapon(item);
 
         // Determine resonance based on current socket layout and unlock metadata.
@@ -237,6 +245,7 @@ public class SocketManager {
                 .withMetadata(MetadataKeys.SOCKET_MAX, Codec.INTEGER, socketData.getMaxSockets())
                 .withMetadata(MetadataKeys.SOCKET_VALUES, Codec.STRING_ARRAY, encoded)
                 .withMetadata(MetadataKeys.SOCKET_MUTATIONS, Codec.STRING_ARRAY, mutations)
+                .withMetadata(MetadataKeys.SOCKET_STATUS_MUTATIONS, Codec.STRING_ARRAY, statusMutations)
                 .withMetadata(MetadataKeys.ESSENCE_EFFECTS, Codec.STRING_ARRAY, effectTypes)
                 .withMetadata(MetadataKeys.ESSENCE_TIER_MAP, Codec.STRING_ARRAY, effectTiers)
                 .withMetadata(MetadataKeys.ESSENCE_EFFECT_LINES, Codec.STRING_ARRAY, effectLines)
@@ -682,6 +691,83 @@ public class SocketManager {
             values[i] = mutation == null || mutation.isBlank() ? "" : mutation.trim().toUpperCase(Locale.ROOT);
         }
         return values;
+    }
+
+    private static String[] encodeSocketStatusMutations(SocketData socketData) {
+        String[] values = new String[socketData.getCurrentSocketCount()];
+        for (int i = 0; i < socketData.getCurrentSocketCount(); i++) {
+            Socket socket = socketData.getSockets().get(i);
+            if (socket == null || socket.isBroken() || socket.isEmpty()) {
+                values[i] = "";
+                continue;
+            }
+            StatusMutation mutation = parseStatusMutation(socket.getStatusMutation());
+            values[i] = mutation == null ? "" : mutation.name();
+        }
+        return values;
+    }
+
+    public enum StatusMutation {
+        BLEED_BASE_1("BLEED", 1, "Plant_Crop_Health1"),
+        BLEED_BASE_2("BLEED", 2, "Plant_Crop_Health2"),
+        POISON_BASE_1("POISON", 1, "Ingredient_Sac_Venom"),
+        POISON_BASE_2("POISON", 2, "Plant_Fruit_Poison");
+
+        private final String status;
+        private final int baseDamage;
+        private final String supportItemId;
+
+        StatusMutation(String status, int baseDamage, String supportItemId) {
+            this.status = status;
+            this.baseDamage = baseDamage;
+            this.supportItemId = supportItemId;
+        }
+
+        public String status() { return status; }
+        public int baseDamage() { return baseDamage; }
+        public String supportItemId() { return supportItemId; }
+    }
+
+    public static StatusMutation parseStatusMutation(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return StatusMutation.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    public static StatusMutation resolveStatusMutationSupport(String itemId) {
+        if (itemId == null || itemId.isBlank()) return null;
+        for (StatusMutation mutation : StatusMutation.values()) {
+            if (mutation.supportItemId().equalsIgnoreCase(itemId.trim())) return mutation;
+        }
+        return null;
+    }
+
+    public static boolean applyStatusMutation(SocketData socketData, int slotIndex, StatusMutation mutation) {
+        if (socketData == null || mutation == null) return false;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket != null && socket.getSlotIndex() == slotIndex
+                    && !socket.isEmpty() && !socket.isBroken() && !socket.isLocked()) {
+                socket.setStatusMutation(mutation.name());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static double getSocketStatusBaseBonus(SocketData socketData, String status) {
+        if (socketData == null || status == null || status.isBlank()) return 0.0d;
+        double total = 0.0d;
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken() || socket.isLocked()) continue;
+            StatusMutation mutation = parseStatusMutation(socket.getStatusMutation());
+            if (mutation != null && mutation.status().equalsIgnoreCase(status.trim())) {
+                total += mutation.baseDamage();
+            }
+        }
+        return total;
     }
 
     // ── Punch socket ──────────────────────────────────────────────────────────

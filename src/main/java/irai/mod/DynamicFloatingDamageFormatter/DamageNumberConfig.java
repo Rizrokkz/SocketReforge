@@ -121,7 +121,7 @@ public class DamageNumberConfig implements ConfigDefaultInjector {
             "regen=HEAL"
     };
 
-    private boolean useCustomCombatText = true;
+    private boolean useCustomCombatText = false;
     private String damageNumberRenderMode = "COMBAT_TEXT";
     private boolean cullingEnabled = true;
     private int cullingWindowMs = 500;
