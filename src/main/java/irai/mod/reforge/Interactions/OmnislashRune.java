@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.SimpleInteraction;
+import com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Lore.LoreProcHandler;
@@ -64,7 +65,25 @@ public abstract class OmnislashRune extends SimpleInteraction {
         if (targetRef == null) {
             targetRef = context.getMetaStore().getIfPresentMetaObject(Interaction.TARGET_ENTITY);
         }
+        if ((targetRef == null || !targetRef.isValid()) && npc) {
+            MarkedEntitySupport markedTargets = store.getComponent(
+                    ownerRef, MarkedEntitySupport.getComponentType());
+            targetRef = markedTargets == null ? null
+                    : markedTargets.getMarkedEntityRef(MarkedEntitySupport.DEFAULT_TARGET_SLOT);
+        }
+        if (npc) {
+            MarkedEntitySupport markedTargets = store.getComponent(
+                    ownerRef, MarkedEntitySupport.getComponentType());
+            Ref<EntityStore> markedTargetRef = markedTargets == null ? null
+                    : markedTargets.getMarkedEntityRef(MarkedEntitySupport.DEFAULT_TARGET_SLOT);
+            if (markedTargetRef != null && markedTargetRef.isValid() && !ownerRef.equals(markedTargetRef)) {
+                targetRef = markedTargetRef;
+            }
+        }
         if (targetRef != null && !targetRef.isValid()) {
+            targetRef = null;
+        }
+        if (ownerRef.equals(targetRef)) {
             targetRef = null;
         }
         ImpactModifiers nativeModifiers = player == null ? null : ImpactModifiers.collect(context, ownerRef, store);

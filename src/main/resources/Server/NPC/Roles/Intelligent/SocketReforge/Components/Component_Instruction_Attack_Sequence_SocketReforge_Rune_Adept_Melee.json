@@ -3,84 +3,185 @@
   "Interface": "Hytale.Instruction.AttackSequence",
   "Parameters": {
     "AttackDistance": {
-      "Value": 24.0,
-      "Description": "Long engagement range for Rune Adept dash openers"
+      "Value": 3.2,
+      "Description": "Attack range supplied by the Trork hybrid combat template"
     },
     "CombatRelativeTurnSpeed": {
-      "Value": 1.5,
+      "Value": 1.8,
       "Description": "Combat turning speed"
     }
   },
   "Content": {
-    "Sensor": {
-      "Type": "Target",
-      "Range": { "Compute": "AttackDistance" },
-      "Filters": [
-        { "Type": "LineOfSight" }
-      ]
-    },
-    "ActionsBlocking": true,
-    "Actions": [
+    "TreeMode": true,
+    "Instructions": [
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Omnislash",
-        "AttackPauseRange": [ 4.0, 5.0 ]
+        "$Comment": "After taking combat damage, set a short evasive sidestep and start its cooldown.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            {
+              "Type": "Damage",
+              "Combat": true,
+              "TargetSlot": "LockedTarget"
+            },
+            {
+              "Type": "Target",
+              "Range": 6.5
+            },
+            {
+              "Type": "Timer",
+              "Name": "RuneAdept_EvasiveCooldown",
+              "State": "Stopped"
+            }
+          ]
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "SetFlag",
+            "Name": "RuneAdept_EvasiveDodge",
+            "SetTo": true
+          },
+          {
+            "Type": "TimerStart",
+            "Name": "RuneAdept_EvasiveCooldown",
+            "StartValueRange": [ 5.0, 5.0 ],
+            "RestartValueRange": [ 5.0, 5.0 ]
+          }
+        ]
       },
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Razorstrike",
-        "AttackPauseRange": [ 3.0, 4.0 ]
+        "$Comment": "Keep attacking paused briefly while circling out of the last hit.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            { "Type": "Flag", "Name": "RuneAdept_EvasiveDodge" },
+            { "Type": "Target" }
+          ]
+        },
+        "BodyMotion": {
+          "Type": "MaintainDistance",
+          "DesiredDistanceRange": [ 5.5, 6.5 ],
+          "MoveThreshold": 0.2,
+          "StrafingDurationRange": [ 0.25, 0.45 ],
+          "StrafingFrequencyRange": [ 0.35, 0.6 ],
+          "RelativeForwardsSpeed": 0.5,
+          "RelativeBackwardsSpeed": 0.5
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          { "Type": "Timeout", "Delay": [ 0.55, 0.55 ] },
+          {
+            "Type": "SetFlag",
+            "Name": "RuneAdept_EvasiveDodge",
+            "SetTo": false
+          }
+        ]
       },
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_BloodRush",
-        "AttackPauseRange": [ 2.5, 3.5 ]
+        "$Comment": "Close distance with a rune when the target is outside melee range.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            {
+              "Type": "Target",
+              "Range": 24.0,
+              "Filters": [ { "Type": "LineOfSight" } ]
+            },
+            {
+              "Type": "Not",
+              "Sensor": { "Type": "Target", "Range": 4.0 }
+            }
+          ]
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Omnislash",
+            "AttackPauseRange": [ 2.0, 2.8 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Razorstrike",
+            "AttackPauseRange": [ 1.8, 2.5 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_BloodRush",
+            "AttackPauseRange": [ 1.8, 2.5 ]
+          }
+        ],
+        "HeadMotion": {
+          "Type": "Aim",
+          "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" }
+        }
       },
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Vortexstrike",
-        "AttackPauseRange": [ 2.5, 3.5 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_WolfPack",
-        "AttackPauseRange": [ 1.0, 1.5 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Berserk",
-        "AttackPauseRange": [ 1.0, 1.5 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Octaslash",
-        "AttackPauseRange": [ 3.0, 4.0 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_GrandSlam",
-        "AttackPauseRange": [ 2.5, 3.5 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Pummel",
-        "AttackPauseRange": [ 1.5, 2.5 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Whirlwind",
-        "AttackPauseRange": [ 3.0, 4.0 ]
-      },
-      {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Mana_Font",
-        "AttackPauseRange": [ 4.0, 5.0 ]
+        "$Comment": "Circle the target and rotate through close-range rune attacks.",
+        "Sensor": {
+          "Type": "Target",
+          "Range": 4.0,
+          "Filters": [ { "Type": "LineOfSight" } ]
+        },
+        "BodyMotion": {
+          "Type": "MaintainDistance",
+          "DesiredDistanceRange": [ 2.0, 3.0 ],
+          "MoveThreshold": 0.35,
+          "StrafingDurationRange": [ 0.3, 0.65 ],
+          "StrafingFrequencyRange": [ 1.0, 1.8 ],
+          "RelativeForwardsSpeed": 0.9,
+          "RelativeBackwardsSpeed": 0.45
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Pummel",
+            "AttackPauseRange": [ 1.0, 1.5 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_GrandSlam",
+            "AttackPauseRange": [ 1.8, 2.5 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Octaslash",
+            "AttackPauseRange": [ 2.2, 3.0 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Whirlwind",
+            "AttackPauseRange": [ 2.2, 3.0 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Vortexstrike",
+            "AttackPauseRange": [ 2.0, 2.8 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_WolfPack",
+            "AttackPauseRange": [ 2.5, 3.5 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Berserk",
+            "AttackPauseRange": [ 3.0, 4.0 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Mana_Font",
+            "AttackPauseRange": [ 4.0, 5.0 ]
+          }
+        ],
+        "HeadMotion": {
+          "Type": "Aim",
+          "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" }
+        }
       }
-    ],
-    "HeadMotion": {
-      "Type": "Aim",
-      "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" }
-    }
+    ]
   },
   "Type": "Component"
 }

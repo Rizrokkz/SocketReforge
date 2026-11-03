@@ -3,49 +3,160 @@
   "Interface": "Hytale.Instruction.AttackSequence",
   "Parameters": {
     "AttackDistance": {
-      "Value": 24,
-      "Description": "Maximum ranged rune attack distance"
+      "Value": 24.0,
+      "Description": "Ranged attack range supplied by the Trork hybrid combat template"
     },
     "CombatRelativeTurnSpeed": {
-      "Value": 1.5,
+      "Value": 1.8,
       "Description": "Combat turning speed"
     }
   },
   "Content": {
-    "Sensor": {
-      "Type": "Target",
-      "Range": { "Compute": "AttackDistance" },
-      "Filters": [
-        { "Type": "LineOfSight" }
-      ]
-    },
-    "ActionsBlocking": true,
-    "Actions": [
+    "TreeMode": true,
+    "Instructions": [
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Big_Arrow_3",
-        "AimingTimeRange": [ 0.3, 0.55 ],
-        "AttackPauseRange": [ 2.5, 3.5 ]
+        "$Comment": "After taking combat damage at close range, evade once and start a cooldown.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            {
+              "Type": "Damage",
+              "Combat": true,
+              "TargetSlot": "LockedTarget"
+            },
+            {
+              "Type": "Target",
+              "Range": 6.5
+            },
+            {
+              "Type": "Timer",
+              "Name": "RuneAdept_EvasiveCooldown",
+              "State": "Stopped"
+            }
+          ]
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "SetFlag",
+            "Name": "RuneAdept_EvasiveDodge",
+            "SetTo": true
+          },
+          {
+            "Type": "TimerStart",
+            "Name": "RuneAdept_EvasiveCooldown",
+            "StartValueRange": [ 5.0, 5.0 ],
+            "RestartValueRange": [ 5.0, 5.0 ]
+          }
+        ]
       },
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Volley",
-        "AimingTimeRange": [ 0.25, 0.45 ],
-        "AttackPauseRange": [ 3.0, 4.0 ]
+        "$Comment": "Pause ranged attacks briefly while the adept strafes away from the attacker.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            { "Type": "Flag", "Name": "RuneAdept_EvasiveDodge" },
+            { "Type": "Target" }
+          ]
+        },
+        "BodyMotion": {
+          "Type": "MaintainDistance",
+          "DesiredDistanceRange": [ 5.5, 6.5 ],
+          "MoveThreshold": 0.2,
+          "StrafingDurationRange": [ 0.25, 0.45 ],
+          "StrafingFrequencyRange": [ 0.35, 0.6 ],
+          "RelativeForwardsSpeed": 0.5,
+          "RelativeBackwardsSpeed": 0.5
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          { "Type": "Timeout", "Delay": [ 0.55, 0.55 ] },
+          {
+            "Type": "SetFlag",
+            "Name": "RuneAdept_EvasiveDodge",
+            "SetTo": false
+          }
+        ]
       },
       {
-        "Type": "Attack",
-        "Attack": "Root_NPC_SocketReforge_Rune_Adept_Soul_Reaper",
-        "AimingTimeRange": [ 0.3, 0.5 ],
-        "AttackPauseRange": [ 3.5, 4.5 ]
+        "$Comment": "Use advancing runes when the target is far enough to justify closing in.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            {
+              "Type": "Target",
+              "Range": 24.0,
+              "Filters": [ { "Type": "LineOfSight" } ]
+            },
+            {
+              "Type": "Not",
+              "Sensor": { "Type": "Target", "Range": 8.0 }
+            }
+          ]
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Advance_Omnislash",
+            "AttackPauseRange": [ 1.8, 2.5 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Advance_Razorstrike",
+            "AttackPauseRange": [ 1.6, 2.3 ]
+          }
+        ],
+        "HeadMotion": {
+          "Type": "Aim",
+          "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" }
+        }
+      },
+      {
+        "$Comment": "Use aimed ranged runes while advancing into melee distance.",
+        "Sensor": {
+          "Type": "And",
+          "Sensors": [
+            {
+              "Type": "Target",
+              "Range": 8.0,
+              "Filters": [ { "Type": "LineOfSight" } ]
+            },
+            {
+              "Type": "Not",
+              "Sensor": { "Type": "Target", "Range": 3.0 }
+            }
+          ]
+        },
+        "ActionsBlocking": true,
+        "Actions": [
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Big_Arrow_3",
+            "AimingTimeRange": [ 0.25, 0.45 ],
+            "AttackPauseRange": [ 1.8, 2.6 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Volley",
+            "AimingTimeRange": [ 0.2, 0.4 ],
+            "AttackPauseRange": [ 2.2, 3.0 ]
+          },
+          {
+            "Type": "Attack",
+            "Attack": "Root_NPC_SocketReforge_Rune_Adept_Soul_Reaper",
+            "AimingTimeRange": [ 0.25, 0.45 ],
+            "AttackPauseRange": [ 2.5, 3.2 ]
+          }
+        ],
+        "HeadMotion": {
+          "Type": "Aim",
+          "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" },
+          "HitProbability": 0.8,
+          "Spread": 0.18
+        }
       }
-    ],
-    "HeadMotion": {
-      "Type": "Aim",
-      "RelativeTurnSpeed": { "Compute": "CombatRelativeTurnSpeed" },
-      "HitProbability": 0.75,
-      "Spread": 0.25
-    }
+    ]
   },
   "Type": "Component"
 }

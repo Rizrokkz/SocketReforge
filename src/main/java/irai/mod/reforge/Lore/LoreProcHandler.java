@@ -253,6 +253,7 @@ public final class LoreProcHandler {
     private static final double OMNISLASH_RADIUS = LoreAbility.BASE_OMNISLASH_RADIUS;
     private static final double OMNISLASH_DASH_REFERENCE_DISTANCE = 3.0d;
     private static final double OMNISLASH_READY_SIDE_STEP_SPEED = 5.0d;
+    private static final double NPC_OMNISLASH_TELEPORT_OFFSET = 1.25d;
     private static final long OMNISLASH_CAMERA_LOCK_IDLE_TIMEOUT_MS = 2400L;
     private static final long OMNISLASH_CAMERA_UNLOCK_DELAY_MS = 350L;
     private static final long OMNISLASH_AFTERIMAGE_LIFETIME_MS = 360L;
@@ -5798,6 +5799,23 @@ public final class LoreProcHandler {
         if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()) {
             return;
         }
+        boolean npcAttacker = store.getComponent(attackerRef, NPCEntity.getComponentType()) != null;
+        if (npcAttacker) {
+            MarkedEntitySupport markedTargets = store.getComponent(
+                    attackerRef, MarkedEntitySupport.getComponentType());
+            Ref<EntityStore> markedTargetRef = markedTargets == null ? null
+                    : markedTargets.getMarkedEntityRef(MarkedEntitySupport.DEFAULT_TARGET_SLOT);
+            if (markedTargetRef != null && isEntityAlive(store, markedTargetRef)
+                    && !attackerRef.equals(markedTargetRef)) {
+                targetRef = markedTargetRef;
+            }
+        }
+        if (targetRef == null || !isEntityAlive(store, targetRef) || attackerRef.equals(targetRef)) {
+            targetRef = null;
+        }
+        if (targetRef != null && (!isEntityAlive(store, targetRef) || attackerRef.equals(targetRef))) {
+            targetRef = null;
+        }
         OmnislashSequence previousSequence = ACTIVE_OMNISLASH_RUNE_SEQUENCES.remove(attackerRef);
         if (previousSequence != null) {
             ACTIVE_OMNISLASH_RUNE_CHAINS.remove(attackerRef);
@@ -5879,7 +5897,7 @@ public final class LoreProcHandler {
                 cleanupDelay, TimeUnit.MILLISECONDS);
     }
 
-    /** Selects the next JSON strike target and turns the player toward it. */
+    /** Selects the next JSON strike target and turns the attacker toward it. */
     public static void prepareOmnislashRuneStep(Store<EntityStore> store,
                                                 Ref<EntityStore> attackerRef,
                                                 String sideStepDirection) {
@@ -5901,6 +5919,7 @@ public final class LoreProcHandler {
         if (sequence == null) {
             return;
         }
+        clearNpcOmnislashBackoff(store, attackerRef);
         sequence.pendingTargetRef = null;
         sequence.pendingHitIndex = -1;
         if (sequence.hitsApplied >= sequence.totalHits) {
@@ -5918,7 +5937,9 @@ public final class LoreProcHandler {
         if (runeChain != null) {
             runeChain.lastTargetRef = targetRef;
         }
-        applyOmnislashReadySideStep(store, attackerRef, targetRef, stepRight);
+        if (store.getComponent(attackerRef, NPCEntity.getComponentType()) == null) {
+            applyOmnislashReadySideStep(store, attackerRef, targetRef, stepRight);
+        }
         applyOmnislashFacing(store, attackerRef, targetRef);
         applyOmnislashCameraLock(store, attackerRef, targetRef, sequence);
         scheduleOmnislashCameraReaim(store, attackerRef, targetRef);
@@ -6039,6 +6060,18 @@ public final class LoreProcHandler {
             sequence.pendingTargetRef = null;
             sequence.pendingHitIndex = -1;
             finishOmnislashRuneSequence(store, attackerRef, sequence);
+            return;
+        }
+
+        // NPC strikes use a native Selector + DamageEntity interaction for hit
+        // eligibility and damage. This interaction only advances the combo state.
+        if (store.getComponent(attackerRef, NPCEntity.getComponentType()) != null) {
+            sequence.pendingTargetRef = null;
+            sequence.pendingHitIndex = -1;
+            sequence.hitsApplied++;
+            if (sequence.hitsApplied >= sequence.totalHits) {
+                finishOmnislashRuneSequence(store, attackerRef, sequence);
+            }
             return;
         }
 
@@ -7388,6 +7421,10 @@ public final class LoreProcHandler {
         if (startPos == null || targetPos == null) {
             return;
         }
+        if (store.getComponent(attackerRef, NPCEntity.getComponentType()) != null) {
+            teleportNpcOmnislashToTarget(store, attackerRef, startPos, targetPos);
+            return;
+        }
         Vector3d direction = new Vector3d(targetPos).sub(startPos);
         direction.set(direction.x, 0.0d, direction.z);
         double distance = direction.length();
@@ -7395,6 +7432,10 @@ public final class LoreProcHandler {
             return;
         }
         direction.normalize();
+
+        // NPC combat roles can keep their backing-away state active during an
+        // attack sequence. That movement can override the target-directed lunge.
+        clearNpcOmnislashBackoff(store, attackerRef);
 
         // Face the selected target before the strike and dash. Updating both
         // rotations keeps the model and the player's view pointed together.
@@ -7428,6 +7469,57 @@ public final class LoreProcHandler {
         // are safe here and the lunge starts on the same strike tick.
         applyOmnislashDashIFrames(store, attackerRef);
         applyOmnislashDashVelocity(store, attackerRef, direction, forceMagnitude);
+    }
+
+    /** NPC Rune Adepts use target-relative teleports so their combat retreat logic cannot cancel the strike. */
+    private static void teleportNpcOmnislashToTarget(Store<EntityStore> store,
+                                                      Ref<EntityStore> attackerRef,
+                                                      Vector3d attackerPosition,
+                                                      Vector3d targetPosition) {
+        if (store == null || attackerRef == null || attackerPosition == null || targetPosition == null) {
+            return;
+        }
+        Vector3d towardTarget = new Vector3d(targetPosition).sub(attackerPosition);
+        towardTarget.set(towardTarget.x, 0.0d, towardTarget.z);
+        if (towardTarget.lengthSquared() <= 1.0e-6d) {
+            TransformComponent attackerTransform = store.getComponent(
+                    attackerRef, TransformComponent.getComponentType());
+            if (attackerTransform == null || attackerTransform.getRotation() == null) {
+                return;
+            }
+            attackerTransform.getRotation().transform(new Vector3d(0.0d, 0.0d, -1.0d), towardTarget);
+            towardTarget.set(towardTarget.x, 0.0d, towardTarget.z);
+            if (towardTarget.lengthSquared() <= 1.0e-6d) {
+                towardTarget.set(0.0d, 0.0d, -1.0d);
+            }
+        }
+        towardTarget.normalize();
+        Vector3d destination = new Vector3d(targetPosition)
+                .fma(-NPC_OMNISLASH_TELEPORT_OFFSET, towardTarget);
+        destination.y = targetPosition.y;
+        Rotation3f facing = Rotation3f.lookAt(towardTarget);
+        facing.setPitch(0f);
+        facing.setRoll(0f);
+        clearNpcOmnislashBackoff(store, attackerRef);
+        TransformComponent attackerTransform = store.getComponent(
+                attackerRef, TransformComponent.getComponentType());
+        if (attackerTransform != null) {
+            attackerTransform.teleportPosition(new Vector3d(destination));
+            attackerTransform.teleportRotation(facing);
+        }
+        applyTeleportInternal(store, attackerRef, destination, facing);
+    }
+
+    private static void clearNpcOmnislashBackoff(Store<EntityStore> store,
+                                                  Ref<EntityStore> attackerRef) {
+        if (store == null || attackerRef == null || !attackerRef.isValid()) {
+            return;
+        }
+        NPCEntity npc = store.getComponent(attackerRef, NPCEntity.getComponentType());
+        Role role = npc == null ? null : npc.getRole();
+        if (role != null && role.isBackingAway()) {
+            role.setBackingAway(false);
+        }
     }
 
     private static void applyOmnislashDashIFrames(Store<EntityStore> store,
@@ -7505,6 +7597,34 @@ public final class LoreProcHandler {
         if (playerRef != null && world != null) {
             playerRef.updatePosition(world, transform.getTransform(), cameraLookRotation);
         }
+    }
+
+    /** Turns Rune Adepts toward their locked combat target before native rune hit checks run. */
+    public static void faceNpcForCoreAbility(Store<EntityStore> store,
+                                             Ref<EntityStore> attackerRef,
+                                             Ref<EntityStore> targetRef) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || store.getComponent(attackerRef, NPCEntity.getComponentType()) == null) {
+            return;
+        }
+        if (targetRef == null || !isEntityAlive(store, targetRef) || attackerRef.equals(targetRef)) {
+            MarkedEntitySupport markedTargets = store.getComponent(
+                    attackerRef, MarkedEntitySupport.getComponentType());
+            targetRef = markedTargets == null ? null
+                    : markedTargets.getMarkedEntityRef(MarkedEntitySupport.DEFAULT_TARGET_SLOT);
+        }
+        if (targetRef == null || !isEntityAlive(store, targetRef) || attackerRef.equals(targetRef)) {
+            return;
+        }
+
+        Ref<EntityStore> selectedTarget = targetRef;
+        LoreWorldTasks.queue(store, () -> {
+            if (store.isShutdown() || !attackerRef.isValid() || !isEntityAlive(store, selectedTarget)) {
+                return;
+            }
+            clearNpcOmnislashBackoff(store, attackerRef);
+            applyOmnislashFacing(store, attackerRef, selectedTarget);
+        });
     }
 
     /** Locks the custom camera on the current target and refreshes the release timer. */

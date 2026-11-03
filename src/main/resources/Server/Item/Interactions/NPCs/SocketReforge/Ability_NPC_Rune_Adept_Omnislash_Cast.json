@@ -2,6 +2,16 @@
   "Type": "Serial",
   "Interactions": [
     { "Type": "CoreAbilityRune", "Ability": "Omnislash" },
-    "Ability_Omnislash_Rune_Cast_12"
+    {
+      "Type": "Parallel",
+      "Interactions": [
+        { "Interactions": ["Ability_NPC_Rune_Adept_Omnislash_Sequence"] },
+        {
+          "Interactions": [
+            { "Type": "TriggerCooldown", "UseAbilityCooldown": true }
+          ]
+        }
+      ]
+    }
   ]
 }

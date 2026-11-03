@@ -1,6 +1,6 @@
 {
   "Type": "Variant",
-  "Reference": "Template_Trork_Hybrid",
+  "Reference": "Template_SocketReforge_Rune_Adept",
   "Modify": {
     "Appearance": "Outlander_Hunter",
     "Weapons": [
@@ -21,8 +21,9 @@
     "AttitudeGroup": "Outlander_Ranged",
     "HearingRange": 10,
     "ViewSector": 300,
-    "AttackDistance": 24.0,
-    "BreakOffRange": 32,
+    "AttackDistance": 3.2,
+    "BreakOffRange": 4.5,
+    "DesiredRangedAttackDistanceRange": [ 4.0, 7.0 ],
     "MaxHealth": 650,
     "MaxSpeed": 10,
     "NameTranslationKey": {

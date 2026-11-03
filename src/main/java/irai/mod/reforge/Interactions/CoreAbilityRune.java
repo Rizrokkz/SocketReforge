@@ -65,6 +65,11 @@ public final class CoreAbilityRune extends SimpleInteraction {
             return;
         }
         if (store.getComponent(ownerRef, Player.getComponentType()) == null) {
+            Ref<EntityStore> targetRef = context.getTargetEntity();
+            if (targetRef == null) {
+                targetRef = context.getMetaStore().getIfPresentMetaObject(Interaction.TARGET_ENTITY);
+            }
+            LoreProcHandler.faceNpcForCoreAbility(store, ownerRef, targetRef);
             ItemStack rune = context.getHeldItem();
             DamageStackDelayEST.markCoreRuneCast(ownerRef, ability,
                     rune == null || rune.isEmpty() ? null : rune.getItemId(),
@@ -141,7 +146,8 @@ public final class CoreAbilityRune extends SimpleInteraction {
         }
         String normalized = ability.trim().toLowerCase(Locale.ROOT)
                 .replace('-', '_').replace(' ', '_');
-        return normalized.equals("grandslam") || normalized.equals("grand_slam")
+        return normalized.equals("omnislash") || normalized.equals("octaslash")
+                || normalized.equals("grandslam") || normalized.equals("grand_slam")
                 || normalized.equals("razorstrike") || normalized.equals("razor_strike")
                 || normalized.equals("pummel") || normalized.startsWith("pummel_")
                 || normalized.equals("vortexstrike") || normalized.equals("vortex_strike")
