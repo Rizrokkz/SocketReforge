@@ -2,13 +2,23 @@ package irai.mod.reforge.Common;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.hypixel.hytale.builtin.abilities.element.Element;
 import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
+import com.hypixel.hytale.server.core.modules.projectile.component.ImpactModifiers;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
+import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
+import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
+import irai.mod.reforge.Util.DamageNumberFormatter;
 
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceRegistry;
@@ -37,21 +47,7 @@ public final class WeaponElementalDamageUtils {
             return List.of();
         }
 
-        Map<Essence.Type, Double> weights = new EnumMap<>(Essence.Type.class);
-        for (Socket socket : socketData.getSockets()) {
-            if (socket == null || socket.isEmpty() || socket.isBroken()) {
-                continue;
-            }
-            double socketWeight = SocketManager.isGreaterEssenceId(socket.getEssenceId()) ? GREATER_WEIGHT : 1.0d;
-            Essence rawEssence = EssenceRegistry.get().getById(socket.getEssenceId());
-            if (rawEssence != null && rawEssence.getType() != null) {
-                addWeight(weights, rawEssence.getType(), socketWeight);
-            }
-            Essence.Type mutationType = SocketManager.parseEssenceType(socket.getMutationElement());
-            if (mutationType != null) {
-                addWeight(weights, mutationType, socketWeight);
-            }
-        }
+        Map<Essence.Type, Double> weights = calculateAffinityWeights(socketData);
 
         List<ElementDamage> result = new ArrayList<>();
         for (Essence.Type type : Essence.Type.values()) {
@@ -83,8 +79,8 @@ public final class WeaponElementalDamageUtils {
             return AffinityDamage.none();
         }
 
-        List<ElementDamage> elementDamages = calculateElementDamage(socketData, damageOutput);
-        if (elementDamages.isEmpty()) {
+        Map<Essence.Type, Double> weights = calculateAffinityWeights(socketData);
+        if (weights.isEmpty()) {
             return AffinityDamage.none();
         }
 
@@ -93,47 +89,160 @@ public final class WeaponElementalDamageUtils {
         double strongestWeight = 0.0d;
         double strongestRate = 0.0d;
         double strongestMultiplier = ElementalAffinityUtils.DEFAULT_NEUTRAL_MULTIPLIER;
-        double strongestDelta = 0.0d;
-        double strongestComponentDamage = 0.0d;
-        float totalDelta = 0f;
-        Map<Essence.Type, Double> adjustedElementDamage = new EnumMap<>(Essence.Type.class);
-
-        for (ElementDamage elementDamage : elementDamages) {
-            double effectivenessMultiplier = ElementalAffinityUtils.effectivenessMultiplier(
-                    elementDamage.type(),
-                    store,
-                    targetRef);
-            double matchupDelta = effectivenessMultiplier - ElementalAffinityUtils.DEFAULT_NEUTRAL_MULTIPLIER;
-            double elementDelta = elementDamage.damage() * matchupDelta;
-            double adjustedComponentDamage = elementDamage.damage() + elementDelta;
-            adjustedElementDamage.put(
-                    elementDamage.type(),
-                    adjustedElementDamage.getOrDefault(elementDamage.type(), 0.0d) + adjustedComponentDamage);
-            totalDelta += (float) elementDelta;
-            if (elementDamage.socketWeight() > strongestWeight
-                    || (elementDamage.socketWeight() == strongestWeight
-                    && adjustedComponentDamage > strongestComponentDamage)) {
-                strongestType = elementDamage.type();
-                strongestWeight = elementDamage.socketWeight();
-                strongestRate = elementDamage.rate();
-                strongestMultiplier = effectivenessMultiplier;
-                strongestDelta = elementDelta;
-                strongestComponentDamage = adjustedComponentDamage;
+        // Keep the first affinity that reaches the highest weight, preserving socket order for ties.
+        for (Map.Entry<Essence.Type, Double> entry : weights.entrySet()) {
+            if (entry.getValue() > strongestWeight) {
+                strongestType = entry.getKey();
+                strongestWeight = entry.getValue();
             }
         }
-
-        String elementDamagePayload = encodeElementDamage(adjustedElementDamage);
-        if (strongestType == null || elementDamagePayload.isBlank()) {
+        if (strongestType == null) {
             return AffinityDamage.none();
         }
+        strongestRate = Math.min(1.0d, strongestWeight * DAMAGE_RATE_PER_SOCKET_WEIGHT);
+        strongestMultiplier = ElementalAffinityUtils.effectivenessMultiplier(strongestType, store, targetRef);
+        double bonusDamage = damageOutput * strongestRate * strongestMultiplier;
+        if (!(bonusDamage > 0.0001d)) {
+            return AffinityDamage.none();
+        }
+        String elementDamagePayload = encodeElementDamage(Map.of(strongestType, bonusDamage));
         return new AffinityDamage(
                 strongestType,
                 strongestWeight,
                 strongestRate,
                 targetType,
                 strongestMultiplier,
-                totalDelta,
+                (float) bonusDamage,
                 elementDamagePayload);
+    }
+
+    private static Map<Essence.Type, Double> calculateAffinityWeights(SocketData socketData) {
+        Map<Essence.Type, Double> weights = new LinkedHashMap<>();
+        if (socketData == null || socketData.getSockets() == null) {
+            return weights;
+        }
+        for (Socket socket : socketData.getSockets()) {
+            if (socket == null || socket.isEmpty() || socket.isBroken()) {
+                continue;
+            }
+            Essence.Type affinity = SocketManager.parseEssenceType(socket.getMutationElement());
+            if (affinity == null) {
+                Essence rawEssence = EssenceRegistry.get().getById(socket.getEssenceId());
+                affinity = rawEssence == null ? null : rawEssence.getType();
+            }
+            if (affinity == null) {
+                continue;
+            }
+            double socketWeight = SocketManager.isGreaterEssenceId(socket.getEssenceId())
+                    ? GREATER_WEIGHT : 1.0d;
+            addWeight(weights, affinity, socketWeight);
+        }
+        return weights;
+    }
+
+    /**
+     * Dispatches the affinity bonus as a separately typed native damage event. This keeps the
+     * weapon's physical hit intact while allowing native DamageCause resistance, element reactions,
+     * and element on-hit effects to process the bonus.
+     */
+    public static boolean applyNativeAffinityDamage(CommandBuffer<EntityStore> commandBuffer,
+                                                    Ref<EntityStore> targetRef,
+                                                    Damage originalDamage,
+                                                    AffinityDamage affinityDamage) {
+        if (commandBuffer == null || targetRef == null || originalDamage == null
+                || affinityDamage == null || affinityDamage.type() == null
+                || affinityDamage.elementalDamage() <= 0.0001f) {
+            return false;
+        }
+
+        DamageCauseResolution resolution = resolveNativeDamageCause(affinityDamage.type());
+        if (resolution.cause() == null) {
+            return false;
+        }
+
+        Damage elementalDamage = new Damage(
+                originalDamage.getSource(), resolution.cause(), affinityDamage.elementalDamage());
+        elementalDamage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT, Boolean.TRUE);
+        elementalDamage.putMetaObject(EquipmentRefineEST.META_SKIP_REFORGE, Boolean.TRUE);
+        elementalDamage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
+        elementalDamage.putMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE,
+                affinityDamage.elementDamagePayload());
+        elementalDamage.putMetaObject(DamageStackDelayEST.META_RAW_AMOUNT, affinityDamage.elementalDamage());
+        elementalDamage.putMetaObject(DamageStackDelayEST.META_BONUS_BASE_AMOUNT, affinityDamage.elementalDamage());
+        markDamageKind(elementalDamage, affinityDamage.type());
+
+        if (resolution.elementId() != null) {
+            String[] onHitEffects = resolution.onHitEffectId() == null
+                    || resolution.onHitEffectId().isBlank()
+                    ? new String[0]
+                    : new String[]{resolution.onHitEffectId()};
+            elementalDamage.putMetaObject(ImpactModifiers.DAMAGE_MODIFIERS,
+                    new ImpactModifiers(Map.of(), onHitEffects, resolution.elementId()));
+        }
+
+        commandBuffer.invoke(targetRef, elementalDamage);
+        return true;
+    }
+
+    private static DamageCauseResolution resolveNativeDamageCause(Essence.Type type) {
+        String elementId = nativeElementId(type);
+        Element element = elementId == null || Element.getAssetMap() == null
+                ? null : Element.getAssetMap().getAsset(elementId);
+        if (element != null) {
+            DamageCause nativeCause = DamageCause.getAssetMap().getAsset(element.getDamageCauseId());
+            if (nativeCause != null) {
+                return new DamageCauseResolution(nativeCause, element.getId(), element.getOnHitEffectId());
+            }
+        }
+
+        String customCauseId = customDamageCauseId(type);
+        DamageCause customCause = customCauseId == null || DamageCause.getAssetMap() == null
+                ? null : DamageCause.getAssetMap().getAsset(customCauseId);
+        if (customCause != null) {
+            return new DamageCauseResolution(customCause, null, null);
+        }
+
+        // Custom Socket Reforge elements without a native Element asset still use the native
+        // generic Elemental cause; their exact identity remains in the damage payload.
+        DamageCause elementalCause = DamageCause.getAssetMap() == null
+                ? null : DamageCause.getAssetMap().getAsset("Elemental");
+        if (elementalCause != null) {
+            return new DamageCauseResolution(elementalCause, null, null);
+        }
+        return new DamageCauseResolution(DamageCause.PHYSICAL, null, null);
+    }
+
+    private static String nativeElementId(Essence.Type type) {
+        return switch (type) {
+            case FIRE -> "Fire";
+            case WATER -> "Water";
+            case LIGHTNING -> "Lightning";
+            // Socket Reforge supplies native-format Element assets for affinities that the base
+            // game does not define. Keep them namespaced to avoid collisions with other mods.
+            case ICE -> "SocketReforge_Ice";
+            case LIFE -> "SocketReforge_Life";
+            case VOID -> "SocketReforge_Void";
+        };
+    }
+
+    private static String customDamageCauseId(Essence.Type type) {
+        if (type == null) {
+            return null;
+        }
+        String name = type.name().toLowerCase(java.util.Locale.ROOT);
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private static void markDamageKind(Damage damage, Essence.Type type) {
+        DamageNumberFormatter.DamageKind kind = switch (type) {
+            case FIRE -> DamageNumberFormatter.DamageKind.BURN;
+            case ICE -> DamageNumberFormatter.DamageKind.ICE;
+            case LIGHTNING -> DamageNumberFormatter.DamageKind.SHOCK;
+            case WATER -> DamageNumberFormatter.DamageKind.WATER;
+            case VOID -> DamageNumberFormatter.DamageKind.VOID;
+            case LIFE -> DamageNumberFormatter.DamageKind.LIFE;
+        };
+        DamageNumberMeta.markKind(damage, kind);
     }
 
     private static void addWeight(Map<Essence.Type, Double> weights, Essence.Type type, double socketWeight) {
@@ -162,7 +271,7 @@ public final class WeaponElementalDamageUtils {
     }
 
     public static Map<Essence.Type, Double> decodeElementDamage(String payload) {
-        EnumMap<Essence.Type, Double> result = new EnumMap<>(Essence.Type.class);
+        Map<Essence.Type, Double> result = new LinkedHashMap<>();
         if (payload == null || payload.isBlank()) {
             return result;
         }
@@ -214,11 +323,13 @@ public final class WeaponElementalDamageUtils {
             double rate,
             Essence.Type targetType,
             double effectivenessMultiplier,
-            float damageDelta,
+            float elementalDamage,
             String elementDamagePayload) {
         public static AffinityDamage none() {
             return new AffinityDamage(null, 0.0d, 0.0d, null,
                     ElementalAffinityUtils.DEFAULT_NEUTRAL_MULTIPLIER, 0f, "");
         }
     }
+
+    private record DamageCauseResolution(DamageCause cause, String elementId, String onHitEffectId) {}
 }

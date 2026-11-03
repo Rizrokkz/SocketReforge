@@ -9,7 +9,8 @@
         "TargetEntityPart": "PrimaryItem",
         "TargetNodeName": "Handle",
         "PositionOffset": {
-          "X": 0.85
+          "X": 0.85,
+          "Z": 0
         }
       },
       {
@@ -17,7 +18,8 @@
         "TargetEntityPart": "SecondaryItem",
         "TargetNodeName": "Handle",
         "PositionOffset": {
-          "X": 0.85
+          "X": 0.85,
+          "Z": 0
         }
       },
       {
@@ -25,7 +27,8 @@
         "TargetEntityPart": "Entity",
         "TargetNodeName": "R-Handle",
         "PositionOffset": {
-          "X": 0.5
+          "X": 0.5,
+          "Z": 0
         }
       },
       {
@@ -33,7 +36,8 @@
         "TargetEntityPart": "Entity",
         "TargetNodeName": "L-Handle",
         "PositionOffset": {
-          "X": 0.5
+          "X": 0.5,
+          "Z": 0
         }
       }
     ]

@@ -10,7 +10,8 @@
         "SystemId": "Impact_Ice",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.3
+          "Y": 0.3,
+          "Z": 0
         }
       }
     ]

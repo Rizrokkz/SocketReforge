@@ -12,7 +12,8 @@
         "SystemId": "Impact_Mace_Signature",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.9
+          "Y": 0.9,
+          "Z": 0
         }
       }
     ]

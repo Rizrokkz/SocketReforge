@@ -13,7 +13,7 @@
       {
         "SystemId": "Dungeon_Goblin_Mace_Slam",
         "Scale": 0.2083,
-        "PositionOffset": { "Y": 0.1 }
+        "PositionOffset": { "Y": 0.1, "Z": 0 }
       }
     ],
     "CameraEffect": "Impact"

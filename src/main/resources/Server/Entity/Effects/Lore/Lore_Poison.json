@@ -15,7 +15,8 @@
         "SystemId": "Effect_Poison",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.1
+          "Y": 0.1,
+          "Z": 0
         }
       }
     ]

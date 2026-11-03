@@ -58,7 +58,7 @@
                     "RotationOffset": { "Pitch": 0, "Roll": 0, "Yaw": 0 },
                     "TargetNodeName": "Handle",
                     "SystemId": "Sword_Charged_Trail",
-                    "PositionOffset": { "X": 0, "Y": 0 }
+                    "PositionOffset": { "X": 0, "Y": 0, "Z": 0 }
                   }
                 ]
               }

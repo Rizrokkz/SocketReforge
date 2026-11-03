@@ -162,6 +162,7 @@ import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
 import irai.mod.reforge.Util.RuntimeBenchPatchHost;
 import irai.mod.reforge.Util.RuntimeWeaponAffinityPatchHost;
+import irai.mod.reforge.Util.ModelParticleOffsetRepair;
 
 public class ReforgePlugin extends JavaPlugin {
     private static final String HATCHET_THROW_INTERACTION_ID = "HatchetThrowUse";
@@ -627,6 +628,7 @@ public class ReforgePlugin extends JavaPlugin {
 
     @Override
     protected void start() {
+        ModelParticleOffsetRepair.repairLoadedAssets();
         RuntimeBenchPatchHost.applyEmbeddedBenchPatches(this);
         if (socketConfig.get() != null && socketConfig.get().isWeaponAffinityAppearancePatchingEnabled()) {
             RuntimeWeaponAffinityPatchHost.applyStartupWeaponAffinityPatches(this);

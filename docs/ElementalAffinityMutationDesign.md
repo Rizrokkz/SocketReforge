@@ -121,6 +121,29 @@ Current implementation notes:
 - Ties keep the first dominant element encountered in socket order.
 - Monster elemental effectiveness applies only to the additional affinity damage bonus.
 
+## Native Damage Integration
+
+Socket Reforge keeps the weapon hit's original physical damage cause. The dominant elemental
+affinity bonus is submitted as a separate damage event using the native `DamageCause` associated
+with that element. This lets Hytale's normal resistance and elemental reaction systems inspect the
+bonus as elemental damage instead of inferring an element from a floating-number label.
+
+- Fire, Water, and Lightning resolve through the matching native `Element` assets, including their
+  native damage causes and configured on-hit effects.
+- Ice, Life, and Void resolve through native-format `Element` assets in
+  `Server/Abilities/Elements`. Ice uses the base game's `Ice` damage cause. Life and Void use
+  Socket Reforge damage causes that inherit `Elemental`, keeping them independent of similarly
+  named assets supplied by other mods.
+- The Socket Reforge element assets currently define damage typing only. Their `OnHitEffect` and
+  `Reactions` can be added to those assets later without changing the damage dispatcher.
+- The native elemental component is calculated from the post-weapon-bonus damage output, weighted by
+  the dominant affinity sockets, then adjusted by Socket Reforge's target matchup multiplier.
+- The physical event is marked as having handled affinity so the custom resistance path does not
+  reduce the physical portion a second time. The typed elemental event carries its own element
+  payload and skips weapon/lore proc dispatch, preventing one swing from recursively proccing itself.
+- A stored mutation replaces the socket's original element for affinity weighting; it does not add a
+  second element contribution.
+
 ## First-Pass Elemental Matchups
 
 Elemental matchups use two tracks:

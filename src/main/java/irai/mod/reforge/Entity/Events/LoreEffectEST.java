@@ -70,6 +70,10 @@ public final class LoreEffectEST extends DamageEventSystem {
         if (store == null || damage == null) {
             return;
         }
+        if (Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT))) {
+            return;
+        }
         float amountBeforeFilter = damage.getAmount();
         boolean loreDamage = Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE));
@@ -186,7 +190,8 @@ public final class LoreEffectEST extends DamageEventSystem {
                     damage, data, true, used, commandBuffer);
         }
 
-        applyElementalAffinityToAddedDamage(store, defenderRef, weapon, damage, beforeLoreProcDamage);
+        applyElementalAffinityToAddedDamage(
+                store, commandBuffer, defenderRef, weapon, damage, beforeLoreProcDamage);
 
         if (changed) {
             ItemStack updated = LoreSocketManager.withLoreSocketData(weapon, data);
@@ -345,6 +350,7 @@ public final class LoreEffectEST extends DamageEventSystem {
     }
 
     private void applyElementalAffinityToAddedDamage(Store<EntityStore> store,
+                                                     CommandBuffer<EntityStore> commandBuffer,
                                                      Ref<EntityStore> defenderRef,
                                                      ItemStack weapon,
                                                      Damage damage,
@@ -358,15 +364,10 @@ public final class LoreEffectEST extends DamageEventSystem {
         }
         WeaponElementalDamageUtils.AffinityDamage affinityDamage =
                 WeaponElementalDamageUtils.calculateAffinityDamage(weapon, addedDamage, store, defenderRef);
-        if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
-            damage.putMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE,
-                    WeaponElementalDamageUtils.mergeElementDamagePayload(
-                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE),
-                            affinityDamage.elementDamagePayload()));
-        }
-        if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
-            damage.setAmount(Math.max(0f, damage.getAmount() + affinityDamage.damageDelta()));
-            markAffinityDamageKind(damage, affinityDamage.type());
+        if (affinityDamage.type() != null) {
+            damage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
+            WeaponElementalDamageUtils.applyNativeAffinityDamage(
+                    commandBuffer, defenderRef, damage, affinityDamage);
         }
     }
 

@@ -15,7 +15,8 @@
         "SystemId": "Torch_Fire",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.1
+          "Y": 0.1,
+          "Z": 0
         }
       }
     ]

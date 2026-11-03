@@ -8,14 +8,16 @@
         "SystemId": "IceBall_Explosion",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.1
+          "Y": 0.1,
+          "Z": 0
         }
       },
       {
         "SystemId": "Block_Break_Ice",
         "TargetEntityPart": "Entity",
         "PositionOffset": {
-          "Y": 0.3
+          "Y": 0.3,
+          "Z": 0
         }
       }
     ]

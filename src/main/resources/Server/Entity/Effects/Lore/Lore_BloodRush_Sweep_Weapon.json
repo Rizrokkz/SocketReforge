@@ -8,7 +8,8 @@
         "TargetEntityPart": "PrimaryItem",
         "TargetNodeName": "Handle",
         "PositionOffset": {
-          "X": 0.85
+          "X": 0.85,
+          "Z": 0
         }
       }
     ]

@@ -152,6 +152,8 @@ public class SocketEffectEST extends DamageEventSystem {
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
         try {
+            boolean elementalComponent = Boolean.TRUE.equals(
+                    damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT));
             if (Boolean.TRUE.equals(damage.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))) {
                 return;
             }
@@ -167,8 +169,10 @@ public class SocketEffectEST extends DamageEventSystem {
             }
 
             Ref<EntityStore> attackerRef = entitySource.getRef();
-            LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
-            LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.before");
+            if (!elementalComponent) {
+                LoreProcHandler.enforceSignatureEnergyLock(store, attackerRef);
+                LoreDamageUtils.traceSignatureEnergy(store, attackerRef, targetRef, "SocketEffectEST.before");
+            }
             Player attackerPlayer = null;
             ItemStack attackerWeapon = null;
             PlayerInventoryUtils.HeldItemContext attackerWeaponContext = null;
@@ -178,15 +182,17 @@ public class SocketEffectEST extends DamageEventSystem {
             Player attacker = store.getComponent(attackerRef, Player.getComponentType());
             attackerPlayer = attacker;
             if (attacker != null) {
-                applyFreezePenaltyIfPresent(attacker, damage);
-                attackerWeaponContext = PlayerInventoryUtils.findFirstInHotbarContext(
-                        attacker, ReforgeEquip::isWeapon);
-                ItemStack weapon = attackerWeaponContext == null ? null : attackerWeaponContext.getItemStack();
-                if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
-                    attackerWeapon = weapon;
-                    attackerResonanceType = resolveResonanceType(weapon);
-                    // NOTE: attacker damage (refine + sockets) is applied in EquipmentRefineEST
-                    // to avoid multi-system write races on Damage amount.
+                if (!elementalComponent) {
+                    applyFreezePenaltyIfPresent(attacker, damage);
+                    attackerWeaponContext = PlayerInventoryUtils.findFirstInHotbarContext(
+                            attacker, ReforgeEquip::isWeapon);
+                    ItemStack weapon = attackerWeaponContext == null ? null : attackerWeaponContext.getItemStack();
+                    if (weapon != null && ReforgeEquip.isWeapon(weapon)) {
+                        attackerWeapon = weapon;
+                        attackerResonanceType = resolveResonanceType(weapon);
+                        // NOTE: attacker damage (refine + sockets) is applied in EquipmentRefineEST
+                        // to avoid multi-system write races on Damage amount.
+                    }
                 }
             }
 
@@ -195,7 +201,7 @@ public class SocketEffectEST extends DamageEventSystem {
             if (defenderPlayer != null) {
                 // Apply Ice Freeze effect on hit if attacker has Max Tier Ice Essence.
                 // This is independent of defender armor and is applied as a short debuff.
-                if (attacker != null) {
+                if (attacker != null && !elementalComponent) {
                     applyIceFreezeOnHit(attacker, defenderPlayer);
                 }
 
@@ -235,7 +241,9 @@ public class SocketEffectEST extends DamageEventSystem {
                     Map<Essence.Type, Double> incomingWeaponElementDamage = WeaponElementalDamageUtils.decodeElementDamage(
                             damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE));
                     boolean hasIncomingWeaponElementDamage = hasAnyIncomingElementDamage(incomingWeaponElementDamage);
-                    Essence.Type incomingAffinityType = hasIncomingWeaponElementDamage
+                    boolean elementalAffinityHandled = Boolean.TRUE.equals(
+                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED));
+                    Essence.Type incomingAffinityType = hasIncomingWeaponElementDamage || elementalAffinityHandled
                             ? null
                             : ElementalAffinityUtils.resolveTargetAffinity(store, attackerRef);
                     if (incomingAffinityType != null) {
@@ -288,35 +296,55 @@ public class SocketEffectEST extends DamageEventSystem {
                     }
 
                     // Apply Fire Burn effect on hit if Fire Essence is Max Tier
-                    applyFireBurnOnHit(store, defenderPlayer, attackerRef, damage.getAmount());
+                    if (!elementalComponent) {
+                        applyFireBurnOnHit(store, defenderPlayer, attackerRef, damage.getAmount());
 
-                    applyArmorResonanceOnHit(store, defenderPlayer, targetRef, attacker, attackerRef, armorPieces, damage);
+                        applyArmorResonanceOnHit(
+                                store, defenderPlayer, targetRef, attacker, attackerRef, armorPieces, damage);
+                    }
                 }
 
-                if (blurActive && attackerRef != null && !attackerRef.equals(targetRef) && beforeDefenderSocketDamage > 0f) {
+                if (!elementalComponent && blurActive && attackerRef != null
+                        && !attackerRef.equals(targetRef) && beforeDefenderSocketDamage > 0f) {
                     applyDirectHealthLoss(store, attackerRef, beforeDefenderSocketDamage);
                 }
             }
 
             if (attacker != null && targetRef != null && attackerWeapon != null) {
+                boolean affinityHandled = Boolean.TRUE.equals(
+                        damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED));
+                if (source instanceof Damage.ProjectileSource && !affinityHandled
+                        && beforeDefenderSocketDamage > 0.0001f) {
+                    WeaponElementalDamageUtils.AffinityDamage projectileAffinity =
+                            WeaponElementalDamageUtils.calculateAffinityDamage(
+                                    attackerWeapon, beforeDefenderSocketDamage, store, targetRef);
+                    if (projectileAffinity.type() != null) {
+                        damage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
+                        WeaponElementalDamageUtils.applyNativeAffinityDamage(
+                                commandBuffer, targetRef, damage, projectileAffinity);
+                    }
+                }
                 float beforeWeaponResonanceDamage = damage.getAmount();
-                applyWeaponResonanceOnHit(
-                        store,
-                        commandBuffer,
-                        attacker,
-                        attackerRef,
-                        defenderPlayer,
-                        targetRef,
-                        attackerWeapon,
-                        attackerWeaponContext,
-                        attackerResonanceType,
-                        damage
-                );
-                applyElementalAffinityToAddedDamage(store, targetRef, attackerWeapon, damage, beforeWeaponResonanceDamage);
+                if (!elementalComponent) {
+                    applyWeaponResonanceOnHit(
+                            store,
+                            commandBuffer,
+                            attacker,
+                            attackerRef,
+                            defenderPlayer,
+                            targetRef,
+                            attackerWeapon,
+                            attackerWeaponContext,
+                            attackerResonanceType,
+                            damage
+                    );
+                    applyElementalAffinityToAddedDamage(
+                            store, commandBuffer, targetRef, attackerWeapon, damage, beforeWeaponResonanceDamage);
+                }
             }
 
             // Log final per-hit damage after socket processing for easier balancing/debugging.
-            if (attackerPlayer != null) {
+            if (attackerPlayer != null && !elementalComponent) {
                 applyWeaponLifeSteal(store, attackerRef, attackerWeapon, damage.getAmount());
 
                 if (DEBUG_DAMAGE_LOG) {
@@ -1021,6 +1049,7 @@ public class SocketEffectEST extends DamageEventSystem {
     }
 
     private void applyElementalAffinityToAddedDamage(Store<EntityStore> store,
+                                                     CommandBuffer<EntityStore> commandBuffer,
                                                      Ref<EntityStore> targetRef,
                                                      ItemStack weapon,
                                                      Damage damage,
@@ -1034,15 +1063,10 @@ public class SocketEffectEST extends DamageEventSystem {
         }
         WeaponElementalDamageUtils.AffinityDamage affinityDamage =
                 WeaponElementalDamageUtils.calculateAffinityDamage(weapon, addedDamage, store, targetRef);
-        if (affinityDamage.elementDamagePayload() != null && !affinityDamage.elementDamagePayload().isBlank()) {
-            damage.putMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE,
-                    WeaponElementalDamageUtils.mergeElementDamagePayload(
-                            damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE),
-                            affinityDamage.elementDamagePayload()));
-        }
-        if (affinityDamage.type() != null && Math.abs(affinityDamage.damageDelta()) > 0.0001f) {
-            damage.setAmount(Math.max(0f, damage.getAmount() + affinityDamage.damageDelta()));
-            markAffinityDamageKind(damage, affinityDamage.type());
+        if (affinityDamage.type() != null) {
+            damage.putMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
+            WeaponElementalDamageUtils.applyNativeAffinityDamage(
+                    commandBuffer, targetRef, damage, affinityDamage);
         }
     }
 
