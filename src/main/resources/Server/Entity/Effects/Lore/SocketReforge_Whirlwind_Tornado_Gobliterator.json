@@ -5,6 +5,31 @@
   "ApplicationEffects": {
     "Particles": [
       {
+        "SystemId": "Lore_Whirlwind_Spin",
+        "TargetNodeName": "Chest",
+        "Scale": 1.0,
+        "PositionOffset": {
+          "X": 0,
+          "Y": -1,
+          "Z": 0
+        }
+      },
+      {
+        "SystemId": "Drill_Spin",
+        "TargetNodeName": "Chest",
+        "Scale": 4.0,
+        "PositionOffset": {
+          "X": 0,
+          "Y": -1,
+          "Z": 0
+        },
+        "RotationOffset": {
+          "Pitch": 90,
+          "Roll": 0,
+          "Yaw": 0
+        }
+      },
+      {
         "SystemId": "SocketReforge_Whirlwind_Gobliterator_Spin",
         "TargetNodeName": "Chest",
         "Scale": 0.7,

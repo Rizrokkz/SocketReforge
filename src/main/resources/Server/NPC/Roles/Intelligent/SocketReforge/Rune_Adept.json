@@ -25,7 +25,6 @@
     "BreakOffRange": 32,
     "MaxHealth": 650,
     "MaxSpeed": 10,
-    "CombatBackOffAfterAttack": false,
     "NameTranslationKey": {
       "Compute": "NameTranslationKey"
     }
