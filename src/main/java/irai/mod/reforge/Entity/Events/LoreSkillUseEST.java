@@ -126,25 +126,11 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
         }
 
         if (isSocketReforgeCoreRoot(coreAbility.getCastRootId())) {
-            if ("Rune_GrandSlam_1".equalsIgnoreCase(coreRune.getItemId())) {
-                RuneDeltaCastSnapshotEST.setRuneDamageBase(
-                        interaction, LoreDamageUtils.resolveGrandSlamRuneOneDamageBase(store, playerRef));
-            } else if (isBigArrowRune(coreAbility.getCastRootId())) {
-                int feedTier = LoreSocketManager.getModifierRunestoneFeedTier(coreRune);
-                int bonusTier = resolveBigArrowBonusTier(coreRune.getItemId(), feedTier);
-                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
-                RuneDeltaCastSnapshotEST.setRuneDamageBase(
-                        interaction, weaponDamage * (1.0f + 0.10f * bonusTier));
-            } else if (isRazorstrikeRune(coreAbility.getCastRootId())) {
-                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
-                RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage);
-            } else if (isVortexstrikeRune(coreAbility.getCastRootId())) {
-                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
-                RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage * 0.275f);
-            } else if (isPummelRune(coreAbility.getCastRootId())) {
-                float weaponDamage = resolveRuneWeaponBaseDamage(store, playerRef);
-                RuneDeltaCastSnapshotEST.setRuneDamageBase(interaction, weaponDamage);
-            }
+            // Seed every Socket Reforge core ability's shared Damage attribute from the held
+            // weapon at cast time. All native hit interactions that reference Damage then inherit
+            // this base through Hytale's cast snapshot, without maintaining a list of hit assets.
+            RuneDeltaCastSnapshotEST.setRuneDamageBase(
+                    interaction, resolveRuneWeaponBaseDamage(store, playerRef));
             int damageFeeds = LoreSocketManager.getRunestoneDamageFeeds(coreRune);
             int manaFeeds = LoreSocketManager.getRunestoneManaFeeds(coreRune);
             if (damageFeeds > 0 || manaFeeds > 0) {
@@ -203,39 +189,4 @@ public final class LoreSkillUseEST extends EntityEventSystem<EntityStore, Intera
                 || normalized.equals("root_ability_soul_reaper");
     }
 
-    private boolean isPummelRune(String rootId) {
-        return rootId != null
-                && rootId.trim().toLowerCase(java.util.Locale.ROOT)
-                .startsWith("root_ability_pummel_rune");
-    }
-
-    private boolean isBigArrowRune(String rootId) {
-        return rootId != null
-                && rootId.trim().toLowerCase(java.util.Locale.ROOT)
-                .startsWith("root_ability_rune_big_arrow");
-    }
-
-    private boolean isRazorstrikeRune(String rootId) {
-        return rootId != null
-                && rootId.trim().toLowerCase(java.util.Locale.ROOT)
-                .startsWith("root_ability_rune_razorstrike");
-    }
-
-    private boolean isVortexstrikeRune(String rootId) {
-        return rootId != null
-                && rootId.trim().toLowerCase(java.util.Locale.ROOT)
-                .startsWith("root_ability_rune_vortexstrike");
-    }
-
-    private int resolveBigArrowBonusTier(String itemId, int feedTier) {
-        if (itemId != null) {
-            String normalized = itemId.trim().toLowerCase(java.util.Locale.ROOT);
-            for (int tier = 1; tier <= 3; tier++) {
-                if (normalized.endsWith("_" + tier)) {
-                    return tier;
-                }
-            }
-        }
-        return Math.max(1, Math.min(3, 1 + Math.max(0, feedTier) / 2));
-    }
 }

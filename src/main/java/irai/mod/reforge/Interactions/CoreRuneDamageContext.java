@@ -19,7 +19,7 @@ import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
 import irai.mod.reforge.Lore.LoreDamageUtils;
 
-/** Snapshots native core-rune casts so hit interactions can scale their coefficients by weapon base damage. */
+/** Snapshots native core-rune casts for the shared ability-damage pipeline. */
 public final class CoreRuneDamageContext {
     private static final long CONTEXT_TTL_MILLIS = 8_000L;
     private static final ConcurrentHashMap<EntityKey, CastSnapshot> MELEE_CASTS = new ConcurrentHashMap<>();
@@ -36,9 +36,10 @@ public final class CoreRuneDamageContext {
     }
 
     /**
-     * Captures a core-rune cast and records whether its authored Damage attribute already
-     * contains weapon base damage. Those casts still receive equipment/refinement bonuses, but
-     * must not be multiplied by weapon base a second time at hit application.
+     * Captures a core-rune cast. Player rune casts have already had their shared Damage
+     * attribute seeded from weapon base by RuneDeltaCastSnapshotEST, so hit-time processing
+     * must leave that value intact. NPC casts do not pass through that player cast listener and
+     * receive the weapon base in the global damage pipeline instead.
      */
     public static void captureCast(Store<EntityStore> store,
                                    Ref<EntityStore> ownerRef,
@@ -50,9 +51,6 @@ public final class CoreRuneDamageContext {
         }
 
         String normalizedAbility = normalizeAbility(ability);
-        if (!usesRuneWeaponDamage(normalizedAbility)) {
-            return;
-        }
 
         boolean npc = NPCEntity.getComponentType() != null
                 && store.getComponent(ownerRef, NPCEntity.getComponentType()) != null;
@@ -79,27 +77,25 @@ public final class CoreRuneDamageContext {
         EntityKey key = new EntityKey(store, ownerRef.getIndex());
         long ttlMillis = npc ? CONTEXT_TTL_MILLIS
                 : Math.max(1200L, Math.min(10000L, activeWindowMillis));
-        boolean damageAttributeIncludesWeaponBase = !npc
-                && "Rune_GrandSlam_1".equalsIgnoreCase(runeItemId);
-        CastSnapshot snapshot = new CastSnapshot(normalizedAbility, weapon.getItemId(),
+        boolean damageAttributeIncludesWeaponBase = !npc;
+        CastSnapshot snapshot = new CastSnapshot(normalizedAbility,
+                runeItemId == null || runeItemId.isBlank() ? "unknown" : runeItemId,
+                weapon.getItemId(),
                 (float) baseDamage, damageAttributeIncludesWeaponBase,
                 System.currentTimeMillis() + ttlMillis);
-        boolean meleePath = usesMeleeDamagePath(normalizedAbility);
-        boolean projectilePath = usesProjectileDamagePath(normalizedAbility);
         MELEE_CASTS.remove(key);
         PROJECTILE_CASTS.remove(key);
-        if (meleePath) {
-            putSnapshot(MELEE_CASTS, key, snapshot, ttlMillis);
-        }
-        if (projectilePath) {
-            putSnapshot(PROJECTILE_CASTS, key, snapshot, ttlMillis);
-        }
+        // Capture both delivery modes for every CoreAbilityRune cast. Damage interactions and
+        // projectile hits are discovered from the actual Damage event instead of an ability-name
+        // allowlist, so new runes automatically use the same weapon-base handling.
+        putSnapshot(MELEE_CASTS, key, snapshot, ttlMillis);
+        putSnapshot(PROJECTILE_CASTS, key, snapshot, ttlMillis);
 
         if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
             System.out.printf(Locale.ROOT,
-                    "[SocketReforge][CoreRuneDamage] stage=cast-snapshot ability=%s weapon=%s "
+                    "[SocketReforge][CoreRuneDamage] stage=cast-snapshot ability=%s rune=%s weapon=%s "
                             + "weaponBase=%.4f damageAttributeIncludesWeaponBase=%s npc=%s ttlMs=%d%n",
-                    normalizedAbility, snapshot.weaponId, snapshot.weaponBaseDamage,
+                    normalizedAbility, snapshot.runeId, snapshot.weaponId, snapshot.weaponBaseDamage,
                     snapshot.damageAttributeIncludesWeaponBase, npc, ttlMillis);
         }
     }
@@ -136,11 +132,6 @@ public final class CoreRuneDamageContext {
         }
 
         boolean projectileHit = damage.getSource() instanceof Damage.ProjectileSource;
-        // Player projectile hits already carry their native projectile damage. Keep that path
-        // untouched; this snapshot is for direct native rune interactions such as Whirlwind.
-        if (projectileHit && !npc) {
-            return false;
-        }
         CastSnapshot snapshot = getActiveSnapshot(
                 projectileHit ? PROJECTILE_CASTS : MELEE_CASTS, store, ownerRef);
         if (snapshot == null) {
@@ -149,10 +140,17 @@ public final class CoreRuneDamageContext {
         if (snapshot.damageAttributeIncludesWeaponBase) {
             if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
                 System.out.printf(Locale.ROOT,
-                        "[SocketReforge][CoreRuneDamage] stage=weapon-base-skipped ability=%s "
-                                + "weapon=%s reason=damage-attribute-already-includes-weapon-base%n",
-                        snapshot.ability, snapshot.weaponId);
+                        "[SocketReforge][CoreRuneDamage] stage=weapon-base-skipped ability=%s rune=%s "
+                                + "weapon=%s reason=cast-damage-attribute-already-includes-weapon-base%n",
+                        snapshot.ability, snapshot.runeId, snapshot.weaponId);
             }
+            // Signal EquipmentRefineEST that the hit is a core-rune hit with an already seeded
+            // base. It must still receive refinement/socket bonuses, including projectile hits.
+            return true;
+        }
+        // Ordinary player projectiles already use Hytale's weapon damage path and have no
+        // cast-time core-rune base marker, so leave them to the native pipeline.
+        if (projectileHit && !npc) {
             return false;
         }
 
@@ -167,32 +165,12 @@ public final class CoreRuneDamageContext {
         damage.setAmount(calculatedDamage);
         if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
             System.out.printf(Locale.ROOT,
-                    "[SocketReforge][CoreRuneDamage] stage=weapon-base-applied ability=%s weapon=%s "
+                    "[SocketReforge][CoreRuneDamage] stage=weapon-base-applied ability=%s rune=%s weapon=%s "
                             + "interactionRaw=%.4f weaponBase=%.4f applied=%.4f projectile=%s npc=%s%n",
-                    snapshot.ability, snapshot.weaponId, interactionCoefficient,
+                    snapshot.ability, snapshot.runeId, snapshot.weaponId, interactionCoefficient,
                     snapshot.weaponBaseDamage, calculatedDamage, projectileHit, npc);
         }
         return true;
-    }
-
-    private static boolean usesRuneWeaponDamage(String ability) {
-        return ability.equals("pummel") || ability.startsWith("big_arrow_")
-                || ability.startsWith("volley") || ability.equals("bloodrush")
-                || ability.equals("grand_slam") || ability.equals("grandslam")
-                || ability.equals("octaslash") || ability.equals("omnislash")
-                || ability.equals("razorstrike") || ability.startsWith("vortexstrike")
-                || ability.equals("whirlwind") || ability.equals("soul_reaper");
-    }
-
-    private static boolean usesMeleeDamagePath(String ability) {
-        return !ability.startsWith("big_arrow_") && !ability.startsWith("volley")
-                && !ability.equals("soul_reaper");
-    }
-
-    private static boolean usesProjectileDamagePath(String ability) {
-        return ability.startsWith("big_arrow_") || ability.startsWith("volley")
-                || ability.equals("soul_reaper") || ability.equals("octaslash")
-                || ability.equals("omnislash") || ability.equals("razorstrike");
     }
 
     private static void putSnapshot(ConcurrentHashMap<EntityKey, CastSnapshot> snapshots,
@@ -245,6 +223,7 @@ public final class CoreRuneDamageContext {
     }
 
     private record CastSnapshot(String ability,
+                                String runeId,
                                 String weaponId,
                                 float weaponBaseDamage,
                                 boolean damageAttributeIncludesWeaponBase,
