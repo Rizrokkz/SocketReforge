@@ -20,7 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Grand Slam rune** - Added a lower-tier, no-jump ground smash; the higher-tier rune keeps its leap-and-slam attack.
     - **Razorstrike core rune** - Added a targetless forward dash that damages enemies along its path and leaves six delayed rubble spikes that explode in sequence, with a dedicated dash animation and screen effect.
     - **VortexStrike** - Vacuum enemies and spin kick to push them away. Distant pulled enemies receive more damage. 
+- **Socketed status mutations** - Added Essence Bench mutations that add +1 or +2 base damage to Bleed or Poison applied by a weapon. Plant Crop Health items mutate Bleed; Venom Sac and Poison Fruit mutate Poison. Mutation data is saved per socket and shown in tooltips.
 ### Changed
+- **Native damage feedback** - Native Hytale combat text is now the default. Physical and weapon-affinity damage are combined into one rendered hit after damage resistance, while elemental damage absorbed by an enemy shield still gets native visual feedback without being applied to health twice.
+- **Status damage and essence bonuses** - Bleed, Poison, and Burn ticks use separate damage events and native combat text instead of inheriting weapon-hit bonuses. Matching weapon essences can increase their related status damage; Ice affinity builds toward Freeze before the target is frozen.
+- **Damage calculation separation** - Core rune damage and status damage are handled separately from ordinary weapon-hit bonuses to avoid applying refinement, socket, or lore bonuses to the wrong damage source.
 - **Legacy lore migration** - Convert existing spirit sockets into matching infused Soulstones when a player joins or socketed equipment enters their inventory, keeping the socket's spirit and progression metadata for the Soulstone-based lore system.
 - **Legacy absorbed lore cleanup** - Clear deprecated player-level absorbed lore data on join and suppress procs from that obsolete source.
 - **Lore proc handling** - Preserved passive lore procs while allowing the new ability runes to be equipped and activated separately. Rune Delta continues to activate socketed runes through its existing system.
