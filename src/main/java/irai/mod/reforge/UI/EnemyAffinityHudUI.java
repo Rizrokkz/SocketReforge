@@ -56,13 +56,55 @@ public final class EnemyAffinityHudUI {
         System.out.println("[SocketReforge] EnemyAffinityHudUI: enabled.");
     }
 
+    public static void setLastDamageVisible(boolean visible) {
+        for (Map.Entry<PlayerRef, Session> entry : sessions.entrySet()) {
+            PlayerRef playerRef = entry.getKey();
+            Session session = entry.getValue();
+            if (playerRef == null || session == null || session.player == null || session.hud == null) {
+                continue;
+            }
+            try {
+                session.player.getWorld().execute(() -> {
+                    UUID playerUuid = playerRef.getUuid();
+                    if (playerUuid == null) {
+                        return;
+                    }
+                    Object lock = getHudLock(playerUuid);
+                    synchronized (lock) {
+                        Session current = sessions.get(playerRef);
+                        if (current != session || current.hud == null
+                                || activeHuds.get(playerUuid) != current.hud) {
+                            return;
+                        }
+                        current.showLastDamage = visible;
+                        HudPayload previous = current.hud.payload;
+                        if (previous != null) {
+                            current.hud.updatePayload(new HudPayload(
+                                    previous.enemyName(),
+                                    previous.hpValue(),
+                                    previous.hpText(),
+                                    previous.lastDamageText(),
+                                    previous.lastDamageColor(),
+                                    previous.multipliers(),
+                                    previous.elementalShield(),
+                                    visible));
+                        }
+                    }
+                });
+            } catch (Throwable ignored) {
+                // The active HUD will pick up the current setting on the next damage event.
+            }
+        }
+    }
+
     public static void showDamage(Store<EntityStore> store,
                                   Ref<EntityStore> attackerRef,
                                   Ref<EntityStore> targetRef,
                                   float damageAmount,
                                   String damageKindId,
                                   float shieldDamageAmount,
-                                  boolean shieldActiveHit) {
+                                  boolean shieldActiveHit,
+                                  boolean showLastDamage) {
         if (!ENABLED) {
             return;
         }
@@ -99,10 +141,13 @@ public final class EnemyAffinityHudUI {
             session.store = store;
             session.targetRef = targetRef;
             session.damageKindId = damageKindId;
+            session.showLastDamage = showLastDamage;
             session.expiresAtNanos = System.nanoTime() + DISPLAY_DURATION_NANOS;
 
             try {
-                HudPayload payload = buildPayload(store, targetRef, damageAmount, damageKindId, shieldDamageAmount, shieldActiveHit, false);
+                HudPayload payload = buildPayload(
+                        store, targetRef, damageAmount, damageKindId, shieldDamageAmount,
+                        shieldActiveHit, showLastDamage, false);
                 if (payload == null) {
                     return;
                 }
@@ -177,6 +222,7 @@ public final class EnemyAffinityHudUI {
                                            String damageKindId,
                                            float shieldDamageAmount,
                                            boolean shieldActiveHit,
+                                           boolean showLastDamage,
                                            boolean predictDamage) {
         if (store == null || targetRef == null) {
             return null;
@@ -202,10 +248,11 @@ public final class EnemyAffinityHudUI {
                     enemyName,
                     hpValue,
                     hpText,
-                    lastDamageText(damageAmount, shieldDamageAmount, shieldActiveHit),
+                    showLastDamage ? lastDamageText(damageAmount, shieldDamageAmount, shieldActiveHit) : "",
                     shieldDamageAmount > 0f || shieldActiveHit ? "#70e4ff" : damageColor(damageKindId),
                     multipliers,
-                    elementalShield);
+                    elementalShield,
+                    showLastDamage);
         } catch (IllegalStateException ignored) {
             return null;
         }
@@ -284,6 +331,7 @@ public final class EnemyAffinityHudUI {
                                 current.damageKindId,
                                 0f,
                                 false,
+                                current.showLastDamage,
                                 false);
                         if (refreshed == null) {
                             removeSession(playerRef, current);
@@ -299,7 +347,8 @@ public final class EnemyAffinityHudUI {
                                         previous.lastDamageText(),
                                         previous.lastDamageColor(),
                                         refreshed.multipliers(),
-                                        refreshed.elementalShield());
+                                        refreshed.elementalShield(),
+                                        previous.showLastDamage());
                         current.hud.updatePayload(payload);
                     } catch (IllegalStateException ignored) {
                         removeSession(playerRef, current);
@@ -448,7 +497,8 @@ public final class EnemyAffinityHudUI {
                               String lastDamageText,
                               String lastDamageColor,
                               Map<Essence.Type, Double> multipliers,
-                              double elementalShield) {
+                              double elementalShield,
+                              boolean showLastDamage) {
     }
 
     private static final class Session {
@@ -457,6 +507,7 @@ public final class EnemyAffinityHudUI {
         private Store<EntityStore> store;
         private Ref<EntityStore> targetRef;
         private String damageKindId;
+        private boolean showLastDamage;
         private long expiresAtNanos;
     }
 
@@ -475,10 +526,13 @@ public final class EnemyAffinityHudUI {
         private void updatePayload(HudPayload payload) {
             Object lock = getHudLock(playerUuid);
             synchronized (lock) {
-                if (activeHuds.get(playerUuid) != this || !built.get()) {
+                if (activeHuds.get(playerUuid) != this) {
                     return;
                 }
                 this.payload = payload;
+                if (!built.get()) {
+                    return;
+                }
                 UICommandBuilder cmd = new UICommandBuilder();
                 if (applyPayload(cmd)) {
                     update(false, cmd);
@@ -500,12 +554,14 @@ public final class EnemyAffinityHudUI {
 
         private boolean applyPayload(UICommandBuilder cmd) {
             HudPayload safePayload = payload == null
-                    ? new HudPayload("Enemy", 0.0d, "HP -", "", "#ffffff", Map.of(), 0.0d)
+                    ? new HudPayload("Enemy", 0.0d, "HP -", "", "#ffffff", Map.of(), 0.0d, false)
                     : payload;
             boolean changed = false;
             changed |= setText(cmd, "#EnemyName.Text", safePayload.enemyName());
             changed |= setText(cmd, "#EnemyHpText.Text", safePayload.hpText());
-            changed |= setText(cmd, "#LastDamage.Text", safePayload.lastDamageText());
+            changed |= setVisible(cmd, "#LastDamage.Visible", safePayload.showLastDamage());
+            changed |= setText(cmd, "#LastDamage.Text",
+                    safePayload.showLastDamage() ? safePayload.lastDamageText() : "");
             changed |= setText(cmd, "#LastDamage.Style.TextColor", safePayload.lastDamageColor());
             changed |= setDouble(cmd, "#EnemyHpBar.Value", safePayload.hpValue());
             changed |= setDouble(cmd, "#EnemyShieldBar.Value", Math.max(0.0d, Math.min(1.0d, safePayload.elementalShield())));
@@ -551,6 +607,16 @@ public final class EnemyAffinityHudUI {
             }
             lastUiState.put(selector, safeValue);
             cmd.set(selector, safeValue);
+            return true;
+        }
+
+        private boolean setVisible(UICommandBuilder cmd, String selector, boolean visible) {
+            Object previous = lastUiState.get(selector);
+            if (previous instanceof Boolean previousValue && previousValue == visible) {
+                return false;
+            }
+            lastUiState.put(selector, visible);
+            cmd.set(selector, visible);
             return true;
         }
 

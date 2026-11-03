@@ -32,6 +32,19 @@ public final class CoreRuneDamageContext {
                                    Ref<EntityStore> ownerRef,
                                    String ability,
                                    long activeWindowMillis) {
+        captureCast(store, ownerRef, ability, activeWindowMillis, null);
+    }
+
+    /**
+     * Captures a core-rune cast and records whether its authored Damage attribute already
+     * contains weapon base damage. Those casts still receive equipment/refinement bonuses, but
+     * must not be multiplied by weapon base a second time at hit application.
+     */
+    public static void captureCast(Store<EntityStore> store,
+                                   Ref<EntityStore> ownerRef,
+                                   String ability,
+                                   long activeWindowMillis,
+                                   String runeItemId) {
         if (store == null || ownerRef == null || !ownerRef.isValid()) {
             return;
         }
@@ -66,8 +79,11 @@ public final class CoreRuneDamageContext {
         EntityKey key = new EntityKey(store, ownerRef.getIndex());
         long ttlMillis = npc ? CONTEXT_TTL_MILLIS
                 : Math.max(1200L, Math.min(10000L, activeWindowMillis));
+        boolean damageAttributeIncludesWeaponBase = !npc
+                && "Rune_GrandSlam_1".equalsIgnoreCase(runeItemId);
         CastSnapshot snapshot = new CastSnapshot(normalizedAbility, weapon.getItemId(),
-                (float) baseDamage, System.currentTimeMillis() + ttlMillis);
+                (float) baseDamage, damageAttributeIncludesWeaponBase,
+                System.currentTimeMillis() + ttlMillis);
         boolean meleePath = usesMeleeDamagePath(normalizedAbility);
         boolean projectilePath = usesProjectileDamagePath(normalizedAbility);
         MELEE_CASTS.remove(key);
@@ -82,8 +98,9 @@ public final class CoreRuneDamageContext {
         if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
             System.out.printf(Locale.ROOT,
                     "[SocketReforge][CoreRuneDamage] stage=cast-snapshot ability=%s weapon=%s "
-                            + "weaponBase=%.4f npc=%s ttlMs=%d%n",
-                    normalizedAbility, snapshot.weaponId, snapshot.weaponBaseDamage, npc, ttlMillis);
+                            + "weaponBase=%.4f damageAttributeIncludesWeaponBase=%s npc=%s ttlMs=%d%n",
+                    normalizedAbility, snapshot.weaponId, snapshot.weaponBaseDamage,
+                    snapshot.damageAttributeIncludesWeaponBase, npc, ttlMillis);
         }
     }
 
@@ -127,6 +144,15 @@ public final class CoreRuneDamageContext {
         CastSnapshot snapshot = getActiveSnapshot(
                 projectileHit ? PROJECTILE_CASTS : MELEE_CASTS, store, ownerRef);
         if (snapshot == null) {
+            return false;
+        }
+        if (snapshot.damageAttributeIncludesWeaponBase) {
+            if (DamageStackDelayEST.isDamageCalculationDebugEnabled()) {
+                System.out.printf(Locale.ROOT,
+                        "[SocketReforge][CoreRuneDamage] stage=weapon-base-skipped ability=%s "
+                                + "weapon=%s reason=damage-attribute-already-includes-weapon-base%n",
+                        snapshot.ability, snapshot.weaponId);
+            }
             return false;
         }
 
@@ -218,5 +244,9 @@ public final class CoreRuneDamageContext {
         }
     }
 
-    private record CastSnapshot(String ability, String weaponId, float weaponBaseDamage, long expiresAtMillis) {}
+    private record CastSnapshot(String ability,
+                                String weaponId,
+                                float weaponBaseDamage,
+                                boolean damageAttributeIncludesWeaponBase,
+                                long expiresAtMillis) {}
 }

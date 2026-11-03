@@ -458,11 +458,9 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(enemyElementalShieldEST);
         this.getEntityStoreRegistry().registerSystem(damageStackDelayEST);
         this.getEntityStoreRegistry().registerSystem(damageCalculationAuditEST);
-        if (customCombatTextEnabled) {
-            registerDamageNumberSystem();
-        } else {
-            damageNumberSystemRegistered = false;
-        }
+        // DamageNumberEST also refreshes the enemy affinity/health HUD. Keep the listener
+        // registered when custom combat text is off; it gates only the damage groups.
+        registerDamageNumberSystem();
         this.getEntityStoreRegistry().registerSystem(loreKillEST);
         this.getEntityStoreRegistry().registerSystem(lorePlayerStateEST);
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
@@ -504,12 +502,9 @@ public class ReforgePlugin extends JavaPlugin {
         boolean useCustom = cfg == null || cfg.isUseCustomCombatText();
         customCombatTextEnabled = useCustom;
         DamageNumberEST.setCustomCombatTextEnabled(useCustom);
+        EnemyAffinityHudUI.setLastDamageVisible(DamageNumberEST.isAffinityDamageGroupEnabled());
         if (systemsRegistered) {
-            if (useCustom) {
-                registerDamageNumberSystem();
-            } else {
-                unregisterDamageNumberSystem();
-            }
+            registerDamageNumberSystem();
         }
         if (useCustom) {
             disableBuiltinCombatText();

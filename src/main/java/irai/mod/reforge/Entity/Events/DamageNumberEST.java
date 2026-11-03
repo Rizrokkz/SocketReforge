@@ -141,6 +141,10 @@ public class DamageNumberEST extends DamageEventSystem {
         return customCombatTextEnabled;
     }
 
+    public static boolean isAffinityDamageGroupEnabled() {
+        return customCombatTextEnabled && renderMode != RenderMode.OFF;
+    }
+
     public static void applyConfig(DamageNumberConfig config) {
         if (config == null) {
             cullingEnabled = true;
@@ -204,10 +208,29 @@ public class DamageNumberEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
+        Damage.Source source = damage.getSource();
+        Ref<EntityStore> attackerRef = source instanceof Damage.EntitySource entitySource
+                ? entitySource.getRef() : null;
+        double shieldDamage = safeDouble(
+                damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ABSORBED_DAMAGE));
+        boolean shieldActiveHit = Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ACTIVE_HIT));
+        String kindId = resolveKind(damage);
+        boolean skipCombatText = DamageNumberMeta.shouldSkipCombatText(damage);
+        boolean showAffinityDamageGroup = isAffinityDamageGroupEnabled() && !skipCombatText;
+        EnemyAffinityHudUI.showDamage(
+                store,
+                attackerRef,
+                targetRef,
+                damage.getAmount(),
+                kindId,
+                (float) shieldDamage,
+                shieldActiveHit,
+                showAffinityDamageGroup);
         if (!customCombatTextEnabled) {
             return;
         }
-        Ref<EntityStore> targetRef = chunk.getReferenceTo(index);
         if (DEBUG_COMBAT_TEXT) {
             String causeId = "null";
             try {
@@ -229,22 +252,13 @@ public class DamageNumberEST extends DamageEventSystem {
             ROOT_LOGGER.at(DEBUG_LOG_LEVEL).log("%s", message);
         }
         ensureComponentTypes();
-        if (DamageNumberMeta.shouldSkipCombatText(damage)) {
+        if (skipCombatText) {
             debug("[DamageNumberEST] skip via meta");
             return;
         }
-        double shieldDamage = safeDouble(damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ABSORBED_DAMAGE));
-        boolean shieldActiveHit = Boolean.TRUE.equals(
-                damage.getIfPresentMetaObject(EnemyElementalShieldUtils.META_SHIELD_ACTIVE_HIT));
         if (damage.getAmount() <= 0f && shieldDamage <= 0.0001d && !shieldActiveHit) {
             debug("[DamageNumberEST] skip amount <= 0");
             return;
-        }
-
-        Damage.Source source = damage.getSource();
-        Ref<EntityStore> attackerRef = null;
-        if (source instanceof Damage.EntitySource entitySource) {
-            attackerRef = entitySource.getRef();
         }
 
         Float hitAngle = (Float) damage.getIfPresentMetaObject(Damage.HIT_ANGLE);
@@ -257,8 +271,6 @@ public class DamageNumberEST extends DamageEventSystem {
         } else {
             debug("[DamageNumberEST] visibleComponentType is null");
         }
-        String kindId = resolveKind(damage);
-        EnemyAffinityHudUI.showDamage(store, attackerRef, targetRef, damage.getAmount(), kindId, (float) shieldDamage, shieldActiveHit);
         float displayAmount = resolveDisplayAmount(damage.getAmount(), shieldDamage, shieldActiveHit);
         if (displayAmount <= 0f) {
             debug("[DamageNumberEST] skip combat text for guarded zero display");

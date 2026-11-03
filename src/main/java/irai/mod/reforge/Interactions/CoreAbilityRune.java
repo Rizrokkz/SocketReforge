@@ -75,7 +75,8 @@ public final class CoreAbilityRune extends SimpleInteraction {
                     rune == null || rune.isEmpty() ? null : rune.getItemId(),
                     coreRuneTraceWindowMillis(rune));
             CoreRuneDamageContext.captureCast(store, ownerRef, ability,
-                    coreRuneTraceWindowMillis(rune));
+                    coreRuneTraceWindowMillis(rune),
+                    rune == null || rune.isEmpty() ? null : rune.getItemId());
             if (!isInteractionAuthoredAbility(ability)) {
                 CoreRuneHandler.activateNpcCoreAbility(store, ownerRef, ability);
             }
@@ -89,7 +90,8 @@ public final class CoreAbilityRune extends SimpleInteraction {
                 rune == null || rune.isEmpty() ? null : rune.getItemId(),
                 coreRuneTraceWindowMillis(rune));
         CoreRuneDamageContext.captureCast(store, ownerRef, ability,
-                coreRuneTraceWindowMillis(rune));
+                coreRuneTraceWindowMillis(rune),
+                rune == null || rune.isEmpty() ? null : rune.getItemId());
         if (ability != null && ability.trim().toLowerCase(Locale.ROOT).startsWith("pummel")) {
             LoreProcHandler.markPummelNativeCast(ownerRef);
         }
