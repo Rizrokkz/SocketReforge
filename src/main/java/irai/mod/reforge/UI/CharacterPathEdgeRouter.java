@@ -24,7 +24,9 @@ final class CharacterPathEdgeRouter {
     private record SearchEntry(int cell, int score) {}
 
     private static final int GRID = 12;
-    private static final int CLEARANCE = 9;
+    // Keep link margins near the rendered line width so compact grid layouts fit.
+    private static final int CLEARANCE = 6;
+    private static final double ROUTING_GRID_MARGIN = 0.25;
     private final Map<String, Node> nodes;
     private final int minX;
     private final int minY;
@@ -173,7 +175,7 @@ final class CharacterPathEdgeRouter {
         boolean[] blocked = Arrays.copyOf(occupied, occupied.length);
         for (Node node : nodes.values()) {
             if (node.id().equals(source.id()) || node.id().equals(target.id())) continue;
-            blockCircle(blocked, node.x(), node.y(), node.radius() + CLEARANCE + GRID * 0.65);
+            blockCircle(blocked, node.x(), node.y(), node.radius() + CLEARANCE + GRID * ROUTING_GRID_MARGIN);
         }
         return blocked;
     }
@@ -243,12 +245,8 @@ final class CharacterPathEdgeRouter {
                 if (insideNode(x, y, source) || insideNode(x, y, target)) continue;
                 int gx = gridX(x);
                 int gy = gridY(y);
-                for (int oy = -1; oy <= 1; oy++) {
-                    for (int ox = -1; ox <= 1; ox++) {
-                        int nx = gx + ox;
-                        int ny = gy + oy;
-                        if (nx >= 0 && ny >= 0 && nx < columns && ny < rows) occupied[ny * columns + nx] = true;
-                    }
+                if (gx >= 0 && gy >= 0 && gx < columns && gy < rows) {
+                    occupied[gy * columns + gx] = true;
                 }
             }
         }

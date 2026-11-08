@@ -19,14 +19,19 @@ final class CharacterPathEdgeVisuals {
         // UI texture paths resolve from Common/UI/Custom, not relative to the .ui file.
         if (("DiagonalDown".equals(orientation) || "DiagonalUp".equals(orientation))
                 && !"Ranked".equals(style)) {
-            String width = thinWidth(Math.max(Math.abs(dx), Math.abs(dy)));
+            String width = thinWidth(Math.abs(dx), Math.abs(dy));
             return "Pages/SkillTreeEdge_" + style + "_" + orientation + "_Thin" + width + ".png";
         }
         return "Pages/SkillTreeEdge_" + style + "_" + orientation + ".png";
     }
 
-    private static String thinWidth(double segmentSide) {
-        double targetTextureWidth = 2.5 * 256.0 / Math.max(1.0, segmentSide);
+    private static String thinWidth(double segmentWidth, double segmentHeight) {
+        // The diagonal source is square, but the UI stretches it to the segment bounds.
+        // Compensate for that non-uniform scaling so shallow slopes keep a solid stroke.
+        double width = Math.max(1.0, segmentWidth);
+        double height = Math.max(1.0, segmentHeight);
+        double targetTextureWidth = 4.0 * 256.0 * Math.hypot(width, height)
+                / (Math.sqrt(2.0) * width * height);
         double[] widths = {0.25, 0.5, 1, 2, 4, 8, 16, 32, 64};
         String[] labels = {"025", "05", "1", "2", "4", "8", "16", "32", "64"};
         int closest = 0;

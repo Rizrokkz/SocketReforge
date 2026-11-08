@@ -104,13 +104,16 @@ public final class EnemyElementalShieldUtils {
         double absorbed = 0.0d;
 
         double totalElementalDamage = totalElementalDamage(damage);
+        boolean nativeElementalStatus = LoreDamageUtils.isStatusDamage(damage)
+                && DamageCauseElementUtils.isFireDamageCause(damage.getCause());
         boolean elementalComponent = Boolean.TRUE.equals(
                 damage.getIfPresentMetaObject(EquipmentRefineEST.META_SOCKET_ELEMENTAL_COMPONENT));
         double processed = safeDouble(damage.getIfPresentMetaObject(META_SHIELD_PROCESSED_ELEMENTAL_DAMAGE));
         double newElementalDamage = Math.max(0.0d, totalElementalDamage - processed);
         boolean hasNewElementalDamage = newElementalDamage > 0.0001d;
         boolean hasShieldSunder = hasShieldSunder(store, damage);
-        double elementalShieldDamage = elementalComponent && shieldActiveBeforeHit && hasNewElementalDamage
+        double elementalShieldDamage = (elementalComponent || nativeElementalStatus)
+                && shieldActiveBeforeHit && hasNewElementalDamage
                 ? Math.min(shieldBeforeHit,
                         newElementalDamage * (hasShieldSunder ? SHIELD_SUNDER_DAMAGE_MULTIPLIER : 1.0d))
                 : 0.0d;
@@ -329,6 +332,10 @@ public final class EnemyElementalShieldUtils {
             if (value != null && value > 0.0d) {
                 total += value;
             }
+        }
+        if (LoreDamageUtils.isStatusDamage(damage)
+                && DamageCauseElementUtils.isFireDamageCause(damage.getCause())) {
+            total = Math.max(total, damage.getAmount());
         }
         return total;
     }

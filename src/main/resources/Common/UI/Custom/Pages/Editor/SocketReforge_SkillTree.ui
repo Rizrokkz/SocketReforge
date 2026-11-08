@@ -350,14 +350,10 @@ Group #SkillTreeRoot {
         }
 
         Label #EditorSelectedBonus {
+          Anchor: (Height: 32);
           Style: (FontSize: 11, TextColor: #c0cbd6, Wrap: true);
           Text: "";
           Padding: (Top: 5, Bottom: 3);
-        }
-        Label #EditorBonusList {
-          Style: (FontSize: 10, TextColor: #d6dee8, Wrap: true);
-          Text: "";
-          Padding: (Bottom: 4);
         }
 
         Group {

@@ -43,6 +43,7 @@ import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.ElementalAffinityUtils;
+import irai.mod.reforge.Common.DamageCauseElementUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Interactions.ReforgeEquip;
@@ -161,6 +162,7 @@ public class SocketEffectEST extends DamageEventSystem {
                 return;
             }
             if (LoreDamageUtils.isStatusDamage(damage)) {
+                applyNativeElementalStatusResistance(store, chunk.getReferenceTo(index), damage);
                 return;
             }
             boolean elementalComponent = Boolean.TRUE.equals(
@@ -1175,6 +1177,38 @@ public class SocketEffectEST extends DamageEventSystem {
             totalReduction += elementDamage * genericScale * (resistancePercent / 100.0d);
         }
         return Math.max(0.0d, totalReduction);
+    }
+
+    /** Applies the appropriate elemental defense to native typed status ticks such as burning. */
+    private void applyNativeElementalStatusResistance(Store<EntityStore> store,
+                                                      Ref<EntityStore> targetRef,
+                                                      Damage damage) {
+        if (store == null || targetRef == null || damage == null || damage.getAmount() <= 0.0f) {
+            return;
+        }
+        if (!DamageCauseElementUtils.isFireDamageCause(damage.getCause())) {
+            return;
+        }
+
+        Player defender = store.getComponent(targetRef, Player.getComponentType());
+        if (defender != null) {
+            List<ItemStack> armorPieces = getAllEquippedArmor(defender);
+            double resistancePercent = ArmorAffinityResistanceUtils.calculateResistancePercent(
+                    defender, armorPieces, Essence.Type.FIRE);
+            if (resistancePercent > 0.0d) {
+                damage.setAmount((float) (damage.getAmount() * (1.0d - resistancePercent / 100.0d)));
+            }
+            return;
+        }
+
+        if (NPCEntity.getComponentType() != null
+                && store.getComponent(targetRef, NPCEntity.getComponentType()) != null) {
+            double affinityMultiplier = ElementalAffinityUtils.effectivenessMultiplier(
+                    Essence.Type.FIRE, store, targetRef);
+            if (Math.abs(affinityMultiplier - 1.0d) > 0.0001d) {
+                damage.setAmount((float) (damage.getAmount() * affinityMultiplier));
+            }
+        }
     }
 
     /**

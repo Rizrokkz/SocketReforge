@@ -58,7 +58,7 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
     private final Map<String, Integer> renderedNodeChildIndices = new HashMap<>();
     private final Map<Integer, GraphEdge> renderedEdgeConnections = new HashMap<>();
     private final Map<Integer, String> renderedEdgeOrientations = new HashMap<>();
-    private final Map<Integer, Double> renderedEdgeSizes = new HashMap<>();
+    private final Map<Integer, EdgeDimensions> renderedEdgeSizes = new HashMap<>();
     private String selectedNodeId;
     private String pathChoicePopupNodeId;
     private String nodeSearchQuery = "";
@@ -69,6 +69,8 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
     private boolean bonusTotalsVisible;
     private CharacterPathTreeViewport.View treeViewport;
     private volatile boolean dismissed;
+
+    private record EdgeDimensions(double width, double height) {}
 
     public CharacterPathPage(PlayerRef owner, String selectedNodeId, int zoomPercent) {
         super(owner, CustomPageLifetime.CanDismiss, PageEvent.CODEC);
@@ -386,9 +388,10 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
             String color = edgeColor(player, findNode(edge.first()), findNode(edge.second()), availablePathEdges);
             String visibleStyle = edgeStyle(color);
             String orientation = renderedEdgeOrientations.getOrDefault(index, "Horizontal");
-            double segmentSize = renderedEdgeSizes.getOrDefault(index, 0.0);
+            EdgeDimensions dimensions = renderedEdgeSizes.getOrDefault(index, new EdgeDimensions(1.0, 1.0));
             commands.setObject(child(index, ".Background"), textureBackground(
-                    CharacterPathEdgeVisuals.texture(visibleStyle, orientation, segmentSize, segmentSize)));
+                    CharacterPathEdgeVisuals.texture(visibleStyle, orientation,
+                            dimensions.width(), dimensions.height())));
         }
 
         Map<String, EditorNode> placements = editorNodes(draft);
@@ -505,26 +508,26 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
         double dx = screenX2 - screenX1;
         double dy = screenY2 - screenY1;
         String orientation = CharacterPathEdgeVisuals.orientation(dx, dy);
-        int thickness = Math.max(2, scaled("#4d9ed8".equals(color) ? 7 : 5));
+        int thickness = Math.max(3, scaled("#4d9ed8".equals(color) ? 8 : 6));
         int left;
         int top;
         int width;
         int height;
         if ("Horizontal".equals(orientation)) {
-            width = Math.max(1, (int) Math.round(Math.abs(dx)));
+            width = Math.max(1, (int) Math.round(Math.abs(dx))) + 2;
             height = thickness;
-            left = Math.min(screenX1, screenX2);
+            left = Math.min(screenX1, screenX2) - 1;
             top = (int) Math.round((screenY1 + screenY2) / 2.0 - height / 2.0);
         } else if ("Vertical".equals(orientation)) {
             width = thickness;
-            height = Math.max(1, (int) Math.round(Math.abs(dy)));
+            height = Math.max(1, (int) Math.round(Math.abs(dy))) + 2;
             left = (int) Math.round((screenX1 + screenX2) / 2.0 - width / 2.0);
-            top = Math.min(screenY1, screenY2);
+            top = Math.min(screenY1, screenY2) - 1;
         } else {
-            width = Math.max(1, (int) Math.round(Math.abs(dx)));
-            height = Math.max(1, (int) Math.round(Math.abs(dy)));
-            left = Math.min(screenX1, screenX2);
-            top = Math.min(screenY1, screenY2);
+            width = Math.max(1, (int) Math.round(Math.abs(dx))) + 2;
+            height = Math.max(1, (int) Math.round(Math.abs(dy))) + 2;
+            left = Math.min(screenX1, screenX2) - 1;
+            top = Math.min(screenY1, screenY2) - 1;
         }
         appendEdge(commands, index, left, top, width, height, color, edge, orientation);
         return index + 1;
@@ -535,7 +538,7 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
         commands.append("#TreeCanvas", EDGE_UI);
         renderedEdgeConnections.put(index, edge);
         renderedEdgeOrientations.put(index, orientation);
-        renderedEdgeSizes.put(index, (double) Math.max(width, height));
+        renderedEdgeSizes.put(index, new EdgeDimensions(width, height));
         commands.setObject(child(index, ".Anchor"), anchor(x, y, width, height));
         commands.setObject(child(index, ".Background"), textureBackground(
                 CharacterPathEdgeVisuals.texture(edgeStyle(color), orientation,

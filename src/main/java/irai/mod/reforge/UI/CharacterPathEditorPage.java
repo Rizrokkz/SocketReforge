@@ -26,6 +26,8 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
 import com.hypixel.hytale.server.core.ui.Anchor;
+import com.hypixel.hytale.server.core.ui.DropdownEntryInfo;
+import com.hypixel.hytale.server.core.ui.LocalizableString;
 import com.hypixel.hytale.server.core.ui.PatchStyle;
 import com.hypixel.hytale.server.core.ui.Value;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
@@ -58,16 +60,19 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private static final String CLEARANCE_UI = "Pages/Editor/SocketReforge_SkillTree_Clearance.ui";
     private static final String SELECTION_UI = "Pages/Editor/SocketReforge_SkillTree_Selection.ui";
     private static final String MOVE_TARGET_UI = "Pages/Editor/SocketReforge_SkillTree_MoveTarget.ui";
+    private static final String MOVE_TARGETS_LAYER_UI = "Pages/Editor/SocketReforge_SkillTree_MoveTargets.ui";
     private static final int TREE_VIEWPORT_WIDTH = 1480;
     private static final int TREE_VIEWPORT_HEIGHT = 900;
     private static final int NODE_CLEARANCE = 8;
     private static final int GRID_SPACING = 120;
     private static final int MIN_ZOOM = 10;
     private static final int MAX_ZOOM = 400;
+    private static final int COORDINATE_LINK_DETACH_LIMIT = 5;
     private static final Map<UUID, CharacterPathEditorPage> ACTIVE_PAGES = new ConcurrentHashMap<>();
 
     private final PlayerRef owner;
     private final Map<String, Integer> renderedNodeChildIndices = new HashMap<>();
+    private final List<Integer> renderedEdgeChildIndices = new ArrayList<>();
     private final Set<String> selectedNodeIds = new LinkedHashSet<>();
     private String selectedNodeId;
     private String hoveredNodeId;
@@ -84,6 +89,9 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private boolean gridPlacementArmed;
     private boolean gridVisible;
     private boolean coordinateGridPreview;
+    private String coordinateBlockedNodeId;
+    private int coordinateLinkBlockCount;
+    private boolean lastMoveBlockedByDetachableLinks;
     private boolean canvasSizePopupVisible;
     private boolean centerOnNextPopulate;
     private CharacterPathTreeViewport.View treeViewport;
@@ -91,6 +99,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private double dragRemainderY;
     private int renderedClearanceChildIndex = -1;
     private int renderedPrimarySelectionHaloChildIndex = -1;
+    private boolean renderedMoveTargetsLayer;
     private int zoomPercent = 80;
     private int renderedZoomPercent = 80;
     private long lastZoomRenderAtMillis;
@@ -146,8 +155,10 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         canvasWidth = document.canvasWidth;
         canvasHeight = document.canvasHeight;
         renderedNodeChildIndices.clear();
+        renderedEdgeChildIndices.clear();
         renderedClearanceChildIndex = -1;
         renderedPrimarySelectionHaloChildIndex = -1;
+        renderedMoveTargetsLayer = false;
         if (clearCanvas) commands.clear("#TreeCanvas");
         // Pathforge lays out the graph inside a bounds-sized canvas. Keep the
         // graph bounds centered at the initial scroll origin rather than
@@ -278,6 +289,14 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     private int appendSegment(UICommandBuilder commands, int index,
                               CharacterPathEdgeRouter.Point from, CharacterPathEdgeRouter.Point to) {
+        EdgeSegmentVisual visual = edgeSegmentVisual(from, to);
+        renderedEdgeChildIndices.add(index);
+        appendEdge(commands, index, visual.anchor(), visual.orientation(), visual.width(), visual.height());
+        return index + 1;
+    }
+
+    private EdgeSegmentVisual edgeSegmentVisual(CharacterPathEdgeRouter.Point from,
+                                                CharacterPathEdgeRouter.Point to) {
         int x1 = canvasX((int) Math.round(from.x()));
         int y1 = canvasY((int) Math.round(from.y()));
         int x2 = canvasX((int) Math.round(to.x()));
@@ -285,30 +304,53 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         double dx = x2 - x1;
         double dy = y2 - y1;
         String orientation = CharacterPathEdgeVisuals.orientation(dx, dy);
-        int thickness = Math.max(2, scaled(5));
+        int thickness = Math.max(3, scaled(6));
         int left;
         int top;
         int width;
         int height;
         if ("Horizontal".equals(orientation)) {
-            width = Math.max(1, (int) Math.round(Math.abs(dx)));
+            width = Math.max(1, (int) Math.round(Math.abs(dx))) + 2;
             height = thickness;
-            left = Math.min(x1, x2);
+            left = Math.min(x1, x2) - 1;
             top = (int) Math.round((y1 + y2) / 2.0 - height / 2.0);
         } else if ("Vertical".equals(orientation)) {
             width = thickness;
-            height = Math.max(1, (int) Math.round(Math.abs(dy)));
+            height = Math.max(1, (int) Math.round(Math.abs(dy))) + 2;
             left = (int) Math.round((x1 + x2) / 2.0 - width / 2.0);
-            top = Math.min(y1, y2);
+            top = Math.min(y1, y2) - 1;
         } else {
-            width = Math.max(1, (int) Math.round(Math.abs(dx)));
-            height = Math.max(1, (int) Math.round(Math.abs(dy)));
-            left = Math.min(x1, x2);
-            top = Math.min(y1, y2);
+            width = Math.max(1, (int) Math.round(Math.abs(dx))) + 2;
+            height = Math.max(1, (int) Math.round(Math.abs(dy))) + 2;
+            left = Math.min(x1, x2) - 1;
+            top = Math.min(y1, y2) - 1;
         }
-        appendEdge(commands, index, anchor(left, top, width, height), orientation,
-                Math.max(width, height));
-        return index + 1;
+        return new EdgeSegmentVisual(anchor(left, top, width, height), orientation, width, height);
+    }
+
+    private boolean updateRenderedEdges(UICommandBuilder commands,
+                                        List<CharacterPathEdgeRouter.RoutedEdge> routes) {
+        List<EdgeSegmentVisual> visuals = new ArrayList<>();
+        if (routes != null) {
+            for (CharacterPathEdgeRouter.RoutedEdge route : routes) {
+                if (route == null || route.points() == null) continue;
+                List<CharacterPathEdgeRouter.Point> points = route.points();
+                for (int i = 1; i < points.size(); i++) {
+                    visuals.add(edgeSegmentVisual(points.get(i - 1), points.get(i)));
+                }
+            }
+        }
+        if (visuals.size() != renderedEdgeChildIndices.size()) return false;
+
+        for (int i = 0; i < visuals.size(); i++) {
+            EdgeSegmentVisual visual = visuals.get(i);
+            int childIndex = renderedEdgeChildIndices.get(i);
+            commands.setObject(child(childIndex, ".Anchor"), visual.anchor());
+            commands.setObject(child(childIndex, ".Background"), textureBackground(
+                    CharacterPathEdgeVisuals.texture("EdgeEditor", visual.orientation(),
+                            visual.width(), visual.height())));
+        }
+        return true;
     }
 
     private int appendClearance(UICommandBuilder commands, Document document, int index) {
@@ -419,18 +461,31 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         return index;
     }
 
-    /** Grid targets are only added while the one-shot placement action is armed. */
+    /** Prebuild hidden grid targets so arming placement is only a visibility update. */
     private int appendMoveTargets(UICommandBuilder commands, UIEventBuilder events,
                                   Document document, int index) {
         EditorNode selected = selectedNode(document);
-        if (!gridPlacementArmed || selected == null) return index;
+        if (selected == null) return index;
 
+        commands.append("#TreeCanvas", MOVE_TARGETS_LAYER_UI);
+        commands.setObject("#GridMoveTargetsLayer.Anchor",
+                anchor(0, 0, treeViewport.contentWidth, treeViewport.contentHeight));
+        commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
+        renderedMoveTargetsLayer = true;
+
+        appendMoveTargetCells(commands, events, document, selected);
+        return index + 1;
+    }
+
+    private void appendMoveTargetCells(UICommandBuilder commands, UIEventBuilder events,
+                                       Document document, EditorNode selected) {
         int cellSize = gridCellSize();
         int nodeSize = CharacterPathEditorService.type(selected).size;
         int maxX = document.canvasWidth - CANVAS_X_OFFSET - nodeSize;
         int maxY = document.canvasHeight - nodeSize;
         List<Integer> xBoundaries = centeredGridBoundaries(document.canvasWidth, cellSize);
         List<Integer> yBoundaries = centeredGridBoundaries(document.canvasHeight, cellSize);
+        int targetIndex = 0;
         for (int yi = 0; yi < yBoundaries.size() - 1; yi++) {
             int y = yBoundaries.get(yi);
             int height = yBoundaries.get(yi + 1) - y;
@@ -439,17 +494,16 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                 int width = xBoundaries.get(xi + 1) - x;
                 int nodeX = Math.max(0, Math.min(maxX, x + width / 2 - nodeSize / 2));
                 int nodeY = Math.max(0, Math.min(maxY, y + height / 2 - nodeSize / 2));
-                commands.append("#TreeCanvas", MOVE_TARGET_UI);
-                commands.setObject(child(index, ".Anchor"), anchor(
+                commands.append("#GridMoveTargetsLayer", MOVE_TARGET_UI);
+                String targetChild = "#GridMoveTargetsLayer[" + targetIndex++ + "]";
+                commands.setObject(targetChild + ".Anchor", anchor(
                         canvasX(x), canvasY(y), scaled(width), scaled(height)));
                 events.addEventBinding(CustomUIEventBindingType.Activating,
-                        nested(index, "MoveTarget", null),
+                        targetChild + " #MoveTarget",
                         EventData.of("Action", "editor_place")
                                 .append("Target", nodeX + "," + nodeY), false);
-                index++;
             }
         }
-        return index;
     }
 
     private static int gridCellSize() {
@@ -485,7 +539,6 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             commands.set("#EditorSelectedName.Text", "No node selected");
             commands.set("#EditorSelectedType.Text", "Add a node or click one on the canvas.");
             commands.set("#EditorSelectedBonus.Text", "");
-            commands.set("#EditorBonusList.Text", "");
             commands.set("#EditorSelectedPosition.Text", "");
             commands.set("#EditorSelectedRank.Text", "");
             commands.set("#NodeXControl.Value", 0.0f);
@@ -523,7 +576,6 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             commands.set("#EditorSelectedBonus.Text", "Default stat: "
                     + CharacterPathEditorService.bonusLabel(CharacterPathEditorService.bonus(selected))
                     + " / " + CharacterPathEditorService.formatAmount(selected));
-            commands.set("#EditorBonusList.Text", "Player chooses +1 Health, Mana, or Stamina when allocating; the matching potion icon is shown.");
         } else {
             commands.set("#NodeCategoryDropdown.Value", CharacterPathEditorService.category(selected).name());
             List<EditorBonus> bonuses = selected.bonuses == null ? List.of() : selected.bonuses;
@@ -540,14 +592,6 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                     : bonusLabel(active.bonus) + " · " + CharacterPathEditorService.formatAmount(selected);
             commands.set("#EditorSelectedBonus.Text", "Selected bonus " + (bonuses.isEmpty() ? 0 : index + 1)
                     + "/" + bonuses.size() + ": " + activeText);
-            StringBuilder allBonuses = new StringBuilder();
-            for (int i = 0; i < bonuses.size(); i++) {
-                EditorBonus bonus = bonuses.get(i);
-                if (i > 0) allBonuses.append("\n");
-                if (i == index) allBonuses.append("▶ ");
-                allBonuses.append(bonusLabel(bonus.bonus)).append("  ").append(formatAmount(bonus));
-            }
-            commands.set("#EditorBonusList.Text", allBonuses.toString());
         }
         commands.set("#EditorSelectedPosition.Text", "Canvas position: " + selected.x + ", " + selected.y);
         commands.set("#EditorSelectedRank.Text", "Maximum rank: " + selected.maxRank);
@@ -555,20 +599,17 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     private static void populateBonusSlotDropdown(
             UICommandBuilder commands, List<EditorBonus> bonuses, int selectedIndex) {
-        commands.clear("#BonusSlotDropdown");
         if (bonuses == null || bonuses.isEmpty()) {
+            commands.set("#BonusSlotDropdown.Entries", List.<DropdownEntryInfo>of());
             return;
         }
 
-        StringBuilder entries = new StringBuilder();
+        List<DropdownEntryInfo> entries = new ArrayList<>(bonuses.size());
         for (int i = 0; i < bonuses.size(); i++) {
-            entries.append("DropdownEntry { Text: \"Slot ")
-                    .append(i + 1)
-                    .append("\"; Value: \"")
-                    .append(i)
-                    .append("\"; }\n");
+            entries.add(new DropdownEntryInfo(
+                    LocalizableString.fromString("Slot " + (i + 1)), Integer.toString(i)));
         }
-        commands.appendInline("#BonusSlotDropdown", entries.toString());
+        commands.set("#BonusSlotDropdown.Entries", entries);
         commands.set("#BonusSlotDropdown.Value", Integer.toString(selectedIndex));
     }
 
@@ -622,6 +663,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         }
         if (!"editor_position_x".equals(event.action) && !"editor_position_y".equals(event.action)
                 && !"editor_hover_enter".equals(event.action) && !"editor_hover_exit".equals(event.action)) {
+            resetCoordinateLinkBlockCount();
             CharacterPathEditorService.commitPositionPreview();
             if (!"editor_position_commit".equals(event.action)) coordinateGridPreview = false;
         }
@@ -635,17 +677,52 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         }
         Player player = store.getComponent(playerRef, Player.getComponentType());
         if (player == null) return;
+        if ("editor_grid_placement".equals(event.action)) {
+            toggleGridPlacement();
+            refreshGridPlacementOverlay();
+            return;
+        }
+        if ("editor_copy_properties".equals(event.action)) {
+            String previousLinkSource = connectFirstNodeId;
+            beginCopyProperties();
+            refreshCopyPropertiesToggleInPlace(previousLinkSource);
+            return;
+        }
+        if ("editor_select".equals(event.action) && copyPropertiesSourceId != null) {
+            selectNode(event.nodeId);
+            return;
+        }
+        if ("editor_connect_mode".equals(event.action)) {
+            toggleConnectMode();
+            refreshSelectionInPlace();
+            return;
+        }
+        if ("editor_select".equals(event.action)) {
+            boolean canRefreshInPlace = !multiSelectMode && selectedNodeIds.size() <= 1
+                    && copyPropertiesSourceId == null;
+            String previousSelection = selectedNodeId;
+            List<GraphEdge> edgesBefore = graphEdges(CharacterPathEditorService.snapshot());
+            selectNode(event.nodeId);
+            List<GraphEdge> edgesAfter = graphEdges(CharacterPathEditorService.snapshot());
+            if (canRefreshInPlace && edgesBefore.equals(edgesAfter)) {
+                Set<String> changedSelection = new LinkedHashSet<>();
+                if (previousSelection != null) changedSelection.add(previousSelection);
+                if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+                refreshSelectionInPlace(changedSelection);
+            } else {
+                refreshFullPage();
+            }
+            return;
+        }
         switch (event.action) {
             case "editor_select" -> selectNode(event.nodeId);
             case "editor_add" -> addNode();
             case "editor_duplicate" -> duplicateNode();
             case "editor_mirror_flip" -> toggleMirrorFlip();
-            case "editor_copy_properties" -> beginCopyProperties();
             case "editor_move_mode" -> toggleMoveMode();
             case "editor_multi_select" -> toggleMultiSelectMode();
             case "editor_select_all" -> selectAllNodes();
             case "editor_clear_selection" -> clearSelection();
-            case "editor_grid_placement" -> toggleGridPlacement();
             case "editor_grid_toggle" -> gridVisible = !gridVisible;
             case "editor_canvas_size_open" -> {
                 Document document = CharacterPathEditorService.snapshot();
@@ -666,8 +743,8 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                     int target = Math.round(event.coordinateValue);
                     boolean firstPreview = !coordinateGridPreview;
                     coordinateGridPreview = true;
-                    moveSelectedTo(target, null);
-                    if (firstPreview) refreshPositionEditor();
+                    boolean linksDetached = moveSelectedByCoordinate(target, null);
+                    if (firstPreview || linksDetached) refreshPositionEditor();
                     else sendSelectedPositionUpdate();
                 }
                 return;
@@ -677,8 +754,8 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                     int target = Math.round(event.coordinateValue);
                     boolean firstPreview = !coordinateGridPreview;
                     coordinateGridPreview = true;
-                    moveSelectedTo(null, target);
-                    if (firstPreview) refreshPositionEditor();
+                    boolean linksDetached = moveSelectedByCoordinate(null, target);
+                    if (firstPreview || linksDetached) refreshPositionEditor();
                     else sendSelectedPositionUpdate();
                 }
                 return;
@@ -747,7 +824,6 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                             ? "Texture override cleared; item icon restored." : "Texture icon updated.";
                 } else status = "Use a bundled or native asset path (no URL or parent-directory traversal).";
             }
-            case "editor_connect_mode" -> toggleConnectMode();
             case "editor_type" -> {
                 updateNodeType(event.nodeId, event.selection);
             }
@@ -781,6 +857,147 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             default -> { return; }
         }
 
+        switch (event.action) {
+            case "editor_bonus_amount", "editor_rank", "editor_rename", "editor_path_bonus",
+                    "editor_bonus_slot", "editor_bonus_type",
+                    "editor_add_bonus", "editor_remove_bonus", "editor_apply" ->
+                    refreshEditorPanelInPlace(false);
+            case "editor_category", "editor_icon", "editor_icon_texture" ->
+                    refreshEditorPanelInPlace(true);
+            default -> refreshFullPage();
+        }
+    }
+
+    /** Panel edits do not rebuild the graph, reroute edges, or recreate grid targets. */
+    private void refreshEditorPanelInPlace(boolean refreshIcon) {
+        Document document = CharacterPathEditorService.snapshot();
+        UICommandBuilder commands = new UICommandBuilder();
+        commands.set("#EditorStatus.Text", status);
+        commands.set("#EditorApplied.Text", document.appliedToPlayers
+                ? "Draft is applied to players" : "Draft only · players unchanged");
+        fillSelection(commands, document);
+
+        if (refreshIcon && selectedNodeId != null) {
+            EditorNode selected = selectedNode(document);
+            Integer childIndex = renderedNodeChildIndices.get(selectedNodeId);
+            if (selected != null && childIndex != null) {
+                String itemId = selected.iconItemId == null ? "" : selected.iconItemId;
+                String texturePath = selected.iconTexturePath == null ? "" : selected.iconTexturePath;
+                boolean hasTexture = !texturePath.isBlank();
+                commands.set(nested(childIndex, "NodeItemIcon", "ItemId"), itemId);
+                commands.set(nested(childIndex, "NodeItemIcon", "Visible"),
+                        !hasTexture && !itemId.isBlank()
+                                && CharacterPathEditorService.type(selected) != NodeType.PATH);
+                if (hasTexture) {
+                    commands.setObject(nested(childIndex, "NodeTextureIcon", "Background"),
+                            textureBackground(CharacterPathEditorService.nodeIconUiPath(texturePath)));
+                }
+                commands.set(nested(childIndex, "NodeTextureIcon", "Visible"),
+                        hasTexture && CharacterPathEditorService.type(selected) != NodeType.PATH);
+            }
+        }
+        sendUpdate(commands, false);
+    }
+
+    /** Refreshes selection state without rebuilding hundreds of hidden grid hit targets. */
+    private void refreshSelectionInPlace() {
+        refreshSelectionInPlace(null);
+    }
+
+    private void refreshSelectionInPlace(Set<String> changedSelection) {
+        Document document = CharacterPathEditorService.snapshot();
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        appendSelectionRefresh(commands, events, document, changedSelection);
+        sendUpdate(commands, events, false);
+    }
+
+    private void refreshCopyPropertiesToggleInPlace(String previousLinkSource) {
+        UICommandBuilder commands = new UICommandBuilder();
+        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
+        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
+        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#EditorStatus.Text", status);
+        if (renderedMoveTargetsLayer) {
+            commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
+        }
+        if (renderedClearanceChildIndex >= 0) {
+            commands.set(child(renderedClearanceChildIndex, ".Visible"), positionDragActive);
+        }
+        if (previousLinkSource != null && renderedPrimarySelectionHaloChildIndex >= 0) {
+            commands.set(nested(renderedPrimarySelectionHaloChildIndex,
+                    "NodeLinkSourceGlow", "Visible"), connectMode
+                    && previousLinkSource.equals(selectedNodeId));
+        }
+        sendUpdate(commands, false);
+    }
+
+    private void appendSelectionRefresh(UICommandBuilder commands,
+                                       UIEventBuilder events,
+                                       Document document,
+                                       Set<String> changedSelection) {
+        EditorNode primary = selectedNode(document);
+
+        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
+        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
+        commands.set("#EditorStatus.Text", status);
+        commands.set("#EditorLinkCount.Text", "Links: " + document.edges.size());
+        commands.set("#EditorApplied.Text", document.appliedToPlayers
+                ? "Draft is applied to players" : "Draft only · players unchanged");
+        if (renderedMoveTargetsLayer) {
+            commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
+        }
+        if (renderedClearanceChildIndex >= 0) {
+            int size = primary == null ? 1 : scaled(CharacterPathEditorService.type(primary).size);
+            int padding = Math.max(1, scaled(NODE_CLEARANCE));
+            int centerX = primary == null ? 0 : canvasX(primary.x) + size / 2;
+            int centerY = primary == null ? 0 : canvasY(primary.y) + size / 2;
+            commands.setObject(child(renderedClearanceChildIndex, ".Anchor"),
+                    anchor(centerX - size / 2 - padding, centerY - size / 2 - padding,
+                            size + padding * 2, size + padding * 2));
+            commands.set(child(renderedClearanceChildIndex, ".Visible"),
+                    primary != null && positionDragActive);
+        }
+        for (EditorNode node : document.nodes) {
+            if (node == null || node.id == null) continue;
+            if (changedSelection != null && !changedSelection.contains(node.id)) continue;
+            Integer childIndex = renderedNodeChildIndices.get(node.id);
+            if (childIndex == null) continue;
+            boolean selected = node.id.equals(selectedNodeId);
+            setNodeFrame(commands, childIndex, CharacterPathEditorService.type(node), selected);
+            commands.set(nested(childIndex, "NodeSelectionTint", "Visible"),
+                    selectedNodeIds.contains(node.id));
+        }
+
+        if (renderedPrimarySelectionHaloChildIndex >= 0) {
+            String selector = child(renderedPrimarySelectionHaloChildIndex, "");
+            if (primary == null) {
+                commands.setObject(selector + ".Anchor", anchor(0, 0, 1, 1));
+            } else {
+                int size = scaled(CharacterPathEditorService.type(primary).size);
+                int padding = Math.max(4, scaled(10));
+                int diameter = size + padding * 2;
+                int centerX = canvasX(primary.x) + size / 2;
+                int centerY = canvasY(primary.y) + size / 2;
+                commands.setObject(selector + ".Anchor", anchor(centerX - diameter / 2,
+                        centerY - diameter / 2, diameter, diameter));
+            }
+            commands.set(nested(renderedPrimarySelectionHaloChildIndex,
+                    "NodeLinkSourceGlow", "Visible"), primary != null && connectMode
+                    && primary.id.equals(connectFirstNodeId));
+            commands.set(nested(renderedPrimarySelectionHaloChildIndex,
+                    "NodePrimaryGroupGlow", "Visible"), false);
+            commands.set(nested(renderedPrimarySelectionHaloChildIndex,
+                    "NodeGroupGlow", "Visible"), false);
+            commands.set(selector + ".Visible", primary != null);
+        }
+
+        fillSelection(commands, document);
+        bindSelectedNodeEvents(events);
+    }
+
+    private void refreshFullPage() {
         UICommandBuilder commands = new UICommandBuilder();
         UIEventBuilder events = new UIEventBuilder();
         populate(commands, events, true);
@@ -875,6 +1092,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private void copyPropertiesTo(String sourceId, String targetId) {
         if (sourceId.equals(targetId)) {
             status = "Choose a different destination node; property copy canceled.";
+            refreshSelectionInPlace(Set.of(sourceId));
             return;
         }
         Document before = CharacterPathEditorService.snapshot();
@@ -882,15 +1100,26 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         EditorNode target = findNode(before, targetId);
         if (source == null || target == null) {
             status = "Property copy canceled because the source or destination no longer exists.";
+            refreshSelectionInPlace(Set.of(sourceId, targetId));
             return;
         }
         String sourceName = source.name;
         String targetName = target.name;
+        boolean hadGroupSelection = selectedNodeIds.size() > 1;
+        List<CharacterPathEdgeRouter.RoutedEdge> validatedRoutes = new ArrayList<>();
         boolean copied = CharacterPathEditorService.copyNodeProperties(sourceId, targetId, candidate -> {
+            EditorNode candidateTarget = findNode(candidate, targetId);
+            if (candidateTarget == null) return false;
+            int targetSize = CharacterPathEditorService.type(candidateTarget).size;
+            candidateTarget.x = Math.max(0, Math.min(candidateTarget.x,
+                    candidate.canvasWidth - CANVAS_X_OFFSET - targetSize));
+            candidateTarget.y = Math.max(0, Math.min(candidateTarget.y,
+                    candidate.canvasHeight - targetSize));
             if (!movedNodesHaveClearance(Set.of(targetId), candidate)) return false;
             try {
-                CharacterPathEdgeRouter.route(graphEdges(candidate), locations(candidate),
-                        candidate.canvasWidth, candidate.canvasHeight);
+                validatedRoutes.clear();
+                validatedRoutes.addAll(CharacterPathEdgeRouter.route(graphEdges(candidate), locations(candidate),
+                        candidate.canvasWidth, candidate.canvasHeight));
                 return true;
             } catch (IllegalStateException exception) {
                 return false;
@@ -898,11 +1127,85 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         });
         if (!copied) {
             status = "Property copy blocked: the copied node size or links would overlap the graph.";
+            refreshSelectionInPlace(Set.of(sourceId, targetId));
             return;
         }
         setSingleSelection(targetId);
         status = "Copied properties from " + sourceName + " to " + targetName
                 + "; the destination position, identity and links were preserved.";
+        if (hadGroupSelection || !refreshCopiedPropertiesInPlace(sourceId, targetId, validatedRoutes)) {
+            refreshFullPage();
+        }
+    }
+
+    private boolean refreshCopiedPropertiesInPlace(String sourceId,
+                                                    String targetId,
+                                                    List<CharacterPathEdgeRouter.RoutedEdge> routes) {
+        Document document = CharacterPathEditorService.snapshot();
+        EditorNode target = findNode(document, targetId);
+        Integer targetChildIndex = renderedNodeChildIndices.get(targetId);
+        if (target == null || targetChildIndex == null || treeViewport == null) return false;
+
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        if (!updateRenderedEdges(commands, routes)) return false;
+        updateCopiedNodeVisual(commands, targetChildIndex, target);
+        rebindMoveTargetCells(events, document, target);
+
+        Set<String> changedSelection = new LinkedHashSet<>();
+        if (sourceId != null) changedSelection.add(sourceId);
+        changedSelection.add(targetId);
+        appendSelectionRefresh(commands, events, document, changedSelection);
+        sendUpdate(commands, events, false);
+        return true;
+    }
+
+    private void updateCopiedNodeVisual(UICommandBuilder commands, int childIndex, EditorNode node) {
+        NodeType type = CharacterPathEditorService.type(node);
+        int size = scaled(type.size);
+        commands.setObject(child(childIndex, ".Anchor"), anchor(canvasX(node.x), canvasY(node.y), size, size));
+        setNodeFrame(commands, childIndex, type, node.id.equals(selectedNodeId));
+
+        boolean pathNode = type == NodeType.PATH;
+        String itemId = pathNode || node.iconItemId == null ? "" : node.iconItemId;
+        String texturePath = pathNode || node.iconTexturePath == null ? "" : node.iconTexturePath;
+        int iconSize = Math.max(10, (int) Math.round(size * 0.58));
+        Anchor iconAnchor = anchor((size - iconSize) / 2, (size - iconSize) / 2, iconSize, iconSize);
+        commands.set(nested(childIndex, "NodeItemIcon", "ItemId"), itemId);
+        commands.set(nested(childIndex, "NodeItemIcon", "Visible"),
+                texturePath.isBlank() && !itemId.isBlank());
+        commands.setObject(nested(childIndex, "NodeItemIcon", "Anchor"), iconAnchor);
+        if (!texturePath.isBlank()) {
+            commands.setObject(nested(childIndex, "NodeTextureIcon", "Background"), textureBackground(
+                    CharacterPathEditorService.nodeIconUiPath(texturePath)));
+        }
+        commands.set(nested(childIndex, "NodeTextureIcon", "Visible"), !texturePath.isBlank());
+        commands.setObject(nested(childIndex, "NodeTextureIcon", "Anchor"), iconAnchor);
+    }
+
+    private void rebindMoveTargetCells(UIEventBuilder events, Document document, EditorNode selected) {
+        if (!renderedMoveTargetsLayer || selected == null) return;
+        int nodeSize = CharacterPathEditorService.type(selected).size;
+        int maxX = document.canvasWidth - CANVAS_X_OFFSET - nodeSize;
+        int maxY = document.canvasHeight - nodeSize;
+        List<Integer> xBoundaries = centeredGridBoundaries(document.canvasWidth, gridCellSize());
+        List<Integer> yBoundaries = centeredGridBoundaries(document.canvasHeight, gridCellSize());
+        int targetIndex = 0;
+        for (int yi = 0; yi < yBoundaries.size() - 1; yi++) {
+            int y = yBoundaries.get(yi);
+            int height = yBoundaries.get(yi + 1) - y;
+            for (int xi = 0; xi < xBoundaries.size() - 1; xi++) {
+                int x = xBoundaries.get(xi);
+                int width = xBoundaries.get(xi + 1) - x;
+                int nodeX = Math.max(0, Math.min(maxX, x + width / 2 - nodeSize / 2));
+                int nodeY = Math.max(0, Math.min(maxY, y + height / 2 - nodeSize / 2));
+                String targetChild = "#GridMoveTargetsLayer[" + targetIndex++ + "]";
+                events.addEventBinding(CustomUIEventBindingType.Activating,
+                        targetChild + " #MoveTarget",
+                        EventData.of("Action", "editor_place")
+                                .append("Target", nodeX + "," + nodeY), false);
+            }
+        }
     }
 
     private static EditorNode findNode(Document document, String id) {
@@ -934,6 +1237,46 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         int targetX = x == null ? selected.x : x;
         int targetY = y == null ? selected.y : y;
         return moveSelectionBy(targetX - selected.x, targetY - selected.y);
+    }
+
+    /** Detaches a node's links only after repeated slider moves that those links alone block. */
+    private boolean moveSelectedByCoordinate(Integer x, Integer y) {
+        EditorNode selected = selectedNode();
+        boolean singleNodeSelection = selected != null && selectedNodeIds.size() == 1
+                && selectedNodeIds.contains(selected.id);
+        moveSelectedTo(x, y);
+        if (!singleNodeSelection || !lastMoveBlockedByDetachableLinks) {
+            resetCoordinateLinkBlockCount();
+            return false;
+        }
+
+        if (!selected.id.equals(coordinateBlockedNodeId)) {
+            coordinateBlockedNodeId = selected.id;
+            coordinateLinkBlockCount = 0;
+        }
+        coordinateLinkBlockCount++;
+        if (coordinateLinkBlockCount < COORDINATE_LINK_DETACH_LIMIT) return false;
+
+        int detached = CharacterPathEditorService.disconnectNodeEdges(selected.id);
+        resetCoordinateLinkBlockCount();
+        if (detached == 0) return false;
+
+        boolean movedAfterDetaching = moveSelectedTo(x, y);
+        if (movedAfterDetaching) {
+            EditorNode current = selectedNode();
+            status = "Detached " + detached + " link" + (detached == 1 ? "" : "s")
+                    + " after repeated blocked coordinate moves; moved "
+                    + (current == null ? "the node" : current.name) + ".";
+        } else {
+            status = "Detached " + detached + " link" + (detached == 1 ? "" : "s")
+                    + " after repeated blocked coordinate moves, but this position is still blocked.";
+        }
+        return true;
+    }
+
+    private void resetCoordinateLinkBlockCount() {
+        coordinateBlockedNodeId = null;
+        coordinateLinkBlockCount = 0;
     }
 
     private void toggleMoveMode() {
@@ -1006,8 +1349,26 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             positionDragActive = true;
             status = "Grid placement armed. Click one canvas cell to place the selected node.";
         } else {
+            positionDragActive = pointerDragActive || (moveMode && selectedNode() != null);
             status = "Grid placement off. Canvas clicks select nodes normally.";
         }
+    }
+
+    /** Toggle only the grid hit targets; rebuilding nodes and routed links made this tool feel delayed. */
+    private void refreshGridPlacementOverlay() {
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#EditorStatus.Text", status);
+        if (renderedClearanceChildIndex >= 0) {
+            commands.set(child(renderedClearanceChildIndex, ".Visible"), positionDragActive);
+        }
+        if (renderedMoveTargetsLayer) {
+            commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
+        } else if (gridPlacementArmed) {
+            appendMoveTargets(commands, events, CharacterPathEditorService.snapshot(), 0);
+        }
+        sendUpdate(commands, events, false);
     }
 
     /** Starts a free drag on press when move mode is active. */
@@ -1162,6 +1523,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     /** Applies one shared translation to every selected node while preserving their layout. */
     private boolean moveSelectionBy(int requestedDx, int requestedDy) {
+        lastMoveBlockedByDetachableLinks = false;
         if (requestedDx == 0 && requestedDy == 0) return false;
         Document before = CharacterPathEditorService.snapshot();
         EditorNode primary = selectedNode(before);
@@ -1204,6 +1566,8 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             CharacterPathEdgeRouter.route(graphEdges(candidate), locations(candidate),
                     candidate.canvasWidth, candidate.canvasHeight);
         } catch (IllegalStateException exception) {
+            lastMoveBlockedByDetachableLinks = movingIds.size() == 1
+                    && routeWorksWithoutNodeLinks(candidate, primary.id);
             status = "Move blocked: a link would cross another link or node.";
             return false;
         }
@@ -1216,6 +1580,19 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                 ? "Moved node to " + (primaryX + dx) + ", " + (primaryY + dy) + "."
                 : "Moved " + movingIds.size() + " nodes by " + dx + ", " + dy + ".";
         return true;
+    }
+
+    private static boolean routeWorksWithoutNodeLinks(Document document, String nodeId) {
+        List<GraphEdge> remainingEdges = graphEdges(document).stream()
+                .filter(edge -> !nodeId.equals(edge.first()) && !nodeId.equals(edge.second()))
+                .toList();
+        try {
+            CharacterPathEdgeRouter.route(remainingEdges, locations(document),
+                    document.canvasWidth, document.canvasHeight);
+            return true;
+        } catch (IllegalStateException exception) {
+            return false;
+        }
     }
 
     private static boolean movedNodesHaveClearance(Set<String> movingIds, Document document) {
@@ -1569,9 +1946,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     }
 
     private EditorNode selectedNode() {
-        if (selectedNodeId == null) return null;
-        return CharacterPathEditorService.snapshot().nodes.stream()
-                .filter(node -> node != null && selectedNodeId.equals(node.id)).findFirst().orElse(null);
+        return CharacterPathEditorService.nodeSnapshot(selectedNodeId);
     }
 
     private static boolean positionIsClear(String movingId, int x, int y, int size, Document document) {
@@ -1612,15 +1987,6 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             };
         }
         catch (Exception ignored) { return "Damage Percent"; }
-    }
-
-    private static String formatAmount(EditorBonus entry) {
-        irai.mod.reforge.Progression.CharacterPathService.Bonus bonus;
-        try { bonus = irai.mod.reforge.Progression.CharacterPathService.Bonus.valueOf(entry.bonus); }
-        catch (Exception ignored) { bonus = irai.mod.reforge.Progression.CharacterPathService.Bonus.DAMAGE_PERCENT; }
-        boolean percent = isPercentBonus(bonus.name());
-        return percent ? String.format(java.util.Locale.ROOT, "%.2f%% / rank", entry.perRank * 100.0)
-                : String.format(java.util.Locale.ROOT, "%.3f / rank", entry.perRank);
     }
 
     private static boolean isPercentBonus(String value) {
@@ -1700,11 +2066,11 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     }
 
     private void appendEdge(UICommandBuilder commands, int index, Anchor placement, String orientation,
-                            double segmentSize) {
+                            double segmentWidth, double segmentHeight) {
         commands.append("#TreeCanvas", EDGE_UI);
         commands.setObject(child(index, ".Anchor"), placement);
         commands.setObject(child(index, ".Background"), textureBackground(
-                CharacterPathEdgeVisuals.texture("EdgeEditor", orientation, segmentSize, segmentSize)));
+                CharacterPathEdgeVisuals.texture("EdgeEditor", orientation, segmentWidth, segmentHeight)));
     }
 
     private void appendGridLine(UICommandBuilder commands, int index, Anchor placement, boolean major) {
@@ -1716,6 +2082,8 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         commands.append("#TreeCanvas", GRID_CENTER_UI);
         commands.setObject(child(index, ".Anchor"), placement);
     }
+
+    private record EdgeSegmentVisual(Anchor anchor, String orientation, int width, int height) {}
 
     public static final class PageEvent {
         public static final BuilderCodec<PageEvent> CODEC = BuilderCodec.<PageEvent>builder(PageEvent.class, PageEvent::new)

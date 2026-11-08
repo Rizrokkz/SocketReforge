@@ -164,6 +164,12 @@ public final class CharacterPathEditorService {
         return copy;
     }
 
+    /** Copies one node without duplicating the entire editor graph. */
+    public static synchronized EditorNode nodeSnapshot(String id) {
+        EditorNode node = find(id);
+        return node == null ? null : copyNode(node);
+    }
+
     public static synchronized EditorNode addNode(int x, int y) {
         EditorNode node = new EditorNode();
         node.id = String.format(Locale.ROOT, "edit_node_%03d", document.nextNodeNumber++);
@@ -626,6 +632,17 @@ public final class CharacterPathEditorService {
         if (before == document.edges.size()) return false;
         changed();
         return true;
+    }
+
+    /** Removes every link attached to one node and persists the graph once. */
+    public static synchronized int disconnectNodeEdges(String id) {
+        if (id == null) return 0;
+        int before = document.edges.size();
+        document.edges.removeIf(edge -> edge != null
+                && (id.equals(edge.first) || id.equals(edge.second)));
+        int removed = before - document.edges.size();
+        if (removed > 0) changed();
+        return removed;
     }
 
     public static synchronized boolean hasEdge(String first, String second) {
