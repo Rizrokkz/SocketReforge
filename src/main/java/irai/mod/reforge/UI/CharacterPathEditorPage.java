@@ -56,6 +56,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private static final String GRID_MINOR_UI = "Pages/Editor/SocketReforge_SkillTree_GridMinor.ui";
     private static final String GRID_MAJOR_UI = "Pages/Editor/SocketReforge_SkillTree_GridMajor.ui";
     private static final String GRID_CENTER_UI = "Pages/Editor/SocketReforge_SkillTree_GridCenter.ui";
+    private static final String GRID_LAYER_UI = "Pages/Editor/SocketReforge_SkillTree_GridLayer.ui";
     private static final String EDGE_UI = "Pages/SocketReforge_SkillTree_Edge.ui";
     private static final String CLEARANCE_UI = "Pages/Editor/SocketReforge_SkillTree_Clearance.ui";
     private static final String SELECTION_UI = "Pages/Editor/SocketReforge_SkillTree_Selection.ui";
@@ -99,7 +100,10 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private double dragRemainderY;
     private int renderedClearanceChildIndex = -1;
     private int renderedPrimarySelectionHaloChildIndex = -1;
+    private final Map<String, Integer> renderedSelectionHaloChildIndices = new HashMap<>();
     private boolean renderedMoveTargetsLayer;
+    private boolean renderedGridLayerContents;
+    private int renderedCanvasNextChildIndex;
     private int zoomPercent = 80;
     private int renderedZoomPercent = 80;
     private long lastZoomRenderAtMillis;
@@ -158,7 +162,10 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         renderedEdgeChildIndices.clear();
         renderedClearanceChildIndex = -1;
         renderedPrimarySelectionHaloChildIndex = -1;
+        renderedSelectionHaloChildIndices.clear();
         renderedMoveTargetsLayer = false;
+        renderedGridLayerContents = false;
+        renderedCanvasNextChildIndex = 0;
         if (clearCanvas) commands.clear("#TreeCanvas");
         // Pathforge lays out the graph inside a bounds-sized canvas. Keep the
         // graph bounds centered at the initial scroll origin rather than
@@ -221,17 +228,25 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         events.addEventBinding(CustomUIEventBindingType.Dismissing, "#SkillTreeRoot",
                 EventData.of("Action", "editor_dismiss"), false);
 
-        int nextChild = appendGrid(commands, document, 0);
+        commands.append("#TreeCanvas", GRID_LAYER_UI);
+        commands.setObject("#EditorGridLayer.Anchor",
+                anchor(0, 0, treeViewport.contentWidth, treeViewport.contentHeight));
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
+        if (gridVisible || gridPlacementArmed || coordinateGridPreview) {
+            appendGrid(commands, document, 0);
+            renderedGridLayerContents = true;
+        }
+        int nextChild = 1;
         nextChild = appendEdges(commands, document, nextChild);
         nextChild = appendClearance(commands, document, nextChild);
         nextChild = appendSelectionHalos(commands, document, nextChild);
         nextChild = appendNodes(commands, events, document, nextChild);
         nextChild = appendMoveTargets(commands, events, document, nextChild);
+        renderedCanvasNextChildIndex = nextChild;
         fillSelection(commands, document);
     }
 
     private int appendGrid(UICommandBuilder commands, Document document, int firstChildIndex) {
-        if (!gridVisible && !gridPlacementArmed && !coordinateGridPreview) return firstChildIndex;
         int index = firstChildIndex;
         int spacing = gridCellSize();
         int centerGridX = document.canvasWidth / 2;
@@ -377,6 +392,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         commands.append("#TreeCanvas", SELECTION_UI);
         renderedPrimarySelectionHaloChildIndex = index;
         if (primary != null) {
+            renderedSelectionHaloChildIndices.put(primary.id, index);
             int size = scaled(CharacterPathEditorService.type(primary).size);
             int padding = Math.max(4, scaled(10));
             int diameter = size + padding * 2;
@@ -413,6 +429,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             commands.set(nested(index, "NodePrimaryGroupGlow", "Visible"), false);
             commands.set(nested(index, "NodeGroupGlow", "Visible"), secondary);
             commands.set(child(index, ".Visible"), true);
+            renderedSelectionHaloChildIndices.put(node.id, index);
             index++;
         }
         return index;
@@ -421,51 +438,55 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private int appendNodes(UICommandBuilder commands, UIEventBuilder events, Document document, int index) {
         for (EditorNode node : document.nodes) {
             if (node == null || node.id == null) continue;
-            NodeType type = CharacterPathEditorService.type(node);
-            Category category = CharacterPathEditorService.category(node);
-            int size = scaled(type.size);
-            boolean selected = node.id.equals(selectedNodeId);
-            String nodeUi = type == NodeType.PATH
-                    ? EDITOR_NODE_UI + "PATH.ui"
-                    : EDITOR_NODE_UI + category.name() + ".ui";
-            commands.append("#TreeCanvas", nodeUi);
-            commands.setObject(child(index, ".Anchor"), anchor(canvasX(node.x), canvasY(node.y), size, size));
-            setNodeFrame(commands, index, type, selected);
-            String iconItemId = type == NodeType.PATH || node.iconItemId == null ? "" : node.iconItemId;
-            String iconTexturePath = type == NodeType.PATH || node.iconTexturePath == null
-                    ? "" : node.iconTexturePath;
-            commands.set(nested(index, "NodeItemIcon", "ItemId"), iconItemId);
-            commands.set(nested(index, "NodeItemIcon", "Visible"),
-                    iconTexturePath.isBlank() && !iconItemId.isBlank());
-            int iconSize = Math.max(10, (int) Math.round(size * 0.58));
-            commands.setObject(nested(index, "NodeItemIcon", "Anchor"),
-                    anchor((size - iconSize) / 2, (size - iconSize) / 2, iconSize, iconSize));
-            if (!iconTexturePath.isBlank()) {
-                commands.setObject(nested(index, "NodeTextureIcon", "Background"), textureBackground(
-                        CharacterPathEditorService.nodeIconUiPath(iconTexturePath)));
-            }
-            commands.set(nested(index, "NodeTextureIcon", "Visible"), !iconTexturePath.isBlank());
-            commands.setObject(nested(index, "NodeTextureIcon", "Anchor"),
-                    anchor((size - iconSize) / 2, (size - iconSize) / 2, iconSize, iconSize));
-            commands.set(nested(index, "NodeSelectionTint", "Visible"), selectedNodeIds.contains(node.id));
-            commands.set(nested(index, "NodeHit", "Text"), "");
-            events.addEventBinding(CustomUIEventBindingType.Activating, nested(index, "NodeHit", null),
-                    EventData.of("Action", "editor_select").append("NodeId", node.id));
-            events.addEventBinding(CustomUIEventBindingType.MouseEntered, nested(index, "NodeHit", null),
-                    EventData.of("Action", "editor_hover_enter").append("NodeId", node.id), false);
-            events.addEventBinding(CustomUIEventBindingType.MouseExited, nested(index, "NodeHit", null),
-                    EventData.of("Action", "editor_hover_exit").append("NodeId", node.id), false);
-            renderedNodeChildIndices.put(node.id, index);
-            index++;
+            index = appendNode(commands, events, node, index);
         }
         return index;
     }
 
-    /** Prebuild hidden grid targets so arming placement is only a visibility update. */
+    private int appendNode(UICommandBuilder commands, UIEventBuilder events, EditorNode node, int index) {
+        NodeType type = CharacterPathEditorService.type(node);
+        Category category = CharacterPathEditorService.category(node);
+        int size = scaled(type.size);
+        boolean selected = node.id.equals(selectedNodeId);
+        String nodeUi = type == NodeType.PATH
+                ? EDITOR_NODE_UI + "PATH.ui"
+                : EDITOR_NODE_UI + category.name() + ".ui";
+        commands.append("#TreeCanvas", nodeUi);
+        commands.setObject(child(index, ".Anchor"), anchor(canvasX(node.x), canvasY(node.y), size, size));
+        setNodeFrame(commands, index, type, selected);
+        String iconItemId = type == NodeType.PATH || node.iconItemId == null ? "" : node.iconItemId;
+        String iconTexturePath = type == NodeType.PATH || node.iconTexturePath == null
+                ? "" : node.iconTexturePath;
+        commands.set(nested(index, "NodeItemIcon", "ItemId"), iconItemId);
+        commands.set(nested(index, "NodeItemIcon", "Visible"),
+                iconTexturePath.isBlank() && !iconItemId.isBlank());
+        int iconSize = Math.max(10, (int) Math.round(size * 0.58));
+        commands.setObject(nested(index, "NodeItemIcon", "Anchor"),
+                anchor((size - iconSize) / 2, (size - iconSize) / 2, iconSize, iconSize));
+        if (!iconTexturePath.isBlank()) {
+            commands.setObject(nested(index, "NodeTextureIcon", "Background"), textureBackground(
+                    CharacterPathEditorService.nodeIconUiPath(iconTexturePath)));
+        }
+        commands.set(nested(index, "NodeTextureIcon", "Visible"), !iconTexturePath.isBlank());
+        commands.setObject(nested(index, "NodeTextureIcon", "Anchor"),
+                anchor((size - iconSize) / 2, (size - iconSize) / 2, iconSize, iconSize));
+        commands.set(nested(index, "NodeSelectionTint", "Visible"), selectedNodeIds.contains(node.id));
+        commands.set(nested(index, "NodeHit", "Text"), "");
+        events.addEventBinding(CustomUIEventBindingType.Activating, nested(index, "NodeHit", null),
+                EventData.of("Action", "editor_select").append("NodeId", node.id));
+        events.addEventBinding(CustomUIEventBindingType.MouseEntered, nested(index, "NodeHit", null),
+                EventData.of("Action", "editor_hover_enter").append("NodeId", node.id), false);
+        events.addEventBinding(CustomUIEventBindingType.MouseExited, nested(index, "NodeHit", null),
+                EventData.of("Action", "editor_hover_exit").append("NodeId", node.id), false);
+        renderedNodeChildIndices.put(node.id, index);
+        return index + 1;
+    }
+
+    /** Create grid hit targets only while placement is armed. */
     private int appendMoveTargets(UICommandBuilder commands, UIEventBuilder events,
                                   Document document, int index) {
         EditorNode selected = selectedNode(document);
-        if (selected == null) return index;
+        if (selected == null || !gridPlacementArmed) return index;
 
         commands.append("#TreeCanvas", MOVE_TARGETS_LAYER_UI);
         commands.setObject("#GridMoveTargetsLayer.Anchor",
@@ -693,31 +714,66 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             return;
         }
         if ("editor_connect_mode".equals(event.action)) {
+            Set<String> changedSelection = new LinkedHashSet<>(selectedNodeIds);
+            String previousSelection = selectedNodeId;
             toggleConnectMode();
-            refreshSelectionInPlace();
+            changedSelection.addAll(selectedNodeIds);
+            if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+            boolean refreshPanel = previousSelection == null
+                    ? selectedNodeId != null : !previousSelection.equals(selectedNodeId);
+            refreshSelectionInPlace(changedSelection, refreshPanel);
+            return;
+        }
+        if ("editor_select_all".equals(event.action) || "editor_clear_selection".equals(event.action)) {
+            Set<String> changedSelection = new LinkedHashSet<>(selectedNodeIds);
+            if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+            if ("editor_select_all".equals(event.action)) selectAllNodes();
+            else clearSelection();
+            changedSelection.addAll(selectedNodeIds);
+            if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+            refreshSelectionInPlace(changedSelection, true);
             return;
         }
         if ("editor_select".equals(event.action)) {
-            boolean canRefreshInPlace = !multiSelectMode && selectedNodeIds.size() <= 1
-                    && copyPropertiesSourceId == null;
             String previousSelection = selectedNodeId;
+            Set<String> changedSelection = new LinkedHashSet<>(selectedNodeIds);
             List<GraphEdge> edgesBefore = graphEdges(CharacterPathEditorService.snapshot());
             selectNode(event.nodeId);
             List<GraphEdge> edgesAfter = graphEdges(CharacterPathEditorService.snapshot());
-            if (canRefreshInPlace && edgesBefore.equals(edgesAfter)) {
-                Set<String> changedSelection = new LinkedHashSet<>();
-                if (previousSelection != null) changedSelection.add(previousSelection);
-                if (selectedNodeId != null) changedSelection.add(selectedNodeId);
-                refreshSelectionInPlace(changedSelection);
+            if (edgesBefore.equals(edgesAfter)) {
+                changedSelection.addAll(selectedNodeIds);
+                if (event.nodeId != null) changedSelection.add(event.nodeId);
+                boolean refreshPanel = previousSelection == null
+                        ? selectedNodeId != null : !previousSelection.equals(selectedNodeId);
+                refreshSelectionInPlace(changedSelection, refreshPanel);
             } else {
                 refreshFullPage();
+            }
+            return;
+        }
+        if ("editor_duplicate".equals(event.action)) {
+            Document before = CharacterPathEditorService.snapshot();
+            Set<String> changedSelection = new LinkedHashSet<>(selectedNodeIds);
+            if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+            duplicateNode(before);
+            Document after = CharacterPathEditorService.snapshot();
+            if (after.nodes.size() == before.nodes.size()) {
+                refreshToolTogglesInPlace();
+            } else {
+                changedSelection.addAll(selectedNodeIds);
+                if (selectedNodeId != null) changedSelection.add(selectedNodeId);
+                boolean appendedSingleUnlinkedNode = after.nodes.size() == before.nodes.size() + 1
+                        && graphEdges(after).equals(graphEdges(before)) && !connectMode;
+                if (!appendedSingleUnlinkedNode
+                        || !refreshAppendedNodeInPlace(selectedNodeId, changedSelection)) {
+                    refreshFullPage();
+                }
             }
             return;
         }
         switch (event.action) {
             case "editor_select" -> selectNode(event.nodeId);
             case "editor_add" -> addNode();
-            case "editor_duplicate" -> duplicateNode();
             case "editor_mirror_flip" -> toggleMirrorFlip();
             case "editor_move_mode" -> toggleMoveMode();
             case "editor_multi_select" -> toggleMultiSelectMode();
@@ -864,8 +920,45 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                     refreshEditorPanelInPlace(false);
             case "editor_category", "editor_icon", "editor_icon_texture" ->
                     refreshEditorPanelInPlace(true);
+            case "editor_move_mode", "editor_multi_select", "editor_mirror_flip" ->
+                    refreshToolTogglesInPlace();
+            case "editor_grid_toggle" -> refreshGridVisibilityInPlace();
             default -> refreshFullPage();
         }
+    }
+
+    private void refreshToolTogglesInPlace() {
+        UICommandBuilder commands = new UICommandBuilder();
+        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
+        commands.set("#ToolMove.Text", moveMode ? "M*" : "M");
+        commands.set("#ToolSelect.Text", multiSelectMode ? "S*" : "S");
+        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
+        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
+        commands.set("#ToolMirrorFlip.Text", mirrorVertically ? "F*" : "F");
+        commands.set("#EditorStatus.Text", status);
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
+        if (renderedClearanceChildIndex >= 0) {
+            commands.set(child(renderedClearanceChildIndex, ".Visible"), positionDragActive);
+        }
+        sendUpdate(commands, false);
+    }
+
+    private void refreshGridVisibilityInPlace() {
+        UICommandBuilder commands = new UICommandBuilder();
+        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
+        if (gridVisible || gridPlacementArmed || coordinateGridPreview) {
+            appendGridLayerContentsIfNeeded(commands, CharacterPathEditorService.snapshot());
+        }
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
+        commands.set("#EditorStatus.Text", status);
+        sendUpdate(commands, false);
+    }
+
+    private void appendGridLayerContentsIfNeeded(UICommandBuilder commands, Document document) {
+        if (renderedGridLayerContents || document == null) return;
+        appendGrid(commands, document, 0);
+        renderedGridLayerContents = true;
     }
 
     /** Panel edits do not rebuild the graph, reroute edges, or recreate grid targets. */
@@ -905,10 +998,14 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     }
 
     private void refreshSelectionInPlace(Set<String> changedSelection) {
+        refreshSelectionInPlace(changedSelection, true);
+    }
+
+    private void refreshSelectionInPlace(Set<String> changedSelection, boolean refreshPanel) {
         Document document = CharacterPathEditorService.snapshot();
         UICommandBuilder commands = new UICommandBuilder();
         UIEventBuilder events = new UIEventBuilder();
-        appendSelectionRefresh(commands, events, document, changedSelection);
+        appendSelectionRefresh(commands, events, document, changedSelection, refreshPanel);
         sendUpdate(commands, events, false);
     }
 
@@ -921,6 +1018,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         if (renderedMoveTargetsLayer) {
             commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
         }
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
         if (renderedClearanceChildIndex >= 0) {
             commands.set(child(renderedClearanceChildIndex, ".Visible"), positionDragActive);
         }
@@ -935,12 +1033,17 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private void appendSelectionRefresh(UICommandBuilder commands,
                                        UIEventBuilder events,
                                        Document document,
-                                       Set<String> changedSelection) {
+                                       Set<String> changedSelection,
+                                       boolean refreshPanel) {
         EditorNode primary = selectedNode(document);
 
         commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
         commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#ToolMove.Text", moveMode ? "M*" : "M");
+        commands.set("#ToolSelect.Text", multiSelectMode ? "S*" : "S");
+        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
         commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
+        commands.set("#ToolMirrorFlip.Text", mirrorVertically ? "F*" : "F");
         commands.set("#EditorStatus.Text", status);
         commands.set("#EditorLinkCount.Text", "Links: " + document.edges.size());
         commands.set("#EditorApplied.Text", document.appliedToPlayers
@@ -948,6 +1051,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         if (renderedMoveTargetsLayer) {
             commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
         }
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
         if (renderedClearanceChildIndex >= 0) {
             int size = primary == null ? 1 : scaled(CharacterPathEditorService.type(primary).size);
             int padding = Math.max(1, scaled(NODE_CLEARANCE));
@@ -993,8 +1097,45 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             commands.set(selector + ".Visible", primary != null);
         }
 
-        fillSelection(commands, document);
-        bindSelectedNodeEvents(events);
+        refreshSelectionHalos(commands, document);
+
+        if (refreshPanel) {
+            fillSelection(commands, document);
+            bindSelectedNodeEvents(events);
+        }
+    }
+
+    private void refreshSelectionHalos(UICommandBuilder commands, Document document) {
+        for (EditorNode node : document.nodes) {
+            if (node == null || node.id == null) continue;
+            boolean primary = node.id.equals(selectedNodeId);
+            boolean linkSource = connectMode && node.id.equals(connectFirstNodeId);
+            boolean secondary = selectedNodeIds.size() > 1 && selectedNodeIds.contains(node.id) && !primary;
+            boolean visible = primary || linkSource || secondary;
+            Integer renderedChildIndex = renderedSelectionHaloChildIndices.get(node.id);
+            if (renderedChildIndex == null && !visible) continue;
+
+            int childIndex;
+            if (renderedChildIndex == null) {
+                childIndex = renderedCanvasNextChildIndex++;
+                commands.append("#TreeCanvas", SELECTION_UI);
+                renderedSelectionHaloChildIndices.put(node.id, childIndex);
+            } else {
+                childIndex = renderedChildIndex;
+            }
+            String selector = child(childIndex, "");
+            int size = scaled(CharacterPathEditorService.type(node).size);
+            int padding = Math.max(4, scaled(10));
+            int diameter = size + padding * 2;
+            int centerX = canvasX(node.x) + size / 2;
+            int centerY = canvasY(node.y) + size / 2;
+            commands.setObject(selector + ".Anchor", anchor(centerX - diameter / 2,
+                    centerY - diameter / 2, diameter, diameter));
+            commands.set(nested(childIndex, "NodeLinkSourceGlow", "Visible"), linkSource);
+            commands.set(nested(childIndex, "NodePrimaryGroupGlow", "Visible"), false);
+            commands.set(nested(childIndex, "NodeGroupGlow", "Visible"), secondary);
+            commands.set(selector + ".Visible", visible);
+        }
     }
 
     private void refreshFullPage() {
@@ -1002,6 +1143,25 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         UIEventBuilder events = new UIEventBuilder();
         populate(commands, events, true);
         sendUpdate(commands, events, false);
+    }
+
+    /** Appends a simple duplicate without rebuilding the graph and its routed links. */
+    private boolean refreshAppendedNodeInPlace(String nodeId, Set<String> changedSelection) {
+        if (nodeId == null || treeViewport == null) return false;
+        Document document = CharacterPathEditorService.snapshot();
+        EditorNode node = findNode(document, nodeId);
+        if (node == null) return false;
+        CharacterPathTreeViewport.View nextViewport = CharacterPathTreeViewport.create(document, zoomPercent,
+                false, TREE_VIEWPORT_WIDTH, TREE_VIEWPORT_HEIGHT, MIN_ZOOM, MAX_ZOOM);
+        if (!treeViewport.hasSameGraphBounds(nextViewport)) return false;
+
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        renderedCanvasNextChildIndex = appendNode(commands, events, node, renderedCanvasNextChildIndex);
+        commands.set("#EditorNodeCount.Text", "Nodes: " + document.nodes.size());
+        appendSelectionRefresh(commands, events, document, changedSelection, true);
+        sendUpdate(commands, events, false);
+        return true;
     }
 
     private void selectNode(String id) {
@@ -1155,7 +1315,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         Set<String> changedSelection = new LinkedHashSet<>();
         if (sourceId != null) changedSelection.add(sourceId);
         changedSelection.add(targetId);
-        appendSelectionRefresh(commands, events, document, changedSelection);
+        appendSelectionRefresh(commands, events, document, changedSelection, true);
         sendUpdate(commands, events, false);
         return true;
     }
@@ -1359,6 +1519,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         UICommandBuilder commands = new UICommandBuilder();
         UIEventBuilder events = new UIEventBuilder();
         commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
         commands.set("#EditorStatus.Text", status);
         if (renderedClearanceChildIndex >= 0) {
             commands.set(child(renderedClearanceChildIndex, ".Visible"), positionDragActive);
@@ -1366,7 +1527,11 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         if (renderedMoveTargetsLayer) {
             commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
         } else if (gridPlacementArmed) {
-            appendMoveTargets(commands, events, CharacterPathEditorService.snapshot(), 0);
+            renderedCanvasNextChildIndex = appendMoveTargets(commands, events,
+                    CharacterPathEditorService.snapshot(), renderedCanvasNextChildIndex);
+        }
+        if (gridPlacementArmed || gridVisible || coordinateGridPreview) {
+            appendGridLayerContentsIfNeeded(commands, CharacterPathEditorService.snapshot());
         }
         sendUpdate(commands, events, false);
     }
@@ -1725,8 +1890,13 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         int selectedSize = selected == null ? size : CharacterPathEditorService.type(selected).size;
         int firstRadius = (selectedSize + size) / 2 + NODE_CLEARANCE;
         int radiusStep = Math.max(48, size + NODE_CLEARANCE * 2);
-        NodeType candidateType = java.util.Arrays.stream(NodeType.values())
-                .filter(type -> type.size == size).findFirst().orElse(NodeType.SMALL);
+        List<CharacterPathEdgeRouter.RoutedEdge> existingRoutes;
+        try {
+            existingRoutes = CharacterPathEdgeRouter.route(graphEdges(document), locations(document),
+                    document.canvasWidth, document.canvasHeight);
+        } catch (IllegalStateException exception) {
+            return null;
+        }
 
         for (int radius = firstRadius; radius <= Math.max(document.canvasWidth, document.canvasHeight); radius += radiusStep) {
             for (int angle = 0; angle < 360; angle += 15) {
@@ -1734,23 +1904,9 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                 int x = Math.max(0, Math.min(maxX, (int) Math.round(originX + Math.cos(radians) * radius - size / 2.0)));
                 int y = Math.max(0, Math.min(maxY, (int) Math.round(originY + Math.sin(radians) * radius - size / 2.0)));
                 if (!positionIsClear("__placement_probe", x, y, size, document)) continue;
-                EditorNode probe = new EditorNode();
-                probe.id = "__placement_probe";
-                probe.type = candidateType.name();
-                probe.x = x;
-                probe.y = y;
-                document.nodes.add(probe);
-                boolean routesRemainClear;
-                try {
-                    CharacterPathEdgeRouter.route(graphEdges(document), locations(document),
-                            document.canvasWidth, document.canvasHeight);
-                    routesRemainClear = true;
-                } catch (IllegalStateException exception) {
-                    routesRemainClear = false;
-                } finally {
-                    document.nodes.remove(probe);
-                }
-                if (routesRemainClear) return new int[] {x, y};
+                if (!CharacterPathEdgeRouter.nodeClearsRoutes(x + size / 2.0, y + size / 2.0,
+                        size, existingRoutes)) continue;
+                return new int[] {x, y};
             }
         }
         return null;
@@ -1762,9 +1918,8 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                 .findFirst().orElse(null);
     }
 
-    private void duplicateNode() {
+    private void duplicateNode(Document before) {
         copyPropertiesSourceId = null;
-        Document before = CharacterPathEditorService.snapshot();
         EditorNode selected = selectedNode(before);
         if (selected == null) { status = "Select a node to duplicate first."; return; }
         LinkedHashSet<String> groupIds = new LinkedHashSet<>(selectedNodeIds);
@@ -1983,6 +2138,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                 case REFINING_JACKPOT_CHANCE -> "Refining Jackpot Weight";
                 case SOCKET_CHANCE -> "Socketing Chance";
                 case ATTACK_SPEED_PERCENT -> "Attack Speed (Multi-hit Chance)";
+                case LORE_XP_GAIN_PERCENT -> "Lore XP Gain";
                 default -> CharacterPathEditorService.bonusLabel(bonus);
             };
         }
@@ -1997,7 +2153,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
             case REFINING_CHANCE, REFINING_BREAK_PROTECTION, REFINING_DEGRADE_PROTECTION,
                     REFINING_SAME_CHANCE, REFINING_UPGRADE_CHANCE, REFINING_JACKPOT_CHANCE,
                     SOCKET_CHANCE, DAMAGE_PERCENT, DAMAGE_RESISTANCE,
-                    CRIT_CHANCE_PERCENT, CRIT_DAMAGE_PERCENT, ATTACK_SPEED_PERCENT,
+                    CRIT_CHANCE_PERCENT, CRIT_DAMAGE_PERCENT, ATTACK_SPEED_PERCENT, LORE_XP_GAIN_PERCENT,
                     ELEMENTAL_DAMAGE, ELEMENTAL_DOT_CRIT_CHANCE, ELEMENTAL_DOT_CRIT_DAMAGE,
                     ELEMENTAL_STACK_BASE, POISON_STACK_BASE, BLEED_STACK_BASE -> true;
             default -> false;
@@ -2074,13 +2230,13 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     }
 
     private void appendGridLine(UICommandBuilder commands, int index, Anchor placement, boolean major) {
-        commands.append("#TreeCanvas", major ? GRID_MAJOR_UI : GRID_MINOR_UI);
-        commands.setObject(child(index, ".Anchor"), placement);
+        commands.append("#EditorGridLayer", major ? GRID_MAJOR_UI : GRID_MINOR_UI);
+        commands.setObject("#EditorGridLayer[" + index + "].Anchor", placement);
     }
 
     private void appendCenterGridLine(UICommandBuilder commands, int index, Anchor placement) {
-        commands.append("#TreeCanvas", GRID_CENTER_UI);
-        commands.setObject(child(index, ".Anchor"), placement);
+        commands.append("#EditorGridLayer", GRID_CENTER_UI);
+        commands.setObject("#EditorGridLayer[" + index + "].Anchor", placement);
     }
 
     private record EdgeSegmentVisual(Anchor anchor, String orientation, int width, int height) {}

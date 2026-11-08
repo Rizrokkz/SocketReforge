@@ -2,7 +2,7 @@
   "Parent": "DamageEntityParent_Hit_Interrupt",
   "DamageCalculator": {
     "BaseDamage": {
-      "Wind": 24
+      "Wind": 1.1
     }
   },
   "DamageAttribute": "Damage",

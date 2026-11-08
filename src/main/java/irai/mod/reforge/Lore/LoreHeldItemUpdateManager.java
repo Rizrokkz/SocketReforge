@@ -376,6 +376,7 @@ public final class LoreHeldItemUpdateManager {
             dst.setEffectOverride(src.getEffectOverride());
             dst.setLevel(src.getLevel());
             dst.setXp(src.getXp());
+            dst.setXpBonusRemainder(src.getXpBonusRemainder());
             dst.setFeedTier(src.getFeedTier());
             dst.setLocked(src.isLocked());
         }

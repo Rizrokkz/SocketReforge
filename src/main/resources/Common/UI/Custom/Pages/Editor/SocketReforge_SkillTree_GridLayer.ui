@@ -1,0 +1,5 @@
+Group #EditorGridLayer {
+  Anchor: (Full: 0);
+  LayoutMode: Full;
+  Visible: false;
+}

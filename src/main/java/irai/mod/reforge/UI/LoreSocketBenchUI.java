@@ -25,6 +25,7 @@ import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCu
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.ui.PatchStyle;
+import com.hypixel.hytale.server.core.ui.Anchor;
 import com.hypixel.hytale.server.core.ui.Value;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
@@ -71,6 +72,11 @@ public final class LoreSocketBenchUI {
     private static final String LORE_SOCKET_TILE_UI = "Pages/LoreSocketBenchTile.ui";
     private static final String LORE_PROGRESS_NODE_UI = "Pages/LoreSocketBenchProgressNode.ui";
     private static final int[] LORE_PROGRESS_NODE_FRAMES = {21, 20, 19, 18, 17};
+    private static final int LORE_PROGRESS_TRACK_WIDTH = 728;
+    private static final int LORE_PROGRESS_TRACK_LEFT = 28;
+    private static final int LORE_PROGRESS_TRACK_RIGHT = 28;
+    private static final int LORE_PROGRESS_CANVAS_WIDTH = LORE_PROGRESS_TRACK_WIDTH
+            + LORE_PROGRESS_TRACK_LEFT + LORE_PROGRESS_TRACK_RIGHT;
     private static final String[] LORE_SOCKET_COLOR_KEYS = {
             "none", "locked", "red", "blue", "green", "purple", "yellow", "orange", "black", "white", "cyan"
     };
@@ -1716,6 +1722,7 @@ public final class LoreSocketBenchUI {
                 socket.setLevel(hasLoreProgression
                         ? LoreSocketManager.getCoreAbilityRunestoneLevel(gem.item) : 0);
                 socket.setXp(0);
+                socket.setXpBonusRemainder(0);
                 socket.setFeedTier(hasLoreProgression
                         ? LoreSocketManager.getCoreAbilityRunestoneFeedTier(gem.item) : 0);
                 socket.setRuneDamageFeeds(LoreSocketManager.getRunestoneDamageFeeds(gem.item));
@@ -1777,6 +1784,7 @@ public final class LoreSocketBenchUI {
             socket.setColor(gemColor.toLowerCase(Locale.ROOT));
             socket.setLevel(1);
             socket.setXp(0);
+            socket.setXpBonusRemainder(0);
             socket.setFeedTier(0);
             socket.setRuneDamageFeeds(0);
             socket.setRuneManaFeeds(0);
@@ -2440,6 +2448,16 @@ public final class LoreSocketBenchUI {
             if (state == null) state = new SelectionState(null, null, null, null, null);
 
             switch (event.action) {
+                case "progress_node_hover" -> {
+                    showProgressNodeTooltip(player, event.target);
+                    return;
+                }
+                case "progress_node_exit" -> {
+                    UICommandBuilder commands = new UICommandBuilder();
+                    commands.set("#LoreProgressHover.Visible", false);
+                    sendUpdate(commands, false);
+                    return;
+                }
                 case "select_equipment" -> state = stateWith(state, event.target, null, state.supportKey,
                         null, null, null, null);
                 case "select_slot" -> state = stateWith(state, state.equipmentKey, state.gemKey,
@@ -2584,7 +2602,7 @@ public final class LoreSocketBenchUI {
             }
             appendEquipmentCards(commands, events, player, equipment);
             appendLoreSocketTiles(commands, events, player, equipment, loreData);
-            appendLoreProgression(commands, player, selectedSocket, runeDelta);
+            appendLoreProgression(commands, events, player, selectedSocket, runeDelta);
             appendGemCards(commands, events, materials, gem);
             appendSupportCards(commands, events, player, support);
         }
@@ -2712,8 +2730,9 @@ public final class LoreSocketBenchUI {
             return tooltip.toString();
         }
 
-        private void appendLoreProgression(UICommandBuilder commands, Player player,
+        private void appendLoreProgression(UICommandBuilder commands, UIEventBuilder events, Player player,
                                            LoreSocketData.LoreSocket socket, boolean runeDelta) {
+            commands.set("#LoreProgressHover.Visible", false);
             String emptyText;
             if (socket == null) {
                 emptyText = LangLoader.getUITranslation(player, "ui.lore_socket.progress_empty_select");
@@ -2727,10 +2746,18 @@ public final class LoreSocketBenchUI {
             commands.set("#LoreProgressEmpty.Visible", !showProgress);
             commands.set("#LoreProgressSummary.Text", showProgress
                     ? buildLoreProgressSummary(player, socket) : "");
-            if (!showProgress) return;
+            if (!showProgress) {
+                commands.set("#LoreProgressTrackFill.Visible", false);
+                commands.setObject("#LoreProgressTrackFill.Anchor", loreProgressTrackAnchor(0));
+                return;
+            }
 
             List<ProgressMilestone> milestones = buildProgressMilestones();
             int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
+            int progressWidth = (int) Math.round(LORE_PROGRESS_TRACK_WIDTH
+                    * loreProgressTrackFraction(socket, milestones, maxLevel));
+            commands.setObject("#LoreProgressTrackFill.Anchor", loreProgressTrackAnchor(progressWidth));
+            commands.set("#LoreProgressTrackFill.Visible", progressWidth > 0);
             for (int i = 0; i < milestones.size(); i++) {
                 ProgressMilestone milestone = milestones.get(i);
                 commands.append("#LoreProgressionNodes", LORE_PROGRESS_NODE_UI);
@@ -2748,9 +2775,37 @@ public final class LoreSocketBenchUI {
                 commands.set(base + " #LoreProgressRuneIcon.Visible", rewardItemId != null);
                 commands.set(base + " #LoreProgressNodeCurrent.Visible",
                         rewardItemId != null && isCurrentProgressMilestone(socket, milestone, maxLevel));
+                String inspectRuneItemId = progressionRuneTooltipItemId(socket, milestone, rewardItemId);
                 commands.set(base + " #LoreProgressNodeHit.TooltipText",
-                        buildProgressMilestoneTooltip(player, socket, milestone, rewardItemId, maxLevel));
+                        buildProgressMilestoneTooltip(player, socket, milestone, inspectRuneItemId, maxLevel));
+                events.addEventBinding(CustomUIEventBindingType.MouseEntered,
+                        base + " #LoreProgressNodeHit",
+                        EventData.of("Action", "progress_node_hover").append("Target", String.valueOf(i)), false);
+                events.addEventBinding(CustomUIEventBindingType.MouseExited,
+                        base + " #LoreProgressNodeHit",
+                        EventData.of("Action", "progress_node_exit"), false);
             }
+        }
+
+        private void showProgressNodeTooltip(Player player, String target) {
+            int index = parseIndex(target, -1);
+            List<ProgressMilestone> milestones = buildProgressMilestones();
+            if (index < 0 || index >= milestones.size()) return;
+            Entry equipment = resolveSelection(snapshot.equipments, state.equipmentKey);
+            ItemStack item = equipment == null ? null : getEffectiveEquipmentItem(player, equipment);
+            LoreSocketData data = item == null ? null : LoreSocketManager.getLoreSocketData(item);
+            LoreSocketData.LoreSocket socket = selectedSocket(data, state.slotKey);
+            if (socket == null || !socket.hasSpirit()) return;
+
+            ProgressMilestone milestone = milestones.get(index);
+            String visibleRuneItemId = progressionRuneItemId(socket, milestone);
+            String inspectRuneItemId = progressionRuneTooltipItemId(socket, milestone, visibleRuneItemId);
+            int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
+            UICommandBuilder commands = new UICommandBuilder();
+            commands.set("#LoreProgressHoverText.Text",
+                    buildProgressMilestoneTooltip(player, socket, milestone, inspectRuneItemId, maxLevel));
+            commands.set("#LoreProgressHover.Visible", true);
+            sendUpdate(commands, false);
         }
 
         private static List<ProgressMilestone> buildProgressMilestones() {
@@ -2783,7 +2838,8 @@ public final class LoreSocketBenchUI {
                 return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_max", level);
             }
             if (LoreSocketManager.needsFeed(socket)) {
-                return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_gate", level);
+                return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_gate", level)
+                        + " | " + feedCostSummary(player, socket);
             }
 
             int nextGate = interval * (Math.max(0, socket.getFeedTier()) + 1);
@@ -2794,7 +2850,13 @@ public final class LoreSocketBenchUI {
             }
             long missing = xpMissingToLevel(socket, nextGate);
             return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_gate_xp",
-                    level, Math.max(0, socket.getXp()), LoreSocketManager.getXpRequiredForLevel(level), missing, nextGate);
+                    level, Math.max(0, socket.getXp()), LoreSocketManager.getXpRequiredForLevel(level), missing, nextGate)
+                    + " | " + feedCostSummary(player, socket);
+        }
+
+        private static String feedCostSummary(Player player, LoreSocketData.LoreSocket socket) {
+            return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_feed_cost",
+                    LoreSocketManager.getFeedCost(socket));
         }
 
         private static long xpMissingToLevel(LoreSocketData.LoreSocket socket, int targetLevel) {
@@ -2805,6 +2867,56 @@ public final class LoreSocketBenchUI {
                 needed += Math.max(1, LoreSocketManager.getXpRequiredForLevel(level));
             }
             return Math.max(0L, needed);
+        }
+
+        private static double loreProgressTrackFraction(LoreSocketData.LoreSocket socket,
+                                                        List<ProgressMilestone> milestones,
+                                                        int maxLevel) {
+            if (socket == null || milestones == null || milestones.isEmpty()) return 0.0d;
+            int lastMilestoneIndex = milestones.size() - 1;
+            if (milestones.size() == 1) return progressTrackMilestoneFraction(0, 1);
+
+            int level = Math.max(1, Math.min(maxLevel, socket.getLevel()));
+            if (level >= maxLevel) {
+                return progressTrackMilestoneFraction(lastMilestoneIndex, milestones.size());
+            }
+            double progressLevel = level;
+            if (!LoreSocketManager.needsFeed(socket)) {
+                int xpRequired = Math.max(1, LoreSocketManager.getXpRequiredForLevel(level));
+                double levelProgress = Math.max(0.0d, Math.min(1.0d,
+                        socket.getXp() / (double) xpRequired));
+                progressLevel += levelProgress;
+            }
+
+            for (int i = 0; i < milestones.size() - 1; i++) {
+                int startLevel = milestones.get(i).level;
+                int endLevel = milestones.get(i + 1).level;
+                if (progressLevel > endLevel) continue;
+                double span = Math.max(1, endLevel - startLevel);
+                double segmentProgress = Math.max(0.0d, Math.min(1.0d,
+                        (progressLevel - startLevel) / span));
+                double startFraction = progressTrackMilestoneFraction(i, milestones.size());
+                double endFraction = progressTrackMilestoneFraction(i + 1, milestones.size());
+                return Math.max(0.0d, Math.min(1.0d,
+                        startFraction + (endFraction - startFraction) * segmentProgress));
+            }
+            return progressTrackMilestoneFraction(lastMilestoneIndex, milestones.size());
+        }
+
+        private static double progressTrackMilestoneFraction(int index, int milestoneCount) {
+            double nodeCenter = LORE_PROGRESS_CANVAS_WIDTH
+                    * ((index + 0.5d) / Math.max(1, milestoneCount));
+            return Math.max(0.0d, Math.min(1.0d,
+                    (nodeCenter - LORE_PROGRESS_TRACK_LEFT) / LORE_PROGRESS_TRACK_WIDTH));
+        }
+
+        private static Anchor loreProgressTrackAnchor(int width) {
+            Anchor anchor = new Anchor();
+            anchor.setLeft(Value.of(LORE_PROGRESS_TRACK_LEFT));
+            anchor.setTop(Value.of(188));
+            anchor.setWidth(Value.of(Math.max(0, Math.min(LORE_PROGRESS_TRACK_WIDTH, width))));
+            anchor.setHeight(Value.of(3));
+            return anchor;
         }
 
         private static boolean isCurrentProgressMilestone(LoreSocketData.LoreSocket socket,
@@ -2862,11 +2974,27 @@ public final class LoreSocketBenchUI {
                         "ui.lore_socket.progress_node_xp", xpMissingToLevel(socket, nextGate), nextGate));
             }
             if (rewardItemId != null) {
+                String rewardLabelKey = isFeedGateRuneStage(socket, milestone)
+                        ? "ui.lore_socket.progress_node_rune_stage"
+                        : "ui.lore_socket.progress_node_reward";
                 tooltip.append('\n').append(LangLoader.getUITranslation(player,
-                        "ui.lore_socket.progress_node_reward",
+                        rewardLabelKey,
                         UIItemUtils.displayNameOrItemId(new ItemStack(rewardItemId, 1), player)));
+                String descriptionKey = "irai.items." + rewardItemId + ".description";
+                String description = LangLoader.getUITranslation(player, descriptionKey);
+                if (description != null && !description.isBlank() && !description.equals(descriptionKey)) {
+                    tooltip.append('\n').append(description);
+                }
             }
             return tooltip.toString();
+        }
+
+        private static boolean isFeedGateRuneStage(LoreSocketData.LoreSocket socket,
+                                                   ProgressMilestone milestone) {
+            return socket != null && milestone.feedGate && !milestone.maxLevel
+                    && (LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())
+                    || LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())
+                    || LoreSocketManager.isCoreAbilityRunestoneSpirit(socket.getSpiritId()));
         }
 
         private static String progressionRuneItemId(LoreSocketData.LoreSocket socket,
@@ -2878,7 +3006,24 @@ public final class LoreSocketBenchUI {
                         spiritId, milestone.feedTier);
                 String previousRuneItemId = milestone.feedTier <= 1 ? null
                         : LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId, milestone.feedTier - 1);
-                return runeItemId != null && !runeItemId.equals(previousRuneItemId) ? runeItemId : null;
+                return runeItemId != null && (milestone.feedTier == 1 || !runeItemId.equals(previousRuneItemId))
+                        ? runeItemId : null;
+            }
+            if (milestone.feedGate && milestone.feedTier >= 1
+                    && LoreSocketManager.isWolfPackSpirit(spiritId)) {
+                String runeItemId = LoreSocketManager.resolveWolfPackRuneItemId(milestone.feedTier);
+                String previousRuneItemId = milestone.feedTier <= 1 ? null
+                        : LoreSocketManager.resolveWolfPackRuneItemId(milestone.feedTier - 1);
+                return !runeItemId.equals(previousRuneItemId) ? runeItemId : null;
+            }
+            if (milestone.feedGate && milestone.feedTier >= 1
+                    && LoreSocketManager.isOmnislashSpirit(spiritId)) {
+                String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(
+                        milestone.level, milestone.feedTier);
+                String previousRuneItemId = milestone.feedTier <= 1 ? null
+                        : LoreSocketManager.resolveOmnislashRuneItemId(
+                                milestone.level, milestone.feedTier - 1);
+                return !runeItemId.equals(previousRuneItemId) ? runeItemId : null;
             }
             if (!milestone.maxLevel) return null;
             int feedTier = Math.max(0, milestone.feedTier);
@@ -2893,6 +3038,25 @@ public final class LoreSocketBenchUI {
             if (LoreSocketManager.isBloodRushSpirit(spiritId)) return LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
             if (LoreSocketManager.isPummelSpirit(spiritId)) return LoreSocketManager.PUMMEL_RUNE_MAX_TIER_ITEM_ID;
             return null;
+        }
+
+        private static String progressionRuneTooltipItemId(LoreSocketData.LoreSocket socket,
+                                                            ProgressMilestone milestone,
+                                                            String visibleRuneItemId) {
+            if (socket == null || milestone == null) return visibleRuneItemId;
+            if (milestone.feedGate && milestone.feedTier >= 1) {
+                String spiritId = socket.getSpiritId();
+                if (LoreSocketManager.isCoreAbilityRunestoneSpirit(spiritId)) {
+                    return LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId, milestone.feedTier);
+                }
+                if (LoreSocketManager.isWolfPackSpirit(spiritId)) {
+                    return LoreSocketManager.resolveWolfPackRuneItemId(milestone.feedTier);
+                }
+                if (LoreSocketManager.isOmnislashSpirit(spiritId)) {
+                    return LoreSocketManager.resolveOmnislashRuneItemId(milestone.level, milestone.feedTier);
+                }
+            }
+            return visibleRuneItemId;
         }
 
         private static List<DetailRow> buildNativeSlotDetailRows(Player player,

@@ -71,6 +71,20 @@ final class CharacterPathEdgeRouter {
         return List.copyOf(result);
     }
 
+    /** Checks a candidate node against already routed edge corridors without rerouting the graph. */
+    static boolean nodeClearsRoutes(double x, double y, double size, List<RoutedEdge> routes) {
+        double radiusSquared = squared(size / 2.0 + CLEARANCE);
+        for (RoutedEdge route : routes) {
+            List<Point> points = route.points();
+            for (int i = 1; i < points.size(); i++) {
+                if (pointSegmentDistanceSquared(x, y, points.get(i - 1), points.get(i)) < radiusSquared) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private List<Point> plan(Work work) {
         double base = Math.atan2(work.second().y() - work.first().y(), work.second().x() - work.first().x());
         int[] offsets = {0, 1, -1, 2, -2, 3, -3, 4};

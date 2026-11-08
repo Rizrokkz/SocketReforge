@@ -16,6 +16,8 @@ public final class LoreSocketData {
         private String effectOverride;
         private int level;
         private int xp;
+        /** Thousandths of bonus XP accrued from proc XP percentage bonuses. */
+        private int xpBonusRemainder;
         private int feedTier;
         private int runeDamageFeeds;
         private int runeManaFeeds;
@@ -83,6 +85,14 @@ public final class LoreSocketData {
 
         public void setXp(int xp) {
             this.xp = Math.max(0, xp);
+        }
+
+        public int getXpBonusRemainder() {
+            return xpBonusRemainder;
+        }
+
+        public void setXpBonusRemainder(int xpBonusRemainder) {
+            this.xpBonusRemainder = Math.max(0, Math.min(999, xpBonusRemainder));
         }
 
         public int getFeedTier() {

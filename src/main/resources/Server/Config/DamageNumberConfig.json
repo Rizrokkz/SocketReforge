@@ -15,7 +15,7 @@
                  ],
     "KINDS":  [
                   "FLAT|label=|format={amount}|color=#FFFFFF|ui=SocketReforge_CombatText_Flat|particleFont=FloatingDamage_FLAT",
-                  "CRITICAL|label=|format={amount}|color=#FF5555|ui=SocketReforge_CombatText_Critical|particleFont=FloatingDamage_CRITICAL|particleIcon=FloatingDamage_Icon_Critical",
+                  "CRITICAL|label=|format=!!!{amount}!!!|color=#FF5555|ui=SocketReforge_CombatText_Critical|particleFont=FloatingDamage_CRITICAL|particleIcon=FloatingDamage_Icon_Critical",
                   "FIRE|label=|format={amount}|color=#FFAA00|ui=SocketReforge_CombatText_Burn|particleFont=FloatingDamage_FIRE|particleIcon=FloatingDamage_Icon_Fire",
                   "ICE|label=|format={amount}|color=#55FFFF|ui=SocketReforge_CombatText_Ice|particleFont=FloatingDamage_ICE|particleIcon=FloatingDamage_Icon_Ice",
                   "BURN|label=|format={amount}|color=#FFAA00|ui=SocketReforge_CombatText_Burn|uiAlt=SocketReforge_CombatText_Burn_Alt|dot=true|particleFont=FloatingDamage_BURN|particleIcon=FloatingDamage_Icon_Fire",

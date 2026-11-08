@@ -56,6 +56,7 @@ public final class CharacterPathService {
         MAX_MANA_FLAT, MANA_REGEN_PER_SECOND,
         MAX_STAMINA_FLAT, STAMINA_REGEN_PER_SECOND,
         DAMAGE_PERCENT, DAMAGE_RESISTANCE, CRIT_DAMAGE_PERCENT, CRIT_CHANCE_PERCENT, ATTACK_SPEED_PERCENT,
+        LORE_XP_GAIN_PERCENT,
 
         // Bench and elemental bonuses are authorable through the skill-tree editor.
         // REFINING_CHANCE remains for existing trees and grants an upgrade guarantee.
@@ -154,6 +155,9 @@ public final class CharacterPathService {
                 effect(Bonus.MANA_REGEN_PER_SECOND, 0.10)));
         add(nodes, byId, node("arcana_core", Category.ARCANA, "Arcane Keystone", "+8 maximum Mana and +0.25 Mana regenerated per second.", 1, null,
                 effect(Bonus.MAX_MANA_FLAT, 8.0), effect(Bonus.MANA_REGEN_PER_SECOND, 0.25)));
+        add(nodes, byId, node("arcana_lore_insight", Category.ARCANA, "Lore Insight",
+                "+10% Lore XP gained from each proc per rank.", 4, null,
+                effect(Bonus.LORE_XP_GAIN_PERCENT, 0.10)));
         add(nodes, byId, node("arcana_resonance", Category.ARCANA, "Resonance", "+1.5 maximum Mana per rank.", 3, null,
                 effect(Bonus.MAX_MANA_FLAT, 1.5)));
         add(nodes, byId, node("arcana_focus", Category.ARCANA, "Quiet Focus", "+0.05 Mana regenerated per second per rank.", 3, null,
@@ -282,6 +286,7 @@ public final class CharacterPathService {
         connect(edges, "arcana_regen", "arcana_focus");
         connect(edges, "arcana_focus", "arcana_core");
         connect(edges, "arcana_core", "arcana_spark");
+        connect(edges, "arcana_core", "arcana_lore_insight");
         connect(edges, "arcana_core", "hybrid_reserve");
         connect(edges, "endurance_stamina", "endurance_reserve");
         connect(edges, "endurance_reserve", "endurance_regen");

@@ -1603,24 +1603,24 @@ public final class LoreProcHandler {
                 int coreHits = resolveCoreHitCount(core.ability, core.level, core.feedTier);
                 if (selfIsAttacker && grandSlam != null) {
                     armGrandSlamAugment(result.playerId, grandSlam, coreHits);
-                    changed |= applyProcXp(data, grandSlam, xpAwarded);
+                    changed |= applyProcXp(data, grandSlam, xpAwarded, self);
                 }
-                changed |= applyProcXp(data, core, xpAwarded);
+                changed |= applyProcXp(data, core, xpAwarded, self);
 
                 for (PendingLoreProc augment : augmentProcs) {
                     if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
-                    changed |= applyProcXp(data, augment, xpAwarded);
+                    changed |= applyProcXp(data, augment, xpAwarded, self);
                 }
                 for (PendingLoreProc augment : forcedAugments) {
                     if (grandSlam != null && augment.socketIndex == grandSlam.socketIndex) {
                         continue;
                     }
-                    changed |= applyProcXp(data, augment, xpAwarded);
+                    changed |= applyProcXp(data, augment, xpAwarded, self);
                 }
                 for (PendingLoreProc modifier : modifierProcs) {
-                    changed |= applyProcXp(data, modifier, xpAwarded);
+                    changed |= applyProcXp(data, modifier, xpAwarded, self);
                 }
             }
             if (executeImmediately) {
@@ -1633,7 +1633,7 @@ public final class LoreProcHandler {
             LoreProcBatch batch = new LoreProcBatch(store, selfRef, otherRef, selfIsAttacker, result.playerId,
                     result.pending, durationMs, damage, commandBuffer, true);
             for (PendingLoreProc proc : result.pending) {
-                changed |= applyProcXp(data, proc, xpAwarded);
+                changed |= applyProcXp(data, proc, xpAwarded, self);
             }
             if (executeImmediately) {
                 executeBatchInline(batch);
@@ -4844,14 +4844,15 @@ public final class LoreProcHandler {
 
     private static boolean applyProcXp(LoreSocketData data,
                                        PendingLoreProc proc,
-                                       java.util.Set<Integer> awarded) {
+                                       java.util.Set<Integer> awarded,
+                                       Player player) {
         if (data == null || proc == null) {
             return false;
         }
         if (awarded != null && !awarded.add(proc.socketIndex)) {
             return false;
         }
-        return LoreSocketManager.addProcXp(data, proc.socketIndex);
+        return LoreSocketManager.addProcXp(data, proc.socketIndex, player);
     }
 
     private static boolean isSynergyEligible(LoreAbility ability) {

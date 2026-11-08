@@ -945,7 +945,8 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
 
     private static boolean isPercentBonus(Bonus bonus) {
         return switch (bonus) {
-            case DAMAGE_PERCENT, DAMAGE_RESISTANCE, CRIT_DAMAGE_PERCENT, CRIT_CHANCE_PERCENT, ATTACK_SPEED_PERCENT,
+            case DAMAGE_PERCENT, DAMAGE_RESISTANCE, CRIT_DAMAGE_PERCENT, CRIT_CHANCE_PERCENT,
+                    ATTACK_SPEED_PERCENT, LORE_XP_GAIN_PERCENT,
                     ELEMENTAL_DAMAGE, ELEMENTAL_DOT_CRIT_CHANCE, ELEMENTAL_DOT_CRIT_DAMAGE,
                     ELEMENTAL_STACK_BASE, POISON_STACK_BASE, BLEED_STACK_BASE,
                     REFINING_CHANCE, REFINING_BREAK_PROTECTION, REFINING_DEGRADE_PROTECTION,
@@ -968,6 +969,7 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
             case CRIT_DAMAGE_PERCENT -> "critical damage";
             case CRIT_CHANCE_PERCENT -> "critical chance";
             case ATTACK_SPEED_PERCENT -> "attack speed (multi-hit chance)";
+            case LORE_XP_GAIN_PERCENT -> "lore XP gain";
             case ELEMENTAL_DAMAGE -> "elemental damage";
             case ELEMENTAL_DOT_CRIT_CHANCE -> "elemental status critical chance";
             case ELEMENTAL_DOT_CRIT_DAMAGE -> "elemental status critical damage";

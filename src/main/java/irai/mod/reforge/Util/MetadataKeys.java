@@ -47,6 +47,7 @@ public final class MetadataKeys {
     public static final String LORE_SOCKET_SPIRITS = "SocketReforge.Lore.Socket.Spirits";
     public static final String LORE_SOCKET_LEVELS = "SocketReforge.Lore.Socket.Levels";
     public static final String LORE_SOCKET_XP = "SocketReforge.Lore.Socket.XP";
+    public static final String LORE_SOCKET_XP_BONUS_REMAINDERS = "SocketReforge.Lore.Socket.XpBonusRemainders";
     public static final String LORE_SOCKET_COLORS = "SocketReforge.Lore.Socket.Colors";
     public static final String LORE_SOCKET_FEED_TIERS = "SocketReforge.Lore.Socket.FeedTiers";
     public static final String LORE_SOCKET_LOCKED = "SocketReforge.Lore.Socket.Locked";

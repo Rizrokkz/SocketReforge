@@ -135,6 +135,7 @@ public final class CharacterPathEditorService {
             Bonus.REFINING_UPGRADE_CHANCE, Bonus.REFINING_JACKPOT_CHANCE, Bonus.SOCKET_CHANCE,
             Bonus.DAMAGE_PERCENT, Bonus.DAMAGE_RESISTANCE,
             Bonus.CRIT_CHANCE_PERCENT, Bonus.CRIT_DAMAGE_PERCENT, Bonus.ATTACK_SPEED_PERCENT,
+            Bonus.LORE_XP_GAIN_PERCENT,
             Bonus.ELEMENTAL_DAMAGE, Bonus.ELEMENTAL_DOT_CRIT_CHANCE,
             Bonus.ELEMENTAL_DOT_CRIT_DAMAGE, Bonus.ELEMENTAL_STACK_BASE,
             Bonus.POISON_STACK_BASE, Bonus.BLEED_STACK_BASE);
@@ -683,6 +684,7 @@ public final class CharacterPathEditorService {
     public static List<Bonus> editableBonuses() { return EDITABLE_BONUSES; }
     public static String bonusLabel(Bonus bonus) {
         if (bonus == Bonus.ATTACK_SPEED_PERCENT) return "Attack Speed (Multi-hit Chance)";
+        if (bonus == Bonus.LORE_XP_GAIN_PERCENT) return "Lore XP Gain";
         return bonus.name().replace('_', ' ');
     }
 
@@ -934,6 +936,7 @@ public final class CharacterPathEditorService {
             case MAX_MANA_FLAT, MAX_STAMINA_FLAT -> 3.0;
             case DAMAGE_PERCENT -> 0.005;
             case ATTACK_SPEED_PERCENT -> 0.05;
+            case LORE_XP_GAIN_PERCENT -> 0.10;
             case REFINING_CHANCE, REFINING_BREAK_PROTECTION, REFINING_DEGRADE_PROTECTION,
                     REFINING_SAME_CHANCE, REFINING_UPGRADE_CHANCE, REFINING_JACKPOT_CHANCE,
                     SOCKET_CHANCE -> 0.005;
@@ -959,6 +962,7 @@ public final class CharacterPathEditorService {
             case MAX_HEALTH_FLAT, MAX_MANA_FLAT, MAX_STAMINA_FLAT -> 1.0;
             case HEALTH_REGEN_PER_SECOND, MANA_REGEN_PER_SECOND, STAMINA_REGEN_PER_SECOND -> 0.05;
             case ATTACK_SPEED_PERCENT -> 0.005;
+            case LORE_XP_GAIN_PERCENT -> 0.01;
             default -> 0.0025;
         };
     }
@@ -968,7 +972,7 @@ public final class CharacterPathEditorService {
             case REFINING_CHANCE, REFINING_BREAK_PROTECTION, REFINING_DEGRADE_PROTECTION,
                     REFINING_SAME_CHANCE, REFINING_UPGRADE_CHANCE, REFINING_JACKPOT_CHANCE,
                     SOCKET_CHANCE, DAMAGE_PERCENT, DAMAGE_RESISTANCE,
-                    CRIT_CHANCE_PERCENT, CRIT_DAMAGE_PERCENT, ATTACK_SPEED_PERCENT,
+                    CRIT_CHANCE_PERCENT, CRIT_DAMAGE_PERCENT, ATTACK_SPEED_PERCENT, LORE_XP_GAIN_PERCENT,
                     ELEMENTAL_DAMAGE, ELEMENTAL_DOT_CRIT_CHANCE, ELEMENTAL_DOT_CRIT_DAMAGE,
                     ELEMENTAL_STACK_BASE, POISON_STACK_BASE, BLEED_STACK_BASE -> true;
             default -> false;
