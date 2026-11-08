@@ -1,7 +1,6 @@
 package irai.mod.reforge.UI;
 
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,19 +19,29 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
+import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.ui.builder.EventData;
+import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
+import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.AscensionUtils;
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
+import irai.mod.reforge.Common.AttackSpeedMultiHitMath;
 import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
-import irai.mod.reforge.Common.UI.HyUIEditUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
@@ -42,6 +51,8 @@ import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
@@ -49,17 +60,16 @@ import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
-/**
- * HyUI Reforge bench page.
- * Uses reflection to keep HyUI optional at runtime.
- */
+/** Native Hytale UI and refinement logic for the equipment refinement bench. */
 public final class ReforgeBenchUI {
     private ReforgeBenchUI() {}
 
-    private static final String HYUI_PAGE_BUILDER  = "au.ellie.hyui.builders.PageBuilder";
-    private static final String HYUI_PLUGIN        = "au.ellie.hyui.HyUIPlugin";
-    private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String TEMPLATE_PATH      = "Common/UI/Custom/Pages/ReforgeBench.html";
+    private static final String NATIVE_PAGE_UI     = "Pages/RefinementBench.ui";
+    private static final String EQUIPMENT_CARD_UI  = "Pages/RefinementEquipmentCard.ui";
+    private static final String MATERIAL_CARD_UI   = "Pages/RefinementMaterialCard.ui";
+    private static final String SUPPORT_CARD_UI    = "Pages/RefinementSupportCard.ui";
+    private static final String SUPPORT_NONE_CARD_UI = "Pages/RefinementSupportNoneCard.ui";
 
     private static final String DEFAULT_MATERIAL_ID = "Refinement_Glob";
     private static final String ANTI_DEGRADATION_ID = "Anti_Degradation";
@@ -89,7 +99,6 @@ public final class ReforgeBenchUI {
     private static final SFXConfig sfxConfig = new SFXConfig();
     private static RefinementConfig refinementConfig;
     private static volatile List<String> refinementMaterialIds = List.of(DEFAULT_MATERIAL_ID);
-    private static boolean hyuiAvailable = false;
 
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
@@ -98,6 +107,7 @@ public final class ReforgeBenchUI {
     private static final int PROCESS_DURATION_MS = 1000;
     private static final int PROGRESS_TICK_MS = 50;
     private static final int MAX_RENDERED_DAMAGE_ROWS = 24;
+    private static final ThreadLocal<Boolean> nativeStatRows = ThreadLocal.withInitial(() -> false);
 
     private enum ContainerKind { HOTBAR, STORAGE }
     private enum OutcomeType { DEGRADE, DEGRADE_B, SAME, UPGRADE, JACKPOT, JACKPOT_B }
@@ -275,11 +285,11 @@ public final class ReforgeBenchUI {
     }
 
     public static void initialize() {
-        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "ReforgeBenchUI");
+        // The refinement bench uses Hytale's native custom UI and no longer needs HyUI.
     }
 
     public static boolean isAvailable() {
-        return hyuiAvailable;
+        return true;
     }
 
     public static void setRefinementConfig(RefinementConfig config) {
@@ -309,12 +319,7 @@ public final class ReforgeBenchUI {
 
     public static void open(Player player) {
         if (player == null) return;
-        if (!hyuiAvailable) {
-            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>HyUI not installed - " + LangLoader.getUITranslation(player, "ui.reforge.title") + " disabled."));
-            return;
-        }
         PlayerRef ref = player.getPlayerRef();
-        closePageIfOpen(ref);
         pendingSelections.remove(ref);
         processingPlayers.remove(ref);
         player.getWorld().execute(() -> openWithSync(player));
@@ -369,137 +374,14 @@ public final class ReforgeBenchUI {
     private static void openPage(Player player, Snapshot snapshot, SelectionState state) {
         PlayerRef playerRef = player.getPlayerRef();
         try {
-            Class<?> pageBuilderClass = Class.forName(HYUI_PAGE_BUILDER);
-            Class<?> eventBindingClass = Class.forName(HYUI_EVENT_BINDING);
-
-            Method pageForPlayer = pageBuilderClass.getMethod("pageForPlayer", PlayerRef.class);
-            Method fromHtml = pageBuilderClass.getMethod("fromHtml", String.class);
-            Method addListener = pageBuilderClass.getMethod("addEventListener", String.class, eventBindingClass, java.util.function.BiConsumer.class);
-            Method withLifetime = pageBuilderClass.getMethod("withLifetime", CustomPageLifetime.class);
-            Method openMethod = pageBuilderClass.getMethod("open", Class.forName("com.hypixel.hytale.component.Store"));
-
-            Object activating = eventBindingClass.getField("Activating").get(null);
-
-            String html = buildHtml(player, snapshot, state);
-            Object pageBuilder = pageForPlayer.invoke(null, playerRef);
-            pageBuilder = fromHtml.invoke(pageBuilder, html);
-
-            final Player finalPlayer = player;
-            final Snapshot finalSnapshot = snapshot;
-
-            for (int i = 0; i < finalSnapshot.equipments.size(); i++) {
-                final int index = i;
-                addListener.invoke(pageBuilder, equipmentCardButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            SelectionState current = pendingSelections.get(finalPlayer.getPlayerRef());
-                            pendingSelections.put(finalPlayer.getPlayerRef(), new SelectionState(
-                                    String.valueOf(index),
-                                    current != null ? current.materialKey : null,
-                                    current != null ? current.supportKey : "",
-                                    null,
-                                    0,
-                                    false));
-                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-                        });
-            }
-
-            List<RefinementConfig.MaterialTier> materialTiers = materialTierCards();
-            for (int i = 0; i < materialTiers.size(); i++) {
-                final String materialId = materialTiers.get(i).itemId;
-                addListener.invoke(pageBuilder, materialCardButtonId(i), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            SelectionState current = pendingSelections.get(finalPlayer.getPlayerRef());
-                            pendingSelections.put(finalPlayer.getPlayerRef(), new SelectionState(
-                                    current != null ? current.equipmentKey : null,
-                                    materialId,
-                                    current != null ? current.supportKey : "",
-                                    null,
-                                    0,
-                                    false));
-                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-                        });
-            }
-
-            addListener.invoke(pageBuilder, supportNoneButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        SelectionState current = pendingSelections.get(finalPlayer.getPlayerRef());
-                        pendingSelections.put(finalPlayer.getPlayerRef(), new SelectionState(
-                                current != null ? current.equipmentKey : null,
-                                current != null ? current.materialKey : null,
-                                "",
-                                null,
-                                0,
-                                false));
-                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-                    });
-
-            List<Entry> supportCards = combinedSupports(finalSnapshot.supports);
-            for (int i = 0; i < supportCards.size(); i++) {
-                final String supportId = supportCards.get(i).itemId;
-                addListener.invoke(pageBuilder, supportCardButtonId(i), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            SelectionState current = pendingSelections.get(finalPlayer.getPlayerRef());
-                            pendingSelections.put(finalPlayer.getPlayerRef(), new SelectionState(
-                                    current != null ? current.equipmentKey : null,
-                                    current != null ? current.materialKey : null,
-                                    toggleSupportKey(current != null ? current.supportKey : "", supportId),
-                                    null,
-                                    0,
-                                    false));
-                            finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-                        });
-            }
-
-            addListener.invoke(pageBuilder, "processButton", activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        PlayerRef ref = finalPlayer.getPlayerRef();
-                        if (Boolean.TRUE.equals(processingPlayers.get(ref))) return;
-
-                        SelectionState current = pendingSelections.get(ref);
-                        String eqVal = current != null ? current.equipmentKey : null;
-                        String matVal = current != null ? current.materialKey : null;
-                        String supVal = sanitizeSupportKey(finalSnapshot.supports, current != null ? current.supportKey : "");
-                        Entry equipment = resolveSelection(finalSnapshot.equipments, eqVal);
-                        Entry material = resolveMaterialKey(finalSnapshot.materials, matVal);
-                        List<Entry> supports = resolveSupportKeys(finalSnapshot.supports, supVal);
-
-                        processingPlayers.put(ref, true);
-                        pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal,
-                                LangLoader.getUITranslation(finalPlayer, "ui.reforge.status_processing"), 0, true));
-                        sfxConfig.playReforgeStart(finalPlayer);
-                        HyUIEditUtils.editText(ctxObj, "statusLabel", LangLoader.getUITranslation(finalPlayer, "ui.reforge.status_processing"));
-                        HyUIEditUtils.editProgress(ctxObj, "refineProgress", 0);
-                        HyUIEditUtils.editDisabled(ctxObj, "processButton", true);
-
-                        for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
-                            final int delay = elapsed;
-                            final int timedProgress = Math.min(99, (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
-                            scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
-                                if (!Boolean.TRUE.equals(processingPlayers.get(ref))) return;
-                                pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal,
-                                        LangLoader.getUITranslation(finalPlayer, "ui.reforge.status_processing"),
-                                        timedProgress, true));
-                                HyUIEditUtils.editProgress(ctxObj, "refineProgress", timedProgress);
-                            }), delay, TimeUnit.MILLISECONDS);
-                        }
-
-                        scheduler.schedule(() -> finalPlayer.getWorld().execute(() -> {
-                            try {
-                                ProcessResult result = processSelection(finalPlayer, equipment, material, supports);
-                                pendingSelections.put(ref, new SelectionState(eqVal, matVal, supVal, result.status, result.progress, false));
-                            } finally {
-                                processingPlayers.remove(ref);
-                                openWithSync(finalPlayer);
-                            }
-                        }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
-                    });
-
-            pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
-            Object store = getStore(playerRef);
-            Object page = openMethod.invoke(pageBuilder, store);
+            Ref<EntityStore> entityRef = playerRef.getReference();
+            Store<EntityStore> store = entityRef == null ? null : entityRef.getStore();
+            if (entityRef == null || !entityRef.isValid() || store == null) return;
+            ReforgeNativePage page = new ReforgeNativePage(playerRef, snapshot, state);
+            player.getPageManager().openCustomPage(entityRef, store, page);
             openPages.put(playerRef, page);
         } catch (Exception e) {
-            System.err.println("[SocketReforge] ReforgeBenchUI open error: " + e.getMessage());
+            System.err.println("[SocketReforge] Native refinement bench open error: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -988,7 +870,7 @@ public final class ReforgeBenchUI {
         Entry antiDegradationEntry = selectedAntiDegradationSupport(supports);
         RefinementConfig.SupportMaterial antiDegradationSupport = supportMaterial(antiDegradationEntry);
         double antiDegradationChance = antiDegradationSupport == null ? 0.0d : antiDegradationSupport.antiDegradeChance;
-        SupportOutcomeEffects supportEffects = supportOutcomeEffects(supports);
+        SupportOutcomeEffects supportEffects = supportOutcomeEffects(supports, player);
         Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
         int maxLevel = getMaxUpgradeLevel();
         int level = Math.max(0, Math.min(maxLevel, ReforgeEquip.getLevelFromItem(item)));
@@ -1034,7 +916,8 @@ public final class ReforgeBenchUI {
                     level);
         }
 
-        double rawBreakChance = effectiveBreakChance(level, isArmor, materialId, breakSupport, smithyBonuses);
+        double rawBreakChance = effectiveBreakChance(level, isArmor, materialId, breakSupport, smithyBonuses)
+                * (1.0d - supportEffects.breakProtectionFraction);
         double blockedBreakChance = breakBlockSupport == null
                 ? 0.0d
                 : rawBreakChance * (1.0d - breakBlockSupport.breakMultiplier);
@@ -1144,7 +1027,7 @@ public final class ReforgeBenchUI {
         Entry antiDegradationEntry = selectedAntiDegradationSupport(supports);
         RefinementConfig.SupportMaterial antiDegradationSupport = supportMaterial(antiDegradationEntry);
         double antiDegradationChance = antiDegradationSupport == null ? 0.0d : antiDegradationSupport.antiDegradeChance;
-        SupportOutcomeEffects supportEffects = supportOutcomeEffects(supports);
+        SupportOutcomeEffects supportEffects = supportOutcomeEffects(supports, player);
         Bonuses smithyBonuses = SmithyLegacyUtils.equippedBonuses(player);
         HammerUseResult hammerUse = new HammerUseResult(true, false);
         if (breakSupport != null && breakSupport.usesDurability()) {
@@ -1162,8 +1045,10 @@ public final class ReforgeBenchUI {
         if (consumeOnUseResult != null) {
             return consumeOnUseResult;
         }
+        CharacterPathService.awardBenchXp(player, 20, "refining");
 
-        double breakChance = effectiveBreakChance(level, isArmor, materialId, breakSupport, smithyBonuses);
+        double breakChance = effectiveBreakChance(level, isArmor, materialId, breakSupport, smithyBonuses)
+                * (1.0d - supportEffects.breakProtectionFraction);
         String breakChanceSuffix = " " + t(player, "ui.reforge.break_roll_info", formatPercent(breakChance));
         String hammerSuffix = "";
         if (breakSupport != null) {
@@ -1320,8 +1205,8 @@ public final class ReforgeBenchUI {
         double[] w = weights(level, materialId);
         w = SmithyLegacyUtils.applyToOutcomeWeights(w, smithyBonuses);
         SupportOutcomeEffects effects = supportEffects == null ? SupportOutcomeEffects.NONE : supportEffects;
-        double degradeTotal = weightAt(w, 0);
-        double same = weightAt(w, 1);
+        double degradeTotal = weightAt(w, 0) * effects.degradeWeightMultiplier;
+        double same = weightAt(w, 1) * effects.sameWeightMultiplier;
         double upgrade = weightAt(w, 2) * effects.upgradeWeightMultiplier;
         double jackpotTotal = weightAt(w, 3) * effects.jackpotWeightMultiplier;
 
@@ -1343,18 +1228,363 @@ public final class ReforgeBenchUI {
                 weights.jackpotB / weights.total);
     }
 
+    /** Native Hytale UI page for equipment refinement. */
+    private static final class ReforgeNativePage extends InteractiveCustomUIPage<ReforgeNativePage.PageEvent> {
+        private final PlayerRef owner;
+        private Snapshot snapshot;
+        private SelectionState state;
+        private volatile boolean dismissed;
+
+        ReforgeNativePage(PlayerRef owner, Snapshot snapshot, SelectionState state) {
+            super(owner, CustomPageLifetime.CanDismiss, PageEvent.CODEC);
+            this.owner = owner;
+            this.snapshot = snapshot;
+            this.state = state;
+        }
+
+        @Override
+        public void build(Ref<EntityStore> playerRef, UICommandBuilder commands,
+                          UIEventBuilder events, Store<EntityStore> store) {
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            commands.append(NATIVE_PAGE_UI);
+            populate(player, commands, events, false);
+        }
+
+        @Override
+        public void handleDataEvent(Ref<EntityStore> playerRef, Store<EntityStore> store, PageEvent event) {
+            super.handleDataEvent(playerRef, store, event);
+            if (dismissed || event == null || event.action == null) return;
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            switch (event.action) {
+                case "select_equipment" -> {
+                    state = new SelectionState(event.target, state == null ? null : state.materialKey,
+                            state == null ? "" : state.supportKey, null, 0, false);
+                    refresh(player);
+                }
+                case "select_material" -> {
+                    state = new SelectionState(state == null ? null : state.equipmentKey, event.target,
+                            state == null ? "" : state.supportKey, null, 0, false);
+                    refresh(player);
+                }
+                case "select_support" -> {
+                    String selected = state == null ? "" : state.supportKey;
+                    state = new SelectionState(state == null ? null : state.equipmentKey,
+                            state == null ? null : state.materialKey,
+                            toggleSupportKey(selected, event.target), null, 0, false);
+                    refresh(player);
+                }
+                case "clear_supports" -> {
+                    state = new SelectionState(state == null ? null : state.equipmentKey,
+                            state == null ? null : state.materialKey, "", null, 0, false);
+                    refresh(player);
+                }
+                case "refine" -> startRefinement(player);
+                default -> { }
+            }
+        }
+
+        @Override
+        public void onDismiss(Ref<EntityStore> playerRef, Store<EntityStore> store) {
+            dismissed = true;
+            processingPlayers.remove(owner);
+            openPages.remove(owner, this);
+            pendingSelections.remove(owner);
+            super.onDismiss(playerRef, store);
+        }
+
+        private void refresh(Player player) {
+            if (dismissed) return;
+            snapshot = collectSnapshot(player);
+            UICommandBuilder commands = new UICommandBuilder();
+            UIEventBuilder events = new UIEventBuilder();
+            populate(player, commands, events, true);
+            sendUpdate(commands, events, false);
+        }
+
+        private void populate(Player player, UICommandBuilder commands,
+                              UIEventBuilder events, boolean replaceContents) {
+            if (snapshot == null) snapshot = collectSnapshot(player);
+            if (state == null) state = new SelectionState(null, null, "", null, 0, false);
+            String equipmentKey = state.equipmentKey;
+            String materialKey = state.materialKey;
+            String supportKey = sanitizeSupportKey(snapshot.supports, state.supportKey);
+            boolean processing = state.processing;
+            int progress = processing ? Math.max(0, Math.min(100, state.progressValue)) : 0;
+
+            Entry selectedEquipment = resolveSelection(snapshot.equipments, equipmentKey);
+            Entry selectedMaterial = resolveMaterialKey(snapshot.materials, materialKey);
+            List<Entry> selectedSupports = resolveSupportKeys(snapshot.supports, supportKey);
+            MaterialRequirement requiredMaterial = getMaterialRequirement(player, selectedEquipment);
+            if (selectedMaterial == null && requiredMaterial != null) {
+                selectedMaterial = findFirstByItemId(snapshot.materials, requiredMaterial.itemId);
+                materialKey = requiredMaterial.itemId;
+            }
+            MaterialRequirement materialRequirement = getMaterialRequirement(player, selectedEquipment, selectedMaterial);
+            int materialCost = materialRequirement == null ? DEFAULT_MATERIAL_COST : materialRequirement.cost;
+            String materialName = materialRequirement == null
+                    ? t(player, "ui.reforge.material")
+                    : resolveMaterialName(player, materialRequirement.itemId,
+                            findFirstByItemId(snapshot.materials, materialRequirement.itemId));
+            int materialCount = materialRequirement == null ? 0
+                    : countMaterials(snapshot.materials, materialRequirement.itemId);
+
+            Preview preview = buildPreview(player, selectedEquipment, selectedMaterial, selectedSupports);
+            String status = state.statusText == null ? t(player, "ui.reforge.status_idle") : state.statusText;
+            if (!processing) {
+                if (selectedEquipment == null) {
+                    status = t(player, "ui.reforge.status_no_equipment");
+                } else if (preview.currentLevel >= getMaxUpgradeLevel()) {
+                    status = t(player, "ui.reforge.status_max_level");
+                } else if (materialCount < materialCost) {
+                    status = t(player, "ui.reforge.status_need_material", materialCost, materialName);
+                } else if (t(player, "ui.reforge.status_idle").equals(status)) {
+                    status = t(player, "ui.reforge.status_ready");
+                }
+            }
+            state = new SelectionState(equipmentKey, materialKey, supportKey, status, progress, processing);
+            pendingSelections.put(owner, state);
+
+            commands.set("#BenchTitle.Text", t(player, "ui.reforge.title"));
+            commands.set("#EquipmentPanelTitle.Text", t(player, "ui.reforge.equipment"));
+            commands.set("#EquipmentHint.Text", t(player, "ui.reforge.equipment"));
+            commands.set("#CurrentDamageTitle.Text", t(player, "ui.reforge.current_damage"));
+            commands.set("#ExpectedDamageTitle.Text", t(player, "ui.reforge.expected_damage"));
+            commands.set("#RefinementPanelTitle.Text", t(player, "ui.reforge.material"));
+            commands.set("#ChancePanelTitle.Text", t(player, "ui.reforge.expected_outcome"));
+            commands.set("#ChanceBreakLabel.Text", t(player, "ui.reforge.chance_break"));
+            commands.set("#ChanceDegradeLabel.Text", t(player, "ui.reforge.chance_degrade"));
+            commands.set("#ChanceSameLabel.Text", t(player, "ui.reforge.chance_same"));
+            commands.set("#ChanceUpgradeLabel.Text", t(player, "ui.reforge.chance_upgrade"));
+            commands.set("#ChanceJackpotLabel.Text", t(player, "ui.reforge.chance_jackpot"));
+            commands.set("#ChanceBreakValue.Text", preview.chanceBreak);
+            commands.set("#ChanceDegradeValue.Text", preview.chanceDegrade);
+            commands.set("#ChanceSameValue.Text", preview.chanceSame);
+            commands.set("#ChanceUpgradeValue.Text", preview.chanceUpgrade);
+            commands.set("#ChanceJackpotValue.Text", preview.chanceJackpot);
+            commands.set("#ChanceNote.Text", preview.chanceNote);
+            commands.set("#SelectedEquipmentIcon.ItemId",
+                    selectedEquipment == null ? "" : selectedEquipment.itemId);
+            commands.set("#SelectedEquipmentIcon.Visible", selectedEquipment != null);
+            commands.set("#SelectedEquipmentName.Text", buildMetadataName(selectedEquipment));
+            commands.set("#SelectedEquipmentLevel.Text", buildMetadataLevel(selectedEquipment));
+            commands.set("#RefineProgressTitle.Text", t(player, "ui.reforge.refine_progress"));
+            commands.set("#RefineStatus.Text", status);
+            commands.set("#RefineMaterialCost.Text",
+                    t(player, "ui.reforge.consumes_material", materialCost, materialName));
+            commands.set("#RefineButton.Text", t(player, "ui.reforge.button_refine"));
+            commands.set("#RefineProgress.Value", progress / 100.0f);
+            commands.set("#RefinePercent.Text", progress + "%");
+
+            boolean canProcess = !shouldDisable(processing, selectedEquipment, materialCount, materialCost);
+            commands.set("#RefineButton.Visible", canProcess);
+            commands.set("#RefineUnavailable.Visible", !canProcess && !processing);
+            commands.set("#RefineBusy.Visible", processing);
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#RefineButton",
+                    EventData.of("Action", "refine"));
+            if (replaceContents) {
+                commands.clear("#EquipmentList");
+                commands.clear("#MaterialCardRow");
+                commands.clear("#SupportList");
+                commands.clear("#CurrentDamageRows");
+                commands.clear("#ExpectedDamageRows");
+            }
+            appendEquipmentCards(commands, events, player, equipmentKey);
+            appendMaterialCards(commands, events, player, materialKey);
+            appendSupportCards(commands, events, player, supportKey);
+            appendStatRows(commands, "#CurrentDamageRows", buildNativeDamageRows(player, selectedEquipment, false));
+            appendStatRows(commands, "#ExpectedDamageRows", buildNativeDamageRows(player, selectedEquipment, true));
+        }
+
+        private void appendEquipmentCards(UICommandBuilder commands, UIEventBuilder events,
+                                          Player player, String selectedKey) {
+            if (snapshot.equipments.isEmpty()) {
+                commands.set("#EquipmentEmpty.Text", t(player, "ui.reforge.no_equipment"));
+                commands.set("#EquipmentEmpty.Visible", true);
+            } else {
+                commands.set("#EquipmentEmpty.Visible", false);
+            }
+            int height = 0;
+            for (int i = 0; i < snapshot.equipments.size(); i++) {
+                Entry entry = snapshot.equipments.get(i);
+                if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
+                commands.append("#EquipmentList", EQUIPMENT_CARD_UI);
+                String base = child("#EquipmentList", i);
+                boolean selected = String.valueOf(i).equals(selectedKey);
+                int level = ReforgeEquip.getLevelFromItem(entry.item);
+                commands.set(base + " #EquipmentIcon.ItemId", entry.itemId);
+                commands.set(base + " #EquipmentName.Text", entry.displayName);
+                commands.set(base + " #EquipmentTier.Text", (ReforgeEquip.isArmor(entry.item)
+                        && !ReforgeEquip.isWeapon(entry.item) ? "Armor" : "Weapon")
+                        + "  |  +" + level + "  |  " + tierLabelForLevel(level));
+                commands.set(base + " #EquipmentSelected.Visible", selected);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #EquipmentCardHit",
+                        EventData.of("Action", "select_equipment").append("Target", String.valueOf(i)));
+                height += 82;
+            }
+            commands.set("#EquipmentList.ContentHeight", Math.max(720, height));
+        }
+
+        private void appendMaterialCards(UICommandBuilder commands, UIEventBuilder events,
+                                         Player player, String selectedMaterialId) {
+            List<RefinementConfig.MaterialTier> tiers = materialTierCards();
+            for (int i = 0; i < tiers.size(); i++) {
+                RefinementConfig.MaterialTier tier = tiers.get(i);
+                String itemId = tier.itemId == null || tier.itemId.isBlank()
+                        ? DEFAULT_MATERIAL_ID : tier.itemId;
+                Entry owned = findFirstByItemId(snapshot.materials, itemId);
+                int count = countMaterials(snapshot.materials, itemId);
+                commands.append("#MaterialCardRow", MATERIAL_CARD_UI);
+                String base = child("#MaterialCardRow", i);
+                boolean selected = itemId.equalsIgnoreCase(selectedMaterialId == null ? "" : selectedMaterialId);
+                commands.set(base + " #MaterialIcon.ItemId", itemId);
+                commands.set(base + " #MaterialName.Text", resolveMaterialName(player, itemId, owned));
+                commands.set(base + " #MaterialCount.Text", "x" + count);
+                commands.set(base + " #MaterialSelected.Visible", selected);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #MaterialCardHit",
+                        EventData.of("Action", "select_material").append("Target", itemId));
+            }
+            commands.set("#MaterialCardRow.ContentWidth", tiers.size() * 104);
+        }
+
+        private void appendSupportCards(UICommandBuilder commands, UIEventBuilder events,
+                                        Player player, String selectedSupportKey) {
+            Set<String> selectedIds = supportSelectionSet(selectedSupportKey);
+            commands.append("#SupportList", SUPPORT_NONE_CARD_UI);
+            String noneCard = child("#SupportList", 0);
+            commands.set(noneCard + " #SupportNoneSelected.Visible", selectedIds.isEmpty());
+            commands.set(noneCard + " #SupportNoneText.Text", t(player, "ui.reforge.support_none"));
+            events.addEventBinding(CustomUIEventBindingType.Activating, noneCard + " #SupportNoneHit",
+                    EventData.of("Action", "clear_supports"));
+            List<Entry> supports = combinedSupports(snapshot.supports);
+            int height = 64;
+            for (int i = 0; i < supports.size(); i++) {
+                Entry entry = supports.get(i);
+                if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
+                commands.append("#SupportList", SUPPORT_CARD_UI);
+                String base = child("#SupportList", i + 1);
+                boolean selected = selectedIds.contains(normalizeSupportId(entry.itemId));
+                commands.set(base + " #SupportIcon.ItemId", entry.itemId);
+                commands.set(base + " #SupportName.Text", entry.displayName);
+                commands.set(base + " #SupportDescription.Text", supportDescription(player, entry));
+                commands.set(base + " #SupportQuantity.Text", "Held: " + entry.quantity);
+                commands.set(base + " #SupportSelected.Visible", selected);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #SupportCardHit",
+                        EventData.of("Action", "select_support").append("Target", entry.itemId));
+                height += 98;
+            }
+            commands.set("#SupportList.ContentHeight", Math.max(560, height));
+        }
+
+        private void appendStatRows(UICommandBuilder commands, String parent, String content) {
+            String[] rows = content == null ? new String[0] : content.split("\\n");
+            int count = 0;
+            for (String row : rows) {
+                if (row == null || row.isBlank()) continue;
+                String[] parts = row.split("\\t", 2);
+                commands.append(parent, "Pages/RefinementStatRow.ui");
+                String base = child(parent, count++);
+                commands.set(base + " #StatLabel.Text", parts.length > 0 ? parts[0] : "");
+                commands.set(base + " #StatValue.Text", parts.length > 1 ? parts[1] : "");
+            }
+            commands.set(parent + ".ContentHeight", count * 26);
+        }
+
+        private void startRefinement(Player player) {
+            if (dismissed || Boolean.TRUE.equals(processingPlayers.get(owner))) return;
+            snapshot = collectSnapshot(player);
+            String equipmentKey = state == null ? null : state.equipmentKey;
+            String materialKey = state == null ? null : state.materialKey;
+            String supportKey = sanitizeSupportKey(snapshot.supports, state == null ? "" : state.supportKey);
+            Entry equipment = resolveSelection(snapshot.equipments, equipmentKey);
+            Entry material = resolveMaterialKey(snapshot.materials, materialKey);
+            List<Entry> supports = resolveSupportKeys(snapshot.supports, supportKey);
+            int materialCount = material == null ? 0 : countMaterials(snapshot.materials, material.itemId);
+            MaterialRequirement requirement = getMaterialRequirement(player, equipment, material);
+            int cost = requirement == null ? DEFAULT_MATERIAL_COST : requirement.cost;
+            if (shouldDisable(false, equipment, materialCount, cost)) {
+                refresh(player);
+                return;
+            }
+
+            processingPlayers.put(owner, true);
+            state = new SelectionState(equipmentKey, materialKey, supportKey,
+                    t(player, "ui.reforge.status_processing"), 0, true);
+            sfxConfig.playReforgeStart(player);
+            refresh(player);
+            for (int elapsed = PROGRESS_TICK_MS; elapsed < PROCESS_DURATION_MS; elapsed += PROGRESS_TICK_MS) {
+                final int delay = elapsed;
+                final int timedProgress = Math.min(99,
+                        (int) Math.round(((delay + PROGRESS_TICK_MS) * 100.0) / PROCESS_DURATION_MS));
+                scheduler.schedule(() -> player.getWorld().execute(() -> updateProgress(player, timedProgress)),
+                        delay, TimeUnit.MILLISECONDS);
+            }
+            scheduler.schedule(() -> player.getWorld().execute(() -> {
+                try {
+                    if (dismissed || !Boolean.TRUE.equals(processingPlayers.get(owner))) return;
+                    ProcessResult result = processSelection(player, equipment, material, supports);
+                    state = new SelectionState(equipmentKey, materialKey, supportKey,
+                            result.status, result.progress, false);
+                } finally {
+                    processingPlayers.remove(owner);
+                    if (!dismissed) refresh(player);
+                }
+            }), PROCESS_DURATION_MS, TimeUnit.MILLISECONDS);
+        }
+
+        private void updateProgress(Player player, int progress) {
+            if (dismissed || !Boolean.TRUE.equals(processingPlayers.get(owner))) return;
+            state = new SelectionState(state.equipmentKey, state.materialKey, state.supportKey,
+                    t(player, "ui.reforge.status_processing"), progress, true);
+            pendingSelections.put(owner, state);
+            UICommandBuilder commands = new UICommandBuilder();
+            commands.set("#RefineProgress.Value", progress / 100.0f);
+            commands.set("#RefinePercent.Text", progress + "%");
+            sendUpdate(commands, false);
+        }
+
+        private static String child(String parent, int index) {
+            return parent + "[" + index + "]";
+        }
+
+        public static final class PageEvent {
+            public static final BuilderCodec<PageEvent> CODEC = BuilderCodec.<PageEvent>builder(
+                            PageEvent.class, PageEvent::new)
+                    .append(new KeyedCodec<>("Action", Codec.STRING),
+                            (event, value) -> event.action = value, event -> event.action).add()
+                    .append(new KeyedCodec<>("Target", Codec.STRING),
+                            (event, value) -> event.target = value, event -> event.target).add()
+                    .build();
+
+            public String action;
+            public String target;
+
+            public PageEvent() { }
+        }
+    }
+
     private static final class SupportOutcomeEffects {
-        static final SupportOutcomeEffects NONE = new SupportOutcomeEffects(0.0d, 0.0d, 1.0d, 1.0d);
+        static final SupportOutcomeEffects NONE = new SupportOutcomeEffects(
+                0.0d, 0.0d, 0.0d, 1.0d, 1.0d, 1.0d, 1.0d);
 
         final double upgradeGuaranteeChance;
         final double jackpotGuaranteeChance;
+        final double breakProtectionFraction;
+        final double degradeWeightMultiplier;
+        final double sameWeightMultiplier;
         final double upgradeWeightMultiplier;
         final double jackpotWeightMultiplier;
 
         SupportOutcomeEffects(double upgradeGuaranteeChance, double jackpotGuaranteeChance,
-                              double upgradeWeightMultiplier, double jackpotWeightMultiplier) {
+                              double breakProtectionFraction, double degradeWeightMultiplier,
+                              double sameWeightMultiplier, double upgradeWeightMultiplier,
+                              double jackpotWeightMultiplier) {
             this.upgradeGuaranteeChance = Math.max(0.0d, Math.min(1.0d, upgradeGuaranteeChance));
             this.jackpotGuaranteeChance = Math.max(0.0d, Math.min(1.0d, jackpotGuaranteeChance));
+            this.breakProtectionFraction = Math.max(0.0d, Math.min(0.95d, breakProtectionFraction));
+            this.degradeWeightMultiplier = Math.max(0.0d, Math.min(10.0d, degradeWeightMultiplier));
+            this.sameWeightMultiplier = Math.max(0.0d, Math.min(10.0d, sameWeightMultiplier));
             this.upgradeWeightMultiplier = Math.max(0.0d, Math.min(10.0d, upgradeWeightMultiplier));
             this.jackpotWeightMultiplier = Math.max(0.0d, Math.min(10.0d, jackpotWeightMultiplier));
         }
@@ -1362,6 +1592,9 @@ public final class ReforgeBenchUI {
         boolean hasAny() {
             return upgradeGuaranteeChance > 0.0d
                     || jackpotGuaranteeChance > 0.0d
+                    || breakProtectionFraction > 0.0d
+                    || Math.abs(degradeWeightMultiplier - 1.0d) > 0.0001d
+                    || Math.abs(sameWeightMultiplier - 1.0d) > 0.0001d
                     || Math.abs(upgradeWeightMultiplier - 1.0d) > 0.0001d
                     || Math.abs(jackpotWeightMultiplier - 1.0d) > 0.0001d;
         }
@@ -1628,17 +1861,14 @@ public final class ReforgeBenchUI {
         return selected;
     }
 
-    private static SupportOutcomeEffects supportOutcomeEffects(List<Entry> supports) {
-        if (supports == null || supports.isEmpty()) {
-            return SupportOutcomeEffects.NONE;
-        }
+    private static SupportOutcomeEffects supportOutcomeEffects(List<Entry> supports, Player player) {
         double upgradeGuaranteeMiss = 1.0d;
         double jackpotGuaranteeMiss = 1.0d;
         double upgradeWeightMultiplier = 1.0d;
         double jackpotWeightMultiplier = 1.0d;
         boolean any = false;
         Set<String> appliedIds = new LinkedHashSet<>();
-        for (Entry support : supports) {
+        for (Entry support : supports == null ? List.<Entry>of() : supports) {
             RefinementConfig.SupportMaterial material = supportMaterial(support);
             if (material == null
                     || material.consumeMode == RefinementConfig.SupportConsumeMode.ON_BLOCK
@@ -1655,14 +1885,38 @@ public final class ReforgeBenchUI {
             upgradeWeightMultiplier *= material.upgradeWeightMultiplier;
             jackpotWeightMultiplier *= material.jackpotWeightMultiplier;
         }
+        double pathUpgradeGuarantee = CharacterPathService.bonus(player, Bonus.REFINING_CHANCE);
+        if (pathUpgradeGuarantee > 0.0d) {
+            upgradeGuaranteeMiss *= 1.0d - Math.min(0.25d, pathUpgradeGuarantee);
+            any = true;
+        }
+
+        // Tree bonuses alter the same outcome weights used by Smithy chest
+        // legacies. Positive protection lowers the bad-outcome weights, while
+        // chance bonuses raise the selected safe/success outcome's weight.
+        double breakProtection = Math.min(0.75d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_BREAK_PROTECTION)));
+        double degradeProtection = Math.min(0.75d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_DEGRADE_PROTECTION)));
+        double sameChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_SAME_CHANCE)));
+        double upgradeChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_UPGRADE_CHANCE)));
+        double jackpotChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_JACKPOT_CHANCE)));
+        any |= breakProtection > 0.0d || degradeProtection > 0.0d
+                || sameChance > 0.0d || upgradeChance > 0.0d || jackpotChance > 0.0d;
         if (!any) {
             return SupportOutcomeEffects.NONE;
         }
         return new SupportOutcomeEffects(
                 1.0d - upgradeGuaranteeMiss,
                 1.0d - jackpotGuaranteeMiss,
-                upgradeWeightMultiplier,
-                jackpotWeightMultiplier);
+                breakProtection,
+                1.0d - degradeProtection,
+                1.0d + sameChance,
+                upgradeWeightMultiplier * (1.0d + upgradeChance),
+                jackpotWeightMultiplier * (1.0d + jackpotChance));
     }
 
     private static int durabilityPercent(RefinementConfig.SupportMaterial support) {
@@ -1794,12 +2048,13 @@ public final class ReforgeBenchUI {
 
         List<EquipmentDamageTooltipMath.DamageBreakdown> breakdowns =
                 EquipmentDamageTooltipMath.getDamageBreakdownFromInteractionVars(item.getItemId());
-        WeaponDamageProfile averageProfile = weaponProfile(item, level, 0.0);
+        WeaponDamageProfile averageProfile = weaponProfile(player, item, level, 0.0);
         sb.append(statRow(t(player, "ui.reforge.damage_multiplier"), "x" + format3(averageProfile.multiplier), "#83D8FF", "#83D8FF"));
         sb.append(statRow(t(player, "ui.reforge.essence_resonance_damage"), bonusLine(averageProfile.damageFlat, averageProfile.damagePercent), "#77DD77", "#77DD77"));
         appendWeaponElementalDamageRows(player, sb, item, averageProfile.normal);
         sb.append(statRow(t(player, "ui.reforge.crit"), formatPercent(averageProfile.critChance / 100.0)
                 + " / +" + formatPercent(averageProfile.critDamage / 100.0), "#FF8888", "#FFAAAA"));
+        sb.append(statRow("Multi-hit Chance", formatPercent(averageProfile.multiHitChancePercent / 100.0), "#F8D36A", "#F8D36A"));
         if (breakdowns.isEmpty()) {
             sb.append(statRow(t(player, "ui.reforge.normal_total"), formatDamageValue(averageProfile.normal), "#F8D36A", "#F8D36A"));
             sb.append(statRow(t(player, "ui.reforge.crit_total"), formatDamageValue(averageProfile.crit), "#FF8888", "#FFAAAA"));
@@ -1813,7 +2068,7 @@ public final class ReforgeBenchUI {
                 sb.append(statRow("...", t(player, "ui.reforge.more_rows", breakdowns.size() - rendered)));
                 break;
             }
-            WeaponDamageProfile profile = weaponProfile(item, level, breakdown.getBaseValue());
+            WeaponDamageProfile profile = weaponProfile(player, item, level, breakdown.getBaseValue());
             sb.append(statRow(breakdown.getLabel(), formatDamageValue(profile.normal), "#D8DEE9", "#FFFFFF"));
             rendered++;
         }
@@ -1852,13 +2107,14 @@ public final class ReforgeBenchUI {
 
         List<EquipmentDamageTooltipMath.DamageBreakdown> breakdowns =
                 EquipmentDamageTooltipMath.getDamageBreakdownFromInteractionVars(item.getItemId());
-        WeaponDamageProfile currentAverage = weaponProfile(item, level, 0.0);
-        WeaponDamageProfile nextAverage = weaponProfile(item, nextLevel, 0.0);
+        WeaponDamageProfile currentAverage = weaponProfile(player, item, level, 0.0);
+        WeaponDamageProfile nextAverage = weaponProfile(player, item, nextLevel, 0.0);
         sb.append(statRow(t(player, "ui.reforge.damage_multiplier"), "x" + format3(nextAverage.multiplier), "#83D8FF", "#83D8FF"));
         sb.append(statRow(t(player, "ui.reforge.essence_resonance_damage"), bonusLine(currentAverage.damageFlat, currentAverage.damagePercent), "#77DD77", "#77DD77"));
         appendWeaponElementalDamageRows(player, sb, item, nextAverage.normal);
         sb.append(statRow(t(player, "ui.reforge.crit"), formatPercent(currentAverage.critChance / 100.0)
                 + " / +" + formatPercent(currentAverage.critDamage / 100.0), "#FF8888", "#FFAAAA"));
+        sb.append(statRow("Multi-hit Chance", formatPercent(currentAverage.multiHitChancePercent / 100.0), "#F8D36A", "#F8D36A"));
         if (breakdowns.isEmpty()) {
             sb.append(statRow(t(player, "ui.reforge.normal_total"), formatDamageValue(nextAverage.normal), "#F8D36A", "#F8D36A"));
             sb.append(statRow(t(player, "ui.reforge.crit_total"), formatDamageValue(nextAverage.crit), "#FF8888", "#FFAAAA"));
@@ -1872,7 +2128,7 @@ public final class ReforgeBenchUI {
                 sb.append(statRow("...", t(player, "ui.reforge.more_rows", breakdowns.size() - rendered)));
                 break;
             }
-            WeaponDamageProfile next = weaponProfile(item, nextLevel, breakdown.getBaseValue());
+            WeaponDamageProfile next = weaponProfile(player, item, nextLevel, breakdown.getBaseValue());
             sb.append(statRow(breakdown.getLabel(), formatDamageValue(next.normal), "#D8DEE9", "#FFFFFF"));
             rendered++;
         }
@@ -1887,12 +2143,27 @@ public final class ReforgeBenchUI {
     }
 
     private static String statRow(String label, String value, String labelColor, String valueColor) {
+        if (Boolean.TRUE.equals(nativeStatRows.get())) {
+            return (label == null ? "" : label) + "\t" + (value == null ? "" : value) + "\n";
+        }
         return "<div style=\"anchor-width:338; layout-mode:left; spacing:8;\">"
                 + "<p style=\"anchor-width:126; font-size:14; color:" + escapeHtml(labelColor) + "; white-space:nowrap;\">"
                 + escapeHtml(label)
                 + "</p><p style=\"anchor-width:204; font-size:14; color:" + escapeHtml(valueColor) + "; white-space:nowrap;\">"
                 + escapeHtml(value)
                 + "</p></div>";
+    }
+
+    private static String buildNativeDamageRows(Player player, Entry equipment, boolean expected) {
+        boolean previous = nativeStatRows.get();
+        nativeStatRows.set(true);
+        try {
+            return expected
+                    ? buildExpectedDamageRowsHtml(player, equipment)
+                    : buildCurrentDamageRowsHtml(player, equipment);
+        } finally {
+            nativeStatRows.set(previous);
+        }
     }
 
     private static String beforeAfter(double before, double after) {
@@ -1928,7 +2199,7 @@ public final class ReforgeBenchUI {
         return weaponSummary(item, level, baseDamage).getBuffedValue();
     }
 
-    private static WeaponDamageProfile weaponProfile(ItemStack item, int level, double baseOverride) {
+    private static WeaponDamageProfile weaponProfile(Player player, ItemStack item, int level, double baseOverride) {
         SocketData socketData = SocketManager.getSocketData(item);
         double base = baseOverride > 0.0
                 ? baseOverride
@@ -1943,18 +2214,22 @@ public final class ReforgeBenchUI {
 
         double damageFlat = damageBonus[0];
         double damagePercent = damageBonus[1];
-        double attackSpeedPercent = attackSpeedBonus[1];
+        double totalAttackSpeedPercent = attackSpeedBonus[1]
+                + CharacterPathService.bonusForWeapon(player, item.getItemId(), Bonus.ATTACK_SPEED_PERCENT) * 100.0d;
+        double multiHitChancePercent = AttackSpeedMultiHitMath.multiHitChancePercent(totalAttackSpeedPercent);
         double critChance = Math.max(0.0, Math.min(100.0, critChanceBonus[1]));
         double critDamage = Math.max(0.0, Math.min(200.0, critDamageBonus[1]));
         double multiplier = refineMultiplier
                 * softcoreMultiplier
                 * (1.0 + (damagePercent / 100.0))
-                * partsMultiplier
-                * (1.0 + (attackSpeedPercent / 100.0));
+                * partsMultiplier;
         double normal = Math.max(0.0, (base * multiplier) + damageFlat);
         double crit = normal * (1.0 + (critDamage / 100.0));
-        double expected = normal * (1.0 + ((critChance / 100.0) * (critDamage / 100.0)));
-        return new WeaponDamageProfile(base, damageFlat, damagePercent, critChance, critDamage, multiplier, normal, crit, expected);
+        double expected = normal * (1.0 + ((critChance / 100.0) * (critDamage / 100.0)))
+                * (1.0 + ((multiHitChancePercent / 100.0)
+                * AttackSpeedMultiHitMath.EXTRA_HIT_DAMAGE_FRACTION));
+        return new WeaponDamageProfile(base, damageFlat, damagePercent, critChance, critDamage,
+                multiHitChancePercent, multiplier, normal, crit, expected);
     }
 
     private static double[] weaponStatBonus(ItemStack item, SocketData socketData, EssenceEffect.StatType stat) {
@@ -2112,6 +2387,7 @@ public final class ReforgeBenchUI {
                                        double damagePercent,
                                        double critChance,
                                        double critDamage,
+                                       double multiHitChancePercent,
                                        double multiplier,
                                        double normal,
                                        double crit,
@@ -2311,12 +2587,21 @@ public final class ReforgeBenchUI {
             if (sb.length() > 0) {
                 sb.append(" ");
             }
-            sb.append("Support odds:");
+            sb.append("Refinement modifiers:");
             if (effects.upgradeGuaranteeChance > 0.0d) {
                 sb.append(" Upgrade guaranteed ").append(formatPercent(effects.upgradeGuaranteeChance)).append(".");
             }
             if (effects.jackpotGuaranteeChance > 0.0d) {
                 sb.append(" Jackpot guaranteed ").append(formatPercent(effects.jackpotGuaranteeChance)).append(".");
+            }
+            if (effects.breakProtectionFraction > 0.0d) {
+                sb.append(" Break chance reduced ").append(formatPercent(effects.breakProtectionFraction)).append(".");
+            }
+            if (Math.abs(effects.degradeWeightMultiplier - 1.0d) > 0.0001d) {
+                sb.append(" Degrade weight x").append(format3(effects.degradeWeightMultiplier)).append(".");
+            }
+            if (Math.abs(effects.sameWeightMultiplier - 1.0d) > 0.0001d) {
+                sb.append(" Same weight x").append(format3(effects.sameWeightMultiplier)).append(".");
             }
             if (Math.abs(effects.upgradeWeightMultiplier - 1.0d) > 0.0001d) {
                 sb.append(" Upgrade weight x").append(format3(effects.upgradeWeightMultiplier)).append(".");

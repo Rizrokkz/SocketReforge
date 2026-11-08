@@ -1,0 +1,28 @@
+@EquipmentCardHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #EquipmentCard {
+  Anchor: (Height: 78);
+  LayoutMode: Full;
+  Background: #151c26;
+  Group #EquipmentSelected { Anchor: (Left: 7, Top: 5, Bottom: 5, Width: 4); Background: #e8c030; Visible: false; }
+  ItemIcon #EquipmentIcon { ItemId: "Weapon_Sword_Copper"; Anchor: (Left: 18, Top: 11, Width: 56, Height: 56); }
+  Group #EquipmentInfo {
+    Anchor: (Left: 83, Right: 8, Top: 5, Height: 68);
+    LayoutMode: Top;
+    Label #EquipmentName {
+      Anchor: (Height: 36);
+      Style: (FontSize: 11, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+      Text: "Equipment";
+    }
+    Label #EquipmentTier {
+      Anchor: (Height: 22);
+      Style: (FontSize: 9, TextColor: #e8c030, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+      Text: "+0";
+    }
+  }
+  TextButton #EquipmentCardHit { Anchor: (Full: 0); Style: @EquipmentCardHitStyle; Padding: (Full: 0); Text: ""; }
+}

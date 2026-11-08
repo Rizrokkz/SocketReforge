@@ -1,0 +1,22 @@
+Group #TreeNodeSelection {
+  LayoutMode: Full;
+  Anchor: (Width: 80, Height: 80);
+
+  Group #NodeGroupGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "../SkillTreeNode_GroupSelected.png", Border: 0);
+    Visible: false;
+  }
+
+  Group #NodePrimaryGroupGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "../SkillTreeNode_Selected.png", Border: 0);
+    Visible: false;
+  }
+
+  Group #NodeLinkSourceGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "../SkillTreeNode_LinkSource.png", Border: 0);
+    Visible: false;
+  }
+}

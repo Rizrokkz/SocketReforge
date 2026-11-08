@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import org.bson.BsonDocument;
+import org.bson.BsonString;
 import org.bson.BsonValue;
 
 import com.hypixel.hytale.codec.Codec;
@@ -74,6 +75,7 @@ public class DynamicTooltipUtils {
     private static final String STATE_BASE_DESCRIPTION = "BaseDescription";
     private static final String STATE_LAST_DESCRIPTION = "LastDescription";
     private static final String STATE_LAST_NAME = "LastName";
+    private static final String STATE_LAST_LOCALE = "LastLocale";
     
     // Possible class names for DynamicTooltipsLib
     private static final String[] LIB_CLASS_NAMES = {
@@ -280,12 +282,8 @@ public class DynamicTooltipUtils {
      * have been pre-cached this session.
      */
     public static void ensureProviderRegistered() {
-        if (!isAvailable || tooltipApi == null) {
-            return;
-        }
-        if (!providerRegistered) {
-            registerTooltipProvider();
-        }
+        // Native ItemDisplayMetadata is the active tooltip renderer. Registering the
+        // legacy DynamicTooltipsLib provider as well duplicates the same item data.
     }
     
     /**
@@ -312,26 +310,7 @@ public class DynamicTooltipUtils {
      * Register the equipment tooltip provider for showing metadata on inventory items
      */
     public static void registerEquipmentTooltipProvider() {
-        if (!isAvailable || tooltipApi == null) {
-            return;
-        }
-        
-        try {
-            // Get the TooltipProvider class
-            Class<?> providerClass = Class.forName("org.herolias.tooltips.api.TooltipProvider");
-            Class<?> tooltipDataClass = Class.forName("org.herolias.tooltips.api.TooltipData");
-            
-            // Create instance of our provider using reflection
-            Object provider = new EquipmentTooltipProvider();
-            
-            // Get the registerProvider method
-            Method registerMethod = tooltipApi.getClass().getMethod("registerProvider", providerClass);
-            registerMethod.invoke(tooltipApi, provider);
-            
-            logger.info("Equipment tooltip provider registered successfully");
-        } catch (Exception e) {
-            logger.warn("Failed to register equipment tooltip provider: " + e.getMessage());
-        }
+        // Kept for source compatibility; native item metadata now owns tooltips.
     }
 
     /**
@@ -352,11 +331,6 @@ public class DynamicTooltipUtils {
             tooltipDataCache.remove(cacheKey);
         } else {
             tooltipDataCache.put(cacheKey, lines);
-        }
-        
-        // Register provider if not already done
-        if (!providerRegistered) {
-            registerTooltipProvider();
         }
         
         if (debugMode) {
@@ -3014,8 +2988,10 @@ public class DynamicTooltipUtils {
             Message baseDescription;
             if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
                 baseDescription = resolveSimpleEnchantmentsBaseDescription(item, state, currentDescription, locale);
+                item = updateSimpleEnchantmentsBaseDescription(item, baseDescription);
             } else if (hasSimpleEnchantments) {
                 baseDescription = stripSocketReforgeTooltipBlocks(currentDescription);
+                item = updateSimpleEnchantmentsBaseDescription(item, baseDescription);
             } else {
                 baseDescription = cleanBaseDescription(decodeStateMessage(state, STATE_BASE_DESCRIPTION));
             }
@@ -3036,14 +3012,30 @@ public class DynamicTooltipUtils {
         Message lastDescription = decodeStateMessage(state, STATE_LAST_DESCRIPTION);
         Message baseDescription = decodeStateMessage(state, STATE_BASE_DESCRIPTION);
         Message lastName = decodeStateMessage(state, STATE_LAST_NAME);
+        String lastLocale = decodeStateString(state, STATE_LAST_LOCALE);
+        String localeToStore = locale == null || locale.isBlank() ? lastLocale : locale.trim();
+        boolean localeChanged = state != null
+                && (locale == null || locale.isBlank()
+                        || lastLocale == null || !lastLocale.equalsIgnoreCase(locale.trim()));
         if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
             baseDescription = resolveSimpleEnchantmentsBaseDescription(item, state, currentDescription, locale);
+            item = updateSimpleEnchantmentsBaseDescription(item, baseDescription);
         } else if (hasSimpleEnchantments) {
             baseDescription = stripSocketReforgeTooltipBlocks(currentDescription);
+            item = updateSimpleEnchantmentsBaseDescription(item, baseDescription);
         } else {
             if (state == null || !messagesEqual(currentDescription, lastDescription)) {
-                if (isGeneratedOrCorruptedDescription(currentDescription)) {
-                    // Preserve foreign tooltip sections while removing our previous generated block.
+                if (localeChanged) {
+                    // Item display metadata can be re-localized independently of our saved
+                    // description, and inventory refreshes may not provide a locale. Keep the
+                    // cleaned base unless the caller confirms the same locale.
+                    Message stableBase = isMessageEmpty(baseDescription)
+                            ? currentDescription
+                            : baseDescription;
+                    baseDescription = cleanBaseDescription(stableBase);
+                } else if (isGeneratedOrCorruptedDescription(currentDescription)
+                        || containsPreviousNativeTooltip(currentDescription, lastDescription, baseDescription)) {
+                    // The current text may still contain the previous locale's tooltip block.
                     Message sourceDescription = state == null
                             ? currentDescription
                             : baseDescription;
@@ -3075,14 +3067,15 @@ public class DynamicTooltipUtils {
         Message fullDescription = composeDescription(baseDescription, tooltipBlock);
         ItemStack updated = writeDisplay(item, name, fullDescription)
                 .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
-                        encodeState(baseDescription, fullDescription, generatedName));
+                        encodeState(baseDescription, fullDescription, generatedName, localeToStore));
         if (hasSimpleEnchantments && simpleEnchantmentsApply != null) {
             ItemStack refreshed = applySimpleEnchantmentsTooltip(updated, simpleEnchantmentsApply);
             if (refreshed != null) {
+                refreshed = updateSimpleEnchantmentsBaseDescription(refreshed, baseDescription);
                 ItemDisplayMetadata refreshedDisplay = refreshed.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC);
                 Message refreshedDescription = refreshedDisplay == null ? null : refreshedDisplay.getDescription();
                 return refreshed.withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
-                        encodeState(baseDescription, refreshedDescription, generatedName));
+                        encodeState(baseDescription, refreshedDescription, generatedName, localeToStore));
             }
 
             // If the optional integration cannot run, retain the latest foreign section found
@@ -3091,7 +3084,7 @@ public class DynamicTooltipUtils {
             fullDescription = composeDescription(fallbackBase, tooltipBlock);
             return writeDisplay(item, name, fullDescription)
                     .withMetadata(NATIVE_TOOLTIP_STATE_KEY, Codec.BSON_DOCUMENT,
-                            encodeState(fallbackBase, fullDescription, generatedName));
+                            encodeState(fallbackBase, fullDescription, generatedName, localeToStore));
         }
         return updated;
     }
@@ -3122,6 +3115,29 @@ public class DynamicTooltipUtils {
         Message cleaned = stripManagedTooltipBlocks(baseDescription, true);
         cleaned = stripUnavailableItemDescriptionTranslation(item, cleaned, locale);
         return isMessageEmpty(cleaned) ? getDefaultItemDescription(item, locale) : cleaned;
+    }
+
+    private static ItemStack updateSimpleEnchantmentsBaseDescription(ItemStack item, Message baseDescription) {
+        if (ItemStack.isEmpty(item)) {
+            return item;
+        }
+        BsonDocument simpleState = item.getFromMetadataOrNull(
+                SIMPLE_ENCHANTMENTS_STATE_KEY, Codec.BSON_DOCUMENT);
+        if (simpleState == null) {
+            return item;
+        }
+
+        BsonDocument updatedState = new BsonDocument();
+        for (Map.Entry<String, BsonValue> entry : simpleState.entrySet()) {
+            updatedState.put(entry.getKey(), entry.getValue());
+        }
+        BsonValue encodedBase = encodeMessage(baseDescription);
+        if (encodedBase == null) {
+            updatedState.remove(STATE_BASE_DESCRIPTION);
+        } else {
+            updatedState.put(STATE_BASE_DESCRIPTION, encodedBase);
+        }
+        return item.withMetadata(SIMPLE_ENCHANTMENTS_STATE_KEY, Codec.BSON_DOCUMENT, updatedState);
     }
 
     private static Message getDefaultItemDescription(ItemStack item, String locale) {
@@ -3274,6 +3290,27 @@ public class DynamicTooltipUtils {
                     changed = true;
                     continue;
                 }
+                if (removeSimpleEnchantments && isSimpleEnchantmentsTooltipBlock(child)) {
+                    changed = true;
+                    while (!children.isEmpty() && isBlankFormattingMessage(children.get(children.size() - 1))) {
+                        children.remove(children.size() - 1);
+                    }
+                    while (i + 1 < message.children.length
+                            && isBlankFormattingMessage(message.children[i + 1])) {
+                        i++;
+                    }
+                    continue;
+                }
+                if (isSocketReforgeTooltipBlock(child) && !hasFormattedMessageId(child)) {
+                    changed = true;
+                    if (!children.isEmpty() && isDescriptionSeparator(children.get(children.size() - 1))) {
+                        children.remove(children.size() - 1);
+                    }
+                    if (i + 1 < message.children.length && isDescriptionSeparator(message.children[i + 1])) {
+                        i++;
+                    }
+                    continue;
+                }
                 if (isDescriptionSeparator(child)
                         && i + 1 < message.children.length
                         && (isSocketReforgeTooltipBlock(message.children[i + 1])
@@ -3298,6 +3335,13 @@ public class DynamicTooltipUtils {
             }
         }
         return changed;
+    }
+
+    private static boolean isBlankFormattingMessage(FormattedMessage message) {
+        return message != null
+                && (message.messageId == null || message.messageId.isBlank())
+                && (message.rawText == null || message.rawText.isBlank())
+                && (message.children == null || message.children.length == 0);
     }
 
     private static boolean isDescriptionSeparator(FormattedMessage message) {
@@ -3908,6 +3952,27 @@ public class DynamicTooltipUtils {
         return false;
     }
 
+    private static boolean containsPreviousNativeTooltip(
+            Message currentDescription, Message lastDescription, Message baseDescription) {
+        if (isMessageEmpty(currentDescription) || isMessageEmpty(lastDescription)) {
+            return false;
+        }
+
+        String currentText = flattenMessageText(currentDescription).stripTrailing();
+        String previousText = flattenMessageText(lastDescription);
+        String baseText = flattenMessageText(baseDescription);
+        if (currentText.isEmpty() || previousText.isEmpty()) {
+            return false;
+        }
+
+        String previousTooltip = previousText;
+        if (!baseText.isEmpty() && previousText.startsWith(baseText)) {
+            previousTooltip = previousText.substring(baseText.length());
+        }
+        previousTooltip = previousTooltip.strip();
+        return !previousTooltip.isEmpty() && currentText.endsWith(previousTooltip);
+    }
+
     private static boolean containsOrphanTooltipRemnant(String text) {
         if (text == null) {
             return false;
@@ -3960,6 +4025,7 @@ public class DynamicTooltipUtils {
         String visibleLine = line.replaceAll("<[^>]*>", "").trim();
         return visibleLine.startsWith("Damage:")
                 || visibleLine.startsWith("Damage :")
+                || isLegacyInlineTooltipStart(visibleLine)
                 || visibleLine.startsWith("Refine Grade:")
                 || visibleLine.startsWith("Softcore Wear:")
                 || visibleLine.startsWith("Sockets:")
@@ -3975,6 +4041,19 @@ public class DynamicTooltipUtils {
                 || startsWithLocalizedTooltipLabel(visibleLine)
                 || startsWithSoftcoreWearLine(visibleLine)
                 || startsWithEssenceTier(visibleLine);
+    }
+
+    /**
+     * Older tooltip versions stored their generated block as an unlabeled first
+     * line (base damage -> refined damage, grade, and socket markers). Recognize
+     * that signature so existing item display metadata can be cleaned on refresh.
+     */
+    private static boolean isLegacyInlineTooltipStart(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
+        return line.matches("(?is)^\\d+(?:\\.\\d+)?\\s*(?:->|→)\\s*\\d+(?:\\.\\d+)?"
+                + "(?=.*\\[[A-Z0-9]+\\])(?=.*\\+\\d+(?:\\.\\d+)?\\s*%).*$");
     }
 
     private static boolean isAscensionTierTooltipLine(String line) {
@@ -4134,13 +4213,32 @@ public class DynamicTooltipUtils {
     }
 
     private static boolean startsWithEssenceTier(String line) {
+        if (line == null || line.isBlank()) {
+            return false;
+        }
         for (Essence.Type type : Essence.Type.values()) {
-            String prefix = localizeEssenceType(type, "en-US") + " T";
-            if (line.startsWith(prefix)) {
+            if (startsWithEssenceTier(line, type, LangLoader.getFallbackLanguage())) {
                 return true;
+            }
+            for (String langCode : LangLoader.getLoadedLanguages()) {
+                if (startsWithEssenceTier(line, type, langCode)) {
+                    return true;
+                }
             }
         }
         return false;
+    }
+
+    private static boolean startsWithEssenceTier(String line, Essence.Type type, String langCode) {
+        if (line == null || type == null || langCode == null || langCode.isBlank()) {
+            return false;
+        }
+        String essenceName = localizeEssenceType(type, langCode);
+        if (essenceName == null || essenceName.isBlank()) {
+            return false;
+        }
+        String prefix = essenceName + " T";
+        return line.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     private static void appendCleanedLine(StringBuilder cleaned, String line) {
@@ -4322,10 +4420,15 @@ public class DynamicTooltipUtils {
     }
 
     private static BsonDocument encodeState(Message baseDescription, Message lastDescription) {
-        return encodeState(baseDescription, lastDescription, null);
+        return encodeState(baseDescription, lastDescription, null, null);
     }
 
     private static BsonDocument encodeState(Message baseDescription, Message lastDescription, Message lastName) {
+        return encodeState(baseDescription, lastDescription, lastName, null);
+    }
+
+    private static BsonDocument encodeState(
+            Message baseDescription, Message lastDescription, Message lastName, String locale) {
         BsonDocument state = new BsonDocument();
         BsonValue base = encodeMessage(baseDescription);
         if (base != null) {
@@ -4338,6 +4441,9 @@ public class DynamicTooltipUtils {
         BsonValue name = encodeMessage(lastName);
         if (name != null) {
             state.put(STATE_LAST_NAME, name);
+        }
+        if (locale != null && !locale.isBlank()) {
+            state.put(STATE_LAST_LOCALE, new BsonString(locale));
         }
         return state;
     }
@@ -4355,6 +4461,18 @@ public class DynamicTooltipUtils {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static String decodeStateString(BsonDocument state, String key) {
+        if (state == null || key == null) {
+            return null;
+        }
+        BsonValue value = state.get(key);
+        if (value == null || !value.isString()) {
+            return null;
+        }
+        String decoded = value.asString().getValue();
+        return decoded == null || decoded.isBlank() ? null : decoded;
     }
 
     private static BsonValue encodeMessage(Message message) {

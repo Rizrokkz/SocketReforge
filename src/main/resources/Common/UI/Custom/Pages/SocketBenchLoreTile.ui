@@ -1,0 +1,24 @@
+Group #LoreTile {
+  Anchor: (Width: 80, Height: 82);
+  LayoutMode: Full;
+  Group #LoreSocketFrame {
+    Anchor: (Left: 1, Top: 2, Width: 78, Height: 78);
+    LayoutMode: Full;
+    Group #LoreSocketColorNone { Anchor: (Full: 0); Background: #2b2b3a(0.72); Visible: false; }
+    Group #LoreSocketColorLocked { Anchor: (Full: 0); Background: #3a3a3a(0.72); Visible: false; }
+    Group #LoreSocketColorRed { Anchor: (Full: 0); Background: #FF5555(0.72); Visible: false; }
+    Group #LoreSocketColorBlue { Anchor: (Full: 0); Background: #5599FF(0.72); Visible: false; }
+    Group #LoreSocketColorGreen { Anchor: (Full: 0); Background: #55FF77(0.72); Visible: false; }
+    Group #LoreSocketColorPurple { Anchor: (Full: 0); Background: #AA55FF(0.72); Visible: false; }
+    Group #LoreSocketColorYellow { Anchor: (Full: 0); Background: #FFFF55(0.72); Visible: false; }
+    Group #LoreSocketColorOrange { Anchor: (Full: 0); Background: #FFAA00(0.72); Visible: false; }
+    Group #LoreSocketColorBlack { Anchor: (Full: 0); Background: #555555(0.72); Visible: false; }
+    Group #LoreSocketColorWhite { Anchor: (Full: 0); Background: #FFFFFF(0.72); Visible: false; }
+    Group #LoreSocketColorCyan { Anchor: (Full: 0); Background: #55FFFF(0.72); Visible: false; }
+    Group #LoreSocketGemFrame {
+      Anchor: (Full: 0);
+      Background: (TexturePath: "../GemSlotEmpty.png", Border: 0);
+    }
+    ItemIcon #LoreSocketIcon { ItemId: ""; Anchor: (Left: 14, Top: 14, Width: 50, Height: 50); Visible: false; }
+  }
+}

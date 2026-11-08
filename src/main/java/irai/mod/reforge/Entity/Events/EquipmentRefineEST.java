@@ -2,6 +2,8 @@ package irai.mod.reforge.Entity.Events;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.hypixel.hytale.codec.Codec;
@@ -14,6 +16,7 @@ import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
+import com.hypixel.hytale.server.core.modules.entity.damage.DamageCause;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageModule;
 import com.hypixel.hytale.server.core.meta.MetaKey;
@@ -24,6 +27,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.AttackSpeedMultiHitMath;
 import irai.mod.reforge.Common.EnemyElementalShieldUtils;
 import irai.mod.reforge.Common.EquipmentDurabilityPenaltyUtils;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
@@ -37,8 +41,11 @@ import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Lore.LoreDamageUtils;
+import irai.mod.reforge.Lore.LoreWorldTasks;
 import irai.mod.reforge.Lore.CoreRuneHandler;
 import irai.mod.reforge.Lore.LoreProcHandler;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.Util.DamageNumberFormatter;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 
@@ -61,6 +68,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
     public static final MetaKey<Boolean> META_SOCKET_ELEMENTAL_AFFINITY_HANDLED =
             Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
                     "socketreforge:elemental_affinity_handled", Codec.BOOLEAN);
+    public static final MetaKey<Boolean> META_ATTACK_SPEED_MULTIHIT_EXTRA =
+            Damage.META_REGISTRY.registerMetaObject(d -> Boolean.FALSE, false,
+                    "socketreforge:attack_speed_multihit_extra", Codec.BOOLEAN);
+    private static final long MULTIHIT_EXTRA_DELAY_MILLIS = 65L;
 
     // Refinement config - will be injected from plugin
     private RefinementConfig refinementConfig;
@@ -129,6 +140,10 @@ public class EquipmentRefineEST extends DamageEventSystem {
                        Store<EntityStore> store,
                        CommandBuffer<EntityStore> commandBuffer,
                        Damage damage) {
+        if (damage != null && Boolean.TRUE.equals(
+                damage.getIfPresentMetaObject(META_ATTACK_SPEED_MULTIHIT_EXTRA))) {
+            return;
+        }
         if (damage != null && Boolean.TRUE.equals(damage.getIfPresentMetaObject(
                 EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
             return;
@@ -160,9 +175,11 @@ public class EquipmentRefineEST extends DamageEventSystem {
         } else if (source instanceof Damage.ProjectileSource projectileDamageSource) {
             attackerRef = projectileDamageSource.getRef();
         } else {
+            applyCharacterPathResistance(store, targetRef, damage);
             return;
         }
         if (attackerRef == null || !attackerRef.isValid()) {
+            applyCharacterPathResistance(store, targetRef, damage);
             return;
         }
 
@@ -197,13 +214,17 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 rawAmount == null ? amountBeforeFilter : rawAmount, baseDamage,
                 "triggered=" + shattered);
         ItemStack attackerWeapon = attacker == null ? null : findWeaponInHotbar(attacker);
-        if (!statusDamage && !elementalComponent && !shattered
+        // Weapon affinity is emitted as a separate typed damage event. Only that actual Ice hit
+        // (or another explicitly Ice-typed hit) may add chill; the accompanying physical hit must not.
+        if (!statusDamage && !shattered && LoreProcHandler.isIceDamage(damage)
                 && attackerWeapon != null && ReforgeEquip.isWeapon(attackerWeapon)) {
-            LoreProcHandler.addWeaponFreezeBuildup(store, targetRef, attackerWeapon, damage.getAmount());
+            LoreProcHandler.addWeaponChillBuildup(store, attackerRef, targetRef, attackerWeapon,
+                    damage.getAmount());
         }
         // Player projectile damage otherwise follows the native pipeline unchanged. Run the
         // weapon's freeze buildup and Frozen Shatter checks above so projectile hits participate too.
         if (projectileSource && !runeWeaponBaseApplied && !elementalComponent) {
+            applyCharacterPathResistance(store, targetRef, damage);
             return;
         }
         boolean skipRefine = statusDamage || (loreDamage && !applyLoreEquipmentBonuses)
@@ -222,11 +243,19 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(weapon);
                     double socketMultiplier = calculateSocketDamageBonus(weapon);
                     double socketFlat = calculateSocketFlatDamage(weapon);
-                    double attackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
                     double partsMultiplier = getPartsDamageMultiplier(weapon);
                     int voidTier = getRawEssenceTier(weapon, Essence.Type.VOID);
-                    double critChancePercent = calculateSocketCritChancePercent(weapon);
-                    double critDamagePercent = calculateSocketCritDamagePercent(weapon);
+                    ItemStack heldWeapon = PlayerInventoryUtils.getHeldItem(attacker);
+                    String heldWeaponId = heldWeapon == null || heldWeapon.isEmpty()
+                            || !ReforgeEquip.isWeapon(heldWeapon) ? null : heldWeapon.getItemId();
+                    double pathDamagePercent = CharacterPathService.bonusForWeapon(attacker, heldWeaponId,
+                            Bonus.DAMAGE_PERCENT) * 100.0d;
+                    double critChancePercent = Math.min(100.0d, calculateSocketCritChancePercent(weapon)
+                            + CharacterPathService.bonusForWeapon(attacker, heldWeaponId,
+                                    Bonus.CRIT_CHANCE_PERCENT) * 100.0d);
+                    double critDamagePercent = calculateSocketCritDamagePercent(weapon)
+                            + CharacterPathService.bonusForWeapon(attacker, heldWeaponId,
+                                    Bonus.CRIT_DAMAGE_PERCENT) * 100.0d;
 
                     boolean chargedCrit = CoreRuneHandler.consumeCriticalChargeGuarantee(attacker, weapon);
                     boolean isCrit = chargedCrit || (critChancePercent > 0.0
@@ -243,7 +272,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
                             + (softcoreMultiplier - 1.0d)
                             + (socketMultiplier - 1.0d)
                             + (partsMultiplier - 1.0d)
-                            + (attackSpeedPercent / 100.0d)
+                            + (pathDamagePercent / 100.0d)
                             + (isCrit ? effectiveCritDamagePercent / 100.0d : 0.0d);
                     // Flat socket damage is balanced around a normal 1.0-base hit. Applying the
                     // full flat amount to every tiny multi-hit ability hit lets low coefficients
@@ -268,6 +297,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     // weapon refinement, socket bonuses, and crit must not inflate that base.
                     WeaponElementalDamageUtils.AffinityDamage affinityDamage =
                             WeaponElementalDamageUtils.calculateAffinityDamage(weapon, baseDamage, store, targetRef);
+                    affinityDamage = WeaponElementalDamageUtils.scaleAffinityDamage(affinityDamage,
+                            1.0d + CharacterPathService.bonus(attacker, Bonus.ELEMENTAL_DAMAGE));
                     if (affinityDamage.type() != null) {
                         damage.putMetaObject(META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
                     }
@@ -276,12 +307,12 @@ public class EquipmentRefineEST extends DamageEventSystem {
                             String.format(java.util.Locale.ROOT,
                                     "weapon=%s shattered=%s refine=%.4f ascension=%.4f softcore=%.4f socket=%.4f parts=%.4f "
                                             + "socketFlat=%.4f socketFlatScale=%.4f socketFlatApplied=%.4f "
-                                            + "attackSpeedPct=%.2f crit=%s critDamagePct=%.2f "
-                                    + "additivePercent=%.4f bloodPact=%.4f affinity=%s affinityBonus=%.4f broken=%.4f",
+                                            + "crit=%s critDamagePct=%.2f "
+                                            + "pathDamagePct=%.2f additivePercent=%.4f bloodPact=%.4f affinity=%s affinityBonus=%.4f broken=%.4f",
                                     weapon.getItemId(), shattered, refinementMultiplier, ascensionMultiplier, softcoreMultiplier,
                                     socketMultiplier, partsMultiplier, socketFlat, socketFlatScale, appliedSocketFlat,
-                                    attackSpeedPercent, isCrit,
-                                    effectiveCritDamagePercent, additivePercent, bloodPactDamage, affinityDamage.type(),
+                                    isCrit,
+                                    effectiveCritDamagePercent, pathDamagePercent, additivePercent, bloodPactDamage, affinityDamage.type(),
                                     affinityDamage.elementalDamage(), brokenWeaponMultiplier));
 
                     damage.setAmount(newDamage);
@@ -297,9 +328,9 @@ public class EquipmentRefineEST extends DamageEventSystem {
                                 + " socketMult=" + socketMultiplier
                                 + " partsMult=" + partsMultiplier
                                 + " socketFlat=" + socketFlat
-                                + " atkSpd=" + attackSpeedPercent
                                 + " critChance=" + critChancePercent
                                 + " critDamage=" + critDamagePercent
+                                + " pathDamagePercent=" + pathDamagePercent
                                 + " critApplied=" + isCrit
                                 + " voidTier=" + voidTier
                                 + " voidEssences=" + equippedVoidEssenceCount
@@ -326,6 +357,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
                     float bonusBase = DamageStackDelayEST.getBonusBaseDamage(damage, newDamage);
                     WeaponElementalDamageUtils.AffinityDamage affinityDamage =
                             WeaponElementalDamageUtils.calculateAffinityDamage(weapon, bonusBase, store, targetRef);
+                    affinityDamage = WeaponElementalDamageUtils.scaleAffinityDamage(affinityDamage,
+                            1.0d + CharacterPathService.bonus(attacker, Bonus.ELEMENTAL_DAMAGE));
                     if (affinityDamage.type() != null) {
                         damage.putMetaObject(META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
                     }
@@ -360,6 +393,8 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 float reducedDamage = (float) (damage.getAmount() / avgDefenseMultiplier);
                 damage.setAmount(reducedDamage);
             }
+
+            applyCharacterPathResistance(defender, damage);
         }
 
         if (!statusDamage && !npcRuneDamage && !elementalComponent) {
@@ -369,6 +404,20 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 amountBeforeFilter, damage.getAmount(),
                 "loreDamage=" + loreDamage + ",applyLoreEquipmentBonuses=" + applyLoreEquipmentBonuses
                         + ",skipRefine=" + skipRefine);
+    }
+
+    private static void applyCharacterPathResistance(Store<EntityStore> store,
+                                                     Ref<EntityStore> targetRef,
+                                                     Damage damage) {
+        if (store == null || targetRef == null || damage == null) return;
+        Player defender = store.getComponent(targetRef, Player.getComponentType());
+        if (defender != null) applyCharacterPathResistance(defender, damage);
+    }
+
+    private static void applyCharacterPathResistance(Player defender, Damage damage) {
+        double resistance = Math.max(0.0d, Math.min(0.75d,
+                CharacterPathService.bonus(defender, Bonus.DAMAGE_RESISTANCE)));
+        if (resistance > 0.0d) damage.setAmount((float) (damage.getAmount() * (1.0d - resistance)));
     }
 
     /**
@@ -477,13 +526,80 @@ public class EquipmentRefineEST extends DamageEventSystem {
      * Deterministic attack speed from Lightning tier.
      * Tier scaling: +1% per tier (T1..T5 => 1..5%).
      */
-    private double calculateSocketAttackSpeedPercent(ItemStack weapon) {
+    private static double calculateSocketAttackSpeedPercent(ItemStack weapon) {
         double[] stored = SocketManager.getStoredStatBonus(weapon, EssenceEffect.StatType.ATTACK_SPEED);
         if (stored[1] > 0.0) {
             return Math.max(0.0, Math.min(100.0, stored[1]));
         }
         int lightningTier = getEssenceTier(weapon, Essence.Type.LIGHTNING);
         return Math.max(0.0, Math.min(100.0, lightningTier));
+    }
+
+    /**
+     * Schedules one reduced-damage follow-up hit after the original hit has finished the custom
+     * attacker and defender calculations. The marker makes the follow-up bypass those modifiers
+     * on re-entry, so it remains a fixed fraction of the finished primary hit.
+     */
+    public static void tryScheduleAttackSpeedMultiHit(Store<EntityStore> store,
+                                                       Ref<EntityStore> attackerRef,
+                                                       Ref<EntityStore> targetRef,
+                                                       Player attacker,
+                                                       ItemStack weapon,
+                                                       Damage completedHit) {
+        if (store == null || store.isShutdown() || attackerRef == null || !attackerRef.isValid()
+                || targetRef == null || !targetRef.isValid() || attacker == null || weapon == null
+                || weapon.isEmpty() || !ReforgeEquip.isWeapon(weapon) || completedHit == null
+                || completedHit.getAmount() <= 0.0f || attackerRef.equals(targetRef)
+                || Boolean.TRUE.equals(completedHit.getIfPresentMetaObject(META_ATTACK_SPEED_MULTIHIT_EXTRA))
+                || LoreDamageUtils.isStatusDamage(completedHit)
+                || Boolean.TRUE.equals(completedHit.getIfPresentMetaObject(LoreDamageUtils.META_LORE_DAMAGE))
+                || Boolean.TRUE.equals(completedHit.getIfPresentMetaObject(META_SOCKET_ELEMENTAL_COMPONENT))) {
+            return;
+        }
+
+        String weaponId = weapon.getItemId();
+        double socketAttackSpeedPercent = calculateSocketAttackSpeedPercent(weapon);
+        double pathAttackSpeedPercent = CharacterPathService.bonusForWeapon(attacker, weaponId,
+                Bonus.ATTACK_SPEED_PERCENT) * 100.0d;
+        double totalAttackSpeedPercent = socketAttackSpeedPercent + pathAttackSpeedPercent;
+        double effectiveAttackSpeed = AttackSpeedMultiHitMath.effectiveAttackSpeed(totalAttackSpeedPercent);
+        double chancePercent = AttackSpeedMultiHitMath.multiHitChancePercent(totalAttackSpeedPercent);
+        boolean triggered = chancePercent > 0.0d
+                && ThreadLocalRandom.current().nextDouble(100.0d) < chancePercent;
+        if (DEBUG_DAMAGE_LOG) {
+            System.out.printf(java.util.Locale.ROOT,
+                    "[SocketReforge][ATK_SPEED] attacker=%s weapon=%s base=%.2f effective=%.2f bonusPct=%.2f chancePct=%.2f triggered=%s%n",
+                    attacker.getUuid(), weaponId, AttackSpeedMultiHitMath.BASE_ATTACK_SPEED,
+                    effectiveAttackSpeed, totalAttackSpeedPercent, chancePercent, triggered);
+        }
+        if (!triggered) {
+            return;
+        }
+
+        float extraAmount = (float) (completedHit.getAmount()
+                * AttackSpeedMultiHitMath.EXTRA_HIT_DAMAGE_FRACTION);
+        if (extraAmount <= 0.0f || !Float.isFinite(extraAmount)) return;
+
+        Damage.Source source = new Damage.EntitySource(attackerRef);
+        DamageCause cause = completedHit.getCause() == null ? DamageCause.PHYSICAL : completedHit.getCause();
+        Damage extraHit = new Damage(source, cause, extraAmount);
+        extraHit.setDamageCauseIndex(completedHit.getDamageCauseIndex());
+        extraHit.putMetaObject(META_ATTACK_SPEED_MULTIHIT_EXTRA, Boolean.TRUE);
+        extraHit.putMetaObject(META_SKIP_REFORGE, Boolean.TRUE);
+        extraHit.putMetaObject(META_SOCKET_ELEMENTAL_AFFINITY_HANDLED, Boolean.TRUE);
+        if (DamageNumberMeta.isCritical(completedHit)) DamageNumberMeta.markCritical(extraHit);
+        String damageKind = DamageNumberMeta.readKindId(completedHit);
+        if (damageKind != null) DamageNumberMeta.markKind(extraHit, damageKind);
+
+        CompletableFuture.delayedExecutor(MULTIHIT_EXTRA_DELAY_MILLIS, TimeUnit.MILLISECONDS).execute(() ->
+                LoreWorldTasks.queue(store, () -> {
+                    if (store.isShutdown() || !attackerRef.isValid() || !targetRef.isValid()) return;
+                    try {
+                        store.invoke(targetRef, extraHit);
+                    } catch (Throwable ignored) {
+                        // The target can disappear between the original hit and the follow-up.
+                    }
+                }));
     }
 
     /**
@@ -512,7 +628,7 @@ public class EquipmentRefineEST extends DamageEventSystem {
         return Math.max(0.0, Math.min(25.0, voidTier * 5.0));
     }
 
-    private int getEssenceTier(ItemStack weapon, Essence.Type type) {
+    private static int getEssenceTier(ItemStack weapon, Essence.Type type) {
         if (weapon == null || weapon.isEmpty() || type == null) return 0;
         SocketData socketData = SocketManager.getSocketData(weapon);
         if (socketData == null || socketData.getMaxSockets() == 0) return 0;

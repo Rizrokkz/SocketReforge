@@ -151,6 +151,16 @@ public final class LoreDamageUtils {
                                          float rawDamage,
                                          DamageCause cause,
                                          DamageNumberFormatter.DamageKind kind) {
+        applyStatusDamage(store, sourceRef, targetRef, rawDamage, cause, kind, false);
+    }
+
+    public static void applyStatusDamage(Store<EntityStore> store,
+                                         Ref<EntityStore> sourceRef,
+                                         Ref<EntityStore> targetRef,
+                                         float rawDamage,
+                                         DamageCause cause,
+                                         DamageNumberFormatter.DamageKind kind,
+                                         boolean critical) {
         if (store == null || targetRef == null || rawDamage <= 0.0f || !Float.isFinite(rawDamage)) {
             return;
         }
@@ -163,6 +173,7 @@ public final class LoreDamageUtils {
         if (kind != null && kind != DamageNumberFormatter.DamageKind.FLAT) {
             DamageNumberMeta.markKind(damage, kind);
         }
+        if (critical) DamageNumberMeta.markCritical(damage);
         // Status ticks use Hytale's native damage text, even while the optional custom
         // floating-number renderer is enabled.
         DamageNumberMeta.markSkipCombatText(damage);

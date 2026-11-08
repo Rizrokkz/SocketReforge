@@ -1,0 +1,198 @@
+$Common = "../SocketReforge_Common.ui";
+$Container = "../SocketReforge_Container.ui";
+
+@PlayerButton = $Common.@SecondaryTextButtonStyle;
+@PlayerAction = $Common.@PrimaryTextButtonStyle;
+@PlayerScrollbar = $Common.@DefaultScrollbarStyle;
+
+Group #SkillTreeRoot {
+  LayoutMode: Top;
+  Anchor: (Full: 0);
+  FlexWeight: 1;
+  Background: #070a0f;
+
+  Group #TreeHeader {
+    LayoutMode: Left;
+    Anchor: (Height: 76);
+    Background: $Common.@PanelBackground;
+    Padding: (Left: 18, Right: 18, Top: 9, Bottom: 7);
+
+    Group {
+      LayoutMode: Top;
+      FlexWeight: 1;
+      Label #TreeTitle {
+        Style: (FontSize: 20, TextColor: #e8c030, RenderBold: true);
+        Text: "CHARACTER SKILL TREE";
+        Padding: (Bottom: 3);
+      }
+      Label #TreeLevelLabel {
+        Style: (FontSize: 11, TextColor: #93a2b2);
+        Text: "Character level 1";
+      }
+    }
+    Group { LayoutMode: Top; Anchor: (Width: 160);
+      Label #TreePointsLabel { Style: (FontSize: 14, TextColor: #e8c030, RenderBold: true); Text: "Skill points: 0"; }
+      Label #AvailablePoints { Style: (FontSize: 11, TextColor: #93a2b2); Text: "Available points: 0"; }
+    }
+    Group { Anchor: (Width: 12); }
+    Label #TreeAvailablePathLegend {
+      Style: (FontSize: 11, TextColor: #63aa7c, RenderBold: true);
+      Text: "Green line: available path";
+      Anchor: (Width: 155);
+    }
+    Group { Anchor: (Width: 10); }
+    Label #TreeZoomLabel { Style: (FontSize: 11, TextColor: #c0cbd6, RenderBold: true); Text: "Zoom 100%"; Anchor: (Width: 80); }
+    TextButton #TreeZoomOut { Text: "-"; Anchor: (Width: 42, Height: 38); Style: @PlayerButton; Padding: (Full: 0); }
+    Group { Anchor: (Width: 5); }
+    TextButton #TreeZoomIn { Text: "+"; Anchor: (Width: 42, Height: 38); Style: @PlayerButton; Padding: (Full: 0); }
+    Group { Anchor: (Width: 5); }
+    TextButton #TreeZoomReset { Text: "RESET"; Anchor: (Width: 72, Height: 38); Style: $Common.@CompactSecondaryTextButtonStyle; Padding: (Horizontal: 6); }
+    Group { Anchor: (Width: 5); }
+    TextButton #TreeCenter { Text: "FIT"; Anchor: (Width: 82, Height: 38); Style: @PlayerButton; Padding: (Horizontal: 6); TooltipText: "Fit all skill nodes into the canvas."; }
+    Group { Anchor: (Width: 5); }
+    TextButton #TreeBonusToggle { Text: "BONUS TOTALS"; Anchor: (Width: 112, Height: 38); Style: @PlayerButton; Padding: (Horizontal: 6); TooltipText: "Show the totals for all allocated skill bonuses."; }
+  }
+
+  Group #TreeBody {
+    LayoutMode: Left;
+    FlexWeight: 1;
+    Group #TreeCanvasHost {
+      FlexWeight: 1;
+      LayoutMode: Full;
+      Background: #05080c;
+      Group #TreeCanvas {
+        LayoutMode: Full;
+        Anchor: (Full: 0);
+        Background: #080c12;
+        ScrollbarStyle: @PlayerScrollbar;
+        Overscroll: true;
+        KeepScrollPosition: true;
+      }
+      Group #TreeActionBanner {
+        Anchor: (Top: 8, Left: 8, Right: 8, Height: 48);
+        LayoutMode: Left;
+        Background: $Common.@PanelBackground;
+        Padding: (Left: 8, Right: 8, Top: 6, Bottom: 6);
+
+        Label #TreeActionSelectedNode {
+          Text: "Select a node";
+          Anchor: (Width: 145, Height: 34);
+          Style: (FontSize: 10, TextColor: #58afd5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+        }
+        TextButton #DetailAction { Text: "ALLOCATE"; Anchor: (Width: 128, Height: 34); Style: @PlayerAction; Padding: (Horizontal: 6); }
+        Group { Anchor: (Width: 4); }
+        TextButton #TreeRespecNodeAction { Text: "RESPEC NODE"; Anchor: (Width: 108, Height: 34); Style: @PlayerButton; Padding: (Horizontal: 4); TooltipText: "Refund the selected node and allocated nodes that become disconnected."; }
+        Group { Anchor: (Width: 4); }
+        TextButton #TreeRespecAction { Text: "RESPEC TREE"; Anchor: (Width: 104, Height: 34); Style: @PlayerButton; Padding: (Horizontal: 4); TooltipText: "Refund all allocated skill points while keeping earned XP."; }
+        Group { Anchor: (Width: 8); }
+        Label { Text: "FIND"; Anchor: (Width: 30, Height: 32); Style: (FontSize: 10, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); }
+        TextField #TreeNodeSearch {
+          FlexWeight: 1;
+          Anchor: (Height: 32);
+          Value: "";
+          Style: $Common.@DefaultInputFieldStyle;
+          PlaceholderStyle: $Common.@DefaultInputFieldPlaceholderStyle;
+          Background: $Common.@InputBoxBackground;
+          PlaceholderText: "Name, bonus, or weapon class";
+        }
+        Group { Anchor: (Width: 5); }
+        TextButton #TreeSearchSubmit { Text: "GO"; Anchor: (Width: 48, Height: 32); Style: $Common.@CompactSecondaryTextButtonStyle; Padding: (Horizontal: 3); TooltipText: "Highlight matching nodes"; }
+        Group { Anchor: (Width: 5); }
+        Label #TreeSearchMatches { Text: "Type a query, then click GO"; Anchor: (Width: 230, Height: 32); Style: (FontSize: 10, TextColor: #63aa7c, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8); }
+        TextButton #TreeSearchClear { Text: "CLEAR"; Anchor: (Width: 52, Height: 32); Style: $Common.@CompactSecondaryTextButtonStyle; Padding: (Horizontal: 2); }
+      }
+      Group #BonusTotalsPopup {
+        Anchor: (Top: 64, Right: 8, Width: 390, Height: 610);
+        LayoutMode: Full;
+        Visible: false;
+        HitTestVisible: true;
+
+        $Container.@DecoratedContainer #BonusTotalsPanel {
+          @ContentPadding = Padding(Full: 12);
+          Anchor: (Full: 0);
+          LayoutMode: Full;
+          #Title {
+            $Container.@Title #BonusTotalsTitle { @Text = "ALLOCATED BONUS TOTALS"; @Alignment = Left; }
+          }
+          #Content {
+            LayoutMode: Top;
+            Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+            Label {
+              Text: "Combined bonuses from allocated ranks. Weapon bonuses apply only while that weapon class is equipped.";
+              Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true);
+              Padding: (Bottom: 10);
+            }
+            Label #BonusTotalsBody {
+              Text: "No bonuses allocated yet.";
+              Style: (FontSize: 11, TextColor: #d5dee8, Wrap: true);
+            }
+          }
+        }
+
+        TextButton #BonusTotalsClose {
+          Text: "X";
+          Anchor: (Top: 3, Right: 5, Width: 30, Height: 30);
+          Style: $Common.@CompactSecondaryTextButtonStyle;
+          Padding: (Full: 0);
+          TooltipText: "Hide bonus totals";
+        }
+      }
+
+      Group #PathChoicePopup {
+        Anchor: (Full: 0);
+        LayoutMode: Center;
+        Background: #000000(0.72);
+        HitTestVisible: true;
+        Visible: false;
+
+        $Container.@DecoratedContainer #PathChoiceDialog {
+          @ContentPadding = Padding(Full: 18);
+          Anchor: (Width: 410, Height: 300);
+          LayoutMode: Full;
+          #Title {
+            $Container.@Title #PathChoiceTitle { @Text = "CHOOSE PATH STAT"; }
+          }
+          #Content {
+            LayoutMode: Top;
+            Padding: (Left: 18, Right: 18, Top: 14, Bottom: 14);
+            Label #PathChoicePrompt {
+              Text: "Choose the permanent +1 stat for this path node.";
+              Style: (FontSize: 12, TextColor: #bac5d1, Wrap: true);
+              Padding: (Bottom: 10);
+            }
+            Group { LayoutMode: Left; Anchor: (Height: 42); Padding: (Horizontal: 8);
+              ItemIcon #PathChoiceHealthIcon { ItemId: "Potion_Health"; Anchor: (Width: 28, Height: 28); }
+              Group { Anchor: (Width: 8); }
+              TextButton #PathChoiceHealth { Text: "+1 MAX HEALTH"; FlexWeight: 1; Anchor: (Height: 42); Style: @PlayerButton; Padding: (Horizontal: 10); }
+            }
+            Group { Anchor: (Height: 5); }
+            Group { LayoutMode: Left; Anchor: (Height: 42); Padding: (Horizontal: 8);
+              ItemIcon #PathChoiceManaIcon { ItemId: "Potion_Mana"; Anchor: (Width: 28, Height: 28); }
+              Group { Anchor: (Width: 8); }
+              TextButton #PathChoiceMana { Text: "+1 MAX MANA"; FlexWeight: 1; Anchor: (Height: 42); Style: @PlayerButton; Padding: (Horizontal: 10); }
+            }
+            Group { Anchor: (Height: 5); }
+            Group { LayoutMode: Left; Anchor: (Height: 42); Padding: (Horizontal: 8);
+              ItemIcon #PathChoiceStaminaIcon { ItemId: "Potion_Stamina"; Anchor: (Width: 28, Height: 28); }
+              Group { Anchor: (Width: 8); }
+              TextButton #PathChoiceStamina { Text: "+1 MAX STAMINA"; FlexWeight: 1; Anchor: (Height: 42); Style: @PlayerButton; Padding: (Horizontal: 10); }
+            }
+            Group { Anchor: (Height: 7); }
+            TextButton #PathChoiceCancel {
+              Text: "CANCEL";
+              Anchor: (Height: 32);
+              Style: @PlayerButton;
+              Padding: (Horizontal: 10);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Group #TreeFutureNodeListings {
+    Visible: false;
+    Label #DetailBonusesBody { Text: "No bonuses allocated yet."; }
+  }
+
+}

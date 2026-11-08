@@ -1,0 +1,494 @@
+$Common = "../../SocketReforge_Common.ui";
+$Container = "../../SocketReforge_Container.ui";
+
+@EditorButton = $Common.@SecondaryTextButtonStyle;
+@EditorAction = $Common.@PrimaryTextButtonStyle;
+@EditorToolButton = $Common.@TertiaryTextButtonStyle;
+@EditorDanger = $Common.@DestructiveTextButtonStyle;
+@EditorCompactButton = $Common.@CompactSecondaryTextButtonStyle;
+@EditorCompactAction = $Common.@CompactPrimaryTextButtonStyle;
+@EditorCompactDanger = $Common.@CompactDestructiveTextButtonStyle;
+@EditorScrollbar = $Common.@DefaultScrollbarStyle;
+
+Group #SkillTreeRoot {
+  LayoutMode: Top;
+  FlexWeight: 1;
+  Background: #070a0f;
+
+  Group #EditorHeader {
+    LayoutMode: Top;
+    Anchor: (Height: 100);
+    Background: $Common.@PanelBackground;
+    Padding: (Left: 14, Right: 14, Top: 6, Bottom: 6);
+
+    Group #EditorHeaderInfo {
+      LayoutMode: Left;
+      Anchor: (Height: 43);
+
+      Group {
+        LayoutMode: Top;
+        FlexWeight: 1;
+      Label #TreeTitle {
+        Style: (FontSize: 18, TextColor: #e8c030, RenderBold: true);
+        Text: "SKILL TREE EDITOR";
+        Padding: (Bottom: 2);
+      }
+      Label #EditorApplied {
+        Style: (FontSize: 12, TextColor: #93a2b2, RenderBold: false);
+        Text: "Draft only · players unchanged";
+      }
+    }
+
+    Label #EditorNodeCount {
+      Style: (FontSize: 13, TextColor: #d4dce5, RenderBold: true);
+      Text: "Nodes: 0";
+      Anchor: (Width: 90);
+    }
+    Label #EditorLinkCount {
+      Style: (FontSize: 13, TextColor: #d4dce5, RenderBold: true);
+      Text: "Links: 0";
+      Anchor: (Width: 80);
+    }
+
+    }
+
+    Group { Anchor: (Height: 3); }
+
+    Group #EditorHeaderActions {
+      LayoutMode: Left;
+      Anchor: (Height: 38);
+
+    TextButton #ApplyDraft {
+      Text: "APPLY TO PLAYERS";
+      Anchor: (Width: 148, Height: 34);
+      Style: @EditorCompactAction;
+      Padding: (Horizontal: 8);
+    }
+    Group { Anchor: (Width: 6); }
+    TextButton #EditorCenter {
+      Text: "FIT";
+      Anchor: (Width: 82, Height: 34);
+      Style: @EditorCompactButton;
+      Padding: (Horizontal: 6);
+      TooltipText: "Fit all nodes into the editor canvas.";
+    }
+    Group { Anchor: (Width: 6); }
+    Group {
+      LayoutMode: Top;
+      Anchor: (Width: 174, Height: 38);
+      Label #EditorCanvasSize {
+        Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true);
+        Text: "Canvas size: 2400 x 1600";
+        Anchor: (Height: 12);
+      }
+      TextButton #EditCanvasSize {
+        Text: "SET CANVAS SIZE";
+        Anchor: (Width: 174, Height: 26);
+        Style: @EditorCompactButton;
+        Padding: (Horizontal: 8);
+      }
+    }
+    Group { Anchor: (Width: 6); }
+    TextButton #PreviewPlayer {
+      Text: "PLAYER VIEW";
+      Anchor: (Width: 112, Height: 34);
+      Style: @EditorCompactButton;
+      Padding: (Horizontal: 8);
+    }
+    }
+  }
+
+  Group { Anchor: (Height: 6); }
+
+  Group #EditorBody {
+    LayoutMode: Left;
+    FlexWeight: 1;
+
+    Group #EditorToolbar {
+      LayoutMode: Top;
+      Anchor: (Width: 44);
+      Background: $Common.@PanelBackground;
+      Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
+
+      TextButton #ToolAdd { Text: "+"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Add node"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolLink { Text: "L"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Link or unlink nodes"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolMove { Text: "M"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Move selected node or group"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolSelect { Text: "S"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle multi-select; click nodes to add or remove them"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolSelectAll { Text: "A"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Select all nodes"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolClearSelection { Text: "C"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Clear node selection"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolGrid { Text: "G"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Place selected node or group on grid"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolGridVisibility { Text: "V"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle canvas grid"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolDuplicate { Text: "D"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Duplicate one node beside it; mirror a multi-selected group using the F direction"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolMirrorFlip { Text: "F"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle group mirror direction: left/right by default, top/bottom when enabled"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolCopyProperties { Text: "P"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Copy properties from the selected node; click a destination node"; }
+      Group { Anchor: (Height: 5); }
+      TextButton #ToolRemove { Text: "X"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactDanger; Padding: (Full: 0); TooltipText: "Remove selected node"; }
+    }
+
+    Group { Anchor: (Width: 6); }
+
+    Group #TreeCanvasHost {
+      FlexWeight: 1;
+      LayoutMode: Full;
+      Background: #05080c;
+      Padding: (Full: 4);
+
+      Group #TreeCanvas {
+        LayoutMode: Full;
+        Anchor: (Full: 0);
+        Background: #080c12;
+        ScrollbarStyle: @EditorScrollbar;
+        Overscroll: true;
+        KeepScrollPosition: true;
+      }
+      Group #EditorZoomBar {
+        LayoutMode: Left;
+        Anchor: (Left: 14, Right: 22, Bottom: 22, Height: 38);
+        Background: #0d131b(0.96);
+        Padding: (Left: 10, Right: 10, Top: 3, Bottom: 3);
+        HitTestVisible: true;
+        Label #EditorZoomLabel {
+          Style: (FontSize: 11, TextColor: #c0cbd6, RenderBold: true, VerticalAlignment: Center);
+          Text: "Canvas 80%";
+          Anchor: (Width: 90, Height: 30);
+        }
+        Slider #EditorZoomSlider {
+          FlexWeight: 1;
+          Anchor: (Height: 28);
+          Style: $Common.@DefaultSliderStyle;
+          Value: 80;
+          Min: 10;
+          Max: 400;
+          Step: 5;
+          TooltipText: "Canvas zoom, 10% to 400%";
+        }
+        Group { Anchor: (Width: 8); }
+        TextButton #EditorZoomReset { Text: "100%"; Anchor: (Width: 56, Height: 30); Style: @EditorCompactButton; Padding: (Horizontal: 3); }
+      }
+    }
+
+    Group { Anchor: (Width: 7); }
+
+    $Container.@DecoratedContainer #EditorPanel {
+      @ContentPadding = Padding(Full: 13);
+      Anchor: (Width: 350);
+      LayoutMode: Full;
+
+      #Title {
+        $Container.@Title #EditorPanelTitle { @Text = "NODE EDITOR"; }
+      }
+
+      #Content {
+        LayoutMode: Top;
+        Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+
+      Label #EditorSelectedName {
+        Style: (FontSize: 16, TextColor: #f1f4f8, RenderBold: true, Wrap: true);
+        Text: "No node selected";
+        Padding: (Bottom: 4);
+      }
+      Label #EditorSelectedType {
+        Style: (FontSize: 11, TextColor: #58afd5, RenderBold: true, Wrap: true);
+        Text: "Add a node or click one on the canvas.";
+        Padding: (Bottom: 5);
+      }
+      Label #EditorSelectedPosition {
+        Style: (FontSize: 11, TextColor: #aab7c5, Wrap: true);
+        Text: "";
+        Padding: (Bottom: 4);
+      }
+      Label #EditorSelectedRank {
+        Style: (FontSize: 11, TextColor: #aab7c5, Wrap: true);
+        Text: "";
+        Padding: (Bottom: 8);
+      }
+
+      Group #NodeIdentityControls {
+        LayoutMode: Top;
+        Anchor: (Height: 107);
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "NAME"; Anchor: (Width: 42, Height: 28); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          TextField #NodeNameInput {
+            FlexWeight: 1; Anchor: (Height: 30); Value: "";
+            Style: $Common.@DefaultInputFieldStyle;
+            PlaceholderStyle: $Common.@DefaultInputFieldPlaceholderStyle;
+            Background: $Common.@InputBoxBackground;
+          }
+          Group { Anchor: (Width: 5); }
+          TextButton #RenameNode { Text: "RENAME"; Anchor: (Width: 88, Height: 32); Style: @EditorCompactAction; Padding: (Horizontal: 4); }
+        }
+        Group { Anchor: (Height: 5); }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "ITEM ID"; Anchor: (Width: 54, Height: 28); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          TextField #NodeIconInput {
+            FlexWeight: 1; Anchor: (Height: 30); Value: "";
+            Style: $Common.@DefaultInputFieldStyle;
+            PlaceholderStyle: $Common.@DefaultInputFieldPlaceholderStyle;
+            Background: $Common.@InputBoxBackground;
+          }
+          Group { Anchor: (Width: 5); }
+          TextButton #ApplyNodeIcon { Text: "SET ICON"; Anchor: (Width: 88, Height: 32); Style: @EditorCompactAction; Padding: (Horizontal: 4); }
+        }
+        Group { Anchor: (Height: 5); }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "TEXTURE"; Anchor: (Width: 54, Height: 28); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          TextField #NodeTexturePathInput {
+            FlexWeight: 1; Anchor: (Height: 30); Value: "";
+            Style: $Common.@DefaultInputFieldStyle;
+            PlaceholderStyle: $Common.@DefaultInputFieldPlaceholderStyle;
+            Background: $Common.@InputBoxBackground;
+          }
+          Group { Anchor: (Width: 5); }
+          TextButton #ApplyNodeTexturePath { Text: "SET TEXTURE"; Anchor: (Width: 88, Height: 32); Style: @EditorCompactAction; Padding: (Horizontal: 4); }
+        }
+      }
+
+      Group { Anchor: (Height: 1); Background: #263243; }
+      Label {
+        Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true);
+        Text: "POSITION";
+        Padding: (Top: 9, Bottom: 5);
+      }
+      Group #PositionControls {
+        LayoutMode: Top;
+        Anchor: (Height: 76);
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 36);
+          Label { Text: "X"; Anchor: (Width: 26, Height: 34); Style: (FontSize: 11, TextColor: #bac5d1, RenderBold: true, VerticalAlignment: Center); }
+          FloatSliderNumberField #NodeXControl {
+            FlexWeight: 1; Anchor: (Height: 34); Value: 0; Min: 0; Max: 5600; Step: 1;
+            SliderStyle: $Common.@DefaultSliderStyle;
+            NumberFieldStyle: $Common.@DefaultInputFieldStyle;
+            NumberFieldMaxDecimalPlaces: 0; NumberFieldDefaultValue: 0;
+          }
+        }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 36);
+          Label { Text: "Y"; Anchor: (Width: 26, Height: 34); Style: (FontSize: 11, TextColor: #bac5d1, RenderBold: true, VerticalAlignment: Center); }
+          FloatSliderNumberField #NodeYControl {
+            FlexWeight: 1; Anchor: (Height: 34); Value: 0; Min: 0; Max: 3200; Step: 1;
+            SliderStyle: $Common.@DefaultSliderStyle;
+            NumberFieldStyle: $Common.@DefaultInputFieldStyle;
+            NumberFieldMaxDecimalPlaces: 0; NumberFieldDefaultValue: 0;
+          }
+        }
+      }
+
+      Group { Anchor: (Height: 1); Background: #263243; }
+      Label {
+        Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true);
+        Text: "NODE SETTINGS";
+        Padding: (Top: 9, Bottom: 5);
+      }
+      Group #NodeTypeControl {
+        LayoutMode: Top;
+        Anchor: (Height: 52);
+        Label { Text: "NODE SIZE / TYPE"; Anchor: (Height: 18); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true); }
+        DropdownBox #NodeTypeDropdown {
+          Anchor: (Height: 30);
+          Style: $Common.@DefaultDropdownBoxStyle;
+          Value: "SMALL";
+          DropdownEntry { Text: "Small"; Value: "SMALL"; }
+          DropdownEntry { Text: "Medium"; Value: "MEDIUM"; }
+          DropdownEntry { Text: "Keystone"; Value: "KEYSTONE"; }
+          DropdownEntry { Text: "Start"; Value: "START"; }
+          DropdownEntry { Text: "Path stat node"; Value: "PATH"; }
+        }
+      }
+
+      Group #PathBonusControls {
+        LayoutMode: Top;
+        Anchor: (Height: 54);
+        Label { Text: "PATH NODE STAT (1 RANK; REQUIRED TO CONTINUE)"; Anchor: (Height: 20); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true); }
+        DropdownBox #PathBonusDropdown { Anchor: (Height: 30); Value: "HEALTH"; Style: $Common.@DefaultDropdownBoxStyle;
+          DropdownEntry { Text: "Health +1"; Value: "HEALTH"; }
+          DropdownEntry { Text: "Mana +1"; Value: "MANA"; }
+          DropdownEntry { Text: "Stamina +1"; Value: "STAMINA"; }
+        }
+      }
+
+      Group #NodeSettingsControls {
+        LayoutMode: Top;
+        FlexWeight: 1;
+        Group {
+          LayoutMode: Top;
+          Anchor: (Height: 52);
+          Label { Text: "CATEGORY"; Anchor: (Height: 18); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true); }
+          DropdownBox #NodeCategoryDropdown { Anchor: (Height: 30); Value: "COMBAT"; Style: $Common.@DefaultDropdownBoxStyle;
+            DropdownEntry { Text: "Vitality"; Value: "VITALITY"; }
+            DropdownEntry { Text: "Arcana"; Value: "ARCANA"; }
+            DropdownEntry { Text: "Endurance"; Value: "ENDURANCE"; }
+            DropdownEntry { Text: "Combat"; Value: "COMBAT"; }
+            DropdownEntry { Text: "Guard"; Value: "GUARD"; }
+            DropdownEntry { Text: "Daggers"; Value: "DAGGERS"; }
+            DropdownEntry { Text: "Swords"; Value: "SWORDS"; }
+            DropdownEntry { Text: "Axes"; Value: "AXES"; }
+            DropdownEntry { Text: "Maces"; Value: "MACES"; }
+            DropdownEntry { Text: "Spears"; Value: "SPEARS"; }
+            DropdownEntry { Text: "Shortbows"; Value: "SHORTBOWS"; }
+            DropdownEntry { Text: "Crossbows"; Value: "CROSSBOWS"; }
+            DropdownEntry { Text: "Staves"; Value: "STAFFS"; }
+          }
+        }
+
+        Label #EditorSelectedBonus {
+          Style: (FontSize: 11, TextColor: #c0cbd6, Wrap: true);
+          Text: "";
+          Padding: (Top: 5, Bottom: 3);
+        }
+        Label #EditorBonusList {
+          Style: (FontSize: 10, TextColor: #d6dee8, Wrap: true);
+          Text: "";
+          Padding: (Bottom: 4);
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "BONUS SLOT"; Anchor: (Width: 72, Height: 28); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          DropdownBox #BonusSlotDropdown { FlexWeight: 1; Anchor: (Height: 30); Value: "0"; Style: $Common.@DefaultDropdownBoxStyle; }
+        }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 34);
+          TextButton #AddBonus { Text: "+ ADD BONUS"; FlexWeight: 1; Anchor: (Height: 32); Style: @EditorCompactAction; Padding: (Horizontal: 5); TooltipText: "Add a different bonus to this node"; }
+          Group { Anchor: (Width: 5); }
+          TextButton #RemoveBonus { Text: "- REMOVE"; FlexWeight: 1; Anchor: (Height: 32); Style: @EditorCompactDanger; Padding: (Horizontal: 5); TooltipText: "Remove selected bonus"; }
+        }
+
+        Group {
+          LayoutMode: Top;
+          Anchor: (Height: 52);
+          Label { Text: "BONUS TYPE"; Anchor: (Height: 18); Style: (FontSize: 10, TextColor: #aab7c5, RenderBold: true); }
+          DropdownBox #BonusTypeDropdown { Anchor: (Height: 30); Value: "DAMAGE_PERCENT"; ShowSearchInput: true; Style: $Common.@DefaultDropdownBoxStyle;
+            DropdownEntry { Text: "Maximum Health"; Value: "MAX_HEALTH_FLAT"; }
+            DropdownEntry { Text: "Health Regeneration"; Value: "HEALTH_REGEN_PER_SECOND"; }
+            DropdownEntry { Text: "Maximum Mana"; Value: "MAX_MANA_FLAT"; }
+            DropdownEntry { Text: "Mana Regeneration"; Value: "MANA_REGEN_PER_SECOND"; }
+            DropdownEntry { Text: "Maximum Stamina"; Value: "MAX_STAMINA_FLAT"; }
+            DropdownEntry { Text: "Stamina Regeneration"; Value: "STAMINA_REGEN_PER_SECOND"; }
+            DropdownEntry { Text: "Refining Upgrade Guarantee (legacy)"; Value: "REFINING_CHANCE"; }
+            DropdownEntry { Text: "Refining Break Protection"; Value: "REFINING_BREAK_PROTECTION"; }
+            DropdownEntry { Text: "Refining Degrade Protection"; Value: "REFINING_DEGRADE_PROTECTION"; }
+            DropdownEntry { Text: "Refining Safe Outcome Weight"; Value: "REFINING_SAME_CHANCE"; }
+            DropdownEntry { Text: "Refining Upgrade Weight"; Value: "REFINING_UPGRADE_CHANCE"; }
+            DropdownEntry { Text: "Refining Jackpot Weight"; Value: "REFINING_JACKPOT_CHANCE"; }
+            DropdownEntry { Text: "Socketing Chance"; Value: "SOCKET_CHANCE"; }
+            DropdownEntry { Text: "Damage"; Value: "DAMAGE_PERCENT"; }
+            DropdownEntry { Text: "Damage Resistance"; Value: "DAMAGE_RESISTANCE"; }
+            DropdownEntry { Text: "Critical Chance"; Value: "CRIT_CHANCE_PERCENT"; }
+            DropdownEntry { Text: "Critical Damage"; Value: "CRIT_DAMAGE_PERCENT"; }
+            DropdownEntry { Text: "Attack Speed (Multi-hit Chance)"; Value: "ATTACK_SPEED_PERCENT"; }
+            DropdownEntry { Text: "Elemental Damage"; Value: "ELEMENTAL_DAMAGE"; }
+            DropdownEntry { Text: "Elemental Damage-over-time Crit Chance"; Value: "ELEMENTAL_DOT_CRIT_CHANCE"; }
+            DropdownEntry { Text: "Elemental Damage-over-time Crit Damage"; Value: "ELEMENTAL_DOT_CRIT_DAMAGE"; }
+            DropdownEntry { Text: "Elemental Stack Base"; Value: "ELEMENTAL_STACK_BASE"; }
+            DropdownEntry { Text: "Poison Stack Base"; Value: "POISON_STACK_BASE"; }
+            DropdownEntry { Text: "Bleed Stack Base"; Value: "BLEED_STACK_BASE"; }
+          }
+        }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "PER RANK"; Anchor: (Width: 72, Height: 28); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          NumberField #BonusAmountInput { FlexWeight: 1; Anchor: (Height: 28); Value: 0; Style: (FontSize: 14, TextColor: #a5b4c4); Background: $Common.@InputBoxBackground; Format: (MaxDecimalPlaces: 4, Step: 0.01); }
+          Label #BonusAmountUnit { Text: ""; Anchor: (Width: 46, Height: 28); Style: (FontSize: 9, TextColor: #aab7c5, VerticalAlignment: Center); }
+        }
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 32);
+          Label { Text: "MAX RANK"; Anchor: (Width: 72, Height: 28); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); }
+          NumberField #MaxRankInput { FlexWeight: 1; Anchor: (Height: 28); Value: 1; Style: (FontSize: 14, TextColor: #a5b4c4); Background: $Common.@InputBoxBackground; }
+          Label { Text: "1–20"; Anchor: (Width: 46, Height: 28); Style: (FontSize: 9, TextColor: #aab7c5, VerticalAlignment: Center); }
+        }
+      }
+      Label #EditorStatus {
+        Style: (FontSize: 11, TextColor: #c0cbd6, Wrap: true);
+        Text: "Blank canvas. Add a node to begin.";
+        Padding: (Top: 10);
+      }
+      }
+    }
+  }
+
+  Group #CanvasSizePopup {
+    Anchor: (Full: 0);
+    LayoutMode: Center;
+    Background: #000000(0.72);
+    HitTestVisible: true;
+    Visible: false;
+
+    $Container.@DecoratedContainer #CanvasSizeDialog {
+      @ContentPadding = Padding(Full: 18);
+      LayoutMode: Full;
+      Anchor: (Width: 460, Height: 250);
+
+      #Title {
+        $Container.@Title #CanvasSizeTitle { @Text = "CANVAS SIZE"; }
+      }
+      #Content {
+      LayoutMode: Top;
+      Padding: (Left: 22, Right: 22, Top: 12, Bottom: 16);
+      Label {
+        Text: "Choose width and height. Each dimension must be 600–10,000.";
+        Anchor: (Height: 30);
+        Style: (FontSize: 11, TextColor: #aab7c5, Wrap: true);
+      }
+      Group { Anchor: (Height: 8); }
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 42);
+        Label { Text: "WIDTH"; Anchor: (Width: 82, Height: 38); Style: (FontSize: 11, TextColor: #c0cbd6, RenderBold: true, VerticalAlignment: Center); }
+        NumberField #CanvasWidthInput {
+          FlexWeight: 1;
+          Anchor: (Height: 36);
+          Value: 2400;
+            Style: (FontSize: 14, TextColor: #a5b4c4);
+            Background: $Common.@InputBoxBackground;
+          Format: (MaxDecimalPlaces: 0, Step: 100, MinValue: 600, MaxValue: 10000, DefaultValue: 2400);
+        }
+      }
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 42);
+        Label { Text: "HEIGHT"; Anchor: (Width: 82, Height: 38); Style: (FontSize: 11, TextColor: #c0cbd6, RenderBold: true, VerticalAlignment: Center); }
+        NumberField #CanvasHeightInput {
+          FlexWeight: 1;
+          Anchor: (Height: 36);
+          Value: 1600;
+            Style: (FontSize: 14, TextColor: #a5b4c4);
+            Background: $Common.@InputBoxBackground;
+          Format: (MaxDecimalPlaces: 0, Step: 100, MinValue: 600, MaxValue: 10000, DefaultValue: 1600);
+        }
+      }
+      Group { FlexWeight: 1; }
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 36);
+        Group { FlexWeight: 1; }
+        TextButton #CancelCanvasSize { Text: "CANCEL"; Anchor: (Width: 100, Height: 34); Style: @EditorCompactButton; Padding: (Horizontal: 6); }
+        Group { Anchor: (Width: 8); }
+        TextButton #ApplyCanvasSize { Text: "APPLY SIZE"; Anchor: (Width: 120, Height: 34); Style: @EditorCompactAction; Padding: (Horizontal: 6); }
+      }
+      }
+    }
+  }
+}

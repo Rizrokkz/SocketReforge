@@ -89,18 +89,43 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
             return;
         }
         Damage.Source source = deathInfo.getSource();
-        if (!(source instanceof Damage.EntitySource entitySource)) {
-            return;
+        Ref<EntityStore> attackerRef = source instanceof Damage.EntitySource entitySource
+                ? entitySource.getRef() : null;
+        if (ref.equals(attackerRef)) {
+            attackerRef = null;
         }
-        Ref<EntityStore> attackerRef = entitySource.getRef();
-        if (attackerRef == null) {
-            return;
+        Player attacker = attackerRef == null || !attackerRef.isValid()
+                ? null : store.getComponent(attackerRef, Player.getComponentType());
+
+        // Handle Soul Reaper before the held-weapon checks used by ordinary lore kill procs.
+        // The weapon may have changed after the projectile was fired.
+        SoulReaperTracker.PendingReap pendingReap = SoulReaperTracker.consumeForTarget(
+                ref, attacker == null ? null : attacker.getUuid());
+        if (pendingReap != null) {
+            Player reaper = null;
+            if (attacker != null) {
+                reaper = attacker;
+            } else if (attacker == null && source instanceof Damage.ProjectileSource
+                    && pendingReap.playerRef() != null && pendingReap.playerRef().isValid()) {
+                reaper = store.getComponent(pendingReap.playerRef(), Player.getComponentType());
+            }
+            if (reaper != null) {
+                String npcRoleId = resolveNpcRoleId(store, ref);
+                ItemStack soulstone = LoreSoulstoneUtils.createInfusedSoulstone(npcRoleId);
+                if (soulstone == null) {
+                    reaper.getPlayerRef().sendMessage(Message.raw(
+                            "This NPC's spirit has no compatible soulstone color."));
+                } else if (LoreSoulstoneUtils.giveInfusedSoulstone(reaper, soulstone)) {
+                    reaper.getPlayerRef().sendMessage(Message.raw(
+                            "Soul reaped: " + npcRoleId + " became an Infused Soulstone."));
+                } else {
+                    reaper.getPlayerRef().sendMessage(Message.raw(
+                            "Your inventory is full. The soulstone could not be added."));
+                }
+            }
         }
-        if (attackerRef.equals(ref)) {
-            return;
-        }
-        Player attacker = store.getComponent(attackerRef, Player.getComponentType());
-        if (attacker == null) {
+
+        if (attackerRef == null || attacker == null) {
             return;
         }
 
@@ -120,28 +145,6 @@ public final class LoreKillEST extends DeathSystems.OnDeathSystem {
 
         String descriptor = resolveSpiritDescriptor(store, ref, deathComponent);
         String npcRoleId = resolveNpcRoleId(store, ref);
-        if (npcRoleId != null && !npcRoleId.isBlank()
-                && SoulReaperTracker.isArmedFor(attacker.getUuid(), ref)) {
-            ItemStack soulstone = LoreSoulstoneUtils.createInfusedSoulstone(npcRoleId);
-            SoulReaperTracker.consume(attacker.getUuid(), ref);
-            if (soulstone == null) {
-                attacker.getPlayerRef().sendMessage(Message.raw(
-                        "This NPC's spirit has no compatible soulstone color."));
-            } else {
-                LoreSoulstoneUtils.InfusionResult result =
-                        LoreSoulstoneUtils.infuseWithRawSoulstone(attacker, soulstone);
-                if (result == LoreSoulstoneUtils.InfusionResult.SUCCESS) {
-                    attacker.getPlayerRef().sendMessage(Message.raw(
-                            "Soul reaped: " + npcRoleId + " became an Infused Soulstone."));
-                } else if (result == LoreSoulstoneUtils.InfusionResult.MISSING_MATCHING_RAW_SOULSTONE) {
-                    attacker.getPlayerRef().sendMessage(Message.raw(
-                            "You need a Raw Soulstone matching this spirit's color to capture its soul."));
-                } else {
-                    attacker.getPlayerRef().sendMessage(Message.raw(
-                            "The soul could not be captured. Make room in your inventory."));
-                }
-            }
-        }
         WorldMapTracker tracker = attacker.getWorldMapTracker();
         WorldMapTracker.ZoneDiscoveryInfo zoneInfo = tracker == null ? null : tracker.getCurrentZone();
         String zoneName = zoneInfo == null ? null : zoneInfo.zoneName();

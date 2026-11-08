@@ -1,0 +1,26 @@
+@MaterialCardHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #MaterialCard {
+  Anchor: (Width: 104, Height: 92);
+  LayoutMode: Full;
+  Background: #151526;
+  Group #MaterialSelected {
+    Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 3);
+    Background: #e8c030;
+    Visible: false;
+  }
+  Group #MaterialIconWrap {
+    Anchor: (Left: 3, Right: 3, Top: 3, Height: 54);
+    LayoutMode: Center;
+    ItemIcon #MaterialIcon { ItemId: "Refinement_Glob"; Anchor: (Width: 48, Height: 48); }
+  }
+  Group #MaterialDetail { LayoutMode: Left; Anchor: (Left: 4, Right: 4, Top: 57, Height: 18);
+    Label #MaterialName { FlexWeight: 1; Style: (FontSize: 8, TextColor: #c4ced8, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7); Text: "Material"; }
+    Label #MaterialCount { Anchor: (Width: 30); Style: (FontSize: 9, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "x0"; }
+  }
+  TextButton #MaterialCardHit { Anchor: (Full: 0); Style: @MaterialCardHitStyle; Padding: (Full: 0); Text: ""; }
+}

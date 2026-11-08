@@ -20,11 +20,14 @@ import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.AttackSpeedMultiHitMath;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
@@ -86,10 +89,15 @@ public class EquipmentStatsCommand extends CommandBase {
         double[] critChance = bonus(held, socketData, EssenceEffect.StatType.CRIT_CHANCE, true);
         double[] critDamage = bonus(held, socketData, EssenceEffect.StatType.CRIT_DAMAGE, true);
         double[] lifeSteal = bonus(held, socketData, EssenceEffect.StatType.LIFE_STEAL, true);
+        double totalAttackSpeedPercent = attackSpeed[1]
+                + CharacterPathService.bonusForWeapon(player, held.getItemId(), Bonus.ATTACK_SPEED_PERCENT) * 100.0d;
+        double multiHitChancePercent = AttackSpeedMultiHitMath.multiHitChancePercent(totalAttackSpeedPercent);
 
         double normal = summary.getBuffedValue();
         double crit = normal * (1.0 + (critDamage[1] / 100.0));
-        double expected = normal * (1.0 + ((critChance[1] / 100.0) * (critDamage[1] / 100.0)));
+        double expected = normal * (1.0 + ((critChance[1] / 100.0) * (critDamage[1] / 100.0)))
+                * (1.0 + ((multiHitChancePercent / 100.0)
+                * AttackSpeedMultiHitMath.EXTRA_HIT_DAMAGE_FRACTION));
 
         StringBuilder sb = new StringBuilder();
         sb.append("Weapon: ").append(displayName(held)).append(" +").append(level).append('\n');
@@ -99,7 +107,8 @@ public class EquipmentStatsCommand extends CommandBase {
         }
         sb.append('\n');
         sb.append("  Socket Damage Bonus: ").append(bonusLine(damage)).append('\n');
-        sb.append("  Attack Speed: ").append(signedPercent(attackSpeed[1])).append('\n');
+        sb.append("  Multi-hit Chance: ").append(formatPercent(multiHitChancePercent)).append('\n');
+        sb.append("  Attack Speed Bonus: ").append(signedPercent(totalAttackSpeedPercent)).append('\n');
         sb.append("  Crit: ").append(formatPercent(critChance[1])).append(" chance / ")
                 .append(formatPercent(critDamage[1])).append(" damage").append('\n');
         sb.append("  Crit Hit: ").append(format(crit)).append(" | Expected Avg: ").append(format(expected)).append('\n');

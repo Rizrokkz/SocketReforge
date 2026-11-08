@@ -1,0 +1,151 @@
+/*
+ * Skill tree bridge to Hytale's built-in Common UI textures and control styles.
+ * Custom UI documents are sandboxed under this mod's UI root, so this local
+ * file exposes the native skin without importing outside that root.
+ */
+
+@ButtonBorderSize = 12;
+@ButtonPadding = 16;
+@PrimaryButtonHeight = 44;
+@SmallButtonHeight = 32;
+@DisabledColor = #797b7c;
+
+// Texture paths are relative to this file in UI/Custom, so walk back to the
+// interface root before using Hytale's built-in Common textures.
+@PanelBackground = PatchStyle(TexturePath: "SocketReforgeUI/DropdownBox.png", Border: 16);
+@InputBoxBackground = PatchStyle(TexturePath: "SocketReforgeUI/InputBox.png", Border: 16);
+
+@DefaultInputFieldStyle = InputFieldStyle();
+@DefaultInputFieldPlaceholderStyle = InputFieldStyle(TextColor: #6e7da1);
+
+@DefaultScrollbarStyle = ScrollbarStyle(
+  Spacing: 6,
+  Size: 6,
+  Background: (TexturePath: "SocketReforgeUI/Scrollbar.png", Border: 3),
+  Handle: (TexturePath: "SocketReforgeUI/ScrollbarHandle.png", Border: 3),
+  HoveredHandle: (TexturePath: "SocketReforgeUI/ScrollbarHandleHovered.png", Border: 3),
+  DraggedHandle: (TexturePath: "SocketReforgeUI/ScrollbarHandleDragged.png", Border: 3)
+);
+
+@PrimaryButtonLabelStyle = LabelStyle(
+  FontSize: 17,
+  TextColor: #bfcdd5,
+  RenderBold: true,
+  RenderUppercase: true,
+  HorizontalAlignment: Center,
+  ShrinkTextToFit: true,
+  MinShrinkTextToFitFontSize: 12,
+  VerticalAlignment: Center
+);
+
+@SecondaryButtonLabelStyle = LabelStyle(...@PrimaryButtonLabelStyle, TextColor: #bdcbd3);
+@SmallSecondaryButtonLabelStyle = LabelStyle(...@SecondaryButtonLabelStyle, FontSize: 14);
+
+@PrimaryButtonDefaultBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Primary.png", VerticalBorder: @ButtonBorderSize, HorizontalBorder: 80);
+@PrimaryButtonHoveredBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Primary_Hovered.png", VerticalBorder: @ButtonBorderSize, HorizontalBorder: 80);
+@PrimaryButtonPressedBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Primary_Pressed.png", VerticalBorder: @ButtonBorderSize, HorizontalBorder: 80);
+@PrimaryButtonDisabledBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", VerticalBorder: @ButtonBorderSize, HorizontalBorder: 80);
+
+@TertiaryDefaultButtonBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Tertiary.png", Border: @ButtonBorderSize);
+@TertiaryHoveredButtonBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Tertiary_Hovered.png", Border: @ButtonBorderSize);
+@TertiaryPressedButtonBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Tertiary_Pressed.png", Border: @ButtonBorderSize);
+@TertiaryDisabledButtonBackground = PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", Border: @ButtonBorderSize);
+
+@PrimaryTextButtonStyle = TextButtonStyle(
+  Default: (Background: @PrimaryButtonDefaultBackground, LabelStyle: @PrimaryButtonLabelStyle),
+  Hovered: (Background: @PrimaryButtonHoveredBackground, LabelStyle: @PrimaryButtonLabelStyle),
+  Pressed: (Background: @PrimaryButtonPressedBackground, LabelStyle: @PrimaryButtonLabelStyle),
+  Disabled: (Background: @PrimaryButtonDisabledBackground, LabelStyle: (...@PrimaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@SecondaryTextButtonStyle = TextButtonStyle(
+  Default: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary.png", Border: @ButtonBorderSize), LabelStyle: @SecondaryButtonLabelStyle),
+  Hovered: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary_Hovered.png", Border: @ButtonBorderSize), LabelStyle: @SecondaryButtonLabelStyle),
+  Pressed: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary_Pressed.png", Border: @ButtonBorderSize), LabelStyle: @SecondaryButtonLabelStyle),
+  Disabled: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", Border: @ButtonBorderSize), LabelStyle: (...@SecondaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@CompactPrimaryButtonLabelStyle = LabelStyle(...@PrimaryButtonLabelStyle, FontSize: 12, MinShrinkTextToFitFontSize: 9);
+@CompactSecondaryButtonLabelStyle = LabelStyle(...@SecondaryButtonLabelStyle, FontSize: 12, MinShrinkTextToFitFontSize: 9);
+
+@CompactPrimaryTextButtonStyle = TextButtonStyle(
+  Default: (Background: @PrimaryButtonDefaultBackground, LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Hovered: (Background: @PrimaryButtonHoveredBackground, LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Pressed: (Background: @PrimaryButtonPressedBackground, LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Disabled: (Background: @PrimaryButtonDisabledBackground, LabelStyle: (...@CompactPrimaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@CompactSecondaryTextButtonStyle = TextButtonStyle(
+  Default: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary.png", Border: @ButtonBorderSize), LabelStyle: @CompactSecondaryButtonLabelStyle),
+  Hovered: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary_Hovered.png", Border: @ButtonBorderSize), LabelStyle: @CompactSecondaryButtonLabelStyle),
+  Pressed: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Secondary_Pressed.png", Border: @ButtonBorderSize), LabelStyle: @CompactSecondaryButtonLabelStyle),
+  Disabled: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", Border: @ButtonBorderSize), LabelStyle: (...@CompactSecondaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@CompactDestructiveTextButtonStyle = TextButtonStyle(
+  Default: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive.png", Border: @ButtonBorderSize), LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Hovered: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive_Hovered.png", Border: @ButtonBorderSize), LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Pressed: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive_Pressed.png", Border: @ButtonBorderSize), LabelStyle: @CompactPrimaryButtonLabelStyle),
+  Disabled: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", Border: @ButtonBorderSize), LabelStyle: (...@CompactPrimaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@TertiaryTextButtonStyle = TextButtonStyle(
+  Default: (Background: @TertiaryDefaultButtonBackground, LabelStyle: @SecondaryButtonLabelStyle),
+  Hovered: (Background: @TertiaryHoveredButtonBackground, LabelStyle: @SecondaryButtonLabelStyle),
+  Pressed: (Background: @TertiaryPressedButtonBackground, LabelStyle: @SecondaryButtonLabelStyle),
+  Disabled: (Background: @TertiaryDisabledButtonBackground, LabelStyle: (...@SecondaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@DestructiveTextButtonStyle = TextButtonStyle(
+  Default: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive.png", Border: @ButtonBorderSize), LabelStyle: @PrimaryButtonLabelStyle),
+  Hovered: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive_Hovered.png", Border: @ButtonBorderSize), LabelStyle: @PrimaryButtonLabelStyle),
+  Pressed: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Destructive_Pressed.png", Border: @ButtonBorderSize), LabelStyle: @PrimaryButtonLabelStyle),
+  Disabled: (Background: PatchStyle(TexturePath: "SocketReforgeUI/Buttons/Disabled.png", Border: @ButtonBorderSize), LabelStyle: (...@PrimaryButtonLabelStyle, TextColor: @DisabledColor))
+);
+
+@DefaultSliderStyle = SliderStyle(
+  Background: (TexturePath: "SocketReforgeUI/SliderBackground.png", Border: 2),
+  Handle: "SocketReforgeUI/SliderHandle.png",
+  HandleWidth: 16,
+  HandleHeight: 16
+);
+
+@DefaultDropdownBoxLabelStyle = LabelStyle(TextColor: #96a9be, RenderUppercase: true, VerticalAlignment: Center, FontSize: 13);
+@DefaultDropdownBoxEntryLabelStyle = LabelStyle(...@DefaultDropdownBoxLabelStyle, TextColor: #b7cedd);
+
+@DefaultDropdownBoxStyle = DropdownBoxStyle(
+  DefaultBackground: (TexturePath: "SocketReforgeUI/Dropdown.png", Border: 16),
+  HoveredBackground: (TexturePath: "SocketReforgeUI/DropdownHovered.png", Border: 16),
+  PressedBackground: (TexturePath: "SocketReforgeUI/DropdownPressed.png", Border: 16),
+  DefaultArrowTexturePath: "SocketReforgeUI/DefaultDropdownCaret.png",
+  HoveredArrowTexturePath: "SocketReforgeUI/DefaultDropdownCaret.png",
+  PressedArrowTexturePath: "SocketReforgeUI/PressedDropdownCaret.png",
+  ArrowWidth: 13,
+  ArrowHeight: 18,
+  LabelStyle: @DefaultDropdownBoxLabelStyle,
+  EntryLabelStyle: @DefaultDropdownBoxEntryLabelStyle,
+  NoItemsLabelStyle: (...@DefaultDropdownBoxEntryLabelStyle, TextColor: #b7cedd(0.5)),
+  SelectedEntryLabelStyle: (...@DefaultDropdownBoxEntryLabelStyle, RenderBold: true),
+  HorizontalPadding: 8,
+  PanelScrollbarStyle: @DefaultScrollbarStyle,
+  PanelBackground: (TexturePath: "SocketReforgeUI/DropdownBox.png", Border: 16),
+  PanelPadding: 6,
+  PanelAlign: Right,
+  PanelOffset: 7,
+  PanelWidth: 300,
+  SearchInputStyle: (
+    Background: @InputBoxBackground,
+    Anchor: (Height: 30),
+    Padding: (Left: 8),
+    Style: (FontSize: 13, TextColor: #a5b4c4),
+    PlaceholderText: "Search",
+    PlaceholderStyle: (TextColor: #6e7da1, FontSize: 13, RenderItalics: true)
+  ),
+  EntryHeight: 31,
+  EntriesInViewport: 10,
+  HorizontalEntryPadding: 7,
+  HoveredEntryBackground: (Color: #0a0f17),
+  PressedEntryBackground: (Color: #0f1621),
+  FocusOutlineSize: 1,
+  FocusOutlineColor: #ffffff(0.4)
+);

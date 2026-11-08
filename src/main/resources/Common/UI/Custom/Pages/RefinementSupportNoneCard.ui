@@ -1,0 +1,22 @@
+@SupportNoneHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #SupportNoneCard {
+  Anchor: (Height: 64);
+  LayoutMode: Full;
+  Background: #151526;
+  Group #SupportNoneSelected {
+    Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 4);
+    Background: #e8c030;
+    Visible: false;
+  }
+  Label #SupportNoneText {
+    Anchor: (Left: 12, Top: 0, Bottom: 0, Right: 12);
+    Style: (FontSize: 11, TextColor: #c4ced8, RenderBold: true, VerticalAlignment: Center);
+    Text: "No support material";
+  }
+  TextButton #SupportNoneHit { Anchor: (Full: 0); Style: @SupportNoneHitStyle; Padding: (Full: 0); Text: ""; }
+}

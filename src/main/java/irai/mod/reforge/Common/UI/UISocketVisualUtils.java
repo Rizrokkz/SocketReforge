@@ -98,6 +98,15 @@ public final class UISocketVisualUtils {
                 "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
     }
 
+    /** Returns the displayed item for a lore slot, preferring its rune over its soulstone/gem. */
+    public static String loreSocketItemId(LoreSocketData.LoreSocket socket) {
+        if (socket == null) {
+            return null;
+        }
+        String itemId = socket.hasRune() ? socket.getRuneItemId() : socket.getGemItemId();
+        return itemId == null || itemId.isBlank() ? null : itemId;
+    }
+
     public static String loreGemIconByItemId(String itemId) {
         if (itemId == null || itemId.isBlank()) {
             return null;

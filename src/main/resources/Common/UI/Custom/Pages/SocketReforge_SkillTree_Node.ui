@@ -1,0 +1,111 @@
+@SkillTreeNodeHitStyle = TextButtonStyle(
+  Default: (LabelStyle: (FontSize: 12, TextColor: #f5f7fa, RenderBold: true)),
+  Hovered: (Background: PatchStyle(TexturePath: "SkillTreeNode_Selected.png", Border: 0), LabelStyle: (FontSize: 12, TextColor: #ffffff, RenderBold: true)),
+  Pressed: (Background: PatchStyle(TexturePath: "SkillTreeNode_Selected.png", Border: 0), LabelStyle: (FontSize: 12, TextColor: #ffffff, RenderBold: true)),
+  Disabled: (LabelStyle: (FontSize: 12, TextColor: #68727e, RenderBold: true))
+);
+
+Group #TreeNode {
+  LayoutMode: Full;
+  Anchor: (Width: 60, Height: 60);
+  
+
+  Group #NodeRing {
+    Anchor: (Full: 0);
+    Visible: false;
+  
+    Group #RingSelected { Anchor: (Full: 0);  Background: #f4d35e; Visible: false; }
+    Group #RingCore { Anchor: (Full: 0);  Background: #d4a84b; Visible: false; }
+    Group #RingRanked { Anchor: (Full: 0);  Background: #d7e9f7; Visible: false; }
+    Group #RingEditor { Anchor: (Full: 0);  Background: #55687b; Visible: false; }
+    Group #RingLocked { Anchor: (Full: 0);  Background: #46505e; Visible: false; }
+    Group #RingCategoryVITALITY { Anchor: (Full: 0);  Background: #5aad79; Visible: false; }
+    Group #RingCategoryARCANA { Anchor: (Full: 0);  Background: #668fd1; Visible: false; }
+    Group #RingCategoryENDURANCE { Anchor: (Full: 0);  Background: #d5a544; Visible: false; }
+    Group #RingCategoryCOMBAT { Anchor: (Full: 0);  Background: #d56858; Visible: false; }
+    Group #RingCategoryGUARD { Anchor: (Full: 0);  Background: #55aeb0; Visible: false; }
+    Group #RingCategoryDAGGERS { Anchor: (Full: 0);  Background: #c76bd6; Visible: false; }
+    Group #RingCategorySWORDS { Anchor: (Full: 0);  Background: #6aa9e9; Visible: false; }
+    Group #RingCategoryAXES { Anchor: (Full: 0);  Background: #da7452; Visible: false; }
+    Group #RingCategoryMACES { Anchor: (Full: 0);  Background: #dcaa54; Visible: false; }
+    Group #RingCategorySPEARS { Anchor: (Full: 0);  Background: #72bf82; Visible: false; }
+    Group #RingCategorySHORTBOWS { Anchor: (Full: 0);  Background: #54b9b6; Visible: false; }
+    Group #RingCategoryCROSSBOWS { Anchor: (Full: 0);  Background: #a2b951; Visible: false; }
+    Group #RingCategorySTAFFS { Anchor: (Full: 0);  Background: #9a83e8; Visible: false; }
+  }
+
+  Group #NodeFill {
+    Anchor: (Left: 3, Right: 3, Top: 3, Bottom: 3);
+    Visible: false;
+  
+    Group #FillLocked { Anchor: (Full: 0);  Background: #202630; Visible: false; }
+    Group #FillCore { Anchor: (Full: 0);  Background: #594824; Visible: false; }
+    Group #FillPath { Anchor: (Full: 0);  Background: #131a22; Visible: false; }
+    Group #FillCategoryVITALITY { Anchor: (Full: 0);  Background: #5aad79; Visible: false; }
+    Group #FillCategoryARCANA { Anchor: (Full: 0);  Background: #668fd1; Visible: false; }
+    Group #FillCategoryENDURANCE { Anchor: (Full: 0);  Background: #d5a544; Visible: false; }
+    Group #FillCategoryCOMBAT { Anchor: (Full: 0);  Background: #d56858; Visible: false; }
+    Group #FillCategoryGUARD { Anchor: (Full: 0);  Background: #55aeb0; Visible: false; }
+    Group #FillCategoryDAGGERS { Anchor: (Full: 0);  Background: #c76bd6; Visible: false; }
+    Group #FillCategorySWORDS { Anchor: (Full: 0);  Background: #6aa9e9; Visible: false; }
+    Group #FillCategoryAXES { Anchor: (Full: 0);  Background: #da7452; Visible: false; }
+    Group #FillCategoryMACES { Anchor: (Full: 0);  Background: #dcaa54; Visible: false; }
+    Group #FillCategorySPEARS { Anchor: (Full: 0);  Background: #72bf82; Visible: false; }
+    Group #FillCategorySHORTBOWS { Anchor: (Full: 0);  Background: #54b9b6; Visible: false; }
+    Group #FillCategoryCROSSBOWS { Anchor: (Full: 0);  Background: #a2b951; Visible: false; }
+    Group #FillCategorySTAFFS { Anchor: (Full: 0);  Background: #9a83e8; Visible: false; }
+    Group #FillAvailableVITALITY { Anchor: (Full: 0);  Background: #254331; Visible: false; }
+    Group #FillAvailableARCANA { Anchor: (Full: 0);  Background: #293851; Visible: false; }
+    Group #FillAvailableENDURANCE { Anchor: (Full: 0);  Background: #514326; Visible: false; }
+    Group #FillAvailableCOMBAT { Anchor: (Full: 0);  Background: #512d2b; Visible: false; }
+    Group #FillAvailableGUARD { Anchor: (Full: 0);  Background: #234344; Visible: false; }
+    Group #FillAvailableDAGGERS { Anchor: (Full: 0);  Background: #482851; Visible: false; }
+    Group #FillAvailableSWORDS { Anchor: (Full: 0);  Background: #263b55; Visible: false; }
+    Group #FillAvailableAXES { Anchor: (Full: 0);  Background: #522c25; Visible: false; }
+    Group #FillAvailableMACES { Anchor: (Full: 0);  Background: #514326; Visible: false; }
+    Group #FillAvailableSPEARS { Anchor: (Full: 0);  Background: #29452f; Visible: false; }
+    Group #FillAvailableSHORTBOWS { Anchor: (Full: 0);  Background: #234443; Visible: false; }
+    Group #FillAvailableCROSSBOWS { Anchor: (Full: 0);  Background: #414a27; Visible: false; }
+    Group #FillAvailableSTAFFS { Anchor: (Full: 0);  Background: #382f59; Visible: false; }
+  }
+
+  Group #NodeFrame {
+    Background: (TexturePath: "SkillTreeNode_Small.png", Border: 0);
+    Anchor: (Full: 0);
+    Visible: true;
+  }
+  Group #NodeAllocatedGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Clearance.png", Border: 0);
+    Visible: false;
+  }
+  Group #NodeSearchGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Available.png", Border: 0);
+    Visible: false;
+  }
+  Group #NodeSelectionTint {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Selected.png", Border: 0);
+    Visible: false;
+  }
+
+  ItemIcon #NodeItemIcon {
+    ItemId: "Weapon_Sword_Copper";
+    Anchor: (Width: 18, Height: 18);
+    Visible: false;
+  }
+  Group #NodeTextureIcon {
+
+    Anchor: (Width: 18, Height: 18);
+    Visible: false;
+  }
+
+  TextButton #NodeHit {
+    Anchor: (Full: 0);
+    Text: "";
+    TooltipText: "";
+    Style: @SkillTreeNodeHitStyle;
+    Padding: (Full: 0);
+  }
+}

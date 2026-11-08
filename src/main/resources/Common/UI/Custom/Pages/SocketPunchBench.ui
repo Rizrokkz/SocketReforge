@@ -1,0 +1,230 @@
+$Common = "../SocketReforge_Common.ui";
+@BenchAction = $Common.@PrimaryTextButtonStyle;
+@BenchScrollbar = $Common.@DefaultScrollbarStyle;
+@PanelTitle = LabelStyle(FontSize: 14, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10);
+@SectionTitle = LabelStyle(FontSize: 12, TextColor: #d5dee8, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9);
+
+Group #SocketBenchRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Center;
+  Background: #000000(0.68);
+
+  Group #BenchFrame {
+    Anchor: (Width: 1660, Height: 820);
+    LayoutMode: Left;
+
+    Group #EquipmentPanel {
+      Anchor: (Width: 430, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+
+      Label #EquipmentPanelTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "EQUIPMENT"; }
+      Label #EquipmentHint {
+        Anchor: (Height: 28);
+        Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center);
+        Text: "Choose equipment to socket.";
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EquipmentListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #EquipmentList {
+          Anchor: (Full: 0);
+          LayoutMode: Top;
+          Padding: (Full: 6);
+          Background: #101823;
+          ScrollbarStyle: @BenchScrollbar;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+        Label #EquipmentEmpty {
+          Anchor: (Full: 0);
+          Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true);
+          Text: "No equipment found.";
+          Visible: false;
+        }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #SocketBenchPanel {
+      Anchor: (Width: 760, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 10);
+      Background: $Common.@PanelBackground;
+
+      Label #SocketBenchTitle { Anchor: (Height: 30); Style: @PanelTitle; Text: "SOCKET PUNCH BENCH"; }
+      Label #SocketBenchSubtitle {
+        Anchor: (Height: 20);
+        Style: (FontSize: 10, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+        Text: "Select equipment and materials from inventory.";
+      }
+      Group #SelectedEquipmentHeader {
+        Anchor: (Height: 78);
+        LayoutMode: Left;
+        Padding: (Top: 2, Bottom: 2);
+        ItemIcon #SelectedEquipmentIcon { ItemId: ""; Anchor: (Width: 70, Height: 70); Visible: false; }
+        Group { Anchor: (Width: 12); }
+        Group {
+          FlexWeight: 1;
+          LayoutMode: Top;
+          Label #SelectedEquipmentName {
+            Anchor: (Height: 34);
+            Style: (FontSize: 15, TextColor: #f2f4f7, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10);
+            Text: "Select equipment";
+          }
+          Label #SelectedEquipmentLevel {
+            Anchor: (Height: 24);
+            Style: (FontSize: 10, TextColor: #e8c030, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+            Text: "-";
+          }
+        }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+
+      Label #PuncherTitle { Anchor: (Height: 24); Style: @SectionTitle; Text: "MAIN MATERIAL (SOCKET PUNCHER)"; }
+      Group #PuncherListHost {
+        Anchor: (Height: 96);
+        LayoutMode: Full;
+        Background: #101823;
+        Group #PuncherList {
+          Anchor: (Full: 0);
+          LayoutMode: Left;
+          Padding: (Full: 6);
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+        Label #PuncherEmpty {
+          Anchor: (Full: 0);
+          Style: (FontSize: 10, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true);
+          Text: "No socket puncher found.";
+          Visible: false;
+        }
+      }
+
+      Label #SocketPreviewTitle { Anchor: (Height: 26); Style: @SectionTitle; Text: "SOCKET PREVIEW"; }
+      Group #SocketPreviewRow {
+        Anchor: (Height: 88);
+        LayoutMode: Left;
+        Padding: (Top: 2, Bottom: 4);
+        Group #SocketPreviewLeftSpacer { FlexWeight: 1; }
+        Group #SocketPreviewTiles { Anchor: (Width: 400, Height: 82); LayoutMode: Left; }
+        Group #SocketPreviewRightSpacer { FlexWeight: 1; }
+      }
+      Label #LorePreviewTitle { Anchor: (Height: 24); Style: @SectionTitle; Text: "LORE SOCKET COLORS"; }
+      Group #LorePreviewRow {
+        Anchor: (Height: 88);
+        LayoutMode: Left;
+        Padding: (Top: 2, Bottom: 4);
+        Group #LorePreviewLeftSpacer { FlexWeight: 1; }
+        Group #LorePreviewTiles { Anchor: (Width: 240, Height: 82); LayoutMode: Left; }
+        Group #LorePreviewRightSpacer { FlexWeight: 1; }
+      }
+      Group { FlexWeight: 1; }
+
+      Group #SocketActions {
+        Anchor: (Height: 180);
+        LayoutMode: Top;
+        Padding: (Top: 4);
+        Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+        Group #SocketRateRow {
+          Anchor: (Height: 42);
+          LayoutMode: Left;
+          Group #SocketSuccessMetric {
+            FlexWeight: 1;
+            LayoutMode: Top;
+            Label #SocketSuccessLabel { Anchor: (Height: 18); Style: (FontSize: 9, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "Success"; }
+            Label #SocketSuccessValue { Anchor: (Height: 22); Style: (FontSize: 13, TextColor: #77dd77, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "0%"; }
+          }
+          Group #SocketBreakMetric {
+            FlexWeight: 1;
+            LayoutMode: Top;
+            Label #SocketBreakLabel { Anchor: (Height: 18); Style: (FontSize: 9, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "Item Break"; }
+            Label #SocketBreakValue { Anchor: (Height: 22); Style: (FontSize: 13, TextColor: #ff8888, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "0%"; }
+          }
+          Group #SocketCountMetric {
+            FlexWeight: 1;
+            LayoutMode: Top;
+            Label #SocketCountLabel { Anchor: (Height: 18); Style: (FontSize: 9, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "Sockets"; }
+            Label #SocketCountValue { Anchor: (Height: 22); Style: (FontSize: 13, TextColor: #f8d36a, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "0 / 0"; }
+          }
+        }
+        Group #SocketProgressHeading {
+          Anchor: (Height: 22);
+          LayoutMode: Left;
+          Label #SocketProgressTitle { FlexWeight: 1; Style: @SectionTitle; Text: "PROGRESS"; }
+          Label #SocketProgressPercent { Anchor: (Width: 48); Style: (FontSize: 10, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "0%"; }
+        }
+        Group #SocketProgressTrack {
+          Anchor: (Height: 16);
+          Background: (TexturePath: "../boost_track.png");
+          ProgressBar #SocketProgress { Anchor: (Full: 0); Value: 0; BarTexturePath: "../boost_fill.png"; }
+        }
+        Label #SocketStatus {
+          Anchor: (Height: 26);
+          Style: (FontSize: 10, TextColor: #c4ced8, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+          Text: "Select equipment to continue.";
+        }
+        Label #SocketFailureNote {
+          Anchor: (Height: 22);
+          Style: (FontSize: 8, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7);
+          Text: "Failure consumes Socket Puncher.";
+        }
+        Group #SocketActionArea {
+          Anchor: (Height: 34);
+          LayoutMode: Center;
+          TextButton #SocketProcessButton { Anchor: (Width: 260, Height: 34); Style: @BenchAction; Text: "PROCESS MATERIALS"; }
+          Label #SocketUnavailable {
+            Anchor: (Width: 320, Height: 30);
+            Style: (FontSize: 10, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+            Text: "Select equipment to continue.";
+            Visible: false;
+          }
+          Label #SocketBusy {
+            Anchor: (Width: 260, Height: 30);
+            Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center);
+            Text: "PUNCHING...";
+            Visible: false;
+          }
+        }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #SupportPanel {
+      Anchor: (Width: 430, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+
+      Label #SupportPanelTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "SUPPORT MATERIAL"; }
+      Label #SupportHint {
+        Anchor: (Height: 28);
+        Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center);
+        Text: "Optional materials alter socket results.";
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #SupportListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #SupportList {
+          Anchor: (Full: 0);
+          LayoutMode: Top;
+          Padding: (Full: 6);
+          Background: #101823;
+          ScrollbarStyle: @BenchScrollbar;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+      }
+      Label #SupportFooter {
+        Anchor: (Height: 28);
+        Style: (FontSize: 9, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center);
+        Text: "Click a material card to toggle it.";
+      }
+    }
+  }
+}

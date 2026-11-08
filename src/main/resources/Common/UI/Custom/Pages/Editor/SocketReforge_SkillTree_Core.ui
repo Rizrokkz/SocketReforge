@@ -1,0 +1,11 @@
+Group #CoreNode {
+  LayoutMode: Full;
+  Anchor: (Width: 86, Height: 86);
+  Background: (TexturePath: "../SkillTreeNode_KeyStone.png", Border: 0);
+
+  Label #CoreText {
+    Anchor: (Full: 0);
+    Style: (FontSize: 13, TextColor: #18130a, RenderBold: true);
+    Text: "PATH";
+  }
+}

@@ -19,6 +19,7 @@ import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.ResonantRecipeUtils;
+import irai.mod.reforge.Progression.CharacterPathService;
 import irai.mod.reforge.Common.ResonantCompendiumUtils;
 import irai.mod.reforge.Common.ResonantCompendiumUtils.CompendiumEntry;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
@@ -981,6 +982,7 @@ public final class RecipeCombineUI {
         if (DynamicTooltipUtils.isAvailable()) {
             DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
         }
+        CharacterPathService.awardBenchXp(player, 10, "recipe research");
 
         String progress = afterStats.totalSlots() > 0
                 ? LangLoader.getUITranslation(player, "ui.recipe_combine.progress_revealed",

@@ -25,6 +25,8 @@ import com.hypixel.hytale.server.core.event.events.ecs.InteractivelyPickupItemEv
 import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerMouseButtonEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerMouseMotionEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.entity.EntityModule;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction;
@@ -42,6 +44,9 @@ import com.hypixel.hytale.server.core.util.Config;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumbers;
 import irai.mod.reforge.Commands.AffinityHudCommand;
+import irai.mod.reforge.Commands.CharacterPathCommand;
+import irai.mod.reforge.Commands.CharacterPathAdminCommand;
+import irai.mod.reforge.Commands.CharacterPathEditorCommand;
 import irai.mod.reforge.Commands.EquipmentStatsCommand;
 import irai.mod.reforge.Commands.EssenceCommand;
 import irai.mod.reforge.Commands.ItemMetaCommand;
@@ -49,6 +54,7 @@ import irai.mod.reforge.Commands.LoreAbilityMapCommand;
 import irai.mod.reforge.Commands.LoreApplyCommand;
 import irai.mod.reforge.Commands.LoreFeedCommand;
 import irai.mod.reforge.Commands.LoreSocketCommand;
+import irai.mod.reforge.Commands.LoreXpCommand;
 import irai.mod.reforge.Commands.LoreSpiritMapCommand;
 import irai.mod.reforge.Commands.ReforgeAdminCommand;
 import irai.mod.reforge.Commands.ResonanceListCommand;
@@ -84,6 +90,7 @@ import irai.mod.reforge.Config.SocketConfig;
 import irai.mod.reforge.Config.WorldRepairConfig;
 import irai.mod.reforge.Entity.Events.AscensionStatueListener;
 import irai.mod.reforge.Entity.Events.ChestWindowSocketLootEST;
+import irai.mod.reforge.Entity.Events.CharacterPathStatSystem;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
 import irai.mod.reforge.Entity.Events.DamageCalculationAuditEST;
 import irai.mod.reforge.Entity.Events.DamageStackDelayEST;
@@ -144,11 +151,15 @@ import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreAbsorptionStore;
 import irai.mod.reforge.Lore.LoreGemRegistry;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathEditorService;
 import irai.mod.reforge.Socket.EssenceRegistry;
 import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Systems.SyncTasks;
 import irai.mod.reforge.UI.DamagePopupHudUI;
+import irai.mod.reforge.UI.CharacterPathUI;
+import irai.mod.reforge.UI.CharacterPathEditorPage;
 import irai.mod.reforge.UI.EnemyAffinityHudUI;
 import irai.mod.reforge.UI.EquipmentStatsUI;
 import irai.mod.reforge.UI.EssenceBenchUI;
@@ -188,6 +199,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final SocketStatSystem socketStatSystem;
     private final LifeHealthSystem lifeHealthSystem;
     private final WaterRegenSystem waterRegenSystem;
+    private final CharacterPathStatSystem characterPathStatSystem;
     private final HatchetThrowEST hatchetThrowEST;
     private final SalvageMetadataCompatEST salvageMetadataCompatEST;
     private final ChestWindowSocketLootEST chestWindowSocketLootEST;
@@ -248,6 +260,7 @@ public class ReforgePlugin extends JavaPlugin {
         socketStatSystem = new SocketStatSystem();
         lifeHealthSystem = new LifeHealthSystem();
         waterRegenSystem = new WaterRegenSystem();
+        characterPathStatSystem = new CharacterPathStatSystem();
         hatchetThrowEST = new HatchetThrowEST();
         salvageMetadataCompatEST = new SalvageMetadataCompatEST();
         chestWindowSocketLootEST = new ChestWindowSocketLootEST();
@@ -345,11 +358,14 @@ public class ReforgePlugin extends JavaPlugin {
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
         ResonantCompendiumUI.initialize();
+        CharacterPathUI.initialize();
         RuntimeConfigUI.initialize(this);
         // Initialize weapon upgrade tracker with persistence
         File dataFolder = new File(".");
         ReforgeEquip.initialize(dataFolder);
         LoreAbsorptionStore.initialize(dataFolder);
+        CharacterPathService.initialize(new File(dataFolder, "server/character_path"));
+        CharacterPathEditorService.initialize(new File(dataFolder, "server/character_path"));
         // Register interaction
         reforgeEquip = new ReforgeEquip();
 
@@ -421,11 +437,17 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, event -> {
             if (event != null) {
                 flushPendingLoreUpdatesOnDisconnect(event.getPlayerRef());
+                CharacterPathEditorPage.clearMouseState(event.getPlayerRef());
                 SocketBenchUI.closeForDisconnect(event.getPlayerRef());
+                CharacterPathUI.closeForDisconnect(event.getPlayerRef());
                 EnemyAffinityHudUI.closeForDisconnect(event.getPlayerRef());
                 DamagePopupHudUI.closeForDisconnect(event.getPlayerRef());
             }
         });
+        this.getEventRegistry().registerGlobal(PlayerMouseButtonEvent.class,
+                CharacterPathEditorPage::onMouseButton);
+        this.getEventRegistry().registerGlobal(PlayerMouseMotionEvent.class,
+                CharacterPathEditorPage::onMouseMotion);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, LeafSaplingDropUtils::onDamageBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, BreakBlockEvent.class, LeafSaplingDropUtils::onBreakBlock);
         this.getEventRegistry().registerGlobal(EventPriority.FIRST, DamageBlockEvent.class, CropEssenceDropUtils::onDamageBlock);
@@ -440,6 +462,9 @@ public class ReforgePlugin extends JavaPlugin {
         System.out.println("[SocketReforge] Hatchet throw experimental feature remains disabled unless its interaction assets are present.");
         this.getCommandRegistry().registerCommand(new ToolPartsCommand("toolpartsui", "Open modular tool parts bench UI", false));
         this.getCommandRegistry().registerCommand(new SocketPunchCommand("socketpunch", "Open socket punch bench UI", false));
+        this.getCommandRegistry().registerCommand(new CharacterPathCommand("characterpath", "Open the character skill path", false));
+        this.getCommandRegistry().registerCommand(new CharacterPathAdminCommand("characterpathadmin", "OP testing controls for character skill path progression", false));
+        this.getCommandRegistry().registerCommand(new CharacterPathEditorCommand("characterpathedit", "Edit and publish the character skill tree", false));
         this.getCommandRegistry().registerCommand(new EssenceCommand("essence", "Open essence socket bench UI", false));
         this.getCommandRegistry().registerCommand(new RuntimeConfigCommand("reforgeconfig", "Open live runtime config UI", false));
         this.getCommandRegistry().registerCommand(new EquipmentStatsCommand("equipmentstats", "Show held weapon and equipped armor stat summary", false));
@@ -448,6 +473,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getCommandRegistry().registerCommand(new LoreSocketCommand("loregem", "Open lore gem socketing UI", false));
         this.getCommandRegistry().registerCommand(new LoreFeedCommand("lorefeed", "Open lore feed UI", false));
         this.getCommandRegistry().registerCommand(new LoreApplyCommand("loreapply", "OP: apply a lore spirit to the held weapon", false));
+        this.getCommandRegistry().registerCommand(new LoreXpCommand("lorexp", "OP: grant XP to a lore socket on held equipment", false));
         this.getCommandRegistry().registerCommand(new LoreAbilityMapCommand("loreabilities", "Dump lore spirit ability map", false));
         this.getCommandRegistry().registerCommand(new LoreSpiritMapCommand("lorecolors", "Dump lore spirit to gem color map", false));
         this.getCommandRegistry().registerCommand(new SpawnEquipChestCommand("spawnequipchest", "Spawn a test chest with equipment-likely loot", false));
@@ -482,6 +508,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.getEntityStoreRegistry().registerSystem(socketStatSystem);
         this.getEntityStoreRegistry().registerSystem(lifeHealthSystem);
         this.getEntityStoreRegistry().registerSystem(waterRegenSystem);
+        this.getEntityStoreRegistry().registerSystem(characterPathStatSystem);
         this.getEntityStoreRegistry().registerSystem(hatchetThrowEST);
         this.getEntityStoreRegistry().registerSystem(salvageMetadataCompatEST);
         this.getEntityStoreRegistry().registerSystem(chestWindowSocketLootEST);

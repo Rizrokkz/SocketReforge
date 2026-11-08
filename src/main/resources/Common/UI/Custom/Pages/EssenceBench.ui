@@ -1,0 +1,214 @@
+$Common = "../SocketReforge_Common.ui";
+@BenchAction = $Common.@PrimaryTextButtonStyle;
+@BenchScrollbar = $Common.@DefaultScrollbarStyle;
+@PanelTitle = LabelStyle(FontSize: 16, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 12);
+@SectionTitle = LabelStyle(FontSize: 14, TextColor: #d5dee8, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 11);
+
+Group #EssenceBenchRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Full;
+  Background: #000000(0.68);
+
+  Group #BenchFrameHost {
+    Anchor: (Full: 0);
+    LayoutMode: Center;
+
+    Group #BenchFrame {
+      Anchor: (Width: 1820, Height: 960);
+      LayoutMode: Left;
+
+      Group #EquipmentPanel {
+      Anchor: (Width: 480, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+      Label #EquipmentPanelTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "EQUIPMENT"; }
+      Label #EquipmentHint {
+        Anchor: (Height: 28);
+        Style: (FontSize: 12, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center);
+        Text: "Choose an item to view its sockets.";
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EquipmentListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #EquipmentList {
+          Anchor: (Full: 0);
+          LayoutMode: Top;
+          Padding: (Full: 6);
+          Background: #101823;
+          ScrollbarStyle: @BenchScrollbar;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+        Label #EquipmentEmpty {
+          Anchor: (Full: 0);
+          Style: (FontSize: 14, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true);
+          Text: "No socketable equipment found.";
+          Visible: false;
+        }
+      }
+    }
+
+      Group { Anchor: (Width: 18); }
+
+      Group #EssenceBenchPanel {
+      Anchor: (Width: 820, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 10);
+      Background: $Common.@PanelBackground;
+      Label #EssenceBenchTitle { Anchor: (Height: 30); Style: @PanelTitle; Text: "ESSENCE SOCKET BENCH"; }
+      Label #EssenceBenchSubtitle {
+        Anchor: (Height: 22);
+        Style: (FontSize: 12, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10);
+        Text: "Select equipment, an essence, and optional support material.";
+      }
+      Group #SelectedEquipmentHeader {
+        Anchor: (Height: 74);
+        LayoutMode: Left;
+        Padding: (Top: 2, Bottom: 2);
+        ItemIcon #SelectedEquipmentIcon { ItemId: ""; Anchor: (Width: 64, Height: 64); Visible: false; }
+        Group { Anchor: (Width: 10); }
+        Group {
+          FlexWeight: 1;
+          LayoutMode: Top;
+          Label #SelectedEquipmentName {
+            Anchor: (Height: 36);
+            Style: (FontSize: 16, TextColor: #f2f4f7, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 11);
+            Text: "Select equipment";
+          }
+          Label #SelectedEquipmentLevel {
+            Anchor: (Height: 24);
+            Style: (FontSize: 12, TextColor: #e8c030, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10);
+            Text: "-";
+          }
+        }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EssenceSocketHeading {
+        Anchor: (Height: 26);
+        LayoutMode: Left;
+        Label #SocketPreviewTitle { FlexWeight: 1; Style: @SectionTitle; Text: "SOCKET PREVIEW"; }
+        Label #SocketSummaryLabel {
+          Anchor: (Width: 270);
+          Style: (FontSize: 11, TextColor: #93a2b2, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9);
+          Text: "No socket data";
+        }
+      }
+      Group #SocketPreviewRow {
+        Anchor: (Height: 80);
+        LayoutMode: Left;
+        Group { FlexWeight: 1; }
+        Group #SocketPreviewTiles { Anchor: (Width: 460, Height: 76); LayoutMode: Left; }
+        Group { FlexWeight: 1; }
+      }
+      Group #SocketDetailsPanel {
+        Anchor: (Height: 44);
+        LayoutMode: Top;
+        Padding: (Left: 8, Right: 8, Top: 3, Bottom: 3);
+        Background: #141a28;
+        Label #SelectedSocketDetails {
+          Anchor: (Full: 0);
+          Style: (FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9);
+          Text: "Select a socket to inspect it.";
+        }
+      }
+      Group #EssenceBenchDetails {
+        FlexWeight: 1;
+        LayoutMode: Top;
+        Padding: (Top: 6, Bottom: 4);
+        Label #SupportDurability { Anchor: (Height: 24); Style: (FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center); Text: "Support durability: -"; }
+        Label #SupportRecipe { Anchor: (Height: 42); Style: (FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Recipe: none"; }
+        Label #EffectPreview { FlexWeight: 1; Style: (FontSize: 11, TextColor: #93a2b2, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Effect preview: none"; }
+        Label #SocketBonusTitle { Anchor: (Height: 24); Style: (FontSize: 12, TextColor: #d5dee8, RenderBold: true, VerticalAlignment: Center); Text: "Total Socket Bonuses"; }
+        Label #SocketBonusText { Anchor: (Height: 96); Style: (FontSize: 10, TextColor: #93a2b2, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8); Text: "No active socket bonuses."; }
+      }
+      Group #EssenceProgressArea {
+        Anchor: (Height: 180);
+        LayoutMode: Top;
+        Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+        Group #EssenceProgressHeading {
+          Anchor: (Height: 24);
+          LayoutMode: Left;
+          Label #EssenceProgressTitle { FlexWeight: 1; Style: @SectionTitle; Text: "PROGRESS"; }
+          Label #EssenceProgressPercent { Anchor: (Width: 54); Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "0%"; }
+        }
+        Group { Anchor: (Height: 15); Background: (TexturePath: "../boost_track.png"); ProgressBar #EssenceProgress { Anchor: (Full: 0); Value: 0; BarTexturePath: "../boost_fill.png"; } }
+        Label #EssenceStatus { Anchor: (Height: 30); Style: (FontSize: 12, TextColor: #c4ced8, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10); Text: "Select equipment to continue."; }
+        Label #EssenceFailureNote { Anchor: (Height: 28); Style: (FontSize: 10, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8); Text: "Essence is consumed on success. Voidheart is consumed only for repairs."; }
+        Group #EssenceActionRow {
+          Anchor: (Height: 34);
+          LayoutMode: Left;
+          Group { FlexWeight: 1; }
+          TextButton #EssenceProcessButton { Anchor: (Width: 230, Height: 32); Style: @BenchAction; Text: "SOCKET ESSENCE"; }
+          Group { Anchor: (Width: 8); }
+          TextButton #EssenceExtractButton { Anchor: (Width: 205, Height: 32); Style: @BenchAction; Text: "EXTRACT RESONANCE"; }
+          Group { FlexWeight: 1; }
+        }
+        Label #EssenceUnavailable { Anchor: (Height: 22); Style: (FontSize: 11, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Select equipment to continue."; Visible: false; }
+        Label #EssenceBusy { Anchor: (Height: 22); Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center); Text: "SOCKETING..."; Visible: false; }
+      }
+    }
+
+      Group { Anchor: (Width: 18); }
+
+      Group #MaterialsPanel {
+      Anchor: (Width: 480, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+      Label #EssenceMaterialsTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "ESSENCE MATERIAL"; }
+      Label #EssenceMaterialsHint { Anchor: (Height: 28); Style: (FontSize: 11, TextColor: #93a2b2, VerticalAlignment: Center, Wrap: true); Text: "Select the essence to socket."; }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EssenceListHost {
+        Anchor: (Height: 380);
+        LayoutMode: Full;
+        Group #EssenceList { Anchor: (Full: 0); LayoutMode: Top; Padding: (Full: 5); Background: #101823; ScrollbarStyle: @BenchScrollbar; Overscroll: true; KeepScrollPosition: true; }
+        Label #EssenceEmpty { Anchor: (Full: 0); Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "No essence found."; Visible: false; }
+      }
+      Group { Anchor: (Height: 8); }
+      Label #SupportMaterialsTitle { Anchor: (Height: 26); Style: @SectionTitle; Text: "SUPPORT MATERIAL (OPTIONAL)"; }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #SupportListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #SupportList { Anchor: (Full: 0); LayoutMode: Top; Padding: (Full: 5); Background: #101823; ScrollbarStyle: @BenchScrollbar; Overscroll: true; KeepScrollPosition: true; }
+      }
+      Label #SupportFooter { Anchor: (Height: 32); Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center); Text: "Click a support material to select it."; }
+    }
+    }
+  }
+
+  Group #LoreDetailsOverlay {
+    Anchor: (Full: 0);
+    LayoutMode: Center;
+    Background: #000000(0.68);
+    Visible: false;
+    Group #LoreDetailsCard {
+      Anchor: (Width: 500, Height: 360);
+      LayoutMode: Top;
+      Padding: (Full: 14);
+      Background: $Common.@PanelBackground;
+      Label #LoreDetailsTitle { Anchor: (Height: 30); Style: @PanelTitle; Text: "LORE SOCKET DETAILS"; }
+      Label #LoreDetailsText { FlexWeight: 1; Style: (FontSize: 12, TextColor: #c4ced8, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Group { Anchor: (Height: 8); }
+      Group { Anchor: (Height: 34); LayoutMode: Center; TextButton #LoreDetailsClose { Anchor: (Width: 160, Height: 32); Style: @BenchAction; Text: "CLOSE"; } }
+    }
+  }
+
+  Group #ExtractOverlay {
+    Anchor: (Full: 0);
+    LayoutMode: Center;
+    Background: #000000(0.68);
+    Visible: false;
+    Group #ExtractDialog {
+      Anchor: (Width: 440, Height: 200);
+      LayoutMode: Top;
+      Padding: (Full: 14);
+      Background: $Common.@PanelBackground;
+      Label #ExtractTitle { Anchor: (Height: 30); Style: @PanelTitle; Text: "RESONANT ESSENCE EXTRACTOR"; }
+      Label #ExtractHint { FlexWeight: 1; Style: (FontSize: 12, TextColor: #c4ced8, VerticalAlignment: Center, Wrap: true); Text: "Extract resonant essence from equipment with active resonance?"; }
+      Group { Anchor: (Height: 38); LayoutMode: Left; Group { FlexWeight: 1; } TextButton #ExtractCancel { Anchor: (Width: 150, Height: 32); Style: @BenchAction; Text: "CANCEL"; } Group { Anchor: (Width: 10); } TextButton #ExtractConfirm { Anchor: (Width: 190, Height: 32); Style: @BenchAction; Text: "EXTRACT"; } Group { FlexWeight: 1; } }
+    }
+  }
+}

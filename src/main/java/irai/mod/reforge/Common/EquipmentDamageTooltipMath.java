@@ -349,7 +349,7 @@ public final class EquipmentDamageTooltipMath {
 
     /**
      * Mirrors deterministic parts of runtime damage math:
-     * refinement multiplier + socket damage bonuses + parts multiplier + attack speed multiplier.
+     * refinement multiplier + socket damage bonuses + parts multiplier.
      */
     public static double computeBuffedWeaponDamage(String itemId,
                                                    double baseDamage,
@@ -369,21 +369,17 @@ public final class EquipmentDamageTooltipMath {
                 ? refinementConfig.getDamageMultiplier(safeLevel)
                 : ReforgeEquip.getDamageMultiplier(safeLevel);
         double[] damageBonus;
-        double[] attackSpeedBonus;
 
         ItemStack previewStack = createPreviewWeaponStack(itemId, safeSocketData);
         if (previewStack != null) {
             // Match runtime damage event math: includes tier, greater weighting, and resonance stats.
             damageBonus = SocketManager.getStoredStatBonus(previewStack, EssenceEffect.StatType.DAMAGE);
-            attackSpeedBonus = SocketManager.getStoredStatBonus(previewStack, EssenceEffect.StatType.ATTACK_SPEED);
         } else {
             damageBonus = SocketManager.calculateTieredBonus(safeSocketData, EssenceEffect.StatType.DAMAGE, true);
-            attackSpeedBonus = SocketManager.calculateTieredBonus(safeSocketData, EssenceEffect.StatType.ATTACK_SPEED, true);
         }
 
         double socketFlat = damageBonus[0];
         double socketPercentMultiplier = 1.0 + (damageBonus[1] / 100.0);
-        double attackSpeedMultiplier = 1.0 + (attackSpeedBonus[1] / 100.0);
         double clampedPartsMultiplier = clamp(partsDamageMultiplier, 0.5, 2.0);
 
         double result = (baseDamage
@@ -392,7 +388,6 @@ public final class EquipmentDamageTooltipMath {
                 * clampedSoftcoreMultiplier
                 * socketPercentMultiplier
                 * clampedPartsMultiplier) + socketFlat;
-        result *= attackSpeedMultiplier;
         return Math.max(0.0, result);
     }
 

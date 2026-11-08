@@ -1,0 +1,22 @@
+@EssenceMaterialHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #EssenceCard {
+  Anchor: (Height: 58);
+  LayoutMode: Full;
+  Background: #151c26;
+  Group #EssenceSelected { Anchor: (Left: 6, Top: 5, Bottom: 5, Width: 4); Background: #e8c030; Visible: false; }
+  Group #EssenceIconGroup { Anchor: (Left: 12, Top: 4, Width: 40, Height: 50); LayoutMode: Center;
+    ItemIcon #EssenceIcon { ItemId: "Ingredient_Fire_Essence"; Anchor: (Width: 36, Height: 36); }
+  }
+  Group #EssenceNameGroup { Anchor: (Left: 62, Right: 72, Top: 4, Height: 50); LayoutMode: Center;
+    Label #EssenceName { Anchor: (Full: 0); Style: (FontSize: 12, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Essence"; }
+  }
+  Group #EssenceAmountGroup { Anchor: (Right: 10, Top: 4, Width: 58, Height: 50); LayoutMode: Center;
+    Label #EssenceQuantity { Anchor: (Full: 0); Style: (FontSize: 11, TextColor: #e8c030, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "x0"; }
+  }
+  TextButton #EssenceCardHit { Anchor: (Full: 0); Style: @EssenceMaterialHitStyle; Padding: (Full: 0); Text: ""; }
+}

@@ -1,0 +1,33 @@
+@SocketSupportHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #SupportCard {
+  Anchor: (Height: 92);
+  LayoutMode: Full;
+  Background: #151c26;
+  Group #SupportSelected { Anchor: (Left: 7, Top: 7, Bottom: 7, Width: 4); Background: #e8c030; Visible: false; }
+  ItemIcon #SupportIcon { ItemId: "Ingredient_Fire_Essence"; Anchor: (Left: 18, Top: 19, Width: 54, Height: 54); }
+  Group #SupportInfo {
+    Anchor: (Left: 81, Right: 8, Top: 5, Height: 82);
+    LayoutMode: Top;
+    Label #SupportName {
+      Anchor: (Height: 25);
+      Style: (FontSize: 10, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+      Text: "Support material";
+    }
+    Label #SupportDescription {
+      Anchor: (Height: 38);
+      Style: (FontSize: 8, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7);
+      Text: "";
+    }
+    Label #SupportQuantity {
+      Anchor: (Height: 17);
+      Style: (FontSize: 8, TextColor: #c4ced8, VerticalAlignment: Center);
+      Text: "Held: 0";
+    }
+  }
+  TextButton #SupportCardHit { Anchor: (Full: 0); Style: @SocketSupportHitStyle; Padding: (Full: 0); Text: ""; }
+}

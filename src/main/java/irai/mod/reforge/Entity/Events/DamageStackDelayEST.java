@@ -30,7 +30,7 @@ import irai.mod.reforge.Lore.LoreWorldTasks;
 /** Delays burst hits before they enter damage modifiers, then lets each hit traverse the pipeline once. */
 public final class DamageStackDelayEST extends DamageEventSystem {
     private static final boolean DAMAGE_CALCULATION_DEBUG = Boolean.parseBoolean(
-            System.getProperty("socketreforge.debug.damageCalculation", "true"));
+            System.getProperty("socketreforge.debug.damageCalculation", "false"));
     private static final long HIT_SPACING_MILLIS = readPositiveLong(
             "socketreforge.damageStackSpacingMs", 45L);
     private static final long STATE_RETENTION_MILLIS = 5_000L;

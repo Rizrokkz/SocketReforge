@@ -1,0 +1,68 @@
+@EssenceSocketHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #SocketTile {
+  Anchor: (Width: 76, Height: 76);
+  LayoutMode: Full;
+  Background: #141a28;
+  Group #SocketVisual { Anchor: (Left: 4, Top: 4, Width: 68, Height: 68); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #SocketEssence { ItemId: ""; Anchor: (Width: 42, Height: 42); Visible: false; } }
+  Group #SocketSelectionColorNone { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #e8c030; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #e8c030; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #e8c030; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #e8c030; }
+    }
+  Group #SocketSelectionColorOpen { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #e8c030; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #e8c030; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #e8c030; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #e8c030; }
+    }
+  Group #SocketSelectionColorBroken { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #FF5555; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #FF5555; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #FF5555; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #FF5555; }
+    }
+  Group #SocketSelectionColorFire { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #FFAA00; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #FFAA00; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #FFAA00; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #FFAA00; }
+    }
+  Group #SocketSelectionColorIce { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #55FFFF; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #55FFFF; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #55FFFF; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #55FFFF; }
+    }
+  Group #SocketSelectionColorLife { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #55FF55; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #55FF55; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #55FF55; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #55FF55; }
+    }
+  Group #SocketSelectionColorLightning { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #FFFF55; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #FFFF55; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #FFFF55; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #FFFF55; }
+    }
+  Group #SocketSelectionColorVoid { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #AA55FF; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #AA55FF; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #AA55FF; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #AA55FF; }
+    }
+  Group #SocketSelectionColorWater { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 2, Top: 2, Width: 72, Height: 2); Background: #5555FF; }
+      Group { Anchor: (Left: 2, Top: 72, Width: 72, Height: 2); Background: #5555FF; }
+      Group { Anchor: (Left: 2, Top: 2, Width: 2, Height: 72); Background: #5555FF; }
+      Group { Anchor: (Left: 72, Top: 2, Width: 2, Height: 72); Background: #5555FF; }
+    }
+  ItemIcon #SocketMutationIcon { ItemId: ""; Anchor: (Left: 56, Top: 52, Width: 20, Height: 20); Visible: false; }
+  TextButton #SocketHit { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; }
+}

@@ -117,6 +117,19 @@ public final class WeaponElementalDamageUtils {
                 elementDamagePayload);
     }
 
+    /** Applies a passive character-path multiplier while preserving native element metadata. */
+    public static AffinityDamage scaleAffinityDamage(AffinityDamage affinityDamage, double multiplier) {
+        if (affinityDamage == null || affinityDamage.type() == null
+                || affinityDamage.elementalDamage() <= 0.0f || !Double.isFinite(multiplier)
+                || multiplier <= 0.0d) {
+            return affinityDamage == null ? AffinityDamage.none() : affinityDamage;
+        }
+        float scaledDamage = (float) (affinityDamage.elementalDamage() * multiplier);
+        String payload = encodeElementDamage(Map.of(affinityDamage.type(), (double) scaledDamage));
+        return new AffinityDamage(affinityDamage.type(), affinityDamage.weight(), affinityDamage.rate(),
+                affinityDamage.targetType(), affinityDamage.effectivenessMultiplier(), scaledDamage, payload);
+    }
+
     private static Map<Essence.Type, Double> calculateAffinityWeights(SocketData socketData) {
         Map<Essence.Type, Double> weights = new LinkedHashMap<>();
         if (socketData == null || socketData.getSockets() == null) {

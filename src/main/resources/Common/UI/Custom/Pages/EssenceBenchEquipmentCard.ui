@@ -1,0 +1,81 @@
+@EssenceCardHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+@EssenceSocketHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.12), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+@EssenceLoreHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.12), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #EquipmentCard {
+  Anchor: (Height: 72);
+  LayoutMode: Full;
+  Background: #151c26;
+  Group #EquipmentSelected { Anchor: (Left: 6, Top: 4, Bottom: 4, Width: 4); Background: #e8c030; Visible: false; }
+  ItemIcon #EquipmentIcon { ItemId: "Weapon_Sword_Copper"; Anchor: (Left: 12, Top: 4, Width: 48, Height: 48); }
+  Group #EquipmentInfo {
+    Anchor: (Left: 76, Right: 10, Top: 4, Height: 36);
+    LayoutMode: Top;
+    Label #EquipmentName { Anchor: (Height: 34); Style: (FontSize: 12, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Equipment"; }
+  }
+  ItemIcon #EquipmentResonantEssence { ItemId: "Ingredient_Resonant_Essence"; Anchor: (Left: 42, Top: 34, Width: 18, Height: 18); Visible: false; }
+  Label #EquipmentSocketsCaption { Anchor: (Left: 76, Top: 48, Width: 44, Height: 16); Style: (FontSize: 8, TextColor: #8d98a8); Text: "Sockets"; }
+
+  TextButton #EquipmentCardHit { Anchor: (Full: 0); Style: @EssenceCardHitStyle; Padding: (Full: 0); Text: ""; }
+
+  Group #EquipmentSocketSlot0 { Anchor: (Left: 124, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentSocketVisual0 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence0 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; } } TextButton #EquipmentSocketHit0 { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentSocketSlot1 { Anchor: (Left: 145, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentSocketVisual1 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence1 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; } } TextButton #EquipmentSocketHit1 { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentSocketSlot2 { Anchor: (Left: 166, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentSocketVisual2 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence2 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; } } TextButton #EquipmentSocketHit2 { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentSocketSlot3 { Anchor: (Left: 187, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentSocketVisual3 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence3 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; } } TextButton #EquipmentSocketHit3 { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentSocketSlot4 { Anchor: (Left: 208, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentSocketVisual4 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence4 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; } } TextButton #EquipmentSocketHit4 { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; } }
+
+  Group #EquipmentLoreSlot0 { Anchor: (Left: 241, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentLoreVisual0 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../GemSlotEmpty.png");
+    Group #EquipmentLoreColorNone0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #2b2b3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorLocked0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #3a3a3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorRed0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FF5555(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlue0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #5599FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorGreen0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FF77(0.5); Visible: false; }
+    Group #EquipmentLoreColorPurple0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #AA55FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorYellow0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFF55(0.5); Visible: false; }
+    Group #EquipmentLoreColorOrange0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFAA00(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlack0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #555555(0.5); Visible: false; }
+    Group #EquipmentLoreColorWhite0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFFFF(0.5); Visible: false; }
+    Group #EquipmentLoreColorCyan0 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FFFF(0.5); Visible: false; }
+    ItemIcon #EquipmentLoreIcon0 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; }
+  } TextButton #EquipmentLoreHit0 { Anchor: (Full: 0); Style: @EssenceLoreHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentLoreSlot1 { Anchor: (Left: 262, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentLoreVisual1 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../GemSlotEmpty.png");
+    Group #EquipmentLoreColorNone1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #2b2b3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorLocked1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #3a3a3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorRed1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FF5555(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlue1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #5599FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorGreen1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FF77(0.5); Visible: false; }
+    Group #EquipmentLoreColorPurple1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #AA55FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorYellow1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFF55(0.5); Visible: false; }
+    Group #EquipmentLoreColorOrange1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFAA00(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlack1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #555555(0.5); Visible: false; }
+    Group #EquipmentLoreColorWhite1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFFFF(0.5); Visible: false; }
+    Group #EquipmentLoreColorCyan1 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FFFF(0.5); Visible: false; }
+    ItemIcon #EquipmentLoreIcon1 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; }
+  } TextButton #EquipmentLoreHit1 { Anchor: (Full: 0); Style: @EssenceLoreHitStyle; Padding: (Full: 0); Text: ""; } }
+  Group #EquipmentLoreSlot2 { Anchor: (Left: 283, Top: 43, Width: 21, Height: 25); LayoutMode: Center; Group #EquipmentLoreVisual2 { Anchor: (Width: 20, Height: 20); LayoutMode: Center; Background: (TexturePath: "../GemSlotEmpty.png");
+    Group #EquipmentLoreColorNone2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #2b2b3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorLocked2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #3a3a3a(0.5); Visible: false; }
+    Group #EquipmentLoreColorRed2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FF5555(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlue2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #5599FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorGreen2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FF77(0.5); Visible: false; }
+    Group #EquipmentLoreColorPurple2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #AA55FF(0.5); Visible: false; }
+    Group #EquipmentLoreColorYellow2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFF55(0.5); Visible: false; }
+    Group #EquipmentLoreColorOrange2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFAA00(0.5); Visible: false; }
+    Group #EquipmentLoreColorBlack2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #555555(0.5); Visible: false; }
+    Group #EquipmentLoreColorWhite2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #FFFFFF(0.5); Visible: false; }
+    Group #EquipmentLoreColorCyan2 { Anchor: (Left: 2, Top: 2, Right: 2, Bottom: 2); Background: #55FFFF(0.5); Visible: false; }
+    ItemIcon #EquipmentLoreIcon2 { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; }
+  } TextButton #EquipmentLoreHit2 { Anchor: (Full: 0); Style: @EssenceLoreHitStyle; Padding: (Full: 0); Text: ""; } }
+}

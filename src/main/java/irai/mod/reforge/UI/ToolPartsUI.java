@@ -27,6 +27,7 @@ import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UITemplateUtils;
+import irai.mod.reforge.Progression.CharacterPathService;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 
@@ -405,6 +406,7 @@ public final class ToolPartsUI {
         updated = updated.withMetadata(META_DAMAGE_MULTIPLIER, Codec.DOUBLE, partStats.breakPowerMultiplier);
         writeTool(player, eq, updated);
         DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
+        CharacterPathService.awardBenchXp(player, 8, "tool crafting");
 
         String extra = ToolAbilityUtils.describeHatchetThrowStatus(p.kind.name(), m1.tier, m2.tier, m3.tier);
         if (extra != null && !extra.isBlank() && !extra.startsWith(" ")) {

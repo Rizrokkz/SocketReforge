@@ -1,0 +1,5 @@
+Group #NodeGlow {
+  LayoutMode: Full;
+  Anchor: (Width: 70, Height: 70);
+  Background: (TexturePath: "../SkillTreeNode_RankGlow.png", Border: 0);
+}

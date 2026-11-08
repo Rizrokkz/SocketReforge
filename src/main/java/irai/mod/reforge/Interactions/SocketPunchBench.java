@@ -78,8 +78,7 @@ public class SocketPunchBench extends SimpleInteraction {
         Player player = getPlayerFromContext(context);
         if (player == null) return;
 
-        // Prefer HyUI bench flow when available.
-        // Keeps old interaction behavior as automatic fallback.
+        // Open the native inventory-backed socket bench.
         if (SocketBenchUI.isAvailable()) {
             SocketBenchUI.open(player);
             return;

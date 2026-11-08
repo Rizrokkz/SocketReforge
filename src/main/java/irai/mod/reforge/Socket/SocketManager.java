@@ -799,6 +799,11 @@ public class SocketManager {
      * Rolls a punch result using an explicit socket count (useful for lore sockets).
      */
     public static PunchResult rollPunchResult(int currentSockets, SupportMaterial support) {
+        return rollPunchResult(currentSockets, support, 0.0d);
+    }
+
+    /** Rolls with a character-path success chance bonus, expressed as a probability (0.02 = 2%). */
+    public static PunchResult rollPunchResult(int currentSockets, SupportMaterial support, double pathSuccessBonus) {
         int current = Math.max(0, currentSockets);
 
         double successChance = config.getSuccessChance(current);
@@ -811,6 +816,8 @@ public class SocketManager {
             case SOCKET_GUARANTOR  -> { if (current == 0) successChance = 1.0; }
             default -> { /* NONE / SOCKET_EXPANDER / SOCKET_DIFFUSER / GHASTLY_ESSENCE */ }
         }
+
+        successChance = Math.min(1.0d, successChance + Math.max(0.0d, pathSuccessBonus));
 
         float roll = RNG.nextFloat();
 

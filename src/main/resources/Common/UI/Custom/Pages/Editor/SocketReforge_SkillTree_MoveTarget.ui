@@ -1,0 +1,17 @@
+@SkillTreeMoveTargetStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #000000(0))),
+  Hovered: (Background: #e8c030(0.16), LabelStyle: (FontSize: 1, TextColor: #000000(0))),
+  Pressed: (Background: #e8c030(0.28), LabelStyle: (FontSize: 1, TextColor: #000000(0))),
+  Disabled: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #000000(0)))
+);
+
+Group #MoveTargetRoot {
+  Anchor: (Width: 80, Height: 80);
+
+  TextButton #MoveTarget {
+    Anchor: (Full: 0);
+    Text: "";
+    Style: @SkillTreeMoveTargetStyle;
+    Padding: (Full: 0);
+  }
+}

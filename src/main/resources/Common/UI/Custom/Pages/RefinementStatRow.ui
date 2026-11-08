@@ -1,0 +1,15 @@
+Group #StatRow {
+  Anchor: (Height: 25);
+  LayoutMode: Left;
+  Label #StatLabel {
+    Anchor: (Width: 166, Height: 25);
+    Style: (FontSize: 9, TextColor: #aab7c4, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7);
+    Text: "Stat";
+  }
+  Label #StatValue {
+    FlexWeight: 1;
+    Anchor: (Height: 25);
+    Style: (FontSize: 9, TextColor: #f0f2f5, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7);
+    Text: "-";
+  }
+}

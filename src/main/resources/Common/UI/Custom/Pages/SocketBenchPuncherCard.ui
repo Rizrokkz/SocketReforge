@@ -1,0 +1,28 @@
+@SocketPuncherHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #PuncherCard {
+  Anchor: (Width: 184, Height: 78);
+  LayoutMode: Full;
+  Background: #151c26;
+  Group #PuncherSelected { Anchor: (Left: 6, Top: 5, Bottom: 5, Width: 4); Background: #e8c030; Visible: false; }
+  ItemIcon #PuncherIcon { ItemId: "Socket_Puncher"; Anchor: (Left: 12, Top: 13, Width: 52, Height: 52); }
+  Group #PuncherInfo {
+    Anchor: (Left: 70, Right: 8, Top: 9, Height: 60);
+    LayoutMode: Top;
+    Label #PuncherName {
+      Anchor: (Height: 38);
+      Style: (FontSize: 10, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+      Text: "Socket Puncher";
+    }
+    Label #PuncherQuantity {
+      Anchor: (Height: 18);
+      Style: (FontSize: 9, TextColor: #e8c030, VerticalAlignment: Center);
+      Text: "x0";
+    }
+  }
+  TextButton #PuncherCardHit { Anchor: (Full: 0); Style: @SocketPuncherHitStyle; Padding: (Full: 0); Text: ""; }
+}

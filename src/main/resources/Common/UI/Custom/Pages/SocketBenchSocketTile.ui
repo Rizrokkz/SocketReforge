@@ -1,0 +1,10 @@
+Group #SocketTile {
+  Anchor: (Width: 80, Height: 82);
+  LayoutMode: Full;
+  Group #SocketVisual {
+    Anchor: (Left: 1, Top: 2, Width: 78, Height: 78);
+    LayoutMode: Center;
+    Background: (TexturePath: "../slot_bg.png");
+    ItemIcon #SocketEssence { ItemId: ""; Anchor: (Width: 52, Height: 52); Visible: false; }
+  }
+}

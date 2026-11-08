@@ -17,6 +17,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 
 import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.AscensionUtils;
+import irai.mod.reforge.Common.AttackSpeedMultiHitMath;
 import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
@@ -25,6 +26,8 @@ import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Entity.Events.SocketStatSystem;
 import irai.mod.reforge.Interactions.ReforgeEquip;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
@@ -142,10 +145,15 @@ public final class EquipmentStatsUI {
         double[] critChance = bonus(held, socketData, EssenceEffect.StatType.CRIT_CHANCE, true);
         double[] critDamage = bonus(held, socketData, EssenceEffect.StatType.CRIT_DAMAGE, true);
         double[] lifeSteal = bonus(held, socketData, EssenceEffect.StatType.LIFE_STEAL, true);
+        double totalAttackSpeedPercent = attackSpeed[1]
+                + CharacterPathService.bonusForWeapon(player, held.getItemId(), Bonus.ATTACK_SPEED_PERCENT) * 100.0d;
+        double multiHitChancePercent = AttackSpeedMultiHitMath.multiHitChancePercent(totalAttackSpeedPercent);
 
         double normal = summary.getBuffedValue();
         double crit = normal * (1.0 + (critDamage[1] / 100.0));
-        double expected = normal * (1.0 + ((critChance[1] / 100.0) * (critDamage[1] / 100.0)));
+        double expected = normal * (1.0 + ((critChance[1] / 100.0) * (critDamage[1] / 100.0)))
+                * (1.0 + ((multiHitChancePercent / 100.0)
+                * AttackSpeedMultiHitMath.EXTRA_HIT_DAMAGE_FRACTION));
         String summaryLine = "Damage " + format(summary.getBaseValue()) + " -> " + format(normal)
                 + " | Expected " + format(expected);
         String critLine = "Crit " + formatPercent(critChance[1]) + " / +" + formatPercent(critDamage[1])
@@ -154,7 +162,8 @@ public final class EquipmentStatsUI {
         StringBuilder rows = new StringBuilder();
         rows.append(statRow("Refine Level", "+" + level, "#FFD36A"));
         rows.append(statRow("Damage Bonus", bonusLine(damage), "#FFAA55"));
-        rows.append(statRow("Attack Speed", signedPercent(attackSpeed[1]), "#FFFFAA"));
+        rows.append(statRow("Multi-hit Chance", formatPercent(multiHitChancePercent), "#FFFFAA"));
+        rows.append(statRow("Attack Speed Bonus", signedPercent(totalAttackSpeedPercent), "#B9C7D6"));
         rows.append(statRow("Parts Multiplier", "x" + format(partsMultiplier), "#B9C7D6"));
         rows.append(statRow("Softcore Multiplier", "x" + format(softcoreMultiplier), "#B9C7D6"));
         if (hasBonus(lifeSteal)) {

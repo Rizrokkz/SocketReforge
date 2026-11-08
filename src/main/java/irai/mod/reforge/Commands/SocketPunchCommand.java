@@ -13,7 +13,7 @@ import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 import irai.mod.reforge.UI.SocketBenchUI;
 
 /**
- * OP-only command to open the socket punch HyUI page.
+ * OP-only command to open the native socket punch bench.
  */
 public class SocketPunchCommand extends CommandBase {
 
@@ -34,7 +34,7 @@ public class SocketPunchCommand extends CommandBase {
             return;
         }
         if (!SocketBenchUI.isAvailable()) {
-            context.sendMessage(Message.raw("Socket bench UI is unavailable (HyUI missing)."));
+            context.sendMessage(Message.raw("Socket bench UI is unavailable."));
             return;
         }
         SocketBenchUI.open(player);

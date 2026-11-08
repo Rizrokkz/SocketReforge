@@ -1,0 +1,25 @@
+@LoreProgressNodeHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.04), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #LoreProgressNode {
+  FlexWeight: 1;
+  Anchor: (Height: 102);
+  LayoutMode: Top;
+  Group #LoreProgressNodeVisualHost { Anchor: (Height: 76); LayoutMode: Center;
+    Group #LoreProgressNodeFrame { Anchor: (Width: 56, Height: 70); LayoutMode: Center;
+      Background: (TexturePath: "../SkillTreeIcons/SkillTreeNode_21.png", Border: 0);
+      ItemIcon #LoreProgressRuneIcon { ItemId: ""; Anchor: (Width: 28, Height: 28); Visible: false; }
+    }
+    Group #LoreProgressNodeCurrent { Anchor: (Full: 0); Visible: false;
+      Group { Anchor: (Left: 4, Right: 4, Top: 2, Height: 2); Background: #ffd75e; }
+      Group { Anchor: (Left: 4, Right: 4, Bottom: 2, Height: 2); Background: #ffd75e; }
+      Group { Anchor: (Left: 4, Top: 2, Bottom: 2, Width: 2); Background: #ffd75e; }
+      Group { Anchor: (Right: 4, Top: 2, Bottom: 2, Width: 2); Background: #ffd75e; }
+    }
+  }
+  Label #LoreProgressNodeLabel { Anchor: (Height: 22); Style: (FontSize: 9, TextColor: #c4ced8, HorizontalAlignment: Center, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 7); Text: "Lv 1"; }
+  TextButton #LoreProgressNodeHit { Anchor: (Full: 0); Style: @LoreProgressNodeHitStyle; Padding: (Full: 0); Text: ""; TooltipText: ""; }
+}

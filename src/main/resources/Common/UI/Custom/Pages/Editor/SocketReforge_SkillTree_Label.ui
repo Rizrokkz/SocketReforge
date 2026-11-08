@@ -1,0 +1,5 @@
+Label #TreeLabel {
+  Anchor: (Width: 180, Height: 30);
+  Style: (FontSize: 12, TextColor: #aebbc9, RenderBold: true, Wrap: true);
+  Text: "";
+}

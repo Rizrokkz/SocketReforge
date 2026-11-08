@@ -156,6 +156,10 @@ public class SocketEffectEST extends DamageEventSystem {
                     EnemyElementalShieldUtils.META_NATIVE_SHIELD_FEEDBACK_EVENT))) {
                 return;
             }
+            if (damage != null && Boolean.TRUE.equals(damage.getIfPresentMetaObject(
+                    EquipmentRefineEST.META_ATTACK_SPEED_MULTIHIT_EXTRA))) {
+                return;
+            }
             if (LoreDamageUtils.isStatusDamage(damage)) {
                 return;
             }
@@ -347,6 +351,9 @@ public class SocketEffectEST extends DamageEventSystem {
             // Log final per-hit damage after socket processing for easier balancing/debugging.
             if (attackerPlayer != null && !elementalComponent) {
                 applyWeaponLifeSteal(store, attackerRef, attackerWeapon, damage.getAmount());
+
+                EquipmentRefineEST.tryScheduleAttackSpeedMultiHit(
+                        store, attackerRef, targetRef, attackerPlayer, attackerWeapon, damage);
 
                 if (DEBUG_DAMAGE_LOG) {
                     System.out.println("[SocketReforge][DEF_DMG] attacker=" + attackerPlayer.getUuid()

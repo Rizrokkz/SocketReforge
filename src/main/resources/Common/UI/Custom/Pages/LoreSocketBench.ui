@@ -1,0 +1,130 @@
+$Common = "../SocketReforge_Common.ui";
+@BenchAction = $Common.@PrimaryTextButtonStyle;
+@BenchScrollbar = $Common.@DefaultScrollbarStyle;
+@LoreSocketScrollbar = ScrollbarStyle(...$Common.@DefaultScrollbarStyle, Spacing: 2, Size: 3);
+@PanelTitle = LabelStyle(FontSize: 16, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 12);
+@SectionTitle = LabelStyle(FontSize: 14, TextColor: #d5dee8, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 11);
+
+Group #LoreSocketBenchRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Center;
+  Background: #000000(0.68);
+
+  Group #LoreSocketBenchFrame {
+    Anchor: (Width: 1820, Height: 960);
+    LayoutMode: Left;
+
+    Group #EquipmentPanel {
+      Anchor: (Width: 480, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+      Label #EquipmentTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "LORE EQUIPMENT"; }
+      Label #EquipmentHint { Anchor: (Height: 28); Style: (FontSize: 11, TextColor: #93a2b2, VerticalAlignment: Center, Wrap: true); Text: "Only equipment with lore sockets is shown."; }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EquipmentListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #EquipmentList { Anchor: (Full: 0); LayoutMode: Top; Padding: (Full: 6); Background: #101823; ScrollbarStyle: @BenchScrollbar; Overscroll: true; KeepScrollPosition: true; }
+        Label #EquipmentEmpty { Anchor: (Full: 0); Style: (FontSize: 14, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "No equipment found."; Visible: false; }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #LoreSocketCenterPanel {
+      Anchor: (Width: 820, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 10);
+      Background: $Common.@PanelBackground;
+      Label #LoreBenchTitle { Anchor: (Height: 30); Style: @PanelTitle; Text: "LORE SOCKET BENCH"; }
+      Label #LoreBenchSubtitle { Anchor: (Height: 24); Style: (FontSize: 12, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10); Text: "Insert lore gems into lore sockets."; }
+      Group #SelectedEquipmentHeader {
+        Anchor: (Height: 68);
+        LayoutMode: Left;
+        Padding: (Top: 2, Bottom: 2);
+        ItemIcon #SelectedEquipmentIcon { ItemId: ""; Anchor: (Width: 60, Height: 60); Visible: false; }
+        Group { Anchor: (Width: 10); }
+        Group { FlexWeight: 1; LayoutMode: Top;
+          Label #SelectedEquipmentName { Anchor: (Height: 36); Style: (FontSize: 16, TextColor: #f2f4f7, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 11); Text: "Select equipment"; }
+          Label #SelectedEquipmentLocation { Anchor: (Height: 24); Style: (FontSize: 11, TextColor: #e8c030, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: ""; }
+        }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group { Anchor: (Height: 26); LayoutMode: Left;
+        Label #LoreSocketPreviewTitle { FlexWeight: 1; Style: @SectionTitle; Text: "LORE SOCKETS"; }
+        Label #LoreSocketPreviewSummary { Anchor: (Width: 260); Style: (FontSize: 10, TextColor: #93a2b2, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8); Text: ""; }
+      }
+      Group #LoreSocketPreviewHost {
+        Anchor: (Height: 140);
+        LayoutMode: Full;
+        Group #LoreSocketPreviewRow { Anchor: (Full: 0); LayoutMode: Left;
+          Group { FlexWeight: 1; }
+          Group #LoreSocketTiles {
+            Anchor: (Width: 324, Height: 132);
+            LayoutMode: Left;
+            ScrollbarStyle: @LoreSocketScrollbar;
+            Overscroll: true;
+            KeepScrollPosition: true;
+          }
+          Group { FlexWeight: 1; }
+        }
+        Label #LoreSocketEmpty { Anchor: (Full: 0); Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "No lore sockets found."; Visible: false; }
+      }
+      Group #LoreProgressionPanel {
+        FlexWeight: 1;
+        LayoutMode: Top;
+        Padding: (Top: 6, Bottom: 4);
+        Label #LoreProgressTitle { Anchor: (Height: 24); Style: @SectionTitle; Text: "LORE PROGRESSION"; }
+        Label #LoreSelectedSlotLabel { Anchor: (Height: 24); Style: (FontSize: 11, TextColor: #e8c030, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "No lore slot selected."; }
+        Label #LoreProgressSummary { Anchor: (Height: 24); Style: (FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: ""; }
+        Group #LoreProgressionHost { FlexWeight: 1; LayoutMode: Full; Padding: (Full: 4); Background: #141a28;
+          Group #LoreProgressionCanvas { Anchor: (Full: 0); LayoutMode: Full;
+            Group #LoreProgressTrack { Anchor: (Left: 28, Right: 28, Top: 188, Height: 3); Background: #566273; }
+            Group #LoreProgressionNodes { Anchor: (Left: 0, Right: 0, Top: 150, Height: 102); LayoutMode: Left; }
+          }
+          Label #LoreProgressEmpty { Anchor: (Full: 0); Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "Select a spirit socket to view its progress."; Visible: false; }
+        }
+      }
+      Group #LoreActionArea {
+        Anchor: (Height: 144);
+        LayoutMode: Top;
+        Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+        Label #LoreStatusTitle { Anchor: (Height: 22); Style: @SectionTitle; Text: "STATUS"; }
+        Label #LoreStatus { Anchor: (Height: 42); Style: (FontSize: 12, TextColor: #c4ced8, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10); Text: "Select an item and gem."; }
+        Label #LoreUnavailable { Anchor: (Height: 22); Style: (FontSize: 10, TextColor: #93a2b2, VerticalAlignment: Center, HorizontalAlignment: Center, Wrap: true); Text: "Select equipment and material to continue."; Visible: false; }
+        Group { Anchor: (Height: 42); LayoutMode: Center;
+          TextButton #LoreProcessButton { Anchor: (Width: 360, Height: 36); Style: @BenchAction; Text: "SOCKET GEM"; }
+        }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #MaterialsPanel {
+      Anchor: (Width: 480, Height: 960);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+      Label #MaterialsTitle { Anchor: (Height: 28); Style: @PanelTitle; Text: "LORE MATERIALS"; }
+      Label #MaterialsHint { Anchor: (Height: 36); Style: (FontSize: 11, TextColor: #93a2b2, VerticalAlignment: Center, Wrap: true); Text: "Lore gems, feed items, and clearing supports in your inventory."; }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Label #LoreGemTitle { Anchor: (Height: 24); Style: @SectionTitle; Text: "LORE GEMS"; }
+      Group #LoreGemListHost {
+        Anchor: (Height: 350);
+        LayoutMode: Full;
+        Group #LoreGemList { Anchor: (Full: 0); LayoutMode: Top; Padding: (Full: 5); Background: #101823; ScrollbarStyle: @BenchScrollbar; Overscroll: true; KeepScrollPosition: true; }
+        Label #LoreGemEmpty { Anchor: (Full: 0); Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "No lore gem found."; Visible: false; }
+      }
+      Group { Anchor: (Height: 8); }
+      Label #SupportMaterialsTitle { Anchor: (Height: 24); Style: @SectionTitle; Text: "SUPPORTS"; }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #SupportListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #SupportList { Anchor: (Full: 0); LayoutMode: Top; Padding: (Full: 5); Background: #101823; ScrollbarStyle: @BenchScrollbar; Overscroll: true; KeepScrollPosition: true; }
+      }
+      Label #SupportFooter { Anchor: (Height: 30); Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center); Text: "Select a support material."; }
+    }
+  }
+}

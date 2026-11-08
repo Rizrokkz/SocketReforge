@@ -30,6 +30,8 @@ import irai.mod.reforge.Common.SmithyLegacyUtils.Legacy;
 import irai.mod.reforge.Common.WorldBlockUtils;
 import irai.mod.reforge.Config.RefinementConfig;
 import irai.mod.reforge.Config.SFXConfig;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
@@ -118,8 +120,7 @@ public class ReforgeEquip extends SimpleInteraction {
         if (player == null) return;
         //yif (!isValidReforgebench(context)) {return ;}
 
-        // Prefer HyUI bench flow when available.
-        // Keeps legacy held-item flow as fallback.
+        // The refinement bench uses the native Hytale custom UI.
         if (ReforgeBenchUI.isAvailable()) {
             ReforgeBenchUI.open(player);
             return;
@@ -185,6 +186,9 @@ public class ReforgeEquip extends SimpleInteraction {
         if (smithyBonuses != null) {
             breakChance = Math.max(0.0d, Math.min(1.0d, breakChance * smithyBonuses.breakMultiplier()));
         }
+        double breakProtection = Math.min(0.75d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_BREAK_PROTECTION)));
+        breakChance *= 1.0d - breakProtection;
         if (Math.random() < breakChance) {
             if (shouldUseSoftcoreBreakProtection(materialId)) {
                 ItemStack softenedItem = applySoftcoreBreakPenalty(heldItem);
@@ -1313,6 +1317,12 @@ public class ReforgeEquip extends SimpleInteraction {
     }
 
     private ReforgeOutcome rollReforgeOutcome(Player player, int currentLevel, String materialId) {
+        double upgradeGuarantee = Math.min(0.25d,
+                Math.max(0.0d, CharacterPathService.bonus(player, Bonus.REFINING_CHANCE)));
+        if (upgradeGuarantee > 0.0d && Math.random() < upgradeGuarantee) {
+            return new ReforgeOutcome(1, OutcomeType.UPGRADE);
+        }
+
         // Use config if available, otherwise use defaults
         double[] weights;
         if (refinementConfig != null) {
@@ -1335,6 +1345,18 @@ public class ReforgeEquip extends SimpleInteraction {
             upgrade = adjusted[2];
             jackpot = adjusted[3];
         }
+        double degradeProtection = Math.min(0.75d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_DEGRADE_PROTECTION)));
+        double sameChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_SAME_CHANCE)));
+        double upgradeChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_UPGRADE_CHANCE)));
+        double jackpotChance = Math.min(9.0d, Math.max(0.0d,
+                CharacterPathService.bonus(player, Bonus.REFINING_JACKPOT_CHANCE)));
+        degrade *= 1.0d - degradeProtection;
+        same *= 1.0d + sameChance;
+        upgrade *= 1.0d + upgradeChance;
+        jackpot *= 1.0d + jackpotChance;
         double total = degrade + same + upgrade + jackpot;
         if (total <= 0.0) return new ReforgeOutcome(0, OutcomeType.SAME);
 

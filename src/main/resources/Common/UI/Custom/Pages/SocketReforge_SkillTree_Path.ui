@@ -1,0 +1,71 @@
+@PathNodeHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0)),
+  Hovered: (Background: PatchStyle(TexturePath: "SkillTreeNode_Selected.png", Border: 0)),
+  Pressed: (Background: PatchStyle(TexturePath: "SkillTreeNode_Selected.png", Border: 0))
+);
+
+Group #TreePathNode {
+  LayoutMode: Full;
+  Anchor: (Width: 20, Height: 20);
+  Group #NodeFrame {
+    Background: (TexturePath: "SkillTreeNode_Path.png", Border: 0);
+    Anchor: (Full: 0);
+    Visible: true;
+  }
+  Group #NodeAllocatedGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Clearance.png", Border: 0);
+    Visible: false;
+  }
+  Group #PathLegacySkin {
+    Anchor: (Full: 0);
+
+    Group #PathRing {
+      Anchor: (Full: 0);
+      Background: (TexturePath: "SkillTreeNode_Ranked.png", Border: 0);
+      Visible: false;
+    }
+
+    Group #PathRingRanked {
+      Anchor: (Full: 0);
+      Background: (TexturePath: "SkillTreeNode_Ranked.png", Border: 0);
+      Visible: false;
+    }
+
+    Group #PathRingAvailable {
+      Anchor: (Full: 0);
+      Background: (TexturePath: "SkillTreeNode_Available.png", Border: 0);
+      Visible: false;
+    }
+
+    Group #PathRingSelected {
+      Anchor: (Full: 0);
+      Background: (TexturePath: "SkillTreeNode_Selected.png", Border: 0);
+      Visible: false;
+    }
+  }
+  Group #NodeSelectionTint {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Selected.png", Border: 0);
+    Visible: false;
+  }
+  Group #NodeSearchGlow {
+    Anchor: (Full: 0);
+    Background: (TexturePath: "SkillTreeNode_Available.png", Border: 0);
+    Visible: false;
+  }
+
+  ItemIcon #PathItemIcon {
+    ItemId: "Potion_Health";
+    Anchor: (Width: 12, Height: 12);
+    Visible: false;
+  }
+
+  TextButton #NodeHit {
+    Anchor: (Full: 0);
+    Text: "";
+    TooltipText: "";
+    Style: @PathNodeHitStyle;
+    Padding: (Full: 0);
+  }
+}

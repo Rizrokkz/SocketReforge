@@ -29,6 +29,7 @@ import irai.mod.reforge.Lore.LoreSocketManager;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreEffectType;
+import irai.mod.reforge.Progression.CharacterPathService;
 import irai.mod.reforge.Util.LangLoader;
 
 /**
@@ -1133,6 +1134,7 @@ public final class LoreFeedBenchUI {
         if (cleared) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_cleared"));
         }
+        CharacterPathService.awardBenchXp(player, 10, "lore feeding");
         return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_done"));
     }
 

@@ -1,0 +1,19 @@
+@SkillTreeEditorNodeHitStyleARCANA = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 12, TextColor: #f5f7fa, RenderBold: true)),
+  Hovered: (Background: PatchStyle(TexturePath: "../SkillTreeNode_Selected.png", Border: 0), LabelStyle: (FontSize: 12, TextColor: #ffffff, RenderBold: true)),
+  Pressed: (Background: PatchStyle(TexturePath: "../SkillTreeNode_Selected.png", Border: 0), LabelStyle: (FontSize: 12, TextColor: #ffffff, RenderBold: true)),
+  Disabled: (LabelStyle: (FontSize: 12, TextColor: #68727e, RenderBold: true))
+);
+
+Group #TreeNode {
+  LayoutMode: Full;
+  Anchor: (Width: 60, Height: 60);
+  Group #NodeRing { Anchor: (Full: 0); Background: #55687b; Visible: false; }
+  Group #NodeSelectedRing { Anchor: (Full: 0); Background: #f4d35e; Visible: false; }
+  Group #NodeFill { Anchor: (Left: 3, Right: 3, Top: 3, Bottom: 3); Background: #668fd1; Visible: false; }
+  Group #NodeFrame { Background: (TexturePath: "../SkillTreeNode_Small.png", Border: 0); Anchor: (Full: 0); Visible: true; }
+  Group #NodeSelectionTint { Anchor: (Full: 0); Background: (TexturePath: "../SkillTreeNode_Selected.png", Border: 0); Visible: false; }
+  ItemIcon #NodeItemIcon { ItemId: "Weapon_Sword_Copper"; Anchor: (Width: 18, Height: 18); Visible: false; }
+  Group #NodeTextureIcon { Anchor: (Width: 18, Height: 18); Visible: false; }
+  TextButton #NodeHit { Anchor: (Full: 0); Text: ""; Style: @SkillTreeEditorNodeHitStyleARCANA; Padding: (Full: 0); }
+}

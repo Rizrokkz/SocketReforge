@@ -59,6 +59,13 @@ public final class LoreSoulstoneUtils {
                 .withMetadata(MetadataKeys.LORE_SOULSTONE_SPIRIT, Codec.STRING, spiritId.trim());
     }
 
+    /** Adds a newly captured soulstone to the player's inventory without requiring a raw stone. */
+    public static boolean giveInfusedSoulstone(Player player, ItemStack infusedSoulstone) {
+        return player != null && player.getInventory() != null
+                && isInfusedSoulstone(infusedSoulstone)
+                && UIInventoryUtils.addItemToInventory(player, infusedSoulstone);
+    }
+
     /**
      * Converts one raw soulstone of the infused stone's color into the infused stone.
      * A single-item raw stack can be replaced in place when the inventory is otherwise full.

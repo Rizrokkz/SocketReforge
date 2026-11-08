@@ -1,0 +1,4 @@
+Group #TreeEdge {
+  Anchor: (Width: 10, Height: 4);
+  Background: (TexturePath: "Pages/SkillTreeEdge_Default_Horizontal.png", Border: 0);
+}

@@ -15,11 +15,13 @@ public final class SoulReaperTracker {
 
     private SoulReaperTracker() {}
 
-    public static void arm(UUID playerId, Ref<EntityStore> targetRef) {
-        if (playerId == null || targetRef == null || !targetRef.isValid()) {
+    public static void arm(UUID playerId, Ref<EntityStore> playerRef, Ref<EntityStore> targetRef) {
+        if (playerId == null || playerRef == null || !playerRef.isValid()
+                || targetRef == null || !targetRef.isValid()) {
             return;
         }
-        PENDING.put(playerId, new PendingReap(targetRef, System.currentTimeMillis() + PENDING_WINDOW_MS));
+        PENDING.put(playerId, new PendingReap(playerId, playerRef, targetRef,
+                System.currentTimeMillis() + PENDING_WINDOW_MS));
     }
 
     public static void clear(UUID playerId) {
@@ -43,11 +45,39 @@ public final class SoulReaperTracker {
         return targetRef.equals(pending.targetRef);
     }
 
+    /** Removes and returns the player who marked this exact target, if the mark is still active. */
+    public static PendingReap consumeForTarget(Ref<EntityStore> targetRef, UUID playerId) {
+        if (targetRef == null) {
+            return null;
+        }
+        long now = System.currentTimeMillis();
+        for (Map.Entry<UUID, PendingReap> entry : PENDING.entrySet()) {
+            PendingReap pending = entry.getValue();
+            if (pending == null) {
+                PENDING.remove(entry.getKey());
+                continue;
+            }
+            if (pending.expiresAt < now) {
+                PENDING.remove(entry.getKey(), pending);
+                continue;
+            }
+            if (targetRef.equals(pending.targetRef)
+                    && (playerId == null || playerId.equals(pending.playerId))
+                    && PENDING.remove(entry.getKey(), pending)) {
+                return pending;
+            }
+        }
+        return null;
+    }
+
     public static void consume(UUID playerId, Ref<EntityStore> targetRef) {
         if (isArmedFor(playerId, targetRef)) {
             PENDING.remove(playerId);
         }
     }
 
-    private record PendingReap(Ref<EntityStore> targetRef, long expiresAt) {}
+    public record PendingReap(UUID playerId,
+                              Ref<EntityStore> playerRef,
+                              Ref<EntityStore> targetRef,
+                              long expiresAt) {}
 }

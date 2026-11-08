@@ -46,7 +46,7 @@ public final class SoulReaperRune extends SimpleInteraction {
         Player player = store.getComponent(ownerRef, Player.getComponentType());
         NPCEntity npc = store.getComponent(targetRef, NPCEntity.getComponentType());
         if (player != null && player.getUuid() != null && npc != null) {
-            SoulReaperTracker.arm(player.getUuid(), targetRef);
+            SoulReaperTracker.arm(player.getUuid(), ownerRef, targetRef);
         }
     }
 }

@@ -1,0 +1,12 @@
+@EssenceLoreHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.12), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #EquipmentLoreSocket {
+  Anchor: (Width: 22, Height: 24);
+  LayoutMode: Center;
+  Group #EquipmentLoreVisual { Anchor: (Width: 17, Height: 20); LayoutMode: Center; Background: (TexturePath: "../GemSlotEmpty.png"); ItemIcon #EquipmentLoreIcon { ItemId: ""; Anchor: (Width: 12, Height: 12); Visible: false; } }
+  TextButton #EquipmentLoreHit { Anchor: (Full: 0); Style: @EssenceLoreHitStyle; Padding: (Full: 0); Text: ""; }
+}

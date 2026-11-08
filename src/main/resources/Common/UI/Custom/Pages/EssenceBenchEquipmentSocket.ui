@@ -1,0 +1,12 @@
+@EssenceSocketHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #ffffff(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #ffffff(0.12), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+
+Group #EquipmentSocket {
+  Anchor: (Width: 21, Height: 24);
+  LayoutMode: Center;
+  Group #EquipmentSocketVisual { Anchor: (Width: 18, Height: 18); LayoutMode: Center; Background: (TexturePath: "../slot_bg.png"); ItemIcon #EquipmentSocketEssence { ItemId: ""; Anchor: (Width: 12, Height: 12); Visible: false; } }
+  TextButton #EquipmentSocketHit { Anchor: (Full: 0); Style: @EssenceSocketHitStyle; Padding: (Full: 0); Text: ""; }
+}

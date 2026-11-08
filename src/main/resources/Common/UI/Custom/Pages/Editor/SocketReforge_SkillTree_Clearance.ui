@@ -1,0 +1,5 @@
+Group #NodeClearance {
+  LayoutMode: Full;
+  Anchor: (Width: 70, Height: 70);
+  Background: (TexturePath: "../SkillTreeNode_Clearance.png", Border: 0);
+}

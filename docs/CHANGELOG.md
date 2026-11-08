@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 1.4.6 [Unreleased Experimental]
 
 ### Added
-- **Soulstone lore system** - Added colored raw and infused Soulstones, Soul Reaper soul harvesting, and color-matched Lore socketing. Soul Reaper requires a raw Soulstone in the player's inventory to create an infused one.
+- **Soulstone lore system** - Added colored raw and infused Soulstones, Soul Reaper soul harvesting, and color-matched Lore socketing. Soul Reaper can harvest a matching infused Soulstone from a marked NPC kill without consuming a raw Soulstone.
   - **Feed-tier progression and extraction** - Maxing out a lore enables extracting ability as Runes
     - **Omnislash** - Added per-hit teleport slashes, weapon trails, blue afterimages, and a final afterimage explosion for the max-tier rune.
     - **Blood Rush and Pummel attacks** - Added six-hit Blood Rush, whose damage scales with missing health, and a five-hit Pummel combo ending in a knockback and stun.
@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Razorstrike core rune** - Added a targetless forward dash that damages enemies along its path and leaves six delayed rubble spikes that explode in sequence, with a dedicated dash animation and screen effect.
     - **VortexStrike** - Vacuum enemies and spin kick to push them away. Distant pulled enemies receive more damage. 
 - **Socketed status mutations** - Added Essence Bench mutations that add +1 or +2 base damage to Bleed or Poison applied by a weapon. Plant Crop Health items mutate Bleed; Venom Sac and Poison Fruit mutate Poison. Mutation data is saved per socket and shown in tooltips.
+- **Character Path progression** - Added persistent character XP, level-based skill points, and a connected passive tree for core attributes and weapon specializations. Refinement, socket, and essence bench actions award progression XP.
+  - **Character Path UI and commands** - Added `/characterpath` to allocate points, `/characterpathedit` to author and publish the tree, and the operator progression controls in `/characterpathadmin`.
+  - **Lore XP command** - Added the operator-only `/lorexp <slot> <amount>` command to grant XP to a spirit in the held equipment's lore socket.
+- **Attack speed multi-hit** - Attack speed bonuses now build from a base speed of 5 and grant a chance for one follow-up hit instead of multiplying hit damage. Follow-up hits deal 35% damage, with the chance capped at 75%; the Character Path tree includes attack-speed nodes.
+- **Soul Reaper rewards** - Deliver matching infused Soulstones directly to the reaper's inventory, preserve the mark through projectile kills, and report when inventory space is unavailable.
 ### Changed
 - **Native damage feedback** - Native Hytale combat text is now the default. Physical and weapon-affinity damage are combined into one rendered hit after damage resistance, while elemental damage absorbed by an enemy shield still gets native visual feedback without being applied to health twice.
 - **Status damage and essence bonuses** - Bleed, Poison, and Burn ticks use separate damage events and native combat text instead of inheriting weapon-hit bonuses. Matching weapon essences can increase their related status damage; Ice affinity builds toward Freeze before the target is frozen.
@@ -29,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Legacy absorbed lore cleanup** - Clear deprecated player-level absorbed lore data on join and suppress procs from that obsolete source.
 - **Lore proc handling** - Preserved passive lore procs while allowing the new ability runes to be equipped and activated separately. Rune Delta continues to activate socketed runes through its existing system.
 - **Lore feedback and effects** - Added lore-ready naming and localized messages, plus configurable hit effects and animations for the new abilities.
+- **Damage and progression integration** - Character Path bonuses now participate in weapon damage, critical chance and damage, elemental damage, damage resistance, refinement odds, and socket-punch success. Socket previews and equipment summaries reflect the current damage and bonus calculations.
+- **Lore ailments and status damage** - Reworked Ice effects around chill buildup and Frostbite ticks, and expanded status-effect stacking and critical-hit handling. Non-Ice damage no longer contributes to Ice buildup.
+
+### Fixed
+- **Tooltip refresh across languages** - Improved cleanup and regeneration of Socket Reforge and SimpleEnchantment tooltip sections when the language changes or hotbar items refresh, including legacy ascended and corrupted equipment metadata.
 
 ---
 

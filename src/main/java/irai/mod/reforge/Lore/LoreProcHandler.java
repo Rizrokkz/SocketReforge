@@ -103,6 +103,7 @@ import irai.mod.reforge.Common.EquipmentDamageTooltipMath;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
 import irai.mod.reforge.Config.LoreConfig;
 import irai.mod.reforge.Entity.Events.DamageNumberEST;
+import irai.mod.reforge.Entity.Events.EquipmentRefineEST;
 import irai.mod.reforge.Entity.Events.RuneDeltaCastSnapshotEST;
 import irai.mod.reforge.Entity.Events.SocketEffectEST;
 import irai.mod.reforge.Interactions.CoreAbilityRune;
@@ -114,8 +115,11 @@ import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Socket.RuneDeltaDebug;
+import irai.mod.reforge.Progression.CharacterPathService;
+import irai.mod.reforge.Progression.CharacterPathService.Bonus;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.MetadataKeys;
+import irai.mod.DynamicFloatingDamageFormatter.DamageNumberMeta;
 
 import it.unimi.dsi.fastutil.Pair;
 
@@ -144,22 +148,42 @@ public final class LoreProcHandler {
     private static final long CORE_ABILITY_MODIFIER_WINDOW_MS = 8000L;
     private static final long PUMMEL_NATIVE_CAST_GUARD_MS = 6000L;
     private static final Map<Ref<EntityStore>, Long> FROZEN_UNTIL = new ConcurrentHashMap<>();
-    private static final Map<Ref<EntityStore>, FreezeBuildup> WEAPON_FREEZE_BUILDUP = new ConcurrentHashMap<>();
-    private static final double WEAPON_FREEZE_BUILDUP_THRESHOLD = 100.0d;
-    private static final double WEAPON_FREEZE_BUILDUP_PER_SOCKET_WEIGHT = 20.0d;
-    private static final long WEAPON_FREEZE_BUILDUP_DECAY_MS = 6000L;
+    private static final Map<Ref<EntityStore>, ChillBuildup> CHILL_BUILDUP = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Long> CHILL_FROSTBITE_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Integer> CHILL_FROSTBITE_STACKS = new ConcurrentHashMap<>();
+    private static final double CHILL_FREEZE_BASE_THRESHOLD = 100.0d;
+    private static final double LORE_FREEZE_CHILL_PER_HIT = 20.0d;
+    private static final double WEAPON_ICE_BUILDUP_PER_SOCKET_WEIGHT = 20.0d;
+    private static final long CHILL_BUILDUP_DECAY_MS = 6000L;
+    private static final long CHILL_FROSTBITE_TICK_MS = 1000L;
+    private static final long CHILL_FROSTBITE_BASE_DURATION_MS = 3000L;
+    private static final Map<Ref<EntityStore>, FreezeShatterResistance> FREEZE_SHATTER_RESISTANCE =
+            new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Boolean> FREEZE_SHATTER_PENDING = new ConcurrentHashMap<>();
+    private static final int FREEZE_SHATTER_RESISTANCE_MAX_STACKS = 8;
+    private static final long FREEZE_SHATTER_RESISTANCE_DECAY_MS = 30000L;
     private static final long WEAPON_FREEZE_DURATION_MS = 1600L;
-    private static final class FreezeBuildup {
+    private static final class ChillBuildup {
         final double amount;
         final long lastHitAt;
 
-        FreezeBuildup(double amount, long lastHitAt) {
+        ChillBuildup(double amount, long lastHitAt) {
             this.amount = amount;
             this.lastHitAt = lastHitAt;
         }
     }
+    private static final class FreezeShatterResistance {
+        final int shatterCount;
+        final long lastShatterAt;
+
+        FreezeShatterResistance(int shatterCount, long lastShatterAt) {
+            this.shatterCount = shatterCount;
+            this.lastShatterAt = lastShatterAt;
+        }
+    }
     private static final Map<Ref<EntityStore>, Long> HEAL_HOT_UNTIL = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BLEED_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Integer> BLEED_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_BLOCKED_APPLICATIONS =
             new ConcurrentHashMap<>();
     private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_REQUIRED_APPLICATIONS =
@@ -167,6 +191,7 @@ public final class LoreProcHandler {
     private static final Map<String, Map<Ref<EntityStore>, Integer>> STATUS_BOSS_REAPPLY_STAGE =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> BURN_DOT_UNTIL = new ConcurrentHashMap<>();
+    private static final Map<Ref<EntityStore>, Integer> BURN_DOT_STACKS = new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, OmnislashSequence> ACTIVE_OMNISLASH_RUNE_SEQUENCES =
             new ConcurrentHashMap<>();
     private static final Map<Ref<EntityStore>, Long> OMNISLASH_DASH_IFRAME_GENERATIONS =
@@ -2208,24 +2233,36 @@ public final class LoreProcHandler {
             }
             case APPLY_FREEZE -> {
                 if (opponentRef != null) {
-                    double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "freeze");
-                    long durationMs = scaleAilmentDuration(resolveStunFreezeDurationMs(value, safeFeedTier), ailmentMultiplier);
-                    if (durationMs > 0L) {
-                        if (!canApplyBossCounterAilment(store, opponentRef, "freeze")) {
-                            if (primaryProc) {
-                                System.out.println("[SocketReforge] Lore status not applied: spirit=" + spiritId
-                                        + ", effect=APPLY_FREEZE, reason=target-counter");
-                            }
-                            break;
-                        }
-                        applyFrozenForDuration(store, opponentRef, durationMs);
-                        onBossCounterAilmentApplied(store, opponentRef, "freeze");
-                        Ref<EntityStore> freezeSource = selfRef != null ? selfRef : attackerRef;
-                        applyFreezeModifierPulse(store, freezeSource, opponentRef, damageAmount, safeFeedTier,
-                                Math.min(3, Math.max(1, (int) (durationMs / 1000L))));
+                    if (!isIceDamage(damage)) {
                         if (primaryProc) {
-                            System.out.println("[SocketReforge] Lore status applied: spirit=" + spiritId
-                                    + ", effect=APPLY_FREEZE, durationMs=" + durationMs);
+                            LoreDebug.logKv("freeze.chill", "source", "lore-freeze-proc",
+                                    "skipped", "non-ice-damage");
+                        }
+                        break;
+                    }
+                    double ailmentMultiplier = resolveNpcAilmentMultiplier(store, opponentRef, "freeze");
+                    long baseDurationMs = resolveStunFreezeDurationMs(value, safeFeedTier);
+                    if (ailmentMultiplier > 0.0d && baseDurationMs > 0L) {
+                        Ref<EntityStore> freezeSource = selfRef != null ? selfRef : attackerRef;
+                        ItemStack sourceWeapon = getStatusSourceWeapon(store, freezeSource);
+                        float frostbiteBaseDamage = damage == null ? damageAmount : damage.getAmount();
+                        boolean freezeApplied = addChillBuildup(store, opponentRef,
+                                freezeSource, sourceWeapon, LORE_FREEZE_CHILL_PER_HIT,
+                                frostbiteBaseDamage, safeFeedTier, baseDurationMs, "lore-freeze-proc");
+                        if (freezeApplied) {
+                            long durationMs = scaleAilmentDuration(baseDurationMs, ailmentMultiplier);
+                            applyFreezeModifierPulse(store, freezeSource, opponentRef, damageAmount, safeFeedTier,
+                                    Math.min(3, Math.max(1, (int) (durationMs / 1000L))));
+                            if (primaryProc) {
+                                System.out.println("[SocketReforge] Lore status applied: spirit=" + spiritId
+                                        + ", effect=APPLY_FREEZE, durationMs=" + durationMs);
+                            }
+                        } else if (primaryProc) {
+                            FreezeShatterResistance resistance = FREEZE_SHATTER_RESISTANCE.get(opponentRef);
+                            System.out.println("[SocketReforge] Lore status chill buildup: spirit=" + spiritId
+                                    + ", effect=APPLY_FREEZE, resistanceStacks="
+                                    + (resistance == null ? 0 : resistance.shatterCount)
+                                    + ", threshold=" + Math.round(chillFreezeThreshold(opponentRef)));
                         }
                     } else {
                         if (primaryProc) {
@@ -8563,58 +8600,143 @@ public final class LoreProcHandler {
         if (!isFrozenActive(store, targetRef)) {
             return false;
         }
+        if (FREEZE_SHATTER_PENDING.putIfAbsent(targetRef, Boolean.TRUE) != null) {
+            return false;
+        }
         Float rawAmount = damage.getIfPresentMetaObject(
                 irai.mod.reforge.Entity.Events.DamageStackDelayEST.META_RAW_AMOUNT);
         float baseDamage = rawAmount != null && rawAmount > 0.0f ? rawAmount : damage.getAmount();
         damage.setAmount(baseDamage * 2.0f);
         queueFrozenShatter(store, targetRef, attackerRef);
+        recordFreezeShatterResistance(targetRef);
         LoreDebug.log("freeze.shatter", "doubleDamage=true");
         return true;
     }
 
-    /** Adds ICE-affinity buildup from a player's weapon; a completed buildup freezes the target. */
-    public static void addWeaponFreezeBuildup(Store<EntityStore> store,
-                                              Ref<EntityStore> targetRef,
-                                              ItemStack weapon,
-                                              float hitDamage) {
-        if (store == null || targetRef == null || weapon == null || weapon.isEmpty() || hitDamage <= 0f) return;
-        SocketData socketData = SocketManager.getSocketData(weapon);
-        double iceWeight = WeaponElementalDamageUtils.getAffinityWeight(socketData, Essence.Type.ICE);
-        if (iceWeight <= 0.0d) return;
-        if (isFrozenActive(store, targetRef)) {
-            WEAPON_FREEZE_BUILDUP.remove(targetRef);
-            return;
+    private static void recordFreezeShatterResistance(Ref<EntityStore> targetRef) {
+        if (targetRef == null) return;
+        long now = System.currentTimeMillis();
+        FreezeShatterResistance resistance = FREEZE_SHATTER_RESISTANCE.compute(targetRef, (ignored, previous) -> {
+            int previousCount = previous == null || now - previous.lastShatterAt > FREEZE_SHATTER_RESISTANCE_DECAY_MS
+                    ? 0 : previous.shatterCount;
+            return new FreezeShatterResistance(
+                    Math.min(FREEZE_SHATTER_RESISTANCE_MAX_STACKS, previousCount + 1), now);
+        });
+        OMNISLASH_SCHEDULER.schedule(
+                () -> FREEZE_SHATTER_RESISTANCE.remove(targetRef, resistance),
+                FREEZE_SHATTER_RESISTANCE_DECAY_MS, TimeUnit.MILLISECONDS);
+        LoreDebug.logKv("freeze.resistance", "shatters", resistance.shatterCount,
+                "nextThreshold", Math.round(chillFreezeThreshold(targetRef)));
+    }
+
+    private static double chillFreezeThreshold(Ref<EntityStore> targetRef) {
+        int stacks = freezeShatterCount(targetRef);
+        if (stacks <= 0) return CHILL_FREEZE_BASE_THRESHOLD;
+
+        // Start at 100 chill, then use the next Fibonacci-like thresholds: 200, 300, 500, 800...
+        double previous = CHILL_FREEZE_BASE_THRESHOLD;
+        double current = CHILL_FREEZE_BASE_THRESHOLD * 2.0d;
+        for (int step = 1; step < stacks; step++) {
+            double next = previous + current;
+            previous = current;
+            current = next;
         }
+        return current;
+    }
+
+    /** Adds chill from any supported source; repeated shatters raise the chill threshold temporarily. */
+    private static boolean addChillBuildup(Store<EntityStore> store,
+                                           Ref<EntityStore> targetRef,
+                                           Ref<EntityStore> sourceRef,
+                                           ItemStack sourceWeapon,
+                                           double rawBuildup,
+                                           float frostbiteBaseDamage,
+                                           int feedTier,
+                                           long baseDurationMs,
+                                           String source) {
+        if (store == null || targetRef == null || rawBuildup <= 0.0d || baseDurationMs <= 0L
+                || !Double.isFinite(rawBuildup)) return false;
+        if (isFrozenActive(store, targetRef)) return false;
 
         double ailmentMultiplier = resolveNpcAilmentMultiplier(store, targetRef, "freeze");
         if (ailmentMultiplier <= 0.0d) {
-            WEAPON_FREEZE_BUILDUP.remove(targetRef);
-            return;
+            CHILL_BUILDUP.remove(targetRef);
+            return false;
         }
+
+        applyChillFrostbiteOverTime(store, sourceRef, targetRef, sourceWeapon,
+                frostbiteBaseDamage, feedTier, ailmentMultiplier);
 
         long now = System.currentTimeMillis();
-        FreezeBuildup previous = WEAPON_FREEZE_BUILDUP.get(targetRef);
-        double current = previous == null || now - previous.lastHitAt > WEAPON_FREEZE_BUILDUP_DECAY_MS
+        ChillBuildup previous = CHILL_BUILDUP.get(targetRef);
+        double current = previous == null || now - previous.lastHitAt > CHILL_BUILDUP_DECAY_MS
                 ? 0.0d : previous.amount;
-        double buildup = current + iceWeight * WEAPON_FREEZE_BUILDUP_PER_SOCKET_WEIGHT;
-        if (buildup < WEAPON_FREEZE_BUILDUP_THRESHOLD) {
-            FreezeBuildup next = new FreezeBuildup(buildup, now);
-            WEAPON_FREEZE_BUILDUP.put(targetRef, next);
+        double buildup = current + rawBuildup * ailmentMultiplier;
+        double threshold = chillFreezeThreshold(targetRef);
+        if (buildup < threshold) {
+            ChillBuildup next = new ChillBuildup(buildup, now);
+            CHILL_BUILDUP.put(targetRef, next);
             OMNISLASH_SCHEDULER.schedule(
-                    () -> WEAPON_FREEZE_BUILDUP.remove(targetRef, next),
-                    WEAPON_FREEZE_BUILDUP_DECAY_MS, TimeUnit.MILLISECONDS);
-            LoreDebug.logKv("freeze.buildup", "current", Math.round(buildup),
-                    "threshold", (int) WEAPON_FREEZE_BUILDUP_THRESHOLD);
-            return;
+                    () -> CHILL_BUILDUP.remove(targetRef, next),
+                    CHILL_BUILDUP_DECAY_MS, TimeUnit.MILLISECONDS);
+            LoreDebug.logKv("freeze.chill", "source", source, "current", Math.round(buildup),
+                    "threshold", Math.round(threshold), "resistanceStacks", freezeShatterCount(targetRef));
+            return false;
         }
 
-        WEAPON_FREEZE_BUILDUP.remove(targetRef);
-        if (!canApplyBossCounterAilment(store, targetRef, "freeze")) return;
-        long durationMs = scaleAilmentDuration(WEAPON_FREEZE_DURATION_MS, ailmentMultiplier);
-        if (durationMs <= 0L) return;
+        CHILL_BUILDUP.remove(targetRef);
+        if (!canApplyBossCounterAilment(store, targetRef, "freeze")) return false;
+        long durationMs = scaleAilmentDuration(baseDurationMs, ailmentMultiplier);
+        if (durationMs <= 0L) return false;
         applyFrozenForDuration(store, targetRef, durationMs);
         onBossCounterAilmentApplied(store, targetRef, "freeze");
-        LoreDebug.logKv("freeze.buildup", "completed", true, "durationMs", durationMs);
+        LoreDebug.logKv("freeze.chill", "source", source, "completed", true,
+                "durationMs", durationMs, "threshold", Math.round(threshold),
+                "resistanceStacks", freezeShatterCount(targetRef));
+        return true;
+    }
+
+    private static int freezeShatterCount(Ref<EntityStore> targetRef) {
+        FreezeShatterResistance resistance = targetRef == null ? null : FREEZE_SHATTER_RESISTANCE.get(targetRef);
+        if (resistance == null || System.currentTimeMillis() - resistance.lastShatterAt > FREEZE_SHATTER_RESISTANCE_DECAY_MS) {
+            return 0;
+        }
+        return resistance.shatterCount;
+    }
+
+    /** Adds ICE-affinity chill from a player's weapon; enough chill freezes the target. */
+    public static boolean addWeaponChillBuildup(Store<EntityStore> store,
+                                                Ref<EntityStore> sourceRef,
+                                                Ref<EntityStore> targetRef,
+                                                ItemStack weapon,
+                                                float hitDamage) {
+        if (store == null || targetRef == null || weapon == null || weapon.isEmpty() || hitDamage <= 0f) return false;
+        SocketData socketData = SocketManager.getSocketData(weapon);
+        double iceWeight = WeaponElementalDamageUtils.getAffinityWeight(socketData, Essence.Type.ICE);
+        double buildupPerHit = Math.max(1.0d, iceWeight) * WEAPON_ICE_BUILDUP_PER_SOCKET_WEIGHT;
+        return addChillBuildup(store, targetRef, sourceRef, weapon,
+                buildupPerHit,
+                hitDamage, 0, WEAPON_FREEZE_DURATION_MS, "weapon-ice");
+    }
+
+    /** Returns true when an incoming damage event is explicitly Ice typed. */
+    public static boolean isIceDamage(Damage damage) {
+        if (damage == null) return false;
+        if (DamageNumberMeta.readKind(damage) == irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.ICE) {
+            return true;
+        }
+        DamageCause cause = damage.getCause();
+        String causeId = cause == null ? "" : cause.getId();
+        if (causeId != null) {
+            String normalized = causeId.toLowerCase(Locale.ROOT);
+            if (normalized.equals("ice") || normalized.equals("frost")
+                    || normalized.contains("_ice") || normalized.contains("ice_")) {
+                return true;
+            }
+        }
+        String payload = damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE);
+        return WeaponElementalDamageUtils.decodeElementDamage(payload)
+                .getOrDefault(Essence.Type.ICE, 0.0d) > 0.0001d;
     }
 
     private static boolean isFrozenActive(Store<EntityStore> store, Ref<EntityStore> targetRef) {
@@ -8642,6 +8764,9 @@ public final class LoreProcHandler {
     private static void applyFrozenShatter(Store<EntityStore> store,
                                            Ref<EntityStore> targetRef,
                                            Ref<EntityStore> attackerRef) {
+        if (targetRef != null) {
+            FREEZE_SHATTER_PENDING.remove(targetRef);
+        }
         if (store == null || targetRef == null || store.isShutdown()) {
             return;
         }
@@ -9067,7 +9192,10 @@ public final class LoreProcHandler {
         int ticks = (int) Math.ceil((double) duration / (double) BLEED_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
 
-        float statusBase = addSocketStatusMutationBase(store, sourceRef, damageOutput, "BLEED");
+        int stackCount = advanceStatusStacks(BLEED_DOT_STACKS, targetRef, 3);
+        double stackBonus = pathBonus(store, sourceRef, Bonus.BLEED_STACK_BASE);
+        float stackedBase = (float) (damageOutput * (1.0d + stackBonus * stackCount));
+        float statusBase = addSocketStatusMutationBase(store, sourceRef, stackedBase, "BLEED");
         float totalBleed = calculateBleedDamageTotal(statusBase, feedTier) * (float) ailmentMultiplier;
         if (totalBleed <= 0f) {
             return false;
@@ -9084,6 +9212,7 @@ public final class LoreProcHandler {
         long now = System.currentTimeMillis();
         long until = now + duration;
         BLEED_DOT_UNTIL.put(targetRef, until);
+        BLEED_DOT_STACKS.put(targetRef, stackCount);
         scheduleBleedExpiry(targetRef, until, duration);
         onBossCounterAilmentApplied(store, targetRef, "bleed");
 
@@ -9117,6 +9246,32 @@ public final class LoreProcHandler {
         if (weapon == null) return baseDamage;
         double bonus = SocketManager.getSocketStatusBaseBonus(SocketManager.getSocketData(weapon), status);
         return baseDamage + (float) Math.max(0.0d, bonus);
+    }
+
+    private static int advanceStatusStacks(Map<Ref<EntityStore>, Integer> stacks,
+                                           Ref<EntityStore> targetRef,
+                                           int maxStacks) {
+        if (stacks == null || targetRef == null) return 1;
+        return stacks.compute(targetRef, (ignored, oldValue) ->
+                Math.max(1, Math.min(Math.max(1, maxStacks), (oldValue == null ? 0 : oldValue) + 1)));
+    }
+
+    private static double pathBonus(Store<EntityStore> store,
+                                    Ref<EntityStore> sourceRef,
+                                    Bonus bonus) {
+        if (store == null || sourceRef == null || bonus == null) return 0.0d;
+        try {
+            Player player = store.getComponent(sourceRef, Player.getComponentType());
+            return CharacterPathService.bonus(player, bonus);
+        } catch (Throwable ignored) {
+            return 0.0d;
+        }
+    }
+
+    private static boolean rollElementalDotCritical(Store<EntityStore> store, Ref<EntityStore> sourceRef) {
+        double chance = Math.max(0.0d, Math.min(0.75d,
+                pathBonus(store, sourceRef, Bonus.ELEMENTAL_DOT_CRIT_CHANCE)));
+        return chance > 0.0d && ThreadLocalRandom.current().nextDouble() < chance;
     }
 
     private static float calculateBleedDamageTotal(float statusBaseDamage, int feedTier) {
@@ -9156,6 +9311,7 @@ public final class LoreProcHandler {
             return;
         }
         BLEED_DOT_UNTIL.remove(targetRef);
+        BLEED_DOT_STACKS.remove(targetRef);
     }
 
     private static void queueBleedTick(Store<EntityStore> store,
@@ -9219,9 +9375,15 @@ public final class LoreProcHandler {
         int ticks = (int) Math.ceil((double) duration / (double) BURN_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
         ItemStack sourceWeapon = getStatusSourceWeapon(store, sourceRef);
+        int stackCount = advanceStatusStacks(BURN_DOT_STACKS, targetRef, 3);
+        double stackBonus = pathBonus(store, sourceRef, Bonus.ELEMENTAL_STACK_BASE);
+        float stackedBase = (float) (totalAmount * (1.0d + stackBonus * stackCount));
         float fireBonus = WeaponElementalDamageUtils.calculateAffinityBonusForType(
-                sourceWeapon, Essence.Type.FIRE, totalAmount, store, targetRef);
-        float scaledTotal = (float) LoreAbility.scaleEffectValue(totalAmount + fireBonus, feedTier);
+                sourceWeapon, Essence.Type.FIRE, stackedBase, store, targetRef);
+        fireBonus *= (float) (1.0d + pathBonus(store, sourceRef, Bonus.ELEMENTAL_DAMAGE));
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(stackedBase + fireBonus, feedTier);
+        boolean critical = rollElementalDotCritical(store, sourceRef);
+        if (critical) scaledTotal *= (float) (1.0d + pathBonus(store, sourceRef, Bonus.ELEMENTAL_DOT_CRIT_DAMAGE));
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {
             return false;
@@ -9234,15 +9396,102 @@ public final class LoreProcHandler {
         long now = System.currentTimeMillis();
         long until = now + duration;
         BURN_DOT_UNTIL.put(targetRef, until);
+        BURN_DOT_STACKS.put(targetRef, stackCount);
         scheduleBurnExpiry(targetRef, until, duration);
         onBossCounterAilmentApplied(store, targetRef, "burn");
 
         for (int i = 0; i < ticks; i++) {
             long delay = i * BURN_DOT_TICK_MS;
-            OMNISLASH_SCHEDULER.schedule(() -> queueBurnTick(store, sourceRef, targetRef, perTickFinal, until, feedTier),
+            OMNISLASH_SCHEDULER.schedule(() -> queueBurnTick(store, sourceRef, targetRef, perTickFinal, until, feedTier, critical),
                     delay, TimeUnit.MILLISECONDS);
         }
         return true;
+    }
+
+    private static void applyChillFrostbiteOverTime(Store<EntityStore> store,
+                                                    Ref<EntityStore> sourceRef,
+                                                    Ref<EntityStore> targetRef,
+                                                    ItemStack sourceWeapon,
+                                                    float baseDamage,
+                                                    int feedTier,
+                                                    double ailmentMultiplier) {
+        if (store == null || targetRef == null || baseDamage <= 0.0f || ailmentMultiplier <= 0.0d) {
+            return;
+        }
+        long duration = LoreAbility.scaleDurationMs(CHILL_FROSTBITE_BASE_DURATION_MS, feedTier);
+        int ticks = Math.max(1, (int) Math.ceil((double) duration / CHILL_FROSTBITE_TICK_MS));
+        int stackCount = advanceStatusStacks(CHILL_FROSTBITE_STACKS, targetRef, 3);
+        double stackBonus = pathBonus(store, sourceRef, Bonus.ELEMENTAL_STACK_BASE);
+        float stackedBase = (float) (baseDamage * (1.0d + stackBonus * stackCount));
+        float iceBonus = WeaponElementalDamageUtils.calculateAffinityBonusForType(
+                sourceWeapon, Essence.Type.ICE, stackedBase, store, targetRef);
+        iceBonus *= (float) (1.0d + pathBonus(store, sourceRef, Bonus.ELEMENTAL_DAMAGE));
+        float scaledTotal = (float) LoreAbility.scaleEffectValue(stackedBase + iceBonus, feedTier);
+        boolean critical = rollElementalDotCritical(store, sourceRef);
+        if (critical) scaledTotal *= (float) (1.0d + pathBonus(store, sourceRef, Bonus.ELEMENTAL_DOT_CRIT_DAMAGE));
+        float perTick = (scaledTotal / ticks) * (float) ailmentMultiplier;
+        if (perTick <= 0.0f || !Float.isFinite(perTick)) {
+            return;
+        }
+
+        long until = System.currentTimeMillis() + duration;
+        CHILL_FROSTBITE_UNTIL.put(targetRef, until);
+        CHILL_FROSTBITE_STACKS.put(targetRef, stackCount);
+        scheduleChillFrostbiteExpiry(targetRef, until, duration);
+        for (int tick = 0; tick < ticks; tick++) {
+            long delay = tick * CHILL_FROSTBITE_TICK_MS;
+            OMNISLASH_SCHEDULER.schedule(
+                    () -> queueChillFrostbiteTick(store, sourceRef, targetRef, perTick, until, critical), delay,
+                    TimeUnit.MILLISECONDS);
+        }
+    }
+
+    private static void scheduleChillFrostbiteExpiry(Ref<EntityStore> targetRef,
+                                                     long expectedUntil,
+                                                     long delayMs) {
+        if (targetRef == null || delayMs <= 0L) return;
+        OMNISLASH_SCHEDULER.schedule(() -> {
+            Long current = CHILL_FROSTBITE_UNTIL.get(targetRef);
+            if (current != null && current <= expectedUntil) {
+                CHILL_FROSTBITE_UNTIL.remove(targetRef, current);
+                CHILL_FROSTBITE_STACKS.remove(targetRef);
+            }
+        }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private static void queueChillFrostbiteTick(Store<EntityStore> store,
+                                                Ref<EntityStore> sourceRef,
+                                                Ref<EntityStore> targetRef,
+                                                float perTick,
+                                                long expectedUntil,
+                                                boolean critical) {
+        if (store == null || targetRef == null || perTick <= 0.0f || store.isShutdown()) return;
+        EntityStore entityStore = store.getExternalData();
+        if (entityStore == null || entityStore.getWorld() == null) return;
+        entityStore.getWorld().execute(
+                () -> applyChillFrostbiteTick(store, sourceRef, targetRef, perTick, expectedUntil, critical));
+    }
+
+    private static void applyChillFrostbiteTick(Store<EntityStore> store,
+                                                Ref<EntityStore> sourceRef,
+                                                Ref<EntityStore> targetRef,
+                                                float perTick,
+                                                long expectedUntil,
+                                                boolean critical) {
+        if (store == null || targetRef == null || perTick <= 0.0f || store.isShutdown()) return;
+        if (!isEntityAlive(store, targetRef)) {
+            CHILL_FROSTBITE_UNTIL.remove(targetRef);
+            CHILL_FROSTBITE_STACKS.remove(targetRef);
+            return;
+        }
+        Long current = CHILL_FROSTBITE_UNTIL.get(targetRef);
+        if (current == null || current.longValue() != expectedUntil
+                || System.currentTimeMillis() > expectedUntil) {
+            return;
+        }
+        LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
+                resolveNativeStatusDamageCause("Ice", DamageCause.PHYSICAL),
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.ICE, critical);
     }
 
     private static void scheduleBurnExpiry(Ref<EntityStore> targetRef, long expectedUntil, long delayMs) {
@@ -9262,6 +9511,7 @@ public final class LoreProcHandler {
             return;
         }
         BURN_DOT_UNTIL.remove(targetRef);
+        BURN_DOT_STACKS.remove(targetRef);
     }
 
     private static void queueBurnTick(Store<EntityStore> store,
@@ -9269,7 +9519,8 @@ public final class LoreProcHandler {
                                       Ref<EntityStore> targetRef,
                                       float perTick,
                                       long expectedUntil,
-                                      int feedTier) {
+                                      int feedTier,
+                                      boolean critical) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
@@ -9277,7 +9528,8 @@ public final class LoreProcHandler {
         if (entityStore == null || entityStore.getWorld() == null) {
             return;
         }
-        entityStore.getWorld().execute(() -> applyBurnTick(store, sourceRef, targetRef, perTick, expectedUntil, feedTier));
+        entityStore.getWorld().execute(() -> applyBurnTick(store, sourceRef, targetRef, perTick,
+                expectedUntil, feedTier, critical));
     }
 
     private static void applyBurnTick(Store<EntityStore> store,
@@ -9285,12 +9537,14 @@ public final class LoreProcHandler {
                                       Ref<EntityStore> targetRef,
                                       float perTick,
                                       long expectedUntil,
-                                      int feedTier) {
+                                      int feedTier,
+                                      boolean critical) {
         if (store == null || targetRef == null || perTick <= 0f || store.isShutdown()) {
             return;
         }
         if (!isEntityAlive(store, targetRef)) {
             BURN_DOT_UNTIL.remove(targetRef);
+            BURN_DOT_STACKS.remove(targetRef);
             clearBossCounterAilmentState(targetRef, "burn");
             return;
         }
@@ -9303,7 +9557,7 @@ public final class LoreProcHandler {
         }
         LoreDamageUtils.applyStatusDamage(store, sourceRef, targetRef, perTick,
                 resolveNativeStatusDamageCause("Fire", DamageCause.PHYSICAL),
-                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN);
+                irai.mod.reforge.Util.DamageNumberFormatter.DamageKind.BURN, critical);
     }
 
     private static boolean applyPoisonOverTime(Store<EntityStore> store,
@@ -9328,7 +9582,9 @@ public final class LoreProcHandler {
         long totalDuration = baseDuration + bonusDuration;
         int ticks = (int) Math.ceil((double) totalDuration / (double) POISON_DOT_TICK_MS);
         ticks = Math.max(1, ticks);
-        float statusBase = addSocketStatusMutationBase(store, sourceRef, totalAmount, "POISON");
+        double stackBonus = pathBonus(store, sourceRef, Bonus.POISON_STACK_BASE);
+        float stackedBase = (float) (totalAmount * (1.0d + stackBonus * stackCount));
+        float statusBase = addSocketStatusMutationBase(store, sourceRef, stackedBase, "POISON");
         float scaledTotal = (float) LoreAbility.scaleEffectValue(statusBase, feedTier);
         float perTick = scaledTotal / (float) ticks;
         if (perTick <= 0f) {

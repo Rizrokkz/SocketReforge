@@ -1,0 +1,298 @@
+$Common = "../SocketReforge_Common.ui";
+@BenchButton = $Common.@SecondaryTextButtonStyle;
+@BenchAction = $Common.@PrimaryTextButtonStyle;
+@BenchCompact = $Common.@CompactSecondaryTextButtonStyle;
+@BenchScrollbar = $Common.@DefaultScrollbarStyle;
+
+@PanelTitle = LabelStyle(
+  FontSize: 14,
+  TextColor: #e8c030,
+  RenderBold: true,
+  VerticalAlignment: Center,
+  ShrinkTextToFit: true,
+  MinShrinkTextToFitFontSize: 10
+);
+@SectionTitle = LabelStyle(
+  FontSize: 12,
+  TextColor: #d5dee8,
+  RenderBold: true,
+  VerticalAlignment: Center,
+  ShrinkTextToFit: true,
+  MinShrinkTextToFitFontSize: 9
+);
+@BodyText = LabelStyle(FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center);
+
+Group #RefinementRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Center;
+  Background: #000000(0.68);
+
+  Group #BenchFrame {
+    Anchor: (Width: 1660, Height: 820);
+    LayoutMode: Left;
+
+    Group #EquipmentPanel {
+      Anchor: (Width: 430, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+
+      Label #EquipmentPanelTitle {
+        Anchor: (Height: 28);
+        Style: @PanelTitle;
+        Text: "EQUIPMENT";
+      }
+      Label #EquipmentHint {
+        Anchor: (Height: 28);
+        Style: (FontSize: 10, TextColor: #93a2b2, Wrap: true);
+        Text: "Choose a weapon or armor piece to refine.";
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #EquipmentListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #EquipmentList {
+          Anchor: (Full: 0);
+          LayoutMode: Top;
+          Padding: (Full: 6);
+          Background: #101823;
+          ScrollbarStyle: @BenchScrollbar;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+        Label #EquipmentEmpty {
+          Anchor: (Full: 0);
+          Style: (FontSize: 12, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true);
+          Text: "No equipment available.";
+          Visible: false;
+        }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #RefinementPanel {
+      Anchor: (Width: 760, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 10);
+      Background: $Common.@PanelBackground;
+
+      Label #BenchTitle {
+        Anchor: (Height: 30);
+        Style: @PanelTitle;
+        Text: "REFINEMENT BENCH";
+      }
+      Group #SelectedEquipmentHeader {
+        Anchor: (Height: 86);
+        LayoutMode: Left;
+        Padding: (Top: 3, Bottom: 3);
+        ItemIcon #SelectedEquipmentIcon {
+          ItemId: "";
+          Anchor: (Width: 78, Height: 78);
+        }
+        Group { Anchor: (Width: 14); }
+        Group {
+          FlexWeight: 1;
+          LayoutMode: Top;
+          Label #SelectedEquipmentName {
+            Anchor: (Height: 30);
+            Style: (FontSize: 16, TextColor: #f2f4f7, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 11);
+            Text: "-";
+          }
+          Label #SelectedEquipmentLevel {
+            Anchor: (Height: 24);
+            Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center);
+            Text: "-";
+          }
+        }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+
+      Group #DamagePanels {
+        FlexWeight: 1;
+        LayoutMode: Left;
+        Padding: (Top: 8, Bottom: 8);
+
+        Group #CurrentDamagePanel {
+          FlexWeight: 1;
+          LayoutMode: Top;
+          Label #CurrentDamageTitle {
+            Anchor: (Height: 28);
+            Style: @SectionTitle;
+            Text: "CURRENT STATS";
+          }
+          Group #CurrentDamageRows {
+            FlexWeight: 1;
+            LayoutMode: Top;
+            Background: #141a28;
+            Padding: (Full: 8);
+            ScrollbarStyle: @BenchScrollbar;
+            Overscroll: true;
+          }
+        }
+        Group { Anchor: (Width: 14); }
+        Group #ExpectedDamagePanel {
+          FlexWeight: 1;
+          LayoutMode: Top;
+          Label #ExpectedDamageTitle {
+            Anchor: (Height: 28);
+            Style: @SectionTitle;
+            Text: "EXPECTED STATS";
+          }
+          Group #ExpectedDamageRows {
+            FlexWeight: 1;
+            LayoutMode: Top;
+            Background: #141a28;
+            Padding: (Full: 8);
+            ScrollbarStyle: @BenchScrollbar;
+            Overscroll: true;
+          }
+        }
+      }
+
+      Group #RefineActions {
+        Anchor: (Height: 124);
+        LayoutMode: Top;
+        Padding: (Top: 5);
+        Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+        Group #ProgressHeading {
+          Anchor: (Height: 22);
+          LayoutMode: Left;
+          Label #RefineProgressTitle {
+            FlexWeight: 1;
+            Style: @SectionTitle;
+            Text: "REFINE PROGRESS";
+          }
+          Label #RefinePercent {
+            Anchor: (Width: 52);
+            Style: (FontSize: 10, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center);
+            Text: "0%";
+          }
+        }
+        Group #ProgressTrack {
+          Anchor: (Height: 16);
+          Background: (TexturePath: "../boost_track.png");
+          ProgressBar #RefineProgress {
+            Anchor: (Full: 0);
+            Value: 0;
+            BarTexturePath: "../boost_fill.png";
+          }
+        }
+        Label #RefineStatus {
+          Anchor: (Height: 26);
+          Style: (FontSize: 11, TextColor: #c4ced8, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9);
+          Text: "Choose equipment to begin.";
+        }
+        Label #RefineMaterialCost {
+          Anchor: (Height: 18);
+          Style: (FontSize: 9, TextColor: #93a2b2, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8);
+          Text: "Consumes refinement material.";
+        }
+        Group #RefineButtonArea {
+          Anchor: (Height: 34);
+          LayoutMode: Right;
+          TextButton #RefineButton {
+            Anchor: (Width: 220, Height: 34);
+            Style: @BenchAction;
+            Text: "REFINE";
+          }
+          Label #RefineUnavailable {
+            Anchor: (Width: 220, Height: 34);
+            Style: (FontSize: 10, TextColor: #93a2b2, HorizontalAlignment: Center, VerticalAlignment: Center);
+            Text: "Not ready";
+            Visible: false;
+          }
+          Label #RefineBusy {
+            Anchor: (Width: 220, Height: 34);
+            Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center);
+            Text: "REFINING...";
+            Visible: false;
+          }
+        }
+      }
+    }
+
+    Group { Anchor: (Width: 18); }
+
+    Group #SupportPanel {
+      Anchor: (Width: 430, Height: 820);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 12, Bottom: 12);
+      Background: $Common.@PanelBackground;
+
+      Label #RefinementPanelTitle {
+        Anchor: (Height: 32);
+        Style: @PanelTitle;
+        Text: "REFINEMENT MATERIAL";
+      }
+      Group { Anchor: (Height: 22); }
+      Group #MaterialList {
+        Anchor: (Height: 102);
+        LayoutMode: Left;
+        Padding: (Top: 5, Bottom: 5);
+        Group { FlexWeight: 1; }
+        Group #MaterialCardRow {
+          Anchor: (Height: 92);
+          LayoutMode: Left;
+        }
+        Group { FlexWeight: 1; }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Label #SupportHeading {
+        Anchor: (Height: 24);
+        Style: @SectionTitle;
+        Text: "SUPPORT MATERIALS";
+      }
+      Group #SupportListHost {
+        FlexWeight: 1;
+        LayoutMode: Full;
+        Group #SupportList {
+          Anchor: (Full: 0);
+          LayoutMode: Top;
+          Padding: (Full: 6);
+          Background: #101823;
+          ScrollbarStyle: @BenchScrollbar;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+      }
+      Group { Anchor: (Height: 3); Background: (TexturePath: "../divider.png"); }
+      Label #ChancePanelTitle {
+        Anchor: (Height: 24);
+        Style: @SectionTitle;
+        Text: "EXPECTED OUTCOME";
+      }
+      Group #ChancePanel {
+        Anchor: (Height: 148);
+        LayoutMode: Top;
+        Padding: (Left: 10, Right: 10, Top: 6, Bottom: 6);
+        Background: #141a28;
+        Group #ChanceBreakRow { LayoutMode: Left; Anchor: (Height: 22);
+          Label #ChanceBreakLabel { FlexWeight: 1; Style: @BodyText; Text: "Break"; }
+          Label #ChanceBreakValue { Anchor: (Width: 88); Style: (FontSize: 11, TextColor: #ff8888, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "-"; }
+        }
+        Group #ChanceDegradeRow { LayoutMode: Left; Anchor: (Height: 22);
+          Label #ChanceDegradeLabel { FlexWeight: 1; Style: @BodyText; Text: "Degrade"; }
+          Label #ChanceDegradeValue { Anchor: (Width: 88); Style: (FontSize: 11, TextColor: #ffbb77, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "-"; }
+        }
+        Group #ChanceSameRow { LayoutMode: Left; Anchor: (Height: 22);
+          Label #ChanceSameLabel { FlexWeight: 1; Style: @BodyText; Text: "No change"; }
+          Label #ChanceSameValue { Anchor: (Width: 88); Style: (FontSize: 11, TextColor: #c4ced8, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "-"; }
+        }
+        Group #ChanceUpgradeRow { LayoutMode: Left; Anchor: (Height: 22);
+          Label #ChanceUpgradeLabel { FlexWeight: 1; Style: @BodyText; Text: "Upgrade"; }
+          Label #ChanceUpgradeValue { Anchor: (Width: 88); Style: (FontSize: 11, TextColor: #77dd77, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "-"; }
+        }
+        Group #ChanceJackpotRow { LayoutMode: Left; Anchor: (Height: 22);
+          Label #ChanceJackpotLabel { FlexWeight: 1; Style: @BodyText; Text: "Jackpot"; }
+          Label #ChanceJackpotValue { Anchor: (Width: 88); Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center); Text: "-"; }
+        }
+        Label #ChanceNote {
+          FlexWeight: 1;
+          Style: (FontSize: 9, TextColor: #93a2b2, Wrap: true, VerticalAlignment: Center);
+          Text: "";
+        }
+      }
+    }
+  }
+}

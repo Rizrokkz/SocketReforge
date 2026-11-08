@@ -12,12 +12,25 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.ui.PatchStyle;
+import com.hypixel.hytale.server.core.ui.Value;
+import com.hypixel.hytale.server.core.ui.builder.EventData;
+import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
+import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.CorruptionUtils;
@@ -32,6 +45,7 @@ import irai.mod.reforge.Lore.LoreGemRegistry;
 import irai.mod.reforge.Lore.LoreHeldItemUpdateManager;
 import irai.mod.reforge.Lore.LoreSocketData;
 import irai.mod.reforge.Lore.LoreSocketManager;
+import irai.mod.reforge.Progression.CharacterPathService;
 import irai.mod.reforge.Lore.LoreSoulstoneUtils;
 import irai.mod.reforge.Socket.Socket;
 import irai.mod.reforge.Socket.SocketData;
@@ -50,12 +64,22 @@ public final class LoreSocketBenchUI {
     private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
     private static final String UI_COMMAND_BUILDER = "com.hypixel.hytale.server.core.ui.builder.UICommandBuilder";
     private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/LoreSocketBench.html";
+    private static final String NATIVE_PAGE_UI = "Pages/LoreSocketBench.ui";
+    private static final String EQUIPMENT_CARD_UI = "Pages/EssenceBenchEquipmentCard.ui";
+    private static final String GEM_CARD_UI = "Pages/EssenceBenchEssenceCard.ui";
+    private static final String SUPPORT_CARD_UI = "Pages/EssenceBenchSupportCard.ui";
+    private static final String LORE_SOCKET_TILE_UI = "Pages/LoreSocketBenchTile.ui";
+    private static final String LORE_PROGRESS_NODE_UI = "Pages/LoreSocketBenchProgressNode.ui";
+    private static final int[] LORE_PROGRESS_NODE_FRAMES = {21, 20, 19, 18, 17};
+    private static final String[] LORE_SOCKET_COLOR_KEYS = {
+            "none", "locked", "red", "blue", "green", "purple", "yellow", "orange", "black", "white", "cyan"
+    };
     private static final String SUPPORT_REROLL_ITEM_ID = "Ingredient_Resonant_Essence";
     private static final String SUPPORT_CLEAR_ITEM_ID = "Ingredient_Ghastly_Essence";
     private static final int EQUIPMENT_CARDS_PER_PAGE = 4;
     private static final int MATERIAL_CARDS_PER_PAGE = 5;
 
-    private static boolean hyuiAvailable = false;
+    private static boolean nativeUiAvailable = true;
     private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> pendingNavToFeed = new ConcurrentHashMap<>();
@@ -154,19 +178,15 @@ public final class LoreSocketBenchUI {
     }
 
     public static void initialize() {
-        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "LoreSocketBenchUI");
+        nativeUiAvailable = true;
     }
 
     public static boolean isAvailable() {
-        return hyuiAvailable;
+        return nativeUiAvailable;
     }
 
     public static void open(Player player) {
         if (player == null) {
-            return;
-        }
-        if (!hyuiAvailable) {
-            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_socket.hyui_missing")));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();
@@ -280,63 +300,14 @@ public final class LoreSocketBenchUI {
     private static void openPage(Player player, Snapshot snapshot, SelectionState selectionState) {
         PlayerRef playerRef = player.getPlayerRef();
         try {
-            Class<?> pageBuilderClass = Class.forName(HYUI_PAGE_BUILDER);
-            Class<?> eventBindingClass = Class.forName(HYUI_EVENT_BINDING);
-
-            Method pageForPlayer = pageBuilderClass.getMethod("pageForPlayer", PlayerRef.class);
-            Method fromHtml = pageBuilderClass.getMethod("fromHtml", String.class);
-            Method addListener = pageBuilderClass.getMethod("addEventListener", String.class, eventBindingClass, java.util.function.BiConsumer.class);
-            Method withLifetime = pageBuilderClass.getMethod("withLifetime", CustomPageLifetime.class);
-            Method openMethod = pageBuilderClass.getMethod("open", Class.forName("com.hypixel.hytale.component.Store"));
-
-            Object activating = eventBindingClass.getField("Activating").get(null);
-
-            String html = buildHtml(player, snapshot, selectionState);
-            Object pageBuilder = pageForPlayer.invoke(null, playerRef);
-            pageBuilder = fromHtml.invoke(pageBuilder, html);
-
-            final Player finalPlayer = player;
-            final Snapshot finalSnapshot = snapshot;
-
-            registerEquipmentCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, selectionState);
-            registerMaterialCardListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, selectionState);
-            registerSocketPreviewListeners(pageBuilder, addListener, activating, finalPlayer, finalSnapshot, selectionState);
-
-            addListener.invoke(pageBuilder, "processButton", activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        String equipmentVal = selectionState != null ? selectionState.equipmentKey : null;
-                        String gemVal = selectionState != null ? selectionState.gemKey : null;
-                        String supportVal = selectionState != null ? selectionState.supportKey : null;
-                        String slotVal = selectionState != null ? selectionState.slotKey : null;
-                        Entry equipment = resolveSelection(finalSnapshot.equipments, equipmentVal);
-                        Entry gem = resolveSelection(materialEntries(finalSnapshot, equipment), gemVal);
-                        Entry support = resolveSelection(finalSnapshot.supports, supportVal);
-
-                        ProcessResult result = processSelection(finalPlayer, equipment, gem, support, slotVal);
-                        pendingSelections.put(finalPlayer.getPlayerRef(),
-                                stateWith(selectionState, equipmentVal, gemVal, supportVal, slotVal,
-                                        result.status, null, null));
-                        finalPlayer.getWorld().execute(() -> openWithSync(finalPlayer));
-                    });
-
-            Method onDismiss = pageBuilderClass.getMethod("onDismiss", java.util.function.BiConsumer.class);
-            pageBuilder = onDismiss.invoke(pageBuilder,
-                    (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByPlayer) -> {
-                        PlayerRef ref = finalPlayer.getPlayerRef();
-                        Object current = openPages.get(ref);
-                        if (current != pageObj) {
-                            return;
-                        }
-                        openPages.remove(ref);
-                        pendingNavToFeed.remove(ref);
-                    });
-
-            pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
-            Object store = getStore(playerRef);
-            Object page = openMethod.invoke(pageBuilder, store);
+            Ref<EntityStore> entityRef = playerRef.getReference();
+            Store<EntityStore> store = entityRef == null ? null : entityRef.getStore();
+            if (entityRef == null || store == null) return;
+            NativeLoreSocketBenchPage page = new NativeLoreSocketBenchPage(playerRef, snapshot, selectionState);
+            player.getPageManager().openCustomPage(entityRef, store, page);
             openPages.put(playerRef, page);
         } catch (Exception e) {
-            System.err.println("[SocketReforge] LoreSocketBenchUI open error: " + e.getMessage());
+            System.err.println("[SocketReforge] Native LoreSocketBenchUI open error: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -1756,6 +1727,7 @@ public final class LoreSocketBenchUI {
             if (runeContainer != null) {
                 runeContainer.removeItemStackFromSlot(gem.slot, 1, false, false);
             }
+            CharacterPathService.awardBenchXp(player, 10, "rune socketing");
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_done"));
         }
         if (!LoreSocketManager.isLoreGem(gem.item)) {
@@ -1815,6 +1787,7 @@ public final class LoreSocketBenchUI {
             if (stoneContainer != null) {
                 stoneContainer.removeItemStackFromSlot(gem.slot, 1, false, false);
             }
+            CharacterPathService.awardBenchXp(player, 10, "soulstone socketing");
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_soulstone_done"));
         }
 
@@ -1835,6 +1808,7 @@ public final class LoreSocketBenchUI {
         if (gemContainer != null) {
             gemContainer.removeItemStackFromSlot(gem.slot, 1, false, false);
         }
+        CharacterPathService.awardBenchXp(player, 8, "lore socketing");
 
         return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_done"));
     }
@@ -1863,6 +1837,7 @@ public final class LoreSocketBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_no_essence"));
         }
         saveEquipment(player, equipment, data);
+        CharacterPathService.awardBenchXp(player, 10, "lore feeding");
         return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_feed.status_done"));
     }
 
@@ -1901,6 +1876,7 @@ public final class LoreSocketBenchUI {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.lore_socket.status_rune_feed_no_material"));
         }
         saveEquipment(player, equipment, data);
+        CharacterPathService.awardBenchXp(player, 10, "rune feeding");
         return new ProcessResult(formatRuneFeedStatus(player, socket));
     }
 
@@ -2395,5 +2371,690 @@ public final class LoreSocketBenchUI {
 
     private static void closePageIfOpen(PlayerRef playerRef) {
         HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
+    }
+
+    private static PatchStyle textureBackground(String texturePath) {
+        return new PatchStyle(Value.of(texturePath), Value.of(0));
+    }
+
+    private static String child(String parent, int index) {
+        return parent + "[" + index + "]";
+    }
+
+    /** Native Hytale page for lore gem and runestone socketing. */
+    private static final class NativeLoreSocketBenchPage extends InteractiveCustomUIPage<NativeLoreSocketBenchPage.PageEvent> {
+        private static final class DetailRow {
+            final String label;
+            final String value;
+
+            DetailRow(String label, String value) {
+                this.label = label == null ? "" : label;
+                this.value = value == null ? "" : value;
+            }
+        }
+
+        private static final class ProgressMilestone {
+            final int level;
+            final int feedTier;
+            final boolean feedGate;
+            final boolean maxLevel;
+
+            ProgressMilestone(int level, int feedTier, boolean feedGate, boolean maxLevel) {
+                this.level = level;
+                this.feedTier = feedTier;
+                this.feedGate = feedGate;
+                this.maxLevel = maxLevel;
+            }
+        }
+
+        private final PlayerRef owner;
+        private Snapshot snapshot;
+        private SelectionState state;
+        private volatile boolean dismissed;
+
+        NativeLoreSocketBenchPage(PlayerRef owner, Snapshot snapshot, SelectionState state) {
+            super(owner, CustomPageLifetime.CanDismiss, PageEvent.CODEC);
+            this.owner = owner;
+            this.snapshot = snapshot;
+            this.state = state == null
+                    ? new SelectionState(snapshot == null || snapshot.equipments.isEmpty() ? null : "0",
+                            null, null, null, null)
+                    : state;
+        }
+
+        @Override
+        public void build(Ref<EntityStore> playerRef, UICommandBuilder commands,
+                          UIEventBuilder events, Store<EntityStore> store) {
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            commands.append(NATIVE_PAGE_UI);
+            populate(player, commands, events, false);
+        }
+
+        @Override
+        public void handleDataEvent(Ref<EntityStore> playerRef, Store<EntityStore> store, PageEvent event) {
+            super.handleDataEvent(playerRef, store, event);
+            if (dismissed || event == null || event.action == null) return;
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            if (state == null) state = new SelectionState(null, null, null, null, null);
+
+            switch (event.action) {
+                case "select_equipment" -> state = stateWith(state, event.target, null, state.supportKey,
+                        null, null, null, null);
+                case "select_slot" -> state = stateWith(state, state.equipmentKey, state.gemKey,
+                        state.supportKey, event.target, null, null, null);
+                case "select_equipment_slot" -> selectEquipmentSlot(event.target);
+                case "select_gem" -> state = stateWith(state, state.equipmentKey, event.target,
+                        null, state.slotKey, null, null, null);
+                case "select_support" -> state = stateWith(state, state.equipmentKey, null,
+                        event.target == null || event.target.isBlank() ? null : event.target,
+                        state.slotKey, null, null, null);
+                case "feed_slot" -> {
+                    feedSlot(player, event.target);
+                    return;
+                }
+                case "process" -> {
+                    process(player);
+                    return;
+                }
+                default -> { return; }
+            }
+            refresh(player);
+        }
+
+        @Override
+        public void onDismiss(Ref<EntityStore> playerRef, Store<EntityStore> store) {
+            dismissed = true;
+            pendingSelections.remove(owner);
+            pendingNavToFeed.remove(owner);
+            openPages.remove(owner, this);
+            super.onDismiss(playerRef, store);
+        }
+
+        private void selectEquipmentSlot(String target) {
+            String[] parts = target == null ? null : target.split(":", 2);
+            if (parts == null || parts.length != 2) return;
+            Entry equipment = resolveSelection(snapshot.equipments, parts[0]);
+            if (equipment == null) return;
+            state = stateWith(state, parts[0], null, state.supportKey, parts[1], null, null, null);
+        }
+
+        private void process(Player player) {
+            snapshot = collectSnapshot(player);
+            Entry equipment = resolveSelection(snapshot.equipments, state.equipmentKey);
+            Entry gem = resolveSelection(materialEntries(snapshot, equipment), state.gemKey);
+            Entry support = resolveSelection(snapshot.supports, state.supportKey);
+            if (shouldDisable(equipment, gem, support, state.slotKey)) {
+                refresh(player);
+                return;
+            }
+            ProcessResult result = processSelection(player, equipment, gem, support, state.slotKey);
+            state = stateWith(state, state.equipmentKey, null, null, state.slotKey,
+                    result.status, null, null);
+            refresh(player);
+        }
+
+        private void feedSlot(Player player, String target) {
+            Entry equipment = resolveSelection(snapshot.equipments, state.equipmentKey);
+            int slot = parseIndex(target, -1);
+            if (equipment == null || slot < 0) return;
+            String slotKey = String.valueOf(slot);
+            ProcessResult result = processFeed(player, equipment, slotKey);
+            state = stateWith(state, state.equipmentKey, state.gemKey, state.supportKey,
+                    slotKey, result.status, null, null);
+            refresh(player);
+        }
+
+        private void refresh(Player player) {
+            if (dismissed) return;
+            snapshot = collectSnapshot(player);
+            if (state == null) state = new SelectionState(null, null, null, null, null);
+            pendingSelections.put(owner, state);
+            UICommandBuilder commands = new UICommandBuilder();
+            UIEventBuilder events = new UIEventBuilder();
+            populate(player, commands, events, true);
+            sendUpdate(commands, events, false);
+        }
+
+        private void populate(Player player, UICommandBuilder commands,
+                              UIEventBuilder events, boolean replaceContents) {
+            if (snapshot == null) snapshot = collectSnapshot(player);
+            if (state == null) state = new SelectionState(null, null, null, null, null);
+            Entry equipment = resolveSelection(snapshot.equipments, state.equipmentKey);
+            List<Entry> materials = materialEntries(snapshot, equipment);
+            Entry gem = resolveSelection(materials, state.gemKey);
+            Entry support = resolveSelection(snapshot.supports, state.supportKey);
+            LoreSocketData loreData = equipment == null ? null
+                    : LoreSocketManager.getLoreSocketData(getEffectiveEquipmentItem(player, equipment));
+            boolean hasLoreSockets = loreData != null && loreData.getSocketCount() > 0;
+            LoreSocketData.LoreSocket selectedSocket = selectedSocket(loreData, state.slotKey);
+            boolean canProcess = !shouldDisable(equipment, gem, support, state.slotKey);
+            boolean runeDelta = isRuneDeltaEquipment(equipment);
+
+            commands.set("#LoreBenchTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.title"));
+            commands.set("#LoreBenchSubtitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.subtitle"));
+            commands.set("#EquipmentTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.equipment_list_title"));
+            commands.set("#EquipmentHint.Text", LangLoader.getUITranslation(player, "ui.lore_socket.equipment_list_hint"));
+            commands.set("#MaterialsTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.materials_list_title"));
+            commands.set("#MaterialsHint.Text", LangLoader.getUITranslation(player, "ui.lore_socket.materials_list_hint"));
+            commands.set("#LoreGemTitle.Text", LangLoader.getUITranslation(player,
+                    runeDelta ? "ui.lore_socket.materials_runes" : "ui.lore_socket.materials_gems"));
+            commands.set("#SupportMaterialsTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.materials_supports"));
+            commands.set("#SupportFooter.Text", LangLoader.getUITranslation(player, "ui.lore_socket.materials_list_hint"));
+            commands.set("#LoreSocketPreviewTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.sockets"));
+            commands.set("#LoreProgressTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.progress_title"));
+            commands.set("#LoreStatusTitle.Text", LangLoader.getUITranslation(player, "ui.lore_socket.status"));
+
+            commands.set("#EquipmentEmpty.Text", LangLoader.getUITranslation(player, "ui.lore_socket.option_no_equipment"));
+            commands.set("#EquipmentEmpty.Visible", snapshot.equipments.isEmpty());
+            commands.set("#SelectedEquipmentName.Text", equipment == null
+                    ? LangLoader.getUITranslation(player, "ui.lore_socket.option_no_equipment") : equipment.displayName);
+            commands.set("#SelectedEquipmentLocation.Text", buildLocationText(player, equipment));
+            commands.set("#SelectedEquipmentIcon.ItemId", equipment == null ? "" : equipment.itemId);
+            commands.set("#SelectedEquipmentIcon.Visible", equipment != null);
+            commands.set("#LoreSocketEmpty.Text", LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets"));
+            commands.set("#LoreSocketEmpty.Visible", !hasLoreSockets);
+            commands.set("#LoreSocketPreviewSummary.Text", hasLoreSockets
+                    ? buildSocketSummary(loreData) : "");
+            commands.set("#LoreSelectedSlotLabel.Text", buildSelectedSlotLabel(player, equipment, state.slotKey));
+            commands.set("#LoreStatus.Text", state.statusText == null
+                    ? LangLoader.getUITranslation(player, "ui.lore_socket.status_idle") : state.statusText);
+            commands.set("#LoreProcessButton.Text", resolveProcessButtonLabel(player, equipment, gem, support, state.slotKey));
+            commands.set("#LoreProcessButton.Visible", canProcess);
+            commands.set("#LoreUnavailable.Visible", !canProcess);
+            commands.set("#LoreUnavailable.Text", equipment == null
+                    ? LangLoader.getUITranslation(player, "ui.lore_socket.status_no_equipment")
+                    : gem == null && support == null
+                            ? LangLoader.getUITranslation(player, runeDelta
+                                    ? "ui.lore_socket.option_no_rune" : "ui.lore_socket.option_no_gem")
+                            : LangLoader.getUITranslation(player, "ui.lore_socket.slot_none_selected"));
+            commands.set("#LoreGemEmpty.Text", LangLoader.getUITranslation(player,
+                    runeDelta ? "ui.lore_socket.option_no_rune" : "ui.lore_socket.option_no_gem"));
+            commands.set("#LoreGemEmpty.Visible", materials.isEmpty());
+
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#LoreProcessButton",
+                    EventData.of("Action", "process"));
+            if (replaceContents) {
+                commands.clear("#EquipmentList");
+                commands.clear("#LoreSocketTiles");
+                commands.clear("#LoreGemList");
+                commands.clear("#SupportList");
+                commands.clear("#LoreProgressionNodes");
+            }
+            appendEquipmentCards(commands, events, player, equipment);
+            appendLoreSocketTiles(commands, events, player, equipment, loreData);
+            appendLoreProgression(commands, player, selectedSocket, runeDelta);
+            appendGemCards(commands, events, materials, gem);
+            appendSupportCards(commands, events, player, support);
+        }
+
+        private void appendEquipmentCards(UICommandBuilder commands, UIEventBuilder events,
+                                          Player player, Entry selected) {
+            for (int i = 0; i < snapshot.equipments.size(); i++) {
+                Entry entry = snapshot.equipments.get(i);
+                if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
+                commands.append("#EquipmentList", EQUIPMENT_CARD_UI);
+                String base = child("#EquipmentList", i);
+                commands.set(base + " #EquipmentIcon.ItemId", entry.itemId);
+                commands.set(base + " #EquipmentName.Text", entry.displayName);
+                commands.set(base + " #EquipmentSocketsCaption.Text",
+                        LangLoader.getUITranslation(player, "tooltip.sockets_label"));
+                commands.set(base + " #EquipmentResonantEssence.Visible", false);
+                commands.set(base + " #EquipmentSelected.Visible", selected == entry);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #EquipmentCardHit",
+                        EventData.of("Action", "select_equipment").append("Target", String.valueOf(i)));
+
+                SocketData socketData = SocketManager.getSocketData(entry.item);
+                List<Socket> sockets = socketData == null ? List.of() : socketData.getSockets();
+                int punched = socketData == null ? 0 : socketData.getCurrentSocketCount();
+                for (int slot = 0; slot < 5; slot++) {
+                    String slotBase = base + " #EquipmentSocketSlot" + slot;
+                    boolean visible = slot < sockets.size();
+                    commands.set(slotBase + ".Visible", visible);
+                    if (!visible) continue;
+                    Socket socket = sockets.get(slot);
+                    commands.setObject(base + " #EquipmentSocketVisual" + slot + ".Background",
+                            textureBackground(UISocketVisualUtils.socketBackgroundIcon(slot < punched,
+                                    socket != null && socket.isBroken(), UISocketVisualUtils.brokenSocketIconName())));
+                    String essenceIcon = socket == null || socket.isEmpty() || socket.isBroken()
+                            ? null : UISocketVisualUtils.essenceItemId(socket.getEssenceId());
+                    commands.set(base + " #EquipmentSocketEssence" + slot + ".ItemId",
+                            essenceIcon == null ? "" : essenceIcon);
+                    commands.set(base + " #EquipmentSocketEssence" + slot + ".Visible", essenceIcon != null);
+                    events.addEventBinding(CustomUIEventBindingType.Activating,
+                            base + " #EquipmentSocketHit" + slot,
+                            EventData.of("Action", "select_equipment").append("Target", String.valueOf(i)));
+                }
+
+                LoreSocketData cardLoreData = LoreSocketManager.getLoreSocketData(entry.item);
+                List<LoreSocketData.LoreSocket> loreSockets = cardLoreData == null
+                        ? List.of() : cardLoreData.getSockets();
+                for (int slot = 0; slot < 3; slot++) {
+                    String slotBase = base + " #EquipmentLoreSlot" + slot;
+                    boolean visible = slot < loreSockets.size();
+                    commands.set(slotBase + ".Visible", visible);
+                    if (!visible) continue;
+                    LoreSocketData.LoreSocket socket = loreSockets.get(slot);
+                    commands.setObject(base + " #EquipmentLoreVisual" + slot + ".Background",
+                            textureBackground("GemSlotEmpty.png"));
+                    String colorKey = UISocketVisualUtils.loreColorKey(socket);
+                    for (String color : LORE_SOCKET_COLOR_KEYS) {
+                        String colorName = Character.toUpperCase(color.charAt(0)) + color.substring(1);
+                        commands.set(base + " #EquipmentLoreColor" + colorName + slot + ".Visible",
+                                color.equals(colorKey));
+                    }
+                    String icon = UISocketVisualUtils.loreSocketItemId(socket);
+                    commands.set(base + " #EquipmentLoreIcon" + slot + ".ItemId", icon == null ? "" : icon);
+                    commands.set(base + " #EquipmentLoreIcon" + slot + ".Visible", icon != null);
+                    events.addEventBinding(CustomUIEventBindingType.Activating,
+                            base + " #EquipmentLoreHit" + slot,
+                            EventData.of("Action", "select_equipment_slot")
+                                    .append("Target", i + ":" + slot));
+                }
+            }
+            commands.set("#EquipmentList.ContentHeight", snapshot.equipments.size() * 72 + 12);
+        }
+
+        private void appendLoreSocketTiles(UICommandBuilder commands, UIEventBuilder events,
+                                           Player player, Entry equipment, LoreSocketData data) {
+            List<LoreSocketData.LoreSocket> sockets = data == null ? List.of() : data.getSockets();
+            String selectedSlot = state.slotKey;
+            for (int i = 0; i < sockets.size(); i++) {
+                LoreSocketData.LoreSocket socket = sockets.get(i);
+                commands.append("#LoreSocketTiles", LORE_SOCKET_TILE_UI);
+                String base = child("#LoreSocketTiles", i);
+                String icon = UISocketVisualUtils.loreSocketItemId(socket);
+                commands.set(base + " #LoreSocketIcon.ItemId", icon == null ? "" : icon);
+                commands.set(base + " #LoreSocketIcon.Visible", icon != null);
+                String colorKey = UISocketVisualUtils.loreColorKey(socket);
+                for (String color : LORE_SOCKET_COLOR_KEYS) {
+                    String colorName = Character.toUpperCase(color.charAt(0)) + color.substring(1);
+                    commands.set(base + " #LoreSocketColor" + colorName + ".Visible",
+                            color.equals(colorKey));
+                }
+                boolean selected = String.valueOf(i).equals(selectedSlot);
+                for (String color : LORE_SOCKET_COLOR_KEYS) {
+                    String colorName = Character.toUpperCase(color.charAt(0)) + color.substring(1);
+                    commands.set(base + " #LoreSocketSelectionColor" + colorName + ".Visible",
+                            selected && color.equals(colorKey));
+                }
+                boolean feedReady = socket != null && socket.hasSpirit() && LoreSocketManager.needsFeed(socket);
+                commands.set(base + " #LoreSocketFeed.Visible", feedReady);
+                commands.set(base + " #LoreSocketFeed.Text",
+                        LangLoader.getUITranslation(player, "ui.lore_socket.feed_button"));
+                commands.set(base + " #LoreSocketHit.TooltipText",
+                        buildNativeSlotTooltip(player, socket, isRuneDeltaEquipment(equipment)));
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #LoreSocketHit",
+                        EventData.of("Action", "select_slot").append("Target", String.valueOf(i)));
+                if (feedReady) {
+                    events.addEventBinding(CustomUIEventBindingType.Activating, base + " #LoreSocketFeed",
+                            EventData.of("Action", "feed_slot").append("Target", String.valueOf(i)));
+                }
+            }
+            commands.set("#LoreSocketTiles.ContentWidth", sockets.size() * 108);
+        }
+
+        private static LoreSocketData.LoreSocket selectedSocket(LoreSocketData data, String slotKey) {
+            int index = parseIndex(slotKey, -1);
+            return data != null && index >= 0 && index < data.getSocketCount() ? data.getSocket(index) : null;
+        }
+
+        private static String buildNativeSlotTooltip(Player player, LoreSocketData.LoreSocket socket,
+                                                     boolean runeDelta) {
+            List<DetailRow> rows = buildNativeSlotDetailRows(player, socket, runeDelta);
+            StringBuilder tooltip = new StringBuilder();
+            for (DetailRow row : rows) {
+                if (tooltip.length() > 0) tooltip.append('\n');
+                if (!row.label.isBlank()) tooltip.append(row.label).append(": ");
+                tooltip.append(row.value);
+            }
+            return tooltip.toString();
+        }
+
+        private void appendLoreProgression(UICommandBuilder commands, Player player,
+                                           LoreSocketData.LoreSocket socket, boolean runeDelta) {
+            String emptyText;
+            if (socket == null) {
+                emptyText = LangLoader.getUITranslation(player, "ui.lore_socket.progress_empty_select");
+            } else if (runeDelta || !socket.hasSpirit()) {
+                emptyText = LangLoader.getUITranslation(player, "ui.lore_socket.progress_empty_no_spirit");
+            } else {
+                emptyText = "";
+            }
+            boolean showProgress = socket != null && socket.hasSpirit() && !runeDelta;
+            commands.set("#LoreProgressEmpty.Text", emptyText);
+            commands.set("#LoreProgressEmpty.Visible", !showProgress);
+            commands.set("#LoreProgressSummary.Text", showProgress
+                    ? buildLoreProgressSummary(player, socket) : "");
+            if (!showProgress) return;
+
+            List<ProgressMilestone> milestones = buildProgressMilestones();
+            int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
+            for (int i = 0; i < milestones.size(); i++) {
+                ProgressMilestone milestone = milestones.get(i);
+                commands.append("#LoreProgressionNodes", LORE_PROGRESS_NODE_UI);
+                String base = child("#LoreProgressionNodes", i);
+                commands.set(base + " #LoreProgressNodeLabel.Text",
+                        LangLoader.getUITranslation(player, "ui.lore_feed.level_label", milestone.level));
+                String rewardItemId = progressionRuneItemId(socket, milestone);
+                commands.set(base + " #LoreProgressNodeFrame.Visible", rewardItemId != null);
+                if (rewardItemId != null) {
+                    commands.setObject(base + " #LoreProgressNodeFrame.Background",
+                            textureBackground("SkillTreeIcons/SkillTreeNode_"
+                                    + LORE_PROGRESS_NODE_FRAMES[i % LORE_PROGRESS_NODE_FRAMES.length] + ".png"));
+                }
+                commands.set(base + " #LoreProgressRuneIcon.ItemId", rewardItemId == null ? "" : rewardItemId);
+                commands.set(base + " #LoreProgressRuneIcon.Visible", rewardItemId != null);
+                commands.set(base + " #LoreProgressNodeCurrent.Visible",
+                        rewardItemId != null && isCurrentProgressMilestone(socket, milestone, maxLevel));
+                commands.set(base + " #LoreProgressNodeHit.TooltipText",
+                        buildProgressMilestoneTooltip(player, socket, milestone, rewardItemId, maxLevel));
+            }
+        }
+
+        private static List<ProgressMilestone> buildProgressMilestones() {
+            int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
+            int interval = Math.max(1, LoreSocketManager.getConfig().getFeedInterval());
+            List<ProgressMilestone> milestones = new ArrayList<>();
+            milestones.add(new ProgressMilestone(1, 0, false, maxLevel == 1));
+            for (int tier = 1; tier <= LoreSocketManager.getMaxRuneFeedThresholds(); tier++) {
+                int level = tier * interval;
+                if (level >= maxLevel) break;
+                milestones.add(new ProgressMilestone(level, tier, true, false));
+            }
+            if (maxLevel > 1) {
+                if (milestones.get(milestones.size() - 1).level == maxLevel) {
+                    ProgressMilestone last = milestones.remove(milestones.size() - 1);
+                    milestones.add(new ProgressMilestone(maxLevel, last.feedTier, last.feedGate, true));
+                } else {
+                    milestones.add(new ProgressMilestone(maxLevel,
+                            LoreSocketManager.getMaxRuneFeedThresholds(), false, true));
+                }
+            }
+            return milestones;
+        }
+
+        private static String buildLoreProgressSummary(Player player, LoreSocketData.LoreSocket socket) {
+            int level = Math.max(1, socket.getLevel());
+            int maxLevel = Math.max(1, LoreSocketManager.getConfig().getMaxLevel());
+            int interval = Math.max(1, LoreSocketManager.getConfig().getFeedInterval());
+            if (level >= maxLevel) {
+                return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_max", level);
+            }
+            if (LoreSocketManager.needsFeed(socket)) {
+                return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_gate", level);
+            }
+
+            int nextGate = interval * (Math.max(0, socket.getFeedTier()) + 1);
+            if (nextGate >= maxLevel) {
+                long missing = xpMissingToLevel(socket, maxLevel);
+                return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_max_xp",
+                        level, Math.max(0, socket.getXp()), LoreSocketManager.getXpRequiredForLevel(level), missing, maxLevel);
+            }
+            long missing = xpMissingToLevel(socket, nextGate);
+            return LangLoader.getUITranslation(player, "ui.lore_socket.progress_summary_gate_xp",
+                    level, Math.max(0, socket.getXp()), LoreSocketManager.getXpRequiredForLevel(level), missing, nextGate);
+        }
+
+        private static long xpMissingToLevel(LoreSocketData.LoreSocket socket, int targetLevel) {
+            int currentLevel = Math.max(1, socket.getLevel());
+            if (targetLevel <= currentLevel) return 0L;
+            long needed = -Math.max(0, socket.getXp());
+            for (int level = currentLevel; level < targetLevel; level++) {
+                needed += Math.max(1, LoreSocketManager.getXpRequiredForLevel(level));
+            }
+            return Math.max(0L, needed);
+        }
+
+        private static boolean isCurrentProgressMilestone(LoreSocketData.LoreSocket socket,
+                                                          ProgressMilestone milestone, int maxLevel) {
+            int level = Math.max(1, socket.getLevel());
+            if (level >= maxLevel) return milestone.maxLevel;
+            if (milestone.level == 1) return false;
+            if (milestone.feedGate) return milestone.feedTier == Math.max(0, socket.getFeedTier()) + 1;
+            return milestone.maxLevel && milestone.feedTier <= socket.getFeedTier();
+        }
+
+        private static String buildProgressMilestoneTooltip(Player player, LoreSocketData.LoreSocket socket,
+                                                           ProgressMilestone milestone, String rewardItemId,
+                                                           int maxLevel) {
+            StringBuilder tooltip = new StringBuilder();
+            if (milestone.feedGate) {
+                int completedTier = Math.max(0, socket.getFeedTier());
+                if (completedTier >= milestone.feedTier) {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.progress_node_gate_passed", milestone.level));
+                } else if (Math.max(1, socket.getLevel()) >= milestone.level) {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.progress_node_gate_ready", milestone.level));
+                } else {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.progress_node_xp", xpMissingToLevel(socket, milestone.level), milestone.level));
+                }
+            } else if (milestone.maxLevel) {
+                if (Math.max(1, socket.getLevel()) >= maxLevel) {
+                    tooltip.append(LangLoader.getUITranslation(player, "ui.lore_socket.progress_node_max_reached"));
+                } else {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.progress_node_max_xp", xpMissingToLevel(socket, maxLevel), maxLevel));
+                }
+            } else if (milestone.level == 1) {
+                int interval = Math.max(1, LoreSocketManager.getConfig().getFeedInterval());
+                int nextGate = Math.min(maxLevel, interval * (Math.max(0, socket.getFeedTier()) + 1));
+                if (LoreSocketManager.needsFeed(socket)) {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.progress_node_gate_ready", Math.max(1, socket.getLevel())));
+                } else {
+                    tooltip.append(LangLoader.getUITranslation(player,
+                            nextGate >= maxLevel ? "ui.lore_socket.progress_node_max_xp"
+                                    : "ui.lore_socket.progress_node_xp",
+                            xpMissingToLevel(socket, nextGate), nextGate));
+                }
+            } else if (Math.max(1, socket.getLevel()) >= milestone.level) {
+                tooltip.append(LangLoader.getUITranslation(player,
+                        "ui.lore_socket.progress_node_level_reached", milestone.level));
+            } else {
+                int nextGate = Math.min(maxLevel,
+                        Math.max(1, LoreSocketManager.getConfig().getFeedInterval())
+                                * (Math.max(0, socket.getFeedTier()) + 1));
+                tooltip.append(LangLoader.getUITranslation(player,
+                        "ui.lore_socket.progress_node_xp", xpMissingToLevel(socket, nextGate), nextGate));
+            }
+            if (rewardItemId != null) {
+                tooltip.append('\n').append(LangLoader.getUITranslation(player,
+                        "ui.lore_socket.progress_node_reward",
+                        UIItemUtils.displayNameOrItemId(new ItemStack(rewardItemId, 1), player)));
+            }
+            return tooltip.toString();
+        }
+
+        private static String progressionRuneItemId(LoreSocketData.LoreSocket socket,
+                                                    ProgressMilestone milestone) {
+            String spiritId = socket.getSpiritId();
+            if (milestone.feedGate && milestone.feedTier >= 1
+                    && LoreSocketManager.isCoreAbilityRunestoneSpirit(spiritId)) {
+                String runeItemId = LoreSocketManager.resolveCoreAbilityRunestoneItemId(
+                        spiritId, milestone.feedTier);
+                String previousRuneItemId = milestone.feedTier <= 1 ? null
+                        : LoreSocketManager.resolveCoreAbilityRunestoneItemId(spiritId, milestone.feedTier - 1);
+                return runeItemId != null && !runeItemId.equals(previousRuneItemId) ? runeItemId : null;
+            }
+            if (!milestone.maxLevel) return null;
+            int feedTier = Math.max(0, milestone.feedTier);
+            if (LoreSocketManager.isModifierRunestoneSpirit(spiritId)) {
+                return LoreSocketManager.resolveModifierRunestoneItemId(spiritId);
+            }
+            if (LoreSocketManager.isWolfPackSpirit(spiritId) && feedTier >= 1) {
+                return LoreSocketManager.resolveWolfPackRuneItemId(feedTier);
+            }
+            if (LoreSocketManager.isOmnislashSpirit(spiritId)) return LoreSocketManager.OMNISLASH_RUNE_12_ITEM_ID;
+            if (LoreSocketManager.isOctaslashSpirit(spiritId)) return LoreSocketManager.OCTASLASH_RUNE_ITEM_ID;
+            if (LoreSocketManager.isBloodRushSpirit(spiritId)) return LoreSocketManager.BLOOD_RUSH_RUNE_ITEM_ID;
+            if (LoreSocketManager.isPummelSpirit(spiritId)) return LoreSocketManager.PUMMEL_RUNE_MAX_TIER_ITEM_ID;
+            return null;
+        }
+
+        private static List<DetailRow> buildNativeSlotDetailRows(Player player,
+                                                                 LoreSocketData.LoreSocket socket,
+                                                                 boolean runeDelta) {
+            List<DetailRow> rows = new ArrayList<>();
+            if (socket == null) {
+                rows.add(new DetailRow("", LangLoader.getUITranslation(player, "ui.lore_socket.detail_click_slot")));
+                return rows;
+            }
+
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_slot_label"),
+                    String.valueOf(socket.getSlotIndex() + 1)));
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_color_label"),
+                    displaySocketColor(player, socket, runeDelta)));
+
+            if (socket.hasRune()) {
+                rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes"),
+                        formatRunestoneNameWithLevel(player, socket)));
+                if (socket.getRuneDamageFeeds() > 0) {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.detail_rune_damage_label"),
+                            "+" + LoreSocketManager.getRuneDamageBonusPercent(socket.getRuneDamageFeeds()) + "%"));
+                }
+                if (socket.getRuneManaFeeds() > 0) {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player,
+                            "ui.lore_socket.detail_rune_mana_label"),
+                            "-" + LoreSocketManager.getRuneManaCostReductionPercent(socket.getRuneManaFeeds()) + "%"));
+                }
+                return rows;
+            }
+
+            if (!socket.hasSpirit()) {
+                if (runeDelta) {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes"),
+                            LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_rune")));
+                    rows.add(new DetailRow("", LangLoader.getUITranslation(player,
+                            "ui.lore_socket.detail_eligible_runes")));
+                } else {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_section"),
+                            LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty")));
+                    List<String> names = buildCompatibleSpiritNames(player,
+                            displaySocketColor(player, socket, false));
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible"),
+                            names.isEmpty() ? LangLoader.getUITranslation(player, "ui.lore_feed.value_none")
+                                    : String.join(", ", names)));
+                }
+                return rows;
+            }
+
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_spirit_label"),
+                    localizeSpiritName(player, socket.getSpiritId())));
+            int level = Math.max(1, socket.getLevel());
+            int needed = Math.max(1, LoreSocketManager.getXpRequiredForLevel(level));
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_level_label"),
+                    LangLoader.getUITranslation(player, "ui.lore_feed.level_label", level)
+                            + " | " + LangLoader.getUITranslation(player, "ui.lore_feed.feed_tier",
+                                    Math.max(0, socket.getFeedTier()))));
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_xp_label"),
+                    LangLoader.getUITranslation(player, "ui.lore_feed.progress_xp",
+                            Math.max(0, socket.getXp()), needed)));
+            rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_feed_label"),
+                    LoreSocketManager.needsFeed(socket)
+                            ? LangLoader.getUITranslation(player, "ui.lore_feed.value_yes")
+                            : LangLoader.getUITranslation(player, "ui.lore_feed.value_no")));
+
+            LoreAbility ability = LoreAbilityRegistry.getAbility(socket.getSpiritId());
+            if (ability != null) {
+                String langCode = resolveLangCode(player);
+                rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_ability_label"),
+                        ability.resolveAbilityName(langCode)));
+                String effect = ability.describeEffectOnly(langCode, level, Math.max(0, socket.getFeedTier()));
+                if (effect != null && !effect.isBlank()) {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_effect_label"), effect));
+                }
+                if (LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())) {
+                    String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(level, socket.getFeedTier());
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.omnislash_rune_stage"),
+                            LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name")));
+                }
+                if (LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())) {
+                    String runeItemId = LoreSocketManager.resolveWolfPackRuneItemId(socket.getFeedTier());
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.wolfpack_rune_stage"),
+                            LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name")));
+                }
+                if (LoreSoulstoneUtils.isInfusedSoulstoneId(socket.getGemItemId())) {
+                    rows.add(new DetailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_note_label"),
+                            LangLoader.getUITranslation(player, "ui.lore_socket.infused_soulstone_hit_roll")));
+                }
+            }
+            return rows;
+        }
+
+        private void appendGemCards(UICommandBuilder commands, UIEventBuilder events,
+                                    List<Entry> materials, Entry selected) {
+            for (int i = 0; i < materials.size(); i++) {
+                Entry entry = materials.get(i);
+                if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
+                commands.append("#LoreGemList", GEM_CARD_UI);
+                String base = child("#LoreGemList", i);
+                commands.set(base + " #EssenceIcon.ItemId", entry.itemId);
+                commands.set(base + " #EssenceName.Text", entry.displayName);
+                commands.set(base + " #EssenceQuantity.Text", "x" + entry.quantity);
+                commands.set(base + " #EssenceSelected.Visible", selected == entry);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #EssenceCardHit",
+                        EventData.of("Action", "select_gem").append("Target", String.valueOf(i)));
+            }
+            commands.set("#LoreGemList.ContentHeight", 10 + materials.size() * 58);
+        }
+
+        private void appendSupportCards(UICommandBuilder commands, UIEventBuilder events,
+                                        Player player, Entry selected) {
+            commands.append("#SupportList", SUPPORT_CARD_UI);
+            commands.set("#SupportList[0] #SupportIcon.Visible", false);
+            commands.set("#SupportList[0] #SupportName.Text",
+                    LangLoader.getUITranslation(player, "ui.lore_socket.option_none"));
+            commands.set("#SupportList[0] #SupportQuantity.Text", "");
+            commands.set("#SupportList[0] #SupportCardHit.TooltipText", "");
+            commands.set("#SupportList[0] #SupportSelected.Visible", selected == null);
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#SupportList[0] #SupportCardHit",
+                    EventData.of("Action", "select_support").append("Target", ""));
+            for (int i = 0; i < snapshot.supports.size(); i++) {
+                Entry entry = snapshot.supports.get(i);
+                if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
+                commands.append("#SupportList", SUPPORT_CARD_UI);
+                String base = child("#SupportList", i + 1);
+                commands.set(base + " #SupportIcon.ItemId", entry.itemId);
+                commands.set(base + " #SupportName.Text", entry.displayName);
+                commands.set(base + " #SupportQuantity.Text", "Held: " + entry.quantity);
+                commands.set(base + " #SupportCardHit.TooltipText", buildMaterialDescription(player, entry, false));
+                commands.set(base + " #SupportSelected.Visible", selected == entry);
+                events.addEventBinding(CustomUIEventBindingType.Activating, base + " #SupportCardHit",
+                        EventData.of("Action", "select_support").append("Target", String.valueOf(i)));
+            }
+            commands.set("#SupportList.ContentHeight", 10 + (snapshot.supports.size() + 1) * 58);
+        }
+
+        private static String buildSocketSummary(LoreSocketData data) {
+            if (data == null) return "";
+            int filled = 0;
+            for (int i = 0; i < data.getSocketCount(); i++) {
+                LoreSocketData.LoreSocket socket = data.getSocket(i);
+                if (socket != null && !socket.isEmpty()) filled++;
+            }
+            return filled + " / " + data.getSocketCount() + " filled";
+        }
+
+        private static int parseIndex(String value, int fallback) {
+            try { return Integer.parseInt(value); } catch (Exception ignored) { return fallback; }
+        }
+
+        public static final class PageEvent {
+            public static final BuilderCodec<PageEvent> CODEC = BuilderCodec.<PageEvent>builder(
+                            PageEvent.class, PageEvent::new)
+                    .append(new KeyedCodec<>("Action", Codec.STRING),
+                            (event, value) -> event.action = value, event -> event.action).add()
+                    .append(new KeyedCodec<>("Target", Codec.STRING),
+                            (event, value) -> event.target = value, event -> event.target).add()
+                    .build();
+            public String action;
+            public String target;
+            public PageEvent() { }
+        }
     }
 }
