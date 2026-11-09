@@ -42,7 +42,7 @@ Group #RecipeCard {
   TextButton #RecipeSelect { Anchor: (Full: 0); Style: @RecipeCardHitStyle; Padding: (Full: 0); Text: ""; }
   Group #RecipeTools { Anchor: (Right: 3, Top: 0, Bottom: 0, Width: 26); LayoutMode: Full;
     Group #RecipeExtractTool { Anchor: (Right: 0, Top: 86, Width: 26, Height: 26); Background: #26384c; Visible: false;
-      ItemIcon #RecipeExtractIcon { ItemId: "EditorTool_Selection"; Anchor: (Full: 2); }
+      ItemIcon #RecipeExtractIcon { ItemId: "EditorTool_Extrude"; Anchor: (Full: 2); }
       TextButton #RecipeExtract { Anchor: (Full: 0); Style: @RecipeToolStyle; Padding: (Full: 0); Text: ""; TooltipText: "Extract recipe"; }
     }
     Group #RecipeCombineTool { Anchor: (Right: 0, Top: 116, Width: 26, Height: 26); Background: #26384c; Visible: false;

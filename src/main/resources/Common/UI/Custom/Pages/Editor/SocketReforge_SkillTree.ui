@@ -121,7 +121,7 @@ Group #SkillTreeRoot {
       Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
 
       Group #ToolAddWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
-        ItemIcon #ToolAddIcon { ItemId: "EditorTool_Paint"; Anchor: (Full: 4); }
+        ItemIcon #ToolAddIcon { ItemId: "EditorTool_Revolve"; Anchor: (Full: 4); }
         TextButton #ToolAdd { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Add node"; }
       }
       Group { Anchor: (Height: 5); }
@@ -132,7 +132,7 @@ Group #SkillTreeRoot {
       }
       Group { Anchor: (Height: 5); }
       Group #ToolMoveWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
-        ItemIcon #ToolMoveIcon { ItemId: "EditorTool_Sculpt"; Anchor: (Full: 4); }
+        ItemIcon #ToolMoveIcon { ItemId: "EditorTool_Scatter"; Anchor: (Full: 4); }
         Group #ToolMoveActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
         TextButton #ToolMove { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Move selected node or group"; }
       }
@@ -160,7 +160,7 @@ Group #SkillTreeRoot {
       }
       Group { Anchor: (Height: 5); }
       Group #ToolGridVisibilityWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
-        ItemIcon #ToolGridVisibilityIcon { ItemId: "EditorTool_Layers"; Anchor: (Full: 4); }
+        ItemIcon #ToolGridVisibilityIcon { ItemId: "EditorTool_TriggerVolume"; Anchor: (Full: 4); }
         Group #ToolGridVisibilityActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
         TextButton #ToolGridVisibility { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Toggle canvas grid"; }
       }
