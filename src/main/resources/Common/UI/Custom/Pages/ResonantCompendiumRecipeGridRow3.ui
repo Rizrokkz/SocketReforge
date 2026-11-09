@@ -1,0 +1,9 @@
+Group #RecipeGridRow {
+  Anchor: (Height: 126);
+  LayoutMode: Left;
+  Group #RecipeGridCell0 { FlexWeight: 1; LayoutMode: Top; Padding: (Full: 4); }
+  Group { Anchor: (Width: 6); }
+  Group #RecipeGridCell1 { FlexWeight: 1; LayoutMode: Top; Padding: (Full: 4); }
+  Group { Anchor: (Width: 6); }
+  Group #RecipeGridCell2 { FlexWeight: 1; LayoutMode: Top; Padding: (Full: 4); }
+}

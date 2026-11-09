@@ -1,10 +1,5 @@
 package irai.mod.reforge.UI;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -12,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,10 +36,8 @@ import irai.mod.reforge.Common.ArmorAffinityResistanceUtils;
 import irai.mod.reforge.Common.AttackSpeedMultiHitMath;
 import irai.mod.reforge.Common.CorruptionUtils;
 import irai.mod.reforge.Common.WeaponElementalDamageUtils;
-import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
 import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
-import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.SmithyLegacyUtils;
 import irai.mod.reforge.Common.SmithyLegacyUtils.Bonuses;
 import irai.mod.reforge.Config.RefinementConfig;
@@ -64,7 +56,6 @@ import irai.mod.reforge.Util.LangLoader;
 public final class ReforgeBenchUI {
     private ReforgeBenchUI() {}
 
-    private static final String TEMPLATE_PATH      = "Common/UI/Custom/Pages/ReforgeBench.html";
     private static final String NATIVE_PAGE_UI     = "Pages/RefinementBench.ui";
     private static final String EQUIPMENT_CARD_UI  = "Pages/RefinementEquipmentCard.ui";
     private static final String MATERIAL_CARD_UI   = "Pages/RefinementMaterialCard.ui";
@@ -100,14 +91,12 @@ public final class ReforgeBenchUI {
     private static RefinementConfig refinementConfig;
     private static volatile List<String> refinementMaterialIds = List.of(DEFAULT_MATERIAL_ID);
 
-    private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> processingPlayers = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private static final int PROCESS_DURATION_MS = 1000;
     private static final int PROGRESS_TICK_MS = 50;
     private static final int MAX_RENDERED_DAMAGE_ROWS = 24;
-    private static final ThreadLocal<Boolean> nativeStatRows = ThreadLocal.withInitial(() -> false);
 
     private enum ContainerKind { HOTBAR, STORAGE }
     private enum OutcomeType { DEGRADE, DEGRADE_B, SAME, UPGRADE, JACKPOT, JACKPOT_B }
@@ -284,14 +273,6 @@ public final class ReforgeBenchUI {
         }
     }
 
-    public static void initialize() {
-        // The refinement bench uses Hytale's native custom UI and no longer needs HyUI.
-    }
-
-    public static boolean isAvailable() {
-        return true;
-    }
-
     public static void setRefinementConfig(RefinementConfig config) {
         refinementConfig = config;
         if (config != null) {
@@ -379,120 +360,13 @@ public final class ReforgeBenchUI {
             if (entityRef == null || !entityRef.isValid() || store == null) return;
             ReforgeNativePage page = new ReforgeNativePage(playerRef, snapshot, state);
             player.getPageManager().openCustomPage(entityRef, store, page);
-            openPages.put(playerRef, page);
         } catch (Exception e) {
             System.err.println("[SocketReforge] Native refinement bench open error: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
-        String eqKey = state != null ? state.equipmentKey : null;
-        String matKey = state != null ? state.materialKey : null;
-        String supKey = sanitizeSupportKey(snapshot.supports, state != null ? state.supportKey : null);
-        String status = state != null && state.statusText != null ? state.statusText : LangLoader.getUITranslation(player, "ui.reforge.status_idle");
-        int progress = state != null ? Math.max(0, Math.min(100, state.progressValue)) : 0;
-        boolean processing = state != null && state.processing;
-        if (!processing) {
-            progress = 0;
-        }
 
-        Entry selectedEquipment = resolveSelection(snapshot.equipments, eqKey);
-        Entry selectedMaterial = resolveMaterialKey(snapshot.materials, matKey);
-        List<Entry> selectedSupports = resolveSupportKeys(snapshot.supports, supKey);
-
-        MaterialRequirement requiredMaterial = getMaterialRequirement(player, selectedEquipment);
-        if (selectedMaterial == null && requiredMaterial != null) {
-            selectedMaterial = findFirstByItemId(snapshot.materials, requiredMaterial.itemId);
-            matKey = requiredMaterial.itemId;
-        }
-        MaterialRequirement materialRequirement = getMaterialRequirement(player, selectedEquipment, selectedMaterial);
-        int selectedMaterialCount = materialRequirement != null
-                ? countMaterials(snapshot.materials, materialRequirement.itemId)
-                : 0;
-        Entry materialEntry = materialRequirement != null
-                ? findFirstByItemId(snapshot.materials, materialRequirement.itemId)
-                : null;
-        String materialName = materialRequirement != null
-                ? resolveMaterialName(player, materialRequirement.itemId, materialEntry)
-                : LangLoader.getUITranslation(player, "ui.reforge.material");
-        int materialCost = materialRequirement != null ? materialRequirement.cost : DEFAULT_MATERIAL_COST;
-
-        Preview preview = buildPreview(player, selectedEquipment, selectedMaterial, selectedSupports);
-        if (!processing) {
-            if (selectedEquipment == null) {
-                status = LangLoader.getUITranslation(player, "ui.reforge.status_no_equipment");
-            } else if (preview.currentLevel >= getMaxUpgradeLevel()) {
-                status = LangLoader.getUITranslation(player, "ui.reforge.status_max_level");
-            } else if (selectedMaterialCount < materialCost) {
-                status = LangLoader.getUITranslation(player, "ui.reforge.status_need_material", materialCost, materialName);
-            } else if (LangLoader.getUITranslation(player, "ui.reforge.status_idle").equals(status)) {
-                status = LangLoader.getUITranslation(player, "ui.reforge.status_ready");
-            }
-        }
-
-        String html = loadTemplate();
-        
-        // UI translations
-        html = html.replace("{{title}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.title")));
-        html = html.replace("{{equipmentPanelTitle}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.equipment")));
-        html = html.replace("{{equipmentPanelHint}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.equipment")));
-        html = html.replace("{{supportPanelTitle}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support")));
-        html = html.replace("{{chancePanelTitle}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_outcome")));
-        html = html.replace("{{equipmentLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.equipment")));
-        html = html.replace("{{materialLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.material")));
-        html = html.replace("{{supportLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support")));
-        html = html.replace("{{metadataLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_name")));
-        html = html.replace("{{currentDamageLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.current_damage")));
-        html = html.replace("{{metadataNameLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_name")));
-        html = html.replace("{{metadataLevelLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_level")));
-        html = html.replace("{{metadataCurrentStatLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_current_stat")));
-        html = html.replace("{{metadataBaseStatLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.metadata_base_stat")));
-        html = html.replace("{{expectedOutcomeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_outcome")));
-        html = html.replace("{{expectedDamageLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.expected_damage")));
-        html = html.replace("{{refineProgressLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.refine_progress")));
-        html = html.replace("{{consumesMaterialText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.consumes_material", materialCost, materialName)));
-        html = html.replace("{{ironHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.iron_hammer_info")));
-        html = html.replace("{{thoriumHammerInfoText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.thorium_hammer_info")));
-        html = html.replace("{{refineButtonText}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.button_refine")));
-        
-        // Dynamic content
-        html = html.replace("{{equipmentCards}}", buildEquipmentCards(player, snapshot.equipments, eqKey));
-        html = html.replace("{{materialCards}}", buildMaterialCards(player, snapshot.materials, matKey));
-        html = html.replace("{{supportCards}}", buildSupportCards(player, snapshot.supports, supKey));
-        html = html.replace("{{selectedEquipmentIcon}}", buildSelectedEquipmentIcon(selectedEquipment));
-        html = html.replace("{{supportDurabilityText}}", escapeHtml(buildSupportDurabilityText(player, selectedBreakSupport(selectedSupports))));
-        html = html.replace("{{materialCountText}}", LangLoader.getUITranslation(player, "ui.reforge.material_count", materialName, selectedMaterialCount));
-        html = html.replace("{{currentStatsText}}", escapeHtml(preview.currentStats));
-        html = html.replace("{{expectedStatsText}}", escapeHtml(preview.expectedStats));
-        html = html.replace("{{chanceBreakLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_break")));
-        html = html.replace("{{chanceDegradeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_degrade")));
-        html = html.replace("{{chanceSameLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_same")));
-        html = html.replace("{{chanceUpgradeLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_upgrade")));
-        html = html.replace("{{chanceJackpotLabel}}", escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.chance_jackpot")));
-        html = html.replace("{{chanceBreakText}}", escapeHtml(preview.chanceBreak));
-        html = html.replace("{{chanceDegradeText}}", escapeHtml(preview.chanceDegrade));
-        html = html.replace("{{chanceSameText}}", escapeHtml(preview.chanceSame));
-        html = html.replace("{{chanceUpgradeText}}", escapeHtml(preview.chanceUpgrade));
-        html = html.replace("{{chanceJackpotText}}", escapeHtml(preview.chanceJackpot));
-        html = html.replace("{{chanceNoteText}}", escapeHtml(preview.chanceNote));
-        html = html.replace("{{expectedDamageText}}", escapeHtml(preview.expectedDamage));
-        html = html.replace("{{expectedDamageLine1Text}}", escapeHtml(preview.expectedDamageLine1));
-        html = html.replace("{{expectedDamageLine2Text}}", escapeHtml(preview.expectedDamageLine2));
-        html = html.replace("{{expectedDamageLine3Text}}", escapeHtml(preview.expectedDamageLine3));
-        html = html.replace("{{currentDamageRows}}", buildCurrentDamageRowsHtml(player, selectedEquipment));
-        html = html.replace("{{expectedDamageRows}}", buildExpectedDamageRowsHtml(player, selectedEquipment));
-        html = html.replace("{{metadataNameText}}", escapeHtml(buildMetadataName(selectedEquipment)));
-        html = html.replace("{{metadataLevelText}}", escapeHtml(buildMetadataLevel(selectedEquipment)));
-        html = html.replace("{{metadataCurrentStatText}}", escapeHtml(buildMetadataCurrentStat(player, selectedEquipment)));
-        html = html.replace("{{metadataBaseStatText}}", escapeHtml(buildMetadataBaseStat(player, selectedEquipment)));
-        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(player, selectedEquipment)));
-        html = html.replace("{{progressValue}}", String.valueOf(progress));
-        html = html.replace("{{statusText}}", escapeHtml(status));
-        html = html.replace("{{processDisabledAttr}}", shouldDisable(processing, selectedEquipment, selectedMaterialCount, materialCost) ? "disabled=\"true\"" : "");
-        pendingSelections.put(player.getPlayerRef(), new SelectionState(eqKey, matKey, supKey == null ? "" : supKey, status, progress, processing));
-        return html;
-    }
 
     private static boolean shouldDisable(boolean processing, Entry selectedEquipment, int materialCount, int materialCost) {
         if (processing) return true;
@@ -502,154 +376,19 @@ public final class ReforgeBenchUI {
         return materialCount < materialCost;
     }
 
-    private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
-        if (entries.isEmpty()) {
-            return "<option value=\"\" selected=\"true\">" + escapeHtml(emptyLabel) + "</option>";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            String key = String.valueOf(i);
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) sb.append(" selected=\"true\"");
-            sb.append(">").append(escapeHtml(entry.displayName)).append(" x").append(entry.quantity).append("</option>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildSupportOptions(Player player, List<Entry> entries, String selectedKey) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<option value=\"\"");
-        if (selectedKey == null || selectedKey.isEmpty()) {
-            sb.append(" selected=\"true\"");
-        }
-        sb.append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support_none"))).append("</option>");
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            String key = String.valueOf(i);
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) sb.append(" selected=\"true\"");
-            sb.append(">").append(escapeHtml(entry.displayName)).append(" ").append(escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support_guard"))).append(" x").append(entry.quantity).append("</option>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildEquipmentCards(Player player, List<Entry> entries, String selectedKey) {
-        if (entries == null || entries.isEmpty()) {
-            return "<p style=\"text-align:center;\">" + escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.no_equipment")) + "</p>";
-        }
-        StringBuilder armor = new StringBuilder();
-        StringBuilder weapons = new StringBuilder();
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            if (entry == null || entry.item == null || entry.item.isEmpty()) continue;
-            String html = buildEquipmentCard(entry, i, String.valueOf(i).equals(selectedKey));
-            if (ReforgeEquip.isArmor(entry.item) && !ReforgeEquip.isWeapon(entry.item)) {
-                armor.append(html);
-            } else {
-                weapons.append(html);
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        if (armor.length() > 0) {
-            sb.append("<p style=\"font-weight:bold;\">Armor</p>").append(armor);
-        }
-        if (weapons.length() > 0) {
-            sb.append("<p style=\"font-weight:bold;\">Weapon</p>").append(weapons);
-        }
-        return sb.toString();
-    }
 
-    private static String buildEquipmentCard(Entry entry, int index, boolean selected) {
-        int level = ReforgeEquip.getLevelFromItem(entry.item);
-        String tierColor = tierColorForLevel(level);
-        return "<button id=\"" + equipmentCardButtonId(index) + "\" class=\"raw-button\" style=\"anchor-width:360; anchor-height:82; padding:0; border:0; background-color:#00000000;\">"
-                + "<div style=\"anchor-width:360; anchor-height:82; layout-mode:full; background-color:" + (selected ? "#2B3F6D" : "#151526") + ";\">"
-                + "<div style=\"anchor-width:344; anchor-height:66; layout-mode:left; padding:8;\">"
-                + "<div style=\"anchor-width:66; anchor-height:66; padding:3; background-color:" + tierColor + ";\">"
-                + "<div style=\"anchor-width:60; anchor-height:60; background-image:url('slot_bg.png'); background-size:100% 100%; background-repeat:no-repeat; padding:3;\">"
-                + "<span class=\"item-icon\" data-hyui-item-id=\"" + escapeHtml(entry.itemId) + "\" style=\"anchor-width:54; anchor-height:54;\"></span>"
-                + "</div>"
-                + "</div>"
-                + "<div style=\"anchor-width:14;\"></div>"
-                + "<div style=\"anchor-width:256; anchor-height:60; layout-mode:top; spacing:3;\">"
-                + "<div style=\"anchor-width:256; layout-mode:left;\">"
-                + "<p style=\"anchor-width:184; font-weight:bold; white-space:nowrap;\">" + escapeHtml(entry.displayName) + "</p>"
-                + "<p style=\"anchor-width:62; text-align:right; font-size:11; color:#FFD24D; visibility:" + (selected ? "shown" : "hidden") + ";\">SELECTED</p>"
-                + "</div>"
-                + "<p style=\"font-size:12;\">+" + level + " | " + tierLabelForLevel(level) + "</p>"
-                + "</div></div></div></button>";
-    }
 
-    private static String buildMaterialCards(Player player, List<Entry> entries, String selectedMaterialId) {
-        StringBuilder sb = new StringBuilder();
-        List<RefinementConfig.MaterialTier> tiers = materialTierCards();
-        for (int i = 0; i < tiers.size(); i++) {
-            RefinementConfig.MaterialTier tier = tiers.get(i);
-            String itemId = tier.itemId == null || tier.itemId.isBlank() ? DEFAULT_MATERIAL_ID : tier.itemId;
-            int count = countMaterials(entries, itemId);
-            boolean selected = itemId.equalsIgnoreCase(selectedMaterialId);
-            String name = resolveMaterialName(player, itemId, findFirstByItemId(entries, itemId));
-            sb.append("<button id=\"").append(materialCardButtonId(i)).append("\" class=\"raw-button\" style=\"anchor-width:92; anchor-height:92; padding:0; border:0; background-color:#00000000;\">")
-                    .append("<div style=\"anchor-width:92; anchor-height:92; padding:4; background-color:")
-                    .append(selected ? "#FFD24D" : tierColorForIndex(i))
-                    .append(";\">")
-                    .append("<div style=\"anchor-width:84; anchor-height:84; layout-mode:full; background-color:#151526; padding:4;\">")
-                    .append("<span class=\"item-icon\" data-hyui-item-id=\"").append(escapeHtml(itemId)).append("\" style=\"anchor-width:58; anchor-height:58;\"></span>")
-                    .append("<div style=\"layout-mode:top;\"><div style=\"flex-weight:1;\"></div><div style=\"layout-mode:left;\"><div style=\"flex-weight:1;\"></div>")
-                    .append("<p style=\"anchor-width:34; anchor-height:18; text-align:center; background-color:#000000AA; font-size:12;\">x").append(count).append("</p>")
-                    .append("</div></div></div></div></button>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildSupportCards(Player player, List<Entry> entries, String selectedSupportId) {
-        StringBuilder sb = new StringBuilder();
-        Set<String> selectedSupportIds = supportSelectionSet(selectedSupportId);
-        boolean noneSelected = selectedSupportIds.isEmpty();
-        sb.append("<button id=\"").append(supportNoneButtonId()).append("\" class=\"raw-button\" style=\"anchor-width:360; anchor-height:86; padding:0; border:0; background-color:#00000000;\">")
-                .append("<div style=\"anchor-width:344; anchor-height:70; layout-mode:left; background-color:")
-                .append(noneSelected ? "#2B3F6D" : "#151526")
-                .append(";\">")
-                .append("<div style=\"anchor-width:10;\"></div>")
-                .append("<div style=\"anchor-width:56; anchor-height:56; background-image:url('slot_bg.png'); background-size:100% 100%;\"></div>")
-                .append("<div style=\"anchor-width:16;\"></div><div style=\"anchor-width:250; layout-mode:top;\">")
-                .append("<p style=\"font-weight:bold;\">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.reforge.support_none"))).append("</p>")
-                .append("<p style=\"font-size:11;\">No support material.</p>")
-                .append("</div></div></button>");
 
-        List<Entry> supports = combinedSupports(entries);
-        for (int i = 0; i < supports.size(); i++) {
-            Entry entry = supports.get(i);
-            boolean selected = selectedSupportIds.contains(normalizeSupportId(entry.itemId));
-            sb.append("<button id=\"").append(supportCardButtonId(i)).append("\" class=\"raw-button\" style=\"anchor-width:360; anchor-height:98; padding:0; border:0; background-color:#00000000;\">")
-                    .append("<div style=\"anchor-width:344; anchor-height:82; layout-mode:left; background-color:")
-                    .append(selected ? "#2B3F6D" : "#151526")
-                    .append(";\">")
-                    .append("<div style=\"anchor-width:10;\"></div>")
-                    .append("<div style=\"anchor-width:60; anchor-height:60; padding:2; background-color:#5A451E;\">")
-                    .append("<span class=\"item-icon\" data-hyui-item-id=\"").append(escapeHtml(entry.itemId)).append("\" style=\"anchor-width:56; anchor-height:56;\"></span>")
-                    .append("</div><div style=\"anchor-width:16;\"></div><div style=\"anchor-width:246; layout-mode:top; spacing:2;\">")
-                    .append("<p style=\"font-weight:bold; white-space:nowrap;\">").append(escapeHtml(entry.displayName)).append("</p>")
-                    .append("<p style=\"font-size:11;\">").append(escapeHtml(supportDescription(player, entry))).append("</p>")
-                    .append("<p style=\"font-size:12;\">Held: ").append(entry.quantity).append("</p>")
-                    .append("</div></div></button>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildSelectedEquipmentIcon(Entry selectedEquipment) {
-        if (selectedEquipment == null || selectedEquipment.item == null || selectedEquipment.item.isEmpty()) {
-            return "<div style=\"anchor-width:86; anchor-height:86; padding:3; background-color:#2b2b3a;\">"
-                    + "<div style=\"anchor-width:80; anchor-height:80; background-image:url('slot_bg.png'); background-size:100% 100%;\"></div>"
-                    + "</div>";
-        }
-        int level = ReforgeEquip.getLevelFromItem(selectedEquipment.item);
-        return "<div style=\"anchor-width:92; anchor-height:92; padding:4; background-color:" + tierColorForLevel(level) + ";\">"
-                + "<div style=\"anchor-width:84; anchor-height:84; background-color:#151526; padding:2;\">"
-                + "<span class=\"item-icon\" data-hyui-item-id=\"" + escapeHtml(selectedEquipment.itemId) + "\" style=\"anchor-width:80; anchor-height:80;\"></span>"
-                + "</div></div>";
-    }
+
+
+
+
+
+
 
     private static List<RefinementConfig.MaterialTier> materialTierCards() {
         List<RefinementConfig.MaterialTier> tiers = refinementConfig != null ? refinementConfig.getMaterialTiers() : List.of();
@@ -792,21 +531,13 @@ public final class ReforgeBenchUI {
         return itemId == null ? "" : itemId.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static String equipmentCardButtonId(int index) {
-        return "reforgeEquipmentCard_" + index;
-    }
 
-    private static String materialCardButtonId(int index) {
-        return "reforgeMaterialCard_" + index;
-    }
 
-    private static String supportCardButtonId(int index) {
-        return "reforgeSupportCard_" + index;
-    }
 
-    private static String supportNoneButtonId() {
-        return "reforgeSupportNoneCard";
-    }
+
+
+
+
 
     private static String tierLabelForLevel(int level) {
         return "T" + Math.max(1, Math.min(3, tierIndexForLevel(level) + 1));
@@ -823,17 +554,9 @@ public final class ReforgeBenchUI {
         return 2;
     }
 
-    private static String tierColorForLevel(int level) {
-        return tierColorForIndex(tierIndexForLevel(level));
-    }
 
-    private static String tierColorForIndex(int index) {
-        return switch (Math.max(0, Math.min(2, index))) {
-            case 0 -> "#5A451E";
-            case 1 -> "#55FFFF";
-            default -> "#AA55FF";
-        };
-    }
+
+
 
     private static String supportDescription(Player player, Entry support) {
         RefinementConfig.SupportMaterial supportMaterial = supportMaterial(support);
@@ -1289,7 +1012,6 @@ public final class ReforgeBenchUI {
         public void onDismiss(Ref<EntityStore> playerRef, Store<EntityStore> store) {
             dismissed = true;
             processingPlayers.remove(owner);
-            openPages.remove(owner, this);
             pendingSelections.remove(owner);
             super.onDismiss(playerRef, store);
         }
@@ -1393,8 +1115,8 @@ public final class ReforgeBenchUI {
             appendEquipmentCards(commands, events, player, equipmentKey);
             appendMaterialCards(commands, events, player, materialKey);
             appendSupportCards(commands, events, player, supportKey);
-            appendStatRows(commands, "#CurrentDamageRows", buildNativeDamageRows(player, selectedEquipment, false));
-            appendStatRows(commands, "#ExpectedDamageRows", buildNativeDamageRows(player, selectedEquipment, true));
+            appendStatRows(commands, "#CurrentDamageRows", buildDamageRows(player, selectedEquipment, false));
+            appendStatRows(commands, "#ExpectedDamageRows", buildDamageRows(player, selectedEquipment, true));
         }
 
         private void appendEquipmentCards(UICommandBuilder commands, UIEventBuilder events,
@@ -1715,21 +1437,9 @@ public final class ReforgeBenchUI {
         return null;
     }
 
-    private static int findMaterialIndex(List<Entry> entries, String itemId) {
-        if (entries == null || entries.isEmpty() || itemId == null) return -1;
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            if (entry != null && entry.itemId != null && entry.itemId.equalsIgnoreCase(itemId)) {
-                return i;
-            }
-        }
-        return -1;
-    }
 
-    private static boolean materialMatches(Entry entry, String itemId) {
-        if (entry == null || entry.itemId == null || itemId == null) return false;
-        return entry.itemId.equalsIgnoreCase(itemId);
-    }
+
+
 
     private static String resolveMaterialName(Player player, String itemId, Entry entry) {
         if (entry != null && entry.displayName != null && !entry.displayName.isBlank()) {
@@ -1787,10 +1497,7 @@ public final class ReforgeBenchUI {
         return supportMaterial(itemId) != null;
     }
 
-    private static boolean isHammerItem(String itemId) {
-        RefinementConfig.SupportMaterial support = supportMaterial(itemId);
-        return support != null && support.usesDurability();
-    }
+
 
     private static RefinementConfig.SupportMaterial supportMaterial(Entry support) {
         return support == null ? null : supportMaterial(support.itemId);
@@ -1999,25 +1706,7 @@ public final class ReforgeBenchUI {
         UIInventoryUtils.removeItem(player, entry.container == ContainerKind.HOTBAR, entry.slot, 1);
     }
 
-    private static String buildMetadata(Player player, Entry equipment) {
-        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return t(player, "ui.reforge.metadata_no_equipment");
-        }
-        ItemStack item = equipment.item;
-        int level = ReforgeEquip.getLevelFromItem(item);
 
-        StringBuilder sb = new StringBuilder();
-        sb.append(t(player, "ui.reforge.metadata_line_name", equipment.displayName)).append("\n");
-        sb.append(t(player, "ui.reforge.metadata_line_level", level));
-        if (ReforgeEquip.hasSoftcorePenalty(item)) {
-            sb.append("\n").append(t(player,
-                    "ui.reforge.metadata_softcore_value",
-                    format3(ReforgeEquip.getSoftcoreStatMultiplier(item)),
-                    formatPercent(1.0 - ReforgeEquip.getSoftcoreStatMultiplier(item)),
-                    ReforgeEquip.getSoftcoreBreakCount(item)));
-        }
-        return sb.toString();
-    }
 
     private static String buildMetadataName(Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
@@ -2026,7 +1715,7 @@ public final class ReforgeBenchUI {
         return equipment.displayName;
     }
 
-    private static String buildCurrentDamageRowsHtml(Player player, Entry equipment) {
+    private static String buildCurrentDamageRows(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return statRow(t(player, "ui.reforge.no_equipment"), t(player, "ui.reforge.preview_select_item"));
         }
@@ -2078,7 +1767,7 @@ public final class ReforgeBenchUI {
         return sb.toString();
     }
 
-    private static String buildExpectedDamageRowsHtml(Player player, Entry equipment) {
+    private static String buildExpectedDamageRows(Player player, Entry equipment) {
         if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
             return statRow(t(player, "ui.reforge.expected_outcome"), t(player, "ui.reforge.preview_select_equipment_note"));
         }
@@ -2139,65 +1828,24 @@ public final class ReforgeBenchUI {
     }
 
     private static String statRow(String label, String value) {
-        return statRow(label, value, "#D8DEE9", "#FFFFFF");
+        return (label == null ? "" : label) + "\t" + (value == null ? "" : value) + "\n";
     }
 
-    private static String statRow(String label, String value, String labelColor, String valueColor) {
-        if (Boolean.TRUE.equals(nativeStatRows.get())) {
-            return (label == null ? "" : label) + "\t" + (value == null ? "" : value) + "\n";
-        }
-        return "<div style=\"anchor-width:338; layout-mode:left; spacing:8;\">"
-                + "<p style=\"anchor-width:126; font-size:14; color:" + escapeHtml(labelColor) + "; white-space:nowrap;\">"
-                + escapeHtml(label)
-                + "</p><p style=\"anchor-width:204; font-size:14; color:" + escapeHtml(valueColor) + "; white-space:nowrap;\">"
-                + escapeHtml(value)
-                + "</p></div>";
+    private static String statRow(String label, String value, String ignoredLabelColor, String ignoredValueColor) {
+        // The native RefinementStatRow.ui document owns colors and layout.
+        return statRow(label, value);
     }
 
-    private static String buildNativeDamageRows(Player player, Entry equipment, boolean expected) {
-        boolean previous = nativeStatRows.get();
-        nativeStatRows.set(true);
-        try {
-            return expected
-                    ? buildExpectedDamageRowsHtml(player, equipment)
-                    : buildCurrentDamageRowsHtml(player, equipment);
-        } finally {
-            nativeStatRows.set(previous);
-        }
+    private static String buildDamageRows(Player player, Entry equipment, boolean expected) {
+        return expected ? buildExpectedDamageRows(player, equipment)
+                : buildCurrentDamageRows(player, equipment);
     }
 
-    private static String beforeAfter(double before, double after) {
-        return formatDamageValue(before) + " → " + formatDamageValue(after);
-    }
 
-    private static EquipmentDamageTooltipMath.StatSummary weaponSummary(ItemStack item, int level, double baseOverride) {
-        SocketData socketData = SocketManager.getSocketData(item);
-        double partsMultiplier = partsDamageMultiplier(item);
-        double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(item);
-        double ascensionMultiplier = AscensionUtils.getAscensionBaseMultiplier(item);
-        if (baseOverride > 0.0) {
-            return new EquipmentDamageTooltipMath.StatSummary(
-                    baseOverride,
-                    EquipmentDamageTooltipMath.computeBuffedWeaponDamage(
-                            item.getItemId(),
-                            baseOverride,
-                            level,
-                            socketData,
-                            partsMultiplier,
-                            softcoreMultiplier,
-                            ascensionMultiplier));
-        }
-        return EquipmentDamageTooltipMath.computeWeaponDamageSummary(
-                item.getItemId(),
-                level,
-                socketData,
-                partsMultiplier,
-                softcoreMultiplier);
-    }
 
-    private static double weaponDamage(ItemStack item, double baseDamage, int level) {
-        return weaponSummary(item, level, baseDamage).getBuffedValue();
-    }
+
+
+
 
     private static WeaponDamageProfile weaponProfile(Player player, ItemStack item, int level, double baseOverride) {
         SocketData socketData = SocketManager.getSocketData(item);
@@ -2400,98 +2048,16 @@ public final class ReforgeBenchUI {
         return "+" + ReforgeEquip.getLevelFromItem(equipment.item);
     }
 
-    private static String buildSupportDurabilityText(Player player, Entry support) {
-        if (support == null || support.item == null || support.item.isEmpty()) {
-            return t(player, "ui.reforge.support_durability_none");
-        }
-        ItemStack item = support.item;
-        double max = item.getMaxDurability();
-        double cur = item.getDurability();
-        if (max <= 0.0d) {
-            return t(player, "ui.reforge.support_durability_na");
-        }
-        int maxInt = (int) Math.round(max);
-        int curInt = (int) Math.round(cur);
-        int percent = (int) Math.round((cur / max) * 100.0);
-        percent = Math.max(0, Math.min(100, percent));
-        return t(player, "ui.reforge.support_durability_value", percent, curInt, maxInt);
-    }
 
-    private static String buildMetadataCurrentStat(Player player, Entry equipment) {
-        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return t(player, "ui.reforge.metadata_current_stat_none");
-        }
-        ItemStack item = equipment.item;
-        boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
-        int level = ReforgeEquip.getLevelFromItem(item);
-        double currentMult = ReforgeEquip.getEffectiveRefinementMultiplier(item, isArmor);
-        String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
-        return t(player, "ui.reforge.metadata_current_stat_value", statLabel, format3(currentMult), formatPercent(currentMult - 1.0));
-    }
 
-    private static String buildMetadataBaseStat(Player player, Entry equipment) {
-        if (equipment == null || equipment.item == null || equipment.item.isEmpty()) {
-            return t(player, "ui.reforge.metadata_base_stat_none");
-        }
-        ItemStack item = equipment.item;
-        String itemId = item.getItemId();
-        if (itemId == null || itemId.isBlank()) {
-            return t(player, "ui.reforge.metadata_base_stat_none");
-        }
-        boolean isArmor = ReforgeEquip.isArmor(item) && !ReforgeEquip.isWeapon(item);
-        int level = ReforgeEquip.getLevelFromItem(item);
-        SocketData socketData = SocketManager.getSocketData(item);
-        double softcoreMultiplier = ReforgeEquip.getSoftcoreStatMultiplier(item);
-        if (isArmor) {
-            EquipmentDamageTooltipMath.StatSummary summary =
-                    EquipmentDamageTooltipMath.computeArmorDefenseSummary(itemId, level, socketData, softcoreMultiplier);
-            if (summary.getBaseValue() <= 0.0) {
-                return t(player, "ui.reforge.metadata_base_defense_na");
-            }
-            return t(player, "ui.reforge.metadata_base_defense_value",
-                    formatDamageValue(summary.getBaseValue()),
-                    formatDamageValue(summary.getBuffedValue()));
-        }
-        EquipmentDamageTooltipMath.StatSummary summary =
-                EquipmentDamageTooltipMath.computeWeaponDamageSummary(itemId, level, socketData, 1.0, softcoreMultiplier);
-        if (summary.getBaseValue() <= 0.0) {
-            return t(player, "ui.reforge.metadata_base_damage_na");
-        }
-        return t(player, "ui.reforge.metadata_base_damage_value",
-                formatDamageValue(summary.getBaseValue()),
-                formatDamageValue(summary.getBuffedValue()));
-    }
 
-    private static String loadTemplate() {
-        return UITemplateUtils.loadTemplate(
-                ReforgeBenchUI.class,
-                TEMPLATE_PATH,
-                "<div><p>Reforge Bench UI template missing.</p></div>",
-                "ReforgeBenchUI");
-    }
+
+
+
+
 
     private static Entry resolveSelection(List<Entry> entries, String value) {
-        return HyUIReflectionUtils.resolveIndexSelection(entries, value);
-    }
-
-    private static String extractEventValue(Object eventObj) {
-        return HyUIReflectionUtils.extractEventValue(eventObj);
-    }
-
-    private static String getContextValue(Object ctxObj, String... keys) {
-        return HyUIReflectionUtils.getContextValue(ctxObj, keys);
-    }
-
-    private static Object getStore(PlayerRef playerRef) throws Exception {
-        return HyUIReflectionUtils.getStore(playerRef);
-    }
-
-    private static void closePageIfOpen(PlayerRef playerRef) {
-        HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
-    }
-
-    private static String escapeHtml(String text) {
-        return UITemplateUtils.escapeHtml(text);
+        return UIInventoryUtils.resolveIndex(entries, value);
     }
 
     private static String format3(double value) {
@@ -2621,7 +2187,5 @@ public final class ReforgeBenchUI {
         return sb.toString();
     }
 
-    private static String antiDegradationName(Player player) {
-        return LangLoader.resolveTranslation("items." + ANTI_DEGRADATION_ID + ".name", LangLoader.getPlayerLanguage(player));
-    }
+
 }

@@ -7,8 +7,8 @@ import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
@@ -48,11 +48,7 @@ public class ResonantCompendiumUse extends SimpleInteraction {
         }
 
         if (type == InteractionType.Secondary) {
-            if (ResonantCompendiumUI.isAvailable()) {
-                ResonantCompendiumUI.open(player, context.getHeldItemSlot());
-            } else {
-                player.getPlayerRef().sendMessage(Message.raw("HyUI not installed - compendium UI disabled."));
-            }
+            ResonantCompendiumUI.open(player, context.getHeldItemSlot());
             return;
         }
 

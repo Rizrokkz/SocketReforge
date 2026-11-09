@@ -1,7 +1,8 @@
 package irai.mod.reforge.UI;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -10,14 +11,27 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
+import com.hypixel.hytale.server.core.ui.DropdownEntryInfo;
+import com.hypixel.hytale.server.core.ui.LocalizableString;
+import com.hypixel.hytale.server.core.ui.builder.EventData;
+import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
+import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
+import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
-import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
-import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Config.AscensionConfig;
 import irai.mod.reforge.Config.CorruptionConfig;
@@ -34,15 +48,34 @@ import irai.mod.reforge.Socket.ResonanceSystem;
 import irai.mod.reforge.Util.LangLoader;
 
 /**
- * OP-only live gameplay config editor backed by HyUI.
+ * OP-only live gameplay config editor backed by native Hytale UI.
  */
 public final class RuntimeConfigUI {
     private RuntimeConfigUI() {}
 
-    private static final String HYUI_PAGE_BUILDER = "au.ellie.hyui.builders.PageBuilder";
-    private static final String HYUI_PLUGIN = "au.ellie.hyui.HyUIPlugin";
-    private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
-    private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/RuntimeConfigEditor.html";
+    private static final String NATIVE_PAGE_UI = "Pages/RuntimeConfigEditor.ui";
+    private static final String CATEGORY_CARD_UI = "Pages/RuntimeConfigCategoryCard.ui";
+    private static final String GROUP_CARD_UI = "Pages/RuntimeConfigGroupCard.ui";
+    private static final String NUMERIC_CARD_UI = "Pages/RuntimeConfigNumericCard.ui";
+    private static final String TOGGLE_CARD_UI = "Pages/RuntimeConfigToggleCard.ui";
+    private static final String TEXT_CARD_UI = "Pages/RuntimeConfigTextCard.ui";
+    private static final String SELECT_CARD_UI = "Pages/RuntimeConfigSelectCard.ui";
+    private static final String ARRAY_SECTION_UI = "Pages/RuntimeConfigArraySection.ui";
+    private static final String ARRAY_ENTRY_UI = "Pages/RuntimeConfigArrayEntry.ui";
+    private static final String STRUCTURED_ARRAY_HEADER_UI = "Pages/RuntimeConfigStructuredHeader.ui";
+    private static final String STRUCTURED_ARRAY_ENTRY_UI = "Pages/RuntimeConfigStructuredEntry.ui";
+    private static final String COLOR_SPIRIT_HEADER_UI = "Pages/RuntimeConfigColorSpiritHeader.ui";
+    private static final String COLOR_SPIRIT_NPC_UI = "Pages/RuntimeConfigColorSpiritNpc.ui";
+    private static final String ARRAY_RULE_ENTRY_UI = "Pages/RuntimeConfigRuleEntry.ui";
+    private static final String ARRAY_LOOT_ENTRY_UI = "Pages/RuntimeConfigLootEntry.ui";
+    private static final String ARRAY_SUPPORT_ENTRY_UI = "Pages/RuntimeConfigSupportEntry.ui";
+    private static final String ARRAY_ABILITY_ENTRY_UI = "Pages/RuntimeConfigAbilityEntry.ui";
+    private static final String WEIGHT_HEADER_UI = "Pages/RuntimeConfigWeightHeader.ui";
+    private static final String WEIGHT_ROW_UI = "Pages/RuntimeConfigWeightRow.ui";
+    private static final String NUMERIC_TABLE_HEADER_UI = "Pages/RuntimeConfigNumericTableHeader.ui";
+    private static final String NUMERIC_TABLE_ROW_UI = "Pages/RuntimeConfigNumericTableRow.ui";
+    private static final String EDITOR_SCHEMA_RESOURCE = "/Server/Config/RuntimeConfigEditor.json";
+    private static final int MAX_STRUCTURED_ARRAY_FIELDS = 12;
     private static final String RESET_DEFAULTS_BUTTON = "resetDefaultsButton";
     private static final String REFINE_RECALCULATE_WEIGHTS_BUTTON = "recalculateWeightsButton";
 
@@ -119,19 +152,6 @@ public final class RuntimeConfigUI {
     private static final String DEFAULT_STATUS_KEY = "ui.runtime_config.status_default";
     private static final String DEFAULT_STATUS_FALLBACK =
             "Changes apply live and save immediately.\nUse Reload All From Disk to discard in-memory edits.";
-    private static final String COMPACT_DROPDOWN_ATTRS = " class=\"default-style\"";
-    private static final int ABILITY_MAPPING_BOTTOM_SPACER_CARDS = 5;
-    private static final int CATEGORY_WIDTH = 848;
-    private static final int GROUP_WIDTH = 828;
-    private static final int GROUP_LIST_COLUMN_WIDTH = 270;
-    private static final int CONTROL_PANEL_WIDTH = 550;
-    private static final int GROUP_PANEL_HEIGHT = 420;
-    private static final int CONTROL_COLUMN_WIDTH = 270;
-    private static final int VALUE_WIDTH = 150;
-    private static final int DIVIDER_WIDTH = 792;
-    private static final int PICKER_PAGE_SIZE = 7;
-    private static final int CONTROL_PAGE_SIZE = 5;
-    private static final int SPIRIT_MAPPING_BOTTOM_SPACER_CARDS = 5;
     private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?[0-9]*\\.?[0-9]+");
 
     private static final double[] DEFAULT_SOCKET_SUCCESS = {0.90, 0.75, 0.55, 0.35};
@@ -146,25 +166,21 @@ public final class RuntimeConfigUI {
             {0.60, 0.30, 0.095, 0.005}
     };
 
-    private static boolean hyuiAvailable = false;
     private static ReforgePlugin plugin;
 
-    private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
+    private static final Map<PlayerRef, NativeRuntimeConfigPage> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, ViewState> viewStates = new ConcurrentHashMap<>();
     private static final List<CategorySection> categories = new ArrayList<>();
     private static final List<ControlEntry> controls = new ArrayList<>();
+    private static final Map<String, String> groupLayouts = new LinkedHashMap<>();
+    private static final List<String> categoryOrder = new ArrayList<>();
+    private static final Map<String, List<String>> groupOrder = new LinkedHashMap<>();
 
     private enum DisplayKind {
         INTEGER,
         PERCENT,
         MULTIPLIER,
         TOGGLE
-    }
-
-    private enum PickerMode {
-        NONE,
-        CATEGORY,
-        GROUP
     }
 
     private enum AbilityField {
@@ -211,30 +227,13 @@ public final class RuntimeConfigUI {
         String activeCategoryId;
         String activeGroupId;
         String statusText;
-        PickerMode picker;
-        int pickerPage;
-        int controlsPage;
         final Map<String, String> draftValues = new LinkedHashMap<>();
+        final Map<String, List<String>> arrayDrafts = new LinkedHashMap<>();
 
-        ViewState(String activeCategoryId, String activeGroupId, String statusText, PickerMode picker, int pickerPage, int controlsPage) {
+        ViewState(String activeCategoryId, String activeGroupId, String statusText) {
             this.activeCategoryId = activeCategoryId;
             this.activeGroupId = activeGroupId;
             this.statusText = statusText;
-            this.picker = picker == null ? PickerMode.NONE : picker;
-            this.pickerPage = Math.max(0, pickerPage);
-            this.controlsPage = Math.max(0, controlsPage);
-        }
-    }
-
-    private static final class PickerEntry {
-        final String id;
-        final String title;
-        final String summary;
-
-        private PickerEntry(String id, String title, String summary) {
-            this.id = id == null ? "" : id;
-            this.title = title == null ? "" : title;
-            this.summary = summary == null ? "" : summary;
         }
     }
 
@@ -498,14 +497,178 @@ public final class RuntimeConfigUI {
         }
     }
 
+    private record ArraySection(String id, String title, String configName) {}
+
     public static void initialize(ReforgePlugin pluginInstance) {
         plugin = pluginInstance;
-        hyuiAvailable = HyUIReflectionUtils.detectHyUi(HYUI_PAGE_BUILDER, HYUI_PLUGIN, "RuntimeConfigUI");
         registerControls();
+        loadGroupLayouts();
+        sortRegistryFromSchema();
+    }
+
+    private static void loadGroupLayouts() {
+        groupLayouts.clear();
+        categoryOrder.clear();
+        groupOrder.clear();
+        try (var input = RuntimeConfigUI.class.getResourceAsStream(EDITOR_SCHEMA_RESOURCE)) {
+            if (input == null) return;
+            JsonObject root = JsonParser.parseReader(new java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            var categoryArray = root.getAsJsonArray("categories");
+            if (categoryArray == null) return;
+            categoryArray.forEach(categoryElement -> {
+                if (!categoryElement.isJsonObject()) return;
+                JsonObject category = categoryElement.getAsJsonObject();
+                String categoryId = category.has("id") ? category.get("id").getAsString() : "";
+                if (!categoryId.isBlank()) categoryOrder.add(categoryId);
+                var groups = category.getAsJsonArray("groups");
+                if (groups == null) return;
+                List<String> orderedGroups = new ArrayList<>();
+                groups.forEach(groupElement -> {
+                    if (!groupElement.isJsonObject()) return;
+                    JsonObject group = groupElement.getAsJsonObject();
+                    if (group.has("id")) orderedGroups.add(group.get("id").getAsString());
+                    if (group.has("id") && group.has("layout")) {
+                        groupLayouts.put(group.get("id").getAsString(), group.get("layout").getAsString());
+                    }
+                });
+                if (!categoryId.isBlank()) groupOrder.put(categoryId, orderedGroups);
+            });
+        } catch (Exception e) {
+            System.err.println("[SocketReforge] Could not read runtime config editor schema: " + e.getMessage());
+        }
+    }
+
+    private static String groupLayout(String groupId) {
+        return groupLayouts.getOrDefault(groupId, "setting_cards");
+    }
+
+    private static void sortRegistryFromSchema() {
+        categories.sort((left, right) -> compareSchemaOrder(categoryOrder, left.id, right.id));
+        for (CategorySection category : categories) {
+            List<String> order = groupOrder.get(category.id);
+            if (order != null) category.groups.sort((left, right) -> compareSchemaOrder(order, left.id, right.id));
+        }
+    }
+
+    private static int compareSchemaOrder(List<String> order, String left, String right) {
+        int leftIndex = order == null ? -1 : order.indexOf(left);
+        int rightIndex = order == null ? -1 : order.indexOf(right);
+        if (leftIndex < 0) leftIndex = Integer.MAX_VALUE;
+        if (rightIndex < 0) rightIndex = Integer.MAX_VALUE;
+        return Integer.compare(leftIndex, rightIndex);
+    }
+
+    private static String layoutLabel(String layout) {
+        if (layout == null || layout.isBlank()) return "";
+        String[] parts = layout.replace('_', ' ').split("\\s+");
+        StringBuilder label = new StringBuilder("LAYOUT  ");
+        for (String part : parts) {
+            if (part.isBlank()) continue;
+            if (label.length() > 8) label.append(' ');
+            label.append(part.substring(0, 1).toUpperCase(Locale.ROOT)).append(part.substring(1));
+        }
+        return label.toString();
+    }
+
+    private static String arrayEntryUi(String layout) {
+        return switch (layout == null ? "" : layout) {
+            case "rule_cards" -> ARRAY_RULE_ENTRY_UI;
+            case "loot_rule_cards" -> ARRAY_LOOT_ENTRY_UI;
+            case "support_rule_cards" -> ARRAY_SUPPORT_ENTRY_UI;
+            case "ability_cards" -> ARRAY_ABILITY_ENTRY_UI;
+            default -> ARRAY_ENTRY_UI;
+        };
+    }
+
+    private static String arrayEntryKind(String layout) {
+        return switch (layout == null ? "" : layout) {
+            case "rule_cards" -> "ELEMENTAL RULE";
+            case "loot_rule_cards" -> "LOOT RULE";
+            case "support_rule_cards" -> "SUPPORT MATERIAL";
+            case "ability_cards" -> "LORE ABILITY";
+            default -> "MAPPING";
+        };
+    }
+
+    private static NumericControl findNumericControl(String id) {
+        if (id == null) return null;
+        for (ControlEntry entry : controls) {
+            if (entry instanceof NumericControl control
+                    && (control.id.equals(id) || control.inputElementId().equals(id))) return control;
+        }
+        return null;
+    }
+
+    private static int appendRefinementWeightMatrix(UICommandBuilder commands, UIEventBuilder events,
+                                                     ControlGroup group, ViewState state, int cardIndex) {
+        Map<Integer, Map<String, NumericControl>> levels = new java.util.TreeMap<>();
+        for (ControlEntry entry : group.controls) {
+            if (!(entry instanceof NumericControl control) || !isWeightControl(control)) continue;
+            String[] parts = control.id.split("_");
+            if (parts.length < 4) continue;
+            int level = parseIntSafe(parts[2], -1);
+            String outcome = parts[3];
+            if (level >= 0) levels.computeIfAbsent(level, ignored -> new LinkedHashMap<>()).put(outcome, control);
+        }
+        if (levels.isEmpty()) return cardIndex;
+        commands.append("#RuntimeConfigCards", WEIGHT_HEADER_UI);
+        cardIndex++;
+        for (Map.Entry<Integer, Map<String, NumericControl>> level : levels.entrySet()) {
+            commands.append("#RuntimeConfigCards", WEIGHT_ROW_UI);
+            String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+            commands.set(base + " #WeightLevel.Text", "Level " + level.getKey());
+            bindWeightField(commands, events, state, base, "degrade", "#WeightDegrade", level.getValue().get("degrade"));
+            bindWeightField(commands, events, state, base, "same", "#WeightSame", level.getValue().get("same"));
+            bindWeightField(commands, events, state, base, "upgrade", "#WeightUpgrade", level.getValue().get("upgrade"));
+            bindWeightField(commands, events, state, base, "jackpot", "#WeightJackpot", level.getValue().get("jackpot"));
+        }
+        return cardIndex;
+    }
+
+    private static int appendNumericControlTable(UICommandBuilder commands, UIEventBuilder events,
+                                                  Player player, ControlGroup group, ViewState state,
+                                                  int cardIndex) {
+        List<NumericControl> numericControls = group.controls.stream()
+                .filter(NumericControl.class::isInstance)
+                .map(NumericControl.class::cast)
+                .filter(control -> control.displayKind != DisplayKind.TOGGLE)
+                .toList();
+        if (numericControls.isEmpty()) return cardIndex;
+
+        commands.append("#RuntimeConfigCards", NUMERIC_TABLE_HEADER_UI);
+        cardIndex++;
+        for (NumericControl control : numericControls) {
+            commands.append("#RuntimeConfigCards", NUMERIC_TABLE_ROW_UI);
+            String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+            String selector = base + " #TableValue";
+            commands.set(base + " #TableSetting.Text", localizedControlLabel(player, control));
+            commands.set(base + " #TableDescription.Text", localizedControlDescription(player, control));
+            commands.set(base + " #TableUnit.Text", control.displayKind == DisplayKind.PERCENT
+                    ? "%" : control.displayKind == DisplayKind.MULTIPLIER ? "×" : "");
+            String raw = draftValue(state, control.inputElementId(), control.formatInputValue());
+            double fallback = control.displayKind == DisplayKind.PERCENT
+                    ? control.currentValue() * 100.0 : control.currentValue();
+            commands.set(selector + ".Value", parseDoubleSafe(raw, fallback));
+            events.addEventBinding(CustomUIEventBindingType.FocusLost, selector,
+                    EventData.of("Action", "number").append("Target", control.inputElementId())
+                            .append("@Number", selector + ".Value"), false);
+        }
+        return cardIndex;
+    }
+
+    private static void bindWeightField(UICommandBuilder commands, UIEventBuilder events, ViewState state,
+                                        String base, String outcome, String suffix, NumericControl control) {
+        if (control == null) return;
+        String selector = base + " " + suffix;
+        String input = draftValue(state, control.inputElementId(), control.formatInputValue());
+        commands.set(selector + ".Value", parseDoubleSafe(input, control.currentValue() * 100.0));
+        events.addEventBinding(CustomUIEventBindingType.FocusLost, selector,
+                EventData.of("Action", "number").append("Target", control.inputElementId())
+                        .append("@Number", selector + ".Value"), false);
     }
 
     public static boolean isAvailable() {
-        return hyuiAvailable && plugin != null;
+        return plugin != null;
     }
 
     public static void open(Player player) {
@@ -513,12 +676,11 @@ public final class RuntimeConfigUI {
             return;
         }
         if (!isAvailable()) {
-            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + t(player, "ui.runtime_config.hyui_missing")));
+            player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>Runtime config editor is unavailable."));
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();
         viewStates.computeIfAbsent(playerRef, RuntimeConfigUI::createDefaultViewState);
-        closePageIfOpen(playerRef);
         player.getWorld().execute(() -> openWithSync(player));
     }
 
@@ -532,539 +694,311 @@ public final class RuntimeConfigUI {
             state.activeCategoryId = CATEGORY_LORE;
         }
         registerControls();
+        sortRegistryFromSchema();
         openPage(player, state);
     }
 
     private static void openPage(Player player, ViewState state) {
         PlayerRef playerRef = player.getPlayerRef();
-        try {
-            Class<?> pageBuilderClass = Class.forName(HYUI_PAGE_BUILDER);
-            Class<?> eventBindingClass = Class.forName(HYUI_EVENT_BINDING);
+        Ref<EntityStore> entityRef = playerRef.getReference();
+        Store<EntityStore> store = entityRef == null ? null : entityRef.getStore();
+        if (entityRef == null || store == null) return;
+        NativeRuntimeConfigPage page = new NativeRuntimeConfigPage(playerRef, state);
+        openPages.put(playerRef, page);
+        player.getPageManager().openCustomPage(entityRef, store, page);
+    }
 
-            Method pageForPlayer = pageBuilderClass.getMethod("pageForPlayer", PlayerRef.class);
-            Method fromHtml = pageBuilderClass.getMethod("fromHtml", String.class);
-            Method addListener = pageBuilderClass.getMethod(
-                    "addEventListener",
-                    String.class,
-                    eventBindingClass,
-                    java.util.function.BiConsumer.class);
-            Method onDismiss = pageBuilderClass.getMethod("onDismiss", java.util.function.BiConsumer.class);
-            Method withLifetime = pageBuilderClass.getMethod("withLifetime", CustomPageLifetime.class);
-            Method openMethod = pageBuilderClass.getMethod("open", Class.forName("com.hypixel.hytale.component.Store"));
+    private static final class NativeRuntimeConfigPage extends InteractiveCustomUIPage<NativeRuntimeConfigPage.PageEvent> {
+        private final PlayerRef owner;
+        private final ViewState state;
+        private boolean dismissed;
 
-            Object activating = eventBindingClass.getField("Activating").get(null);
-            Object valueChanged = eventBindingClass.getField("ValueChanged").get(null);
-            Object validating = eventBindingClass.getField("Validating").get(null);
+        private NativeRuntimeConfigPage(PlayerRef owner, ViewState state) {
+            super(owner, CustomPageLifetime.CanDismiss, PageEvent.CODEC);
+            this.owner = owner;
+            this.state = state;
+        }
 
-            String html = loadTemplate();
-            CategorySection activeCategory = resolveActiveCategory(state);
-            ControlGroup activeGroup = resolveActiveGroup(activeCategory, state);
+        @Override
+        public void build(Ref<EntityStore> playerRef, UICommandBuilder commands,
+                          UIEventBuilder events, Store<EntityStore> store) {
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            commands.append(NATIVE_PAGE_UI);
+            populate(player, commands, events, false);
+        }
 
-            html = html.replace("{{statusText}}", escapeHtml(state.statusText));
-            html = html.replace("{{activeCategoryId}}", activeCategory == null ? "" : escapeHtml(activeCategory.id));
-            html = html.replace("{{categoryTabsHtml}}", buildCategoryTabsHtml(player, state));
-            html = html.replace("{{groupNavHtml}}", buildGroupNavHtml(player, activeCategory, activeGroup));
-            html = html.replace("{{controlsHtml}}", buildControlsHtml(player, activeCategory, activeGroup, state));
-            html = LangLoader.replaceUiTokens(player, html);
-
-            Object pageBuilder = pageForPlayer.invoke(null, playerRef);
-            pageBuilder = fromHtml.invoke(pageBuilder, html);
-
-            final Player finalPlayer = player;
-            final ViewState finalState = state;
-
-            addListener.invoke(pageBuilder, "reloadAllButton", activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReload(finalPlayer, finalState));
-            addListener.invoke(pageBuilder, RESET_DEFAULTS_BUTTON, activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleResetDefaults(finalPlayer, finalState));
-            addListener.invoke(pageBuilder, "applyChangesButton", activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) ->
-                            handleApplyVisibleInputs(finalPlayer, finalState, activeCategory, activeGroup, ctxObj));
-            if (activeGroup != null && "refine_limits".equals(activeGroup.id)) {
-                addListener.invoke(pageBuilder, REFINE_RECALCULATE_WEIGHTS_BUTTON, activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) ->
-                                handleRecalculateRefinementWeights(finalPlayer, finalState, ctxObj));
-            }
-
-            for (CategorySection category : categories) {
-                addListener.invoke(pageBuilder, category.toggleButtonId, activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            selectCategory(finalState, category.id);
-                            finalState.picker = PickerMode.NONE;
-                            finalState.pickerPage = 0;
-                            finalState.controlsPage = 0;
-                            requestReopen(finalPlayer, finalState);
-                        });
-            }
-
-            if (activeCategory != null) {
-                for (ControlGroup group : activeCategory.groups) {
-                    addListener.invoke(pageBuilder, group.buttonId(activeCategory.id), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            finalState.activeGroupId = group.id;
-                            finalState.picker = PickerMode.NONE;
-                            finalState.pickerPage = 0;
-                            finalState.controlsPage = 0;
-                            requestReopen(finalPlayer, finalState);
-                        });
+        @Override
+        public void handleDataEvent(Ref<EntityStore> playerRef, Store<EntityStore> store, PageEvent event) {
+            super.handleDataEvent(playerRef, store, event);
+            if (dismissed || event == null || event.action == null) return;
+            Player player = store.getComponent(playerRef, Player.getComponentType());
+            if (player == null) return;
+            switch (event.action) {
+                case "category" -> {
+                    selectCategory(state, event.target);
+                    refresh(player);
                 }
+                case "group" -> {
+                    state.activeGroupId = event.target;
+                    refresh(player);
+                }
+                case "number" -> {
+                    if (event.numberValue != null && event.target != null)
+                        state.draftValues.put(event.target, Double.toString(event.numberValue));
+                }
+                case "text" -> {
+                    if (event.target != null) state.draftValues.put(event.target, event.textValue == null ? "" : event.textValue);
+                }
+                case "toggle" -> {
+                    NumericControl control = findNumericControl(event.target);
+                    if (control != null) handleToggle(player, state, control);
+                }
+                case "array_value" -> setArrayDraft(state, event.target, event.textValue);
+                case "array_structured_value" -> setStructuredArrayDraft(state, event.target, event.textValue);
+                case "color_spirit_value" -> setColorSpiritDraft(state, event.target, event.textValue, false);
+                case "color_spirit_npc_value" -> setColorSpiritDraft(state, event.target, event.textValue, true);
+                case "color_spirit_add_npc" -> {
+                    addColorSpiritNpcDraft(state, event.target);
+                    refresh(player);
+                }
+                case "color_spirit_remove_npc" -> {
+                    removeColorSpiritNpcDraft(state, event.target);
+                    refresh(player);
+                }
+                case "array_add" -> {
+                    mutateArray(state, event.target, -1, null);
+                    refresh(player);
+                }
+                case "array_remove" -> {
+                    int separator = event.target == null ? -1 : event.target.lastIndexOf(':');
+                    if (separator > 0) mutateArray(state, event.target.substring(0, separator), parseIntSafe(event.target.substring(separator + 1), -1), null);
+                    refresh(player);
+                }
+                case "apply" -> {
+                    CategorySection category = resolveActiveCategory(state);
+                    ControlGroup group = resolveActiveGroup(category, state);
+                    handleApplyVisibleInputs(player, state, group);
+                }
+                case "reload" -> handleReload(player, state);
+                case "reset" -> handleResetDefaults(player, state);
+                case "recalculate_weights" -> handleRecalculateRefinementWeights(player, state);
+                default -> { }
+            }
+        }
+
+        @Override
+        public void onDismiss(Ref<EntityStore> playerRef, Store<EntityStore> store) {
+            dismissed = true;
+            openPages.remove(owner, this);
+            super.onDismiss(playerRef, store);
+        }
+
+        private void refresh(Player player) {
+            if (dismissed) return;
+            UICommandBuilder commands = new UICommandBuilder();
+            UIEventBuilder events = new UIEventBuilder();
+            populate(player, commands, events, true);
+            sendUpdate(commands, events, false);
+        }
+
+        private void populate(Player player, UICommandBuilder commands, UIEventBuilder events, boolean replace) {
+            registerControls();
+            sortRegistryFromSchema();
+            CategorySection category = resolveActiveCategory(state);
+            ControlGroup group = resolveActiveGroup(category, state);
+            if (replace) {
+                commands.clear("#RuntimeConfigCategories");
+                commands.clear("#ConfigGroupCards");
+                commands.clear("#RuntimeConfigCards");
+            }
+            commands.set("#ConfigTitle.Text", tOrFallback(player, "ui.runtime_config.title", "Runtime Configuration"));
+            commands.set("#ConfigStatus.Text", state.statusText == null ? "" : state.statusText);
+            commands.set("#ConfigCategorySummary.Text", category == null ? "" : localizedCategorySummary(player, category));
+            commands.set("#ConfigGroupTitle.Text", group == null ? "" : localizedGroupTitle(player, category, group));
+            commands.set("#ConfigGroupDescription.Text", group == null ? "" : localizedGroupDescription(player, category, group));
+            commands.set("#ConfigGroupLayout.Text", group == null ? "" : layoutLabel(groupLayout(group.id)));
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigReload", EventData.of("Action", "reload"));
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigReset", EventData.of("Action", "reset"));
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigApply", EventData.of("Action", "apply"));
+
+            for (int i = 0; i < categories.size(); i++) {
+                CategorySection entry = categories.get(i);
+                commands.append("#RuntimeConfigCategories", CATEGORY_CARD_UI);
+                String selector = "#RuntimeConfigCategories[" + i + "] #CategoryButton";
+                commands.set(selector + ".Text", localizedCategoryTitle(player, entry));
+                if (entry.id.equals(category == null ? "" : category.id))
+                    commands.set(selector + ".Text", "• " + localizedCategoryTitle(player, entry));
+                events.addEventBinding(CustomUIEventBindingType.Activating, selector,
+                        EventData.of("Action", "category").append("Target", entry.id));
             }
 
-            for (ControlEntry entry : visibleControls(activeCategory, activeGroup, finalState)) {
-                if (entry instanceof NumericControl control) {
-                    if (control.displayKind == DisplayKind.TOGGLE) {
-                        registerToggleListener(pageBuilder, addListener, activating, control, finalPlayer, finalState);
-                    } else {
-                        registerValueListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
-                        registerValueListener(pageBuilder, addListener, validating, control, finalPlayer, finalState);
+            List<ControlGroup> visibleGroups = category == null ? List.of() : category.groups;
+            for (int i = 0; i < visibleGroups.size(); i++) {
+                ControlGroup entry = visibleGroups.get(i);
+                commands.append("#ConfigGroupCards", GROUP_CARD_UI);
+                String selector = "#ConfigGroupCards[" + i + "] #GroupButton";
+                commands.set(selector + ".Text", localizedGroupTitle(player, category, entry));
+                if (entry.id.equals(group == null ? "" : group.id))
+                    commands.set(selector + ".Text", "• " + localizedGroupTitle(player, category, entry));
+                events.addEventBinding(CustomUIEventBindingType.Activating, selector,
+                        EventData.of("Action", "group").append("Target", entry.id));
+            }
+            if (category == null || group == null) return;
+
+            int cardIndex = 0;
+            String activeLayout = groupLayout(group.id);
+            for (ControlEntry entry : group.controls) {
+                if ("probability_matrix".equals(activeLayout)
+                        && entry instanceof NumericControl numeric && isWeightControl(numeric)) continue;
+                if ("numeric_table".equals(activeLayout)
+                        && entry instanceof NumericControl numeric && numeric.displayKind != DisplayKind.TOGGLE) continue;
+                if (entry instanceof NumericControl numeric && numeric.displayKind == DisplayKind.TOGGLE) {
+                    commands.append("#RuntimeConfigCards", TOGGLE_CARD_UI);
+                    String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                    commands.set(base + " #ToggleTitle.Text", localizedControlLabel(player, numeric));
+                    commands.set(base + " #ToggleDescription.Text", localizedControlDescription(player, numeric));
+                    commands.set(base + " #ToggleValue.Text", numeric.currentValue() > 0 ? "ENABLED" : "DISABLED");
+                    events.addEventBinding(CustomUIEventBindingType.Activating, base + " #ToggleValue",
+                            EventData.of("Action", "toggle").append("Target", numeric.id));
+                } else if (entry instanceof NumericControl numeric) {
+                    commands.append("#RuntimeConfigCards", NUMERIC_CARD_UI);
+                    String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                    String input = base + " #NumericValue";
+                    commands.set(base + " #NumericTitle.Text", localizedControlLabel(player, numeric));
+                    commands.set(base + " #NumericDescription.Text", localizedControlDescription(player, numeric));
+                    commands.set(base + " #NumericUnit.Text", numeric.displayKind == DisplayKind.PERCENT ? "%" : numeric.displayKind == DisplayKind.MULTIPLIER ? "×" : "");
+                    String raw = draftValue(state, numeric.inputElementId(), numeric.formatInputValue());
+                    commands.set(input + ".Value", parseDoubleSafe(raw, numeric.currentValue()));
+                    EventData data = EventData.of("Action", "number").append("Target", numeric.inputElementId())
+                            .append("@Number", input + ".Value");
+                    events.addEventBinding(CustomUIEventBindingType.FocusLost, input, data, false);
+                    if (isRefineMaxLevelControl(numeric)) {
+                        String recalculate = base + " #RecalculateWeights";
+                        commands.set(recalculate + ".Visible", true);
+                        events.addEventBinding(CustomUIEventBindingType.Activating, recalculate,
+                                EventData.of("Action", "recalculate_weights"));
                     }
-                } else if (entry instanceof TextControl control) {
-                    registerTextListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
-                } else if (entry instanceof SelectControl control) {
-                    registerSelectListener(pageBuilder, addListener, valueChanged, control, finalPlayer, finalState);
+                } else if (entry instanceof TextControl text) {
+                    commands.append("#RuntimeConfigCards", TEXT_CARD_UI);
+                    String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                    String input = base + " #TextValue";
+                    commands.set(base + " #TextTitle.Text", localizedControlLabel(player, text));
+                    commands.set(base + " #TextDescription.Text", localizedControlDescription(player, text));
+                    String textValue = text.currentValue();
+                    if (text.multiline) textValue = String.join(", ", splitListValue(textValue));
+                    commands.set(input + ".Value", draftValue(state, text.inputElementId(), textValue));
+                    events.addEventBinding(CustomUIEventBindingType.ValueChanged, input,
+                            EventData.of("Action", "text").append("Target", text.inputElementId()).append("@Text", input + ".Value"), false);
+                } else if (entry instanceof SelectControl select) {
+                    commands.append("#RuntimeConfigCards", SELECT_CARD_UI);
+                    String base = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                    String input = base + " #SelectValue";
+                    commands.set(base + " #SelectTitle.Text", localizedControlLabel(player, select));
+                    commands.set(base + " #SelectDescription.Text", localizedControlDescription(player, select));
+                    List<DropdownEntryInfo> options = new ArrayList<>(select.options.length);
+                    for (String option : select.options) options.add(new DropdownEntryInfo(LocalizableString.fromString(option), option));
+                    commands.set(input + ".Entries", options);
+                    String selected = draftValue(state, select.inputElementId(), select.currentValue());
+                    commands.set(input + ".Value", selected);
+                    events.addEventBinding(CustomUIEventBindingType.ValueChanged, input,
+                            EventData.of("Action", "text").append("Target", select.inputElementId()).append("@Text", input + ".Value"), false);
                 }
             }
-            registerLoreMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
-            registerLootInjectionListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
-            registerAffinityMappingListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
-            registerReforgeSupportMaterialListeners(pageBuilder, addListener, activating, valueChanged, validating, activeGroup, finalPlayer, finalState);
-            registerResonanceClassMappingListeners(pageBuilder, addListener, activating, valueChanged, activeGroup, finalPlayer, finalState);
 
-            pageBuilder = onDismiss.invoke(pageBuilder,
-                    (java.util.function.BiConsumer<Object, Object>) (pageObj, dismissedByServer) ->
-                            openPages.remove(playerRef, pageObj));
-            pageBuilder = withLifetime.invoke(pageBuilder, CustomPageLifetime.CanDismiss);
-            Object page = openMethod.invoke(pageBuilder, getStore(playerRef));
-            openPages.put(playerRef, page);
-        } catch (Exception e) {
-            System.err.println("[SocketReforge] RuntimeConfigUI open error: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    private static void registerAdjustmentListener(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            NumericControl control,
-            double delta,
-            Player player,
-            ViewState state) throws Exception {
-        String buttonId = buttonIdForDelta(control, delta);
-        addListener.invoke(pageBuilder, buttonId, activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAdjustment(player, state, control, delta));
-    }
-
-    private static void registerValueListener(
-            Object pageBuilder,
-            Method addListener,
-            Object validating,
-            NumericControl control,
-            Player player,
-            ViewState state) throws Exception {
-        String inputId = control.inputElementId();
-        addListener.invoke(pageBuilder, inputId, validating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleValueChange(player, state, control, eventObj, ctxObj));
-    }
-
-    private static void registerToggleListener(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            NumericControl control,
-            Player player,
-            ViewState state) throws Exception {
-        String buttonId = control.plusButtonId();
-        addListener.invoke(pageBuilder, buttonId, activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleToggle(player, state, control));
-    }
-
-    private static void registerTextListener(
-            Object pageBuilder,
-            Method addListener,
-            Object validating,
-            TextControl control,
-            Player player,
-            ViewState state) throws Exception {
-        String inputId = control.inputElementId();
-        addListener.invoke(pageBuilder, inputId, validating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleTextChange(player, state, control, eventObj, ctxObj));
-    }
-
-    private static void registerSelectListener(
-            Object pageBuilder,
-            Method addListener,
-            Object valueChanged,
-            SelectControl control,
-            Player player,
-            ViewState state) throws Exception {
-        String inputId = control.inputElementId();
-        addListener.invoke(pageBuilder, inputId, valueChanged,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleSelectChange(player, state, control, eventObj, ctxObj));
-    }
-
-    private static void registerDraftValueListener(
-            Object pageBuilder,
-            Method addListener,
-            Object valueChanged,
-            String elementId,
-            ViewState state) throws Exception {
-        addListener.invoke(pageBuilder, elementId, valueChanged,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) ->
-                        handleDraftValueChange(state, elementId, eventObj, ctxObj));
-    }
-
-    private static void registerLoreMappingListeners(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            Object valueChanged,
-            Object validating,
-            ControlGroup activeGroup,
-            Player player,
-            ViewState state) throws Exception {
-        if (activeGroup == null) {
-            return;
-        }
-        if (GROUP_LORE_MAPPING_GEMS.equals(activeGroup.id)) {
-            String[] entries = loreMappingConfig().getGemColorEntries();
-            for (String color : LORE_COLORS) {
-                addListener.invoke(pageBuilder, coreColorToggleButtonId(color), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleToggleCoreColor(player, state, color));
+            if ("probability_matrix".equals(activeLayout)) {
+                cardIndex = appendRefinementWeightMatrix(commands, events, group, state, cardIndex);
+            } else if ("numeric_table".equals(activeLayout)) {
+                cardIndex = appendNumericControlTable(commands, events, player, group, state, cardIndex);
             }
-            for (int i = 0; i < entries.length; i++) {
-                int index = i;
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, gemMappingTokenInputId(index), state);
-                addListener.invoke(pageBuilder, gemMappingTokenInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleGemMappingTokenChange(player, state, index, eventObj, ctxObj));
-            }
-            return;
-        }
-        if (GROUP_LORE_MAPPING_SPIRITS.equals(activeGroup.id)) {
-            for (String color : LORE_COLORS) {
-                List<String> spirits = spiritsForColor(color);
-                addListener.invoke(pageBuilder, spiritMappingAddButtonId(color), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddSpiritMapping(player, state, color));
-                for (int i = 0; i < spirits.size(); i++) {
-                    int index = i;
-                    addListener.invoke(pageBuilder, spiritMappingSelectId(color, index), valueChanged,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleSpiritMappingChange(player, state, color, index, eventObj, ctxObj));
-                    addListener.invoke(pageBuilder, spiritMappingDeleteButtonId(color, index), activating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteSpiritMapping(player, state, color, index));
+
+            List<ArraySection> sections = arraySections(group.id);
+            for (ArraySection section : sections) {
+                List<String> values = state.arrayDrafts.computeIfAbsent(section.id(), ignored -> mutableList(readArray(section.id())));
+                commands.append("#RuntimeConfigCards", ARRAY_SECTION_UI);
+                String sectionBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                commands.set(sectionBase + " #ArraySectionTitle.Text", section.title());
+                events.addEventBinding(CustomUIEventBindingType.Activating, sectionBase + " #ArrayAdd",
+                        EventData.of("Action", "array_add").append("Target", section.id()));
+                if ("lore_mapping.color_spirits".equals(section.id())) {
+                    cardIndex = appendColorSpiritMappings(commands, events, values, cardIndex);
+                    continue;
+                }
+                List<String> columnLabels = structuredArrayLabels(section.id(), values);
+                if (columnLabels != null) {
+                    commands.append("#RuntimeConfigCards", STRUCTURED_ARRAY_HEADER_UI);
+                    String headerBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                    for (int field = 0; field < MAX_STRUCTURED_ARRAY_FIELDS; field++) {
+                        boolean visible = field < columnLabels.size();
+                        commands.set(headerBase + " #StructuredHeaderField" + field + ".Visible", visible);
+                        if (visible) {
+                            commands.set(headerBase + " #StructuredHeaderField" + field + " #StructuredHeaderLabel" + field + ".Text",
+                                    columnLabels.get(field));
+                        }
+                    }
+                }
+                for (int itemIndex = 0; itemIndex < values.size(); itemIndex++) {
+                    String target = section.id() + ":" + itemIndex;
+                    if (columnLabels != null) {
+                        commands.append("#RuntimeConfigCards", STRUCTURED_ARRAY_ENTRY_UI);
+                        String itemBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                        List<String> fields = structuredArrayFields(section.id(), values.get(itemIndex), columnLabels.size());
+                        for (int field = 0; field < MAX_STRUCTURED_ARRAY_FIELDS; field++) {
+                            boolean visible = field < columnLabels.size();
+                            commands.set(itemBase + " #StructuredField" + field + ".Visible", visible);
+                            if (!visible) continue;
+                            String fieldTarget = section.id() + ":" + itemIndex + ":" + field + ":" + columnLabels.size();
+                            if (field == 0 && isAffinityStructuredModeSection(section.id())) {
+                                String textInput = itemBase + " #StructuredField0 #StructuredField0Value";
+                                String modeInput = itemBase + " #StructuredField0 #StructuredField0Mode";
+                                commands.set(textInput + ".Visible", false);
+                                commands.set(modeInput + ".Visible", true);
+                                commands.set(modeInput + ".Value", fields.get(field));
+                                events.addEventBinding(CustomUIEventBindingType.ValueChanged, modeInput,
+                                        EventData.of("Action", "array_structured_value").append("Target", fieldTarget)
+                                                .append("@Text", modeInput + ".Value"), false);
+                            } else {
+                                String input = itemBase + " #StructuredField" + field + " #StructuredField" + field + "Value";
+                                commands.set(input + ".Value", fields.get(field));
+                                if (field == 0) {
+                                    commands.set(itemBase + " #StructuredField0 #StructuredField0Mode.Visible", false);
+                                }
+                                events.addEventBinding(CustomUIEventBindingType.ValueChanged, input,
+                                        EventData.of("Action", "array_structured_value").append("Target", fieldTarget)
+                                                .append("@Text", input + ".Value"), false);
+                            }
+                        }
+                        events.addEventBinding(CustomUIEventBindingType.Activating, itemBase + " #StructuredRemove",
+                                EventData.of("Action", "array_remove").append("Target", target));
+                    } else {
+                        String entryLayout = groupLayout(group.id);
+                        commands.append("#RuntimeConfigCards", arrayEntryUi(entryLayout));
+                        String itemBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                        String valueSelector = itemBase + " #ArrayValue";
+                        commands.set(itemBase + " #ArrayKind.Text", arrayEntryKind(entryLayout));
+                        String value = draftValue(state, arrayDraftKey(section.id(), itemIndex), values.get(itemIndex));
+                        commands.set(valueSelector + ".Value", value);
+                        events.addEventBinding(CustomUIEventBindingType.ValueChanged, valueSelector,
+                                EventData.of("Action", "array_value").append("Target", target).append("@Text", valueSelector + ".Value"), false);
+                        events.addEventBinding(CustomUIEventBindingType.Activating, itemBase + " #ArrayRemove",
+                                EventData.of("Action", "array_remove").append("Target", target));
+                    }
                 }
             }
-            return;
-        }
-        if (GROUP_LORE_MAPPING_ABILITIES.equals(activeGroup.id)) {
-            String[] entries = loreMappingConfig().getAbilityEntries();
-            addListener.invoke(pageBuilder, abilityMappingAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAbilityMapping(player, state));
-            for (int i = 0; i < entries.length; i++) {
-                int index = i;
-                AbilityEntry ability = parseAbilityEntry(entries[i]);
-                addListener.invoke(pageBuilder, abilitySpiritSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilitySpiritChange(player, state, index, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, abilityTriggerSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityTriggerChange(player, state, index, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, abilityDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAbilityMapping(player, state, index));
-                if (!ability.signature()) {
-                    registerDraftValueListener(pageBuilder, addListener, valueChanged, abilityChanceInputId(index), state);
-                    addListener.invoke(pageBuilder, abilityChanceInputId(index), validating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityFieldChange(player, state, index, AbilityField.CHANCE, eventObj, ctxObj));
-                    registerDraftValueListener(pageBuilder, addListener, valueChanged, abilityCooldownInputId(index), state);
-                    addListener.invoke(pageBuilder, abilityCooldownInputId(index), validating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityFieldChange(player, state, index, AbilityField.COOLDOWN, eventObj, ctxObj));
-                    addListener.invoke(pageBuilder, abilityEffectSelectId(index), valueChanged,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityFieldChange(player, state, index, AbilityField.EFFECT, eventObj, ctxObj));
-                    registerDraftValueListener(pageBuilder, addListener, valueChanged, abilityBaseInputId(index), state);
-                    addListener.invoke(pageBuilder, abilityBaseInputId(index), validating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityFieldChange(player, state, index, AbilityField.BASE, eventObj, ctxObj));
-                    registerDraftValueListener(pageBuilder, addListener, valueChanged, abilityPerLevelInputId(index), state);
-                    addListener.invoke(pageBuilder, abilityPerLevelInputId(index), validating,
-                            (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAbilityFieldChange(player, state, index, AbilityField.PER_LEVEL, eventObj, ctxObj));
-                }
-            }
-            return;
-        }
-        if (GROUP_LORE_STATUS_RULES.equals(activeGroup.id)) {
-            List<StatusRuleEntry> reapplyRules = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
-            addListener.invoke(pageBuilder, statusRuleAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddStatusRule(player, state));
-            for (int i = 0; i < reapplyRules.size(); i++) {
-                int index = i;
-                addListener.invoke(pageBuilder, statusRuleStatusSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusRuleChange(player, state, index, StatusRuleField.STATUS, eventObj, ctxObj));
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, statusRuleStepInputId(index), state);
-                addListener.invoke(pageBuilder, statusRuleStepInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusRuleChange(player, state, index, StatusRuleField.STEP, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusRulePatternSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusRuleChange(player, state, index, StatusRuleField.PATTERN, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusRuleDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteStatusRule(player, state, index));
-            }
-
-            List<StatusResistanceEntry> resistances = parseStatusResistanceEntries(loreConfig().getNpcStatusResistanceEntries());
-            addListener.invoke(pageBuilder, statusResistanceAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddStatusResistance(player, state));
-            for (int i = 0; i < resistances.size(); i++) {
-                int index = i;
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, statusResistanceNpcInputId(index), state);
-                addListener.invoke(pageBuilder, statusResistanceNpcInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusResistanceChange(player, state, index, StatusResistanceField.NPC, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusResistanceStatusSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusResistanceChange(player, state, index, StatusResistanceField.STATUS, eventObj, ctxObj));
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, statusResistanceValueInputId(index), state);
-                addListener.invoke(pageBuilder, statusResistanceValueInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusResistanceChange(player, state, index, StatusResistanceField.VALUE, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusResistanceDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteStatusResistance(player, state, index));
-            }
-
-            List<StatusCounterEntry> counters = parseStatusCounterEntries(loreConfig().getStatusBossCounterNpcIds());
-            addListener.invoke(pageBuilder, statusCounterAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddStatusCounter(player, state));
-            for (int i = 0; i < counters.size(); i++) {
-                int index = i;
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, statusCounterNpcInputId(index), state);
-                addListener.invoke(pageBuilder, statusCounterNpcInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusCounterChange(player, state, index, StatusCounterField.NPC, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusCounterStatusSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleStatusCounterChange(player, state, index, StatusCounterField.STATUS, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, statusCounterDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteStatusCounter(player, state, index));
-            }
-
-            List<String> bleedCounters = mutableList(loreConfig().getBleedBossCounterNpcIds());
-            addListener.invoke(pageBuilder, bleedCounterAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddBleedCounter(player, state));
-            for (int i = 0; i < bleedCounters.size(); i++) {
-                int index = i;
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, bleedCounterNpcInputId(index), state);
-                addListener.invoke(pageBuilder, bleedCounterNpcInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleBleedCounterChange(player, state, index, eventObj, ctxObj));
-                addListener.invoke(pageBuilder, bleedCounterDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteBleedCounter(player, state, index));
-            }
-        }
-    }
-
-    private static void registerLootInjectionListeners(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            Object valueChanged,
-            Object validating,
-            ControlGroup activeGroup,
-            Player player,
-            ViewState state) throws Exception {
-        if (activeGroup == null || !isLootInjectionGroup(activeGroup.id)) {
-            return;
-        }
-        String[] entries = lootInjectionEntries(activeGroup.id);
-        addListener.invoke(pageBuilder, lootInjectionAddButtonId(activeGroup.id), activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddLootInjectionRule(player, state, activeGroup.id));
-        for (int i = 0; i < entries.length; i++) {
-            int index = i;
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, lootInjectionItemInputId(activeGroup.id, index), state);
-            addListener.invoke(pageBuilder, lootInjectionItemInputId(activeGroup.id, index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleLootInjectionRuleChange(player, state, activeGroup.id, index, ctxObj));
-            if (isNpcLootInjectionGroup(activeGroup.id)) {
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, lootInjectionTargetInputId(activeGroup.id, index), state);
-                addListener.invoke(pageBuilder, lootInjectionTargetInputId(activeGroup.id, index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleLootInjectionRuleChange(player, state, activeGroup.id, index, ctxObj));
-            }
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, lootInjectionChanceInputId(activeGroup.id, index), state);
-            addListener.invoke(pageBuilder, lootInjectionChanceInputId(activeGroup.id, index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleLootInjectionRuleChange(player, state, activeGroup.id, index, ctxObj));
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, lootInjectionMinInputId(activeGroup.id, index), state);
-            addListener.invoke(pageBuilder, lootInjectionMinInputId(activeGroup.id, index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleLootInjectionRuleChange(player, state, activeGroup.id, index, ctxObj));
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, lootInjectionMaxInputId(activeGroup.id, index), state);
-            addListener.invoke(pageBuilder, lootInjectionMaxInputId(activeGroup.id, index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleLootInjectionRuleChange(player, state, activeGroup.id, index, ctxObj));
-            addListener.invoke(pageBuilder, lootInjectionDeleteButtonId(activeGroup.id, index), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteLootInjectionRule(player, state, activeGroup.id, index));
-        }
-    }
-
-    private static void registerReforgeSupportMaterialListeners(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            Object valueChanged,
-            Object validating,
-            ControlGroup activeGroup,
-            Player player,
-            ViewState state) throws Exception {
-        if (activeGroup == null || !GROUP_REFORGE_SUPPORT_MATERIALS.equals(activeGroup.id)) {
-            return;
-        }
-        String[] entries = refinementConfig().getSupportMaterialEntries();
-        addListener.invoke(pageBuilder, reforgeSupportAddButtonId(), activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddReforgeSupportMaterial(player, state));
-        for (int i = 0; i < entries.length; i++) {
-            int index = i;
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportItemInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportBreakInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportDurabilityInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportAntiInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportConsumeInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportUpgradeGuaranteeInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportJackpotGuaranteeInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportUpgradeWeightInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportJackpotWeightInputId(index), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, reforgeSupportDescriptionInputId(index), state);
-            addListener.invoke(pageBuilder, reforgeSupportItemInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportBreakInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportDurabilityInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportAntiInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportUpgradeGuaranteeInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportJackpotGuaranteeInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportUpgradeWeightInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportJackpotWeightInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportDescriptionInputId(index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleReforgeSupportMaterialChange(player, state, index, ctxObj));
-            addListener.invoke(pageBuilder, reforgeSupportDeleteButtonId(index), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteReforgeSupportMaterial(player, state, index));
-        }
-    }
-
-    private static void registerResonanceClassMappingListeners(Object pageBuilder,
-                                                               Method addListener,
-                                                               Object activating,
-                                                               Object valueChanged,
-                                                               ControlGroup activeGroup,
-                                                               Player player,
-                                                               ViewState state) throws Exception {
-        if (activeGroup == null
-                || (!GROUP_RESONANCE_CLASS_MAPPINGS.equals(activeGroup.id)
-                && !GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)
-                && !GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id))) {
-            return;
-        }
-        if (GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id)) {
-            addListener.invoke(pageBuilder, clockworkAmmoHintAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddClockworkAmmoHint(player, state));
-            String[] hints = socketConfig().getClockworkAmmoItemHints();
-            for (int i = 0; i < hints.length; i++) {
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, clockworkAmmoHintInputId(i), state);
-                final int index = i;
-                addListener.invoke(pageBuilder, clockworkAmmoHintDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteClockworkAmmoHint(player, state, index));
-            }
-            return;
-        }
-        if (GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)) {
-            addListener.invoke(pageBuilder, resonanceHintAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddResonanceHint(player, state));
-            String[] hints = socketConfig().getResonanceWeaponClassHints();
-            for (int i = 0; i < hints.length; i++) {
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceHintClassInputId(i), state);
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceHintTokensInputId(i), state);
-                final int index = i;
-                addListener.invoke(pageBuilder, resonanceHintDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteResonanceHint(player, state, index));
-            }
-            return;
-        }
-        addListener.invoke(pageBuilder, resonanceMappingAddButtonId(), activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddResonanceMapping(player, state));
-        String[] entries = resonanceMappingDisplayEntries();
-        for (int i = 0; i < entries.length; i++) {
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceMappingNameInputId(i), state);
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, resonanceMappingClassesInputId(i), state);
-            final int index = i;
-            addListener.invoke(pageBuilder, resonanceMappingDeleteButtonId(index), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteResonanceMapping(player, state, index));
-        }
-    }
-
-    private static void registerAffinityMappingListeners(
-            Object pageBuilder,
-            Method addListener,
-            Object activating,
-            Object valueChanged,
-            Object validating,
-            ControlGroup activeGroup,
-            Player player,
-            ViewState state) throws Exception {
-        if (activeGroup == null || !isAffinityMappingGroup(activeGroup.id)) {
-            return;
-        }
-        if (isAffinityRuleGroup(activeGroup.id)) {
-            String[] entries = affinityRuleEntries(activeGroup.id);
-            addListener.invoke(pageBuilder, affinityRuleAddButtonId(activeGroup.id), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityRule(player, state, activeGroup.id));
-            for (int i = 0; i < entries.length; i++) {
-                int index = i;
-                addListener.invoke(pageBuilder, affinityRuleModeSelectId(activeGroup.id, index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityRuleTargetInputId(activeGroup.id, index), state);
-                addListener.invoke(pageBuilder, affinityRuleTargetInputId(activeGroup.id, index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityRuleElementSelectId(activeGroup.id, index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityRuleChange(player, state, activeGroup.id, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityRuleDeleteButtonId(activeGroup.id, index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityRule(player, state, activeGroup.id, index));
-            }
-            return;
         }
 
-        if (GROUP_AFFINITY_SHIELDS.equals(activeGroup.id)) {
-            String[] shieldEntries = elementalAffinityConfig().getElementShields();
-            addListener.invoke(pageBuilder, affinityShieldAddButtonId(), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityShield(player, state));
-            for (int i = 0; i < shieldEntries.length; i++) {
-                int index = i;
-                addListener.invoke(pageBuilder, affinityShieldModeSelectId(index), valueChanged,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldTargetInputId(index), state);
-                addListener.invoke(pageBuilder, affinityShieldTargetInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldValueInputId(index), state);
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldDelayInputId(index), state);
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldRateInputId(index), state);
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityShieldDurationInputId(index), state);
-                addListener.invoke(pageBuilder, affinityShieldValueInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityShieldDelayInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityShieldRateInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityShieldDurationInputId(index), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityShieldChange(player, state, index, ctxObj));
-                addListener.invoke(pageBuilder, affinityShieldDeleteButtonId(index), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityShield(player, state, index));
-            }
-            return;
-        }
-
-        String[] entries = elementalAffinityConfig().getElementMultipliers();
-        addListener.invoke(pageBuilder, affinityMultiplierAddButtonId(activeGroup.id), activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAddAffinityMultiplier(player, state, activeGroup.id));
-        for (int i = 0; i < entries.length; i++) {
-            int index = i;
-            addListener.invoke(pageBuilder, affinityMultiplierModeSelectId(activeGroup.id, index), valueChanged,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
-            registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierTargetInputId(activeGroup.id, index), state);
-            addListener.invoke(pageBuilder, affinityMultiplierTargetInputId(activeGroup.id, index), validating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
-            for (String element : AFFINITY_ELEMENTS) {
-                registerDraftValueListener(pageBuilder, addListener, valueChanged, affinityMultiplierElementInputId(activeGroup.id, index, element), state);
-                addListener.invoke(pageBuilder, affinityMultiplierElementInputId(activeGroup.id, index, element), validating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleAffinityMultiplierChange(player, state, activeGroup.id, index, ctxObj));
-            }
-            addListener.invoke(pageBuilder, affinityMultiplierDeleteButtonId(activeGroup.id, index), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> handleDeleteAffinityMultiplier(player, state, activeGroup.id, index));
+        public static final class PageEvent {
+            public static final BuilderCodec<PageEvent> CODEC = BuilderCodec.<PageEvent>builder(PageEvent.class, PageEvent::new)
+                    .append(new KeyedCodec<>("Action", Codec.STRING), (event, value) -> event.action = value, event -> event.action).add()
+                    .append(new KeyedCodec<>("Target", Codec.STRING), (event, value) -> event.target = value, event -> event.target).add()
+                    .append(new KeyedCodec<>("@Text", Codec.STRING), (event, value) -> event.textValue = value, event -> event.textValue).add()
+                    .append(new KeyedCodec<>("@Number", Codec.DOUBLE), (event, value) -> event.numberValue = value, event -> event.numberValue).add()
+                    .build();
+            public String action;
+            public String target;
+            public String textValue;
+            public Double numberValue;
+            public PageEvent() { }
         }
     }
 
@@ -1072,6 +1006,7 @@ public final class RuntimeConfigUI {
         try {
             plugin.getConfigService().reloadAll();
             state.draftValues.clear();
+            state.arrayDrafts.clear();
             state.statusText = t(player, "ui.runtime_config.status_reload_success");
         } catch (Exception e) {
             state.statusText = t(player, "ui.runtime_config.status_reload_failed", sanitizeError(e));
@@ -1089,6 +1024,7 @@ public final class RuntimeConfigUI {
         try {
             resetCategoryToDefaults(activeCategory.id);
             state.draftValues.clear();
+            state.arrayDrafts.clear();
             state.statusText = t(player, "ui.runtime_config.status_reset_success", localizedCategoryTitle(player, activeCategory));
         } catch (Exception e) {
             state.statusText = t(player, "ui.runtime_config.status_reset_failed", sanitizeError(e));
@@ -1146,22 +1082,6 @@ public final class RuntimeConfigUI {
         }
     }
 
-    private static void handleAdjustment(Player player, ViewState state, NumericControl control, double delta) {
-        double before = control.currentValue();
-        try {
-            control.adjust(delta);
-            plugin.getConfigService().saveAndApply(control.configName);
-            double after = control.currentValue();
-            if (roughlyEqual(before, after)) {
-                state.statusText = t(player, "ui.runtime_config.status_control_unchanged", localizedControlLabel(player, control), control.formatValue(after));
-            } else {
-                state.statusText = t(player, "ui.runtime_config.status_control_changed", localizedControlLabel(player, control), control.formatValue(before), control.formatValue(after));
-            }
-        } catch (Exception e) {
-            state.statusText = t(player, "ui.runtime_config.status_control_failed", localizedControlLabel(player, control), sanitizeError(e));
-        }
-        requestReopen(player, state);
-    }
 
     private static void handleToggle(Player player, ViewState state, NumericControl control) {
         double before = control.currentValue();
@@ -1180,59 +1100,16 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
-    private static void handleValueChange(Player player, ViewState state, NumericControl control, Object eventObj, Object ctxObj) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null || rawValue.isBlank()) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
-        }
-        if (rawValue != null) {
-            state.draftValues.put(control.inputElementId(), rawValue);
-        }
-    }
-
-    private static void handleTextChange(Player player, ViewState state, TextControl control, Object eventObj, Object ctxObj) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
-        }
-        if (rawValue == null) {
-            rawValue = "";
-        }
-        state.draftValues.put(control.inputElementId(), rawValue);
-    }
-
-    private static void handleSelectChange(Player player, ViewState state, SelectControl control, Object eventObj, Object ctxObj) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null || rawValue.isBlank()) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, control.inputElementId(), "#" + control.inputElementId() + ".value");
-        }
-        if (rawValue != null) {
-            state.draftValues.put(control.inputElementId(), rawValue);
-        }
-    }
-
-    private static void handleDraftValueChange(ViewState state, String elementId, Object eventObj, Object ctxObj) {
-        if (state == null || elementId == null || elementId.isBlank()) {
-            return;
-        }
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, elementId, "#" + elementId + ".value");
-        }
-        state.draftValues.put(elementId, rawValue == null ? "" : rawValue);
-    }
-
     private static void handleApplyVisibleInputs(
             Player player,
             ViewState state,
-            CategorySection activeCategory,
-            ControlGroup activeGroup,
-            Object ctxObj) {
+            ControlGroup activeGroup) {
         List<String> configsToSave = new ArrayList<>();
         int changed = 0;
         boolean refinementMaxChanged = false;
         try {
-            for (ControlEntry entry : visibleControls(activeCategory, activeGroup, state)) {
+            List<ControlEntry> activeEntries = activeGroup == null ? List.of() : activeGroup.controls;
+            for (ControlEntry entry : activeEntries) {
                 if (entry instanceof NumericControl control) {
                     if (control.displayKind == DisplayKind.TOGGLE) {
                         continue;
@@ -1241,7 +1118,7 @@ public final class RuntimeConfigUI {
                         state.draftValues.remove(control.inputElementId());
                         continue;
                     }
-                    String rawValue = draftOrContextValue(state, ctxObj, control.inputElementId(), control.formatInputValue());
+                    String rawValue = draftValue(state, control.inputElementId(), control.formatInputValue());
                     Double parsed = parseInputValue(control.displayKind, rawValue);
                     if (parsed == null) {
                         continue;
@@ -1258,7 +1135,7 @@ public final class RuntimeConfigUI {
                     }
                     state.draftValues.remove(control.inputElementId());
                 } else if (entry instanceof TextControl control) {
-                    String rawValue = draftOrContextValue(state, ctxObj, control.inputElementId(), control.currentValue());
+                    String rawValue = draftValue(state, control.inputElementId(), control.currentValue());
                     String before = control.currentValue();
                     control.applyValue(rawValue == null ? "" : rawValue);
                     if (!before.equals(control.currentValue())) {
@@ -1267,7 +1144,7 @@ public final class RuntimeConfigUI {
                     }
                     state.draftValues.remove(control.inputElementId());
                 } else if (entry instanceof SelectControl control) {
-                    String rawValue = draftOrContextValue(state, ctxObj, control.inputElementId(), control.currentValue());
+                    String rawValue = draftValue(state, control.inputElementId(), control.currentValue());
                     String before = control.currentValue();
                     control.applyValue(rawValue == null ? "" : rawValue);
                     if (!before.equalsIgnoreCase(control.currentValue())) {
@@ -1277,7 +1154,10 @@ public final class RuntimeConfigUI {
                     state.draftValues.remove(control.inputElementId());
                 }
             }
-            changed += applyVisibleMappingInputs(state, activeGroup, ctxObj, configsToSave);
+            if (activeGroup == null || arraySections(activeGroup.id).isEmpty()) {
+                changed += applyVisibleMappingInputs(state, activeGroup, configsToSave);
+            }
+            changed += applyNativeArrayInputs(state, activeGroup, configsToSave);
             saveConfigs(configsToSave);
             state.statusText = changed <= 0
                     ? tOrFallback(player, "ui.runtime_config.status_apply_no_changes", "No changes to apply.")
@@ -1289,9 +1169,9 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
-    private static void handleRecalculateRefinementWeights(Player player, ViewState state, Object ctxObj) {
+    private static void handleRecalculateRefinementWeights(Player player, ViewState state) {
         String maxLevelInputId = "input_refine_max_level";
-        String rawValue = draftOrContextValue(state, ctxObj, maxLevelInputId, String.valueOf(refinementConfig().getMaxLevel()));
+        String rawValue = draftValue(state, maxLevelInputId, String.valueOf(refinementConfig().getMaxLevel()));
         Double parsed = parseInputValue(DisplayKind.INTEGER, rawValue);
         if (parsed == null) {
             state.statusText = t(player, "ui.runtime_config.status_control_invalid",
@@ -1322,304 +1202,52 @@ public final class RuntimeConfigUI {
         requestReopen(player, state);
     }
 
-    private static void handleAddLootInjectionRule(Player player, ViewState state, String groupId) {
-        List<String> entries = mutableList(lootInjectionEntries(groupId));
-        entries.add(LootInjectionUtils.formatEntry("Item_ID", 0.01d, 1, 1, isNpcLootInjectionGroup(groupId) ? "NPC_ID" : ""));
-        setLootInjectionEntries(groupId, entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(LOOT_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteLootInjectionRule(Player player, ViewState state, String groupId, int index) {
-        List<String> entries = mutableList(lootInjectionEntries(groupId));
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            setLootInjectionEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(LOOT_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleLootInjectionRuleChange(Player player, ViewState state, String groupId, int index, Object ctxObj) {
-        List<String> entries = mutableList(lootInjectionEntries(groupId));
-        if (index < 0 || index >= entries.size()) {
-            requestReopen(player, state);
-            return;
-        }
-        LootRuleEntry entry = parseLootRuleEntry(entries.get(index));
-        String itemId = draftOrContextValue(state, ctxObj, lootInjectionItemInputId(groupId, index), entry.itemId()).trim();
-        String targetId = isNpcLootInjectionGroup(groupId)
-                ? draftOrContextValue(state, ctxObj, lootInjectionTargetInputId(groupId, index), entry.targetId()).trim()
-                : "";
-        String chance = normalizeLootChanceText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, index), entry.chance()), entry.chance());
-        int minQty = Math.max(0, parseIntSafe(normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMinInputId(groupId, index), entry.min()), entry.min()), 1));
-        int maxQty = Math.max(minQty, parseIntSafe(normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMaxInputId(groupId, index), entry.max()), entry.max()), minQty));
-        if (!itemId.isBlank()) {
-            entries.set(index, LootInjectionUtils.formatEntry(itemId, parseDoubleSafe(chance, 0.0d), minQty, maxQty, targetId));
-            setLootInjectionEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(LOOT_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAddReforgeSupportMaterial(Player player, ViewState state) {
-        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
-        entries.add(formatReforgeSupportEntry(new ReforgeSupportRuleEntry(
-                "Item_ID",
-                "1.0",
-                "0.0",
-                "0.0",
-                "NEVER",
-                "0.0",
-                "0.0",
-                "1.0",
-                "1.0",
-                "Describe what this support does.")));
-        refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteReforgeSupportMaterial(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleReforgeSupportMaterialChange(Player player, ViewState state, int index, Object ctxObj) {
-        List<String> entries = mutableList(refinementConfig().getSupportMaterialEntries());
-        if (index < 0 || index >= entries.size()) {
-            requestReopen(player, state);
-            return;
-        }
-        ReforgeSupportRuleEntry entry = readReforgeSupportEntryFromInputs(state, ctxObj, index, parseReforgeSupportEntry(entries.get(index)));
-        if (!entry.itemId().isBlank()) {
-            entries.set(index, formatReforgeSupportEntry(entry));
-            refinementConfig().setSupportMaterialEntries(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(REFINEMENT_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        clearReforgeSupportDrafts(state, index);
-        requestReopen(player, state);
-    }
-
-    private static void handleAddAffinityRule(Player player, ViewState state, String groupId) {
-        List<String> entries = mutableList(affinityRuleEntries(groupId));
-        entries.add("hint:new_npc=" + AFFINITY_ELEMENTS[0]);
-        setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteAffinityRule(Player player, ViewState state, String groupId, int index) {
-        List<String> entries = mutableList(affinityRuleEntries(groupId));
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAffinityRuleChange(Player player, ViewState state, String groupId, int index, Object ctxObj) {
-        List<String> entries = mutableList(affinityRuleEntries(groupId));
-        if (index < 0 || index >= entries.size()) {
-            requestReopen(player, state);
-            return;
-        }
-        AffinityRuleEntry entry = parseAffinityRuleEntry(entries.get(index));
-        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityRuleModeSelectId(groupId, index), entry.mode()));
-        String target = draftOrContextValue(state, ctxObj, affinityRuleTargetInputId(groupId, index), entry.target()).trim();
-        String element = normalizeAffinityElement(draftOrContextValue(state, ctxObj, affinityRuleElementSelectId(groupId, index), entry.element()));
-        if (!target.isBlank()) {
-            entries.set(index, formatAffinityRuleEntry(new AffinityRuleEntry(mode, target, element)));
-            setAffinityRuleEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        clearAffinityRuleDrafts(state, groupId, index);
-        requestReopen(player, state);
-    }
-
-    private static void handleAddAffinityMultiplier(Player player, ViewState state, String groupId) {
-        List<String> entries = mutableList(affinityMultiplierEntries(groupId));
-        String fallback = GROUP_AFFINITY_SHIELDS.equals(groupId)
-                ? "hint:new_npc=FIRE:0.0,WATER:0.0,ICE:0.0,LIGHTNING:0.0,LIFE:0.0,VOID:0.0"
-                : "hint:new_npc=FIRE:1.0,WATER:1.0,ICE:1.0,LIGHTNING:1.0,LIFE:1.0,VOID:1.0";
-        entries.add(fallback);
-        setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteAffinityMultiplier(Player player, ViewState state, String groupId, int index) {
-        List<String> entries = mutableList(affinityMultiplierEntries(groupId));
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAffinityMultiplierChange(Player player, ViewState state, String groupId, int index, Object ctxObj) {
-        String[] before = affinityMultiplierEntries(groupId);
-        if (index < 0 || index >= before.length) {
-            requestReopen(player, state);
-            return;
-        }
-        List<String> entries = mutableList(before);
-        AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries.get(index));
-        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(groupId, index), entry.mode()));
-        String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(groupId, index), entry.target()).trim();
-        Map<String, String> multipliers = new LinkedHashMap<>();
-        for (String element : AFFINITY_ELEMENTS) {
-            String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(groupId, index, element), entry.multipliers().getOrDefault(element, "")).trim();
-            if (!rawValue.isBlank()) {
-                multipliers.put(element, normalizeAffinityValueText(groupId, rawValue));
-            }
-        }
-        if (!target.isBlank() && !multipliers.isEmpty()) {
-            entries.set(index, formatAffinityMultiplierEntry(groupId, new AffinityMultiplierEntry(mode, target, multipliers)));
-            setAffinityMultiplierEntries(groupId, entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        clearAffinityMultiplierDrafts(state, groupId, index);
-        requestReopen(player, state);
-    }
-
-    private static void handleAddAffinityShield(Player player, ViewState state) {
-        List<String> entries = mutableList(elementalAffinityConfig().getElementShields());
-        entries.add("hint:new_npc=100.0,8.0,0.2,5.0");
-        elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteAffinityShield(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(elementalAffinityConfig().getElementShields());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAffinityShieldChange(Player player, ViewState state, int index, Object ctxObj) {
-        String[] before = elementalAffinityConfig().getElementShields();
-        if (index < 0 || index >= before.length) {
-            requestReopen(player, state);
-            return;
-        }
-        List<String> entries = mutableList(before);
-        AffinityShieldEntry entry = parseAffinityShieldEntry(entries.get(index));
-        String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityShieldModeSelectId(index), entry.mode()));
-        String target = draftOrContextValue(state, ctxObj, affinityShieldTargetInputId(index), entry.target()).trim();
-        String shield = normalizeAffinityShieldText(
-                draftOrContextValue(state, ctxObj, affinityShieldValueInputId(index), entry.shield()),
-                entry.shield());
-        String delay = normalizeAffinityShieldNumberText(
-                draftOrContextValue(state, ctxObj, affinityShieldDelayInputId(index), entry.delay()),
-                entry.delay());
-        String rate = normalizeAffinityShieldNumberText(
-                draftOrContextValue(state, ctxObj, affinityShieldRateInputId(index), entry.rate()),
-                entry.rate());
-        String duration = normalizeAffinityShieldNumberText(
-                draftOrContextValue(state, ctxObj, affinityShieldDurationInputId(index), entry.duration()),
-                entry.duration());
-        if (!target.isBlank()) {
-            entries.set(index, formatAffinityShieldEntry(new AffinityShieldEntry(mode, target, shield, delay, rate, duration)));
-            elementalAffinityConfig().setElementShields(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(ELEMENTAL_AFFINITY_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        clearAffinityShieldDrafts(state, index);
-        requestReopen(player, state);
-    }
-
-    private static int applyVisibleMappingInputs(ViewState state, ControlGroup activeGroup, Object ctxObj, List<String> configsToSave) {
+    private static int applyVisibleMappingInputs(ViewState state, ControlGroup activeGroup, List<String> configsToSave) {
         if (activeGroup == null) {
             return 0;
         }
         if (GROUP_LORE_MAPPING_GEMS.equals(activeGroup.id)) {
-            return applyGemMappingInputs(state, ctxObj, configsToSave);
+            return applyGemMappingInputs(state, configsToSave);
         }
         if (GROUP_LORE_MAPPING_SPIRITS.equals(activeGroup.id)) {
-            return applySpiritMappingInputs(state, ctxObj, configsToSave);
+            return applySpiritMappingInputs(state, configsToSave);
         }
         if (GROUP_LORE_MAPPING_ABILITIES.equals(activeGroup.id)) {
-            return applyAbilityMappingInputs(state, ctxObj, configsToSave);
+            return applyAbilityMappingInputs(state, configsToSave);
         }
         if (GROUP_LORE_STATUS_RULES.equals(activeGroup.id)) {
-            return applyLoreStatusInputs(state, ctxObj, configsToSave);
+            return applyLoreStatusInputs(state, configsToSave);
         }
         if (isLootInjectionGroup(activeGroup.id)) {
-            return applyLootInjectionInputs(state, activeGroup.id, ctxObj, configsToSave);
+            return applyLootInjectionInputs(state, activeGroup.id, configsToSave);
         }
         if (isAffinityMappingGroup(activeGroup.id)) {
-            return applyAffinityMappingInputs(state, activeGroup.id, ctxObj, configsToSave);
+            return applyAffinityMappingInputs(state, activeGroup.id, configsToSave);
         }
         if (GROUP_REFORGE_SUPPORT_MATERIALS.equals(activeGroup.id)) {
-            return applyReforgeSupportMaterialInputs(state, ctxObj, configsToSave);
+            return applyReforgeSupportMaterialInputs(state, configsToSave);
         }
         if (GROUP_RESONANCE_CLASS_MAPPINGS.equals(activeGroup.id)) {
-            return applyResonanceMappingInputs(state, ctxObj, configsToSave);
+            return applyResonanceMappingInputs(state, configsToSave);
         }
         if (GROUP_RESONANCE_CLASS_HINTS.equals(activeGroup.id)) {
-            return applyResonanceHintInputs(state, ctxObj, configsToSave);
+            return applyResonanceHintInputs(state, configsToSave);
         }
         if (GROUP_CLOCKWORK_AMMO_HINTS.equals(activeGroup.id)) {
-            return applyClockworkAmmoHintInputs(state, ctxObj, configsToSave);
+            return applyClockworkAmmoHintInputs(state, configsToSave);
         }
         return 0;
     }
 
-    private static void handleAddResonanceMapping(Player player, ViewState state) {
-        List<String> entries = mutableList(resonanceMappingDisplayEntries());
-        entries.add("New Resonance=WEAPON");
-        socketConfig().setResonanceClassMappings(entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteResonanceMapping(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(resonanceMappingDisplayEntries());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            socketConfig().setResonanceClassMappings(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static int applyResonanceMappingInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyResonanceMappingInputs(ViewState state, List<String> configsToSave) {
         String[] before = socketConfig().getResonanceClassMappings();
         String[] display = resonanceMappingDisplayEntries();
         List<String> after = new ArrayList<>();
         for (int i = 0; i < display.length; i++) {
             ResonanceMappingEntry entry = parseResonanceMappingEntry(display[i]);
-            String name = draftOrContextValue(state, ctxObj, resonanceMappingNameInputId(i), entry.name()).trim();
+            String name = draftValue(state, resonanceMappingNameInputId(i), entry.name()).trim();
             String classes = normalizeResonanceClassText(
-                    draftOrContextValue(state, ctxObj, resonanceMappingClassesInputId(i), entry.classes()));
+                    draftValue(state, resonanceMappingClassesInputId(i), entry.classes()));
             if (!name.isBlank() && !classes.isBlank()) {
                 after.add(formatResonanceMappingEntry(new ResonanceMappingEntry(name, classes)));
             }
@@ -1634,35 +1262,15 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static void handleAddResonanceHint(Player player, ViewState state) {
-        List<String> entries = mutableList(socketConfig().getResonanceWeaponClassHints());
-        entries.add("GUN=new_hint");
-        socketConfig().setResonanceWeaponClassHints(entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteResonanceHint(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(socketConfig().getResonanceWeaponClassHints());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            socketConfig().setResonanceWeaponClassHints(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static int applyResonanceHintInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyResonanceHintInputs(ViewState state, List<String> configsToSave) {
         String[] before = socketConfig().getResonanceWeaponClassHints();
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             ResonanceHintEntry entry = parseResonanceHintEntry(before[i]);
             String clazz = normalizeResonanceHintClassText(
-                    draftOrContextValue(state, ctxObj, resonanceHintClassInputId(i), entry.weaponClass()));
+                    draftValue(state, resonanceHintClassInputId(i), entry.weaponClass()));
             String tokens = normalizeHintTokenText(
-                    draftOrContextValue(state, ctxObj, resonanceHintTokensInputId(i), entry.hints()));
+                    draftValue(state, resonanceHintTokensInputId(i), entry.hints()));
             if (!clazz.isBlank() && !tokens.isBlank()) {
                 after.add(clazz + "=" + tokens);
             }
@@ -1677,32 +1285,12 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static void handleAddClockworkAmmoHint(Player player, ViewState state) {
-        List<String> entries = mutableList(socketConfig().getClockworkAmmoItemHints());
-        entries.add("shell");
-        socketConfig().setClockworkAmmoItemHints(entries.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteClockworkAmmoHint(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(socketConfig().getClockworkAmmoItemHints());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            socketConfig().setClockworkAmmoItemHints(entries.toArray(String[]::new));
-            plugin.getConfigService().saveAndApply(SOCKET_CONFIG_NAME);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static int applyClockworkAmmoHintInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyClockworkAmmoHintInputs(ViewState state, List<String> configsToSave) {
         String[] before = socketConfig().getClockworkAmmoItemHints();
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             String token = normalizeSingleHintToken(
-                    draftOrContextValue(state, ctxObj, clockworkAmmoHintInputId(i), before[i]));
+                    draftValue(state, clockworkAmmoHintInputId(i), before[i]));
             if (!token.isBlank() && !after.contains(token)) {
                 after.add(token);
             }
@@ -1716,15 +1304,15 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyAffinityMappingInputs(ViewState state, String groupId, Object ctxObj, List<String> configsToSave) {
+    private static int applyAffinityMappingInputs(ViewState state, String groupId, List<String> configsToSave) {
         if (isAffinityRuleGroup(groupId)) {
             String[] before = affinityRuleEntries(groupId);
             List<String> after = new ArrayList<>();
             for (int i = 0; i < before.length; i++) {
                 AffinityRuleEntry entry = parseAffinityRuleEntry(before[i]);
-                String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityRuleModeSelectId(groupId, i), entry.mode()));
-                String target = draftOrContextValue(state, ctxObj, affinityRuleTargetInputId(groupId, i), entry.target()).trim();
-                String element = normalizeAffinityElement(draftOrContextValue(state, ctxObj, affinityRuleElementSelectId(groupId, i), entry.element()));
+                String mode = normalizeAffinityMode(draftValue(state, affinityRuleModeSelectId(groupId, i), entry.mode()));
+                String target = draftValue(state, affinityRuleTargetInputId(groupId, i), entry.target()).trim();
+                String element = normalizeAffinityElement(draftValue(state, affinityRuleElementSelectId(groupId, i), entry.element()));
                 if (!target.isBlank()) {
                     after.add(formatAffinityRuleEntry(new AffinityRuleEntry(mode, target, element)));
                 }
@@ -1739,18 +1327,18 @@ public final class RuntimeConfigUI {
         }
 
         if (GROUP_AFFINITY_SHIELDS.equals(groupId)) {
-            return applyAffinityShieldInputs(state, ctxObj, configsToSave);
+            return applyAffinityShieldInputs(state, configsToSave);
         }
 
         String[] before = affinityMultiplierEntries(groupId);
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(before[i]);
-            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityMultiplierModeSelectId(groupId, i), entry.mode()));
-            String target = draftOrContextValue(state, ctxObj, affinityMultiplierTargetInputId(groupId, i), entry.target()).trim();
+            String mode = normalizeAffinityMode(draftValue(state, affinityMultiplierModeSelectId(groupId, i), entry.mode()));
+            String target = draftValue(state, affinityMultiplierTargetInputId(groupId, i), entry.target()).trim();
             Map<String, String> multipliers = new LinkedHashMap<>();
             for (String element : AFFINITY_ELEMENTS) {
-                String rawValue = draftOrContextValue(state, ctxObj, affinityMultiplierElementInputId(groupId, i, element), entry.multipliers().getOrDefault(element, "")).trim();
+                String rawValue = draftValue(state, affinityMultiplierElementInputId(groupId, i, element), entry.multipliers().getOrDefault(element, "")).trim();
                 if (!rawValue.isBlank()) {
                     multipliers.put(element, normalizeAffinityValueText(groupId, rawValue));
                 }
@@ -1768,24 +1356,24 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyAffinityShieldInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyAffinityShieldInputs(ViewState state, List<String> configsToSave) {
         String[] before = elementalAffinityConfig().getElementShields();
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             AffinityShieldEntry entry = parseAffinityShieldEntry(before[i]);
-            String mode = normalizeAffinityMode(draftOrContextValue(state, ctxObj, affinityShieldModeSelectId(i), entry.mode()));
-            String target = draftOrContextValue(state, ctxObj, affinityShieldTargetInputId(i), entry.target()).trim();
+            String mode = normalizeAffinityMode(draftValue(state, affinityShieldModeSelectId(i), entry.mode()));
+            String target = draftValue(state, affinityShieldTargetInputId(i), entry.target()).trim();
             String shield = normalizeAffinityShieldText(
-                    draftOrContextValue(state, ctxObj, affinityShieldValueInputId(i), entry.shield()),
+                    draftValue(state, affinityShieldValueInputId(i), entry.shield()),
                     entry.shield());
             String delay = normalizeAffinityShieldNumberText(
-                    draftOrContextValue(state, ctxObj, affinityShieldDelayInputId(i), entry.delay()),
+                    draftValue(state, affinityShieldDelayInputId(i), entry.delay()),
                     entry.delay());
             String rate = normalizeAffinityShieldNumberText(
-                    draftOrContextValue(state, ctxObj, affinityShieldRateInputId(i), entry.rate()),
+                    draftValue(state, affinityShieldRateInputId(i), entry.rate()),
                     entry.rate());
             String duration = normalizeAffinityShieldNumberText(
-                    draftOrContextValue(state, ctxObj, affinityShieldDurationInputId(i), entry.duration()),
+                    draftValue(state, affinityShieldDurationInputId(i), entry.duration()),
                     entry.duration());
             if (!target.isBlank()) {
                 after.add(formatAffinityShieldEntry(new AffinityShieldEntry(mode, target, shield, delay, rate, duration)));
@@ -1800,18 +1388,18 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyLootInjectionInputs(ViewState state, String groupId, Object ctxObj, List<String> configsToSave) {
+    private static int applyLootInjectionInputs(ViewState state, String groupId, List<String> configsToSave) {
         String[] before = lootInjectionEntries(groupId);
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
             LootRuleEntry entry = parseLootRuleEntry(before[i]);
-            String itemId = draftOrContextValue(state, ctxObj, lootInjectionItemInputId(groupId, i), entry.itemId()).trim();
+            String itemId = draftValue(state, lootInjectionItemInputId(groupId, i), entry.itemId()).trim();
             String targetId = isNpcLootInjectionGroup(groupId)
-                    ? draftOrContextValue(state, ctxObj, lootInjectionTargetInputId(groupId, i), entry.targetId()).trim()
+                    ? draftValue(state, lootInjectionTargetInputId(groupId, i), entry.targetId()).trim()
                     : "";
-            String chance = normalizeLootChanceText(draftOrContextValue(state, ctxObj, lootInjectionChanceInputId(groupId, i), entry.chance()), entry.chance());
-            String min = normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMinInputId(groupId, i), entry.min()), entry.min());
-            String max = normalizeIntegerText(draftOrContextValue(state, ctxObj, lootInjectionMaxInputId(groupId, i), entry.max()), entry.max());
+            String chance = normalizeLootChanceText(draftValue(state, lootInjectionChanceInputId(groupId, i), entry.chance()), entry.chance());
+            String min = normalizeIntegerText(draftValue(state, lootInjectionMinInputId(groupId, i), entry.min()), entry.min());
+            String max = normalizeIntegerText(draftValue(state, lootInjectionMaxInputId(groupId, i), entry.max()), entry.max());
             if (!itemId.isBlank()) {
                 int minQty = Math.max(0, parseIntSafe(min, 1));
                 int maxQty = Math.max(minQty, parseIntSafe(max, minQty));
@@ -1833,11 +1421,11 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyReforgeSupportMaterialInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyReforgeSupportMaterialInputs(ViewState state, List<String> configsToSave) {
         String[] before = refinementConfig().getSupportMaterialEntries();
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.length; i++) {
-            ReforgeSupportRuleEntry entry = readReforgeSupportEntryFromInputs(state, ctxObj, i, parseReforgeSupportEntry(before[i]));
+            ReforgeSupportRuleEntry entry = readReforgeSupportEntryFromInputs(state, i, parseReforgeSupportEntry(before[i]));
             if (!entry.itemId().isBlank()) {
                 after.add(formatReforgeSupportEntry(entry));
             }
@@ -1851,7 +1439,7 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applySpiritMappingInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applySpiritMappingInputs(ViewState state, List<String> configsToSave) {
         String[] before = loreMappingConfig().getColorSpiritEntries();
         List<String> entries = mutableList(before);
         for (String color : LORE_COLORS) {
@@ -1859,7 +1447,7 @@ public final class RuntimeConfigUI {
             List<String> updated = new ArrayList<>();
             for (int i = 0; i < spirits.size(); i++) {
                 String elementId = spiritMappingSelectId(color, i);
-                String spirit = draftOrContextValue(state, ctxObj, elementId, spirits.get(i)).trim();
+                String spirit = draftValue(state, elementId, spirits.get(i)).trim();
                 if (!spirit.isBlank() && !updated.contains(spirit)) {
                     updated.add(spirit);
                 }
@@ -1877,7 +1465,7 @@ public final class RuntimeConfigUI {
         return 0;
     }
 
-    private static int applyGemMappingInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyGemMappingInputs(ViewState state, List<String> configsToSave) {
         List<String> before = mutableList(loreMappingConfig().getGemColorEntries());
         List<String> after = new ArrayList<>();
         for (String color : LORE_COLORS) {
@@ -1888,7 +1476,7 @@ public final class RuntimeConfigUI {
                     continue;
                 }
                 String elementId = gemMappingTokenInputId(i);
-                String token = draftOrContextValue(state, ctxObj, elementId, entry.key()).trim();
+                String token = draftValue(state, elementId, entry.key()).trim();
                 if (!token.isBlank()) {
                     after.add(token + "=" + color);
                 }
@@ -1905,13 +1493,13 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyAbilityMappingInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyAbilityMappingInputs(ViewState state, List<String> configsToSave) {
         List<String> before = mutableList(loreMappingConfig().getAbilityEntries());
         List<String> after = new ArrayList<>();
         for (int i = 0; i < before.size(); i++) {
             AbilityEntry ability = parseAbilityEntry(before.get(i));
-            String spirit = draftOrContextValue(state, ctxObj, abilitySpiritSelectId(i), ability.spirit()).trim();
-            String trigger = normalizeAbilityToken(draftOrContextValue(state, ctxObj, abilityTriggerSelectId(i), ability.trigger()), ability.trigger());
+            String spirit = draftValue(state, abilitySpiritSelectId(i), ability.spirit()).trim();
+            String trigger = normalizeAbilityToken(draftValue(state, abilityTriggerSelectId(i), ability.trigger()), ability.trigger());
             if (spirit.isBlank()) {
                 continue;
             }
@@ -1920,11 +1508,11 @@ public final class RuntimeConfigUI {
                 updated = ability.withSpirit(spirit).asSignature(trigger);
             } else {
                 updated = ability.withSpirit(spirit).asNormal(trigger)
-                        .withChance(normalizeDecimalText(draftOrContextValue(state, ctxObj, abilityChanceInputId(i), ability.chance()), ability.chance(), false))
-                        .withCooldown(normalizeIntegerText(draftOrContextValue(state, ctxObj, abilityCooldownInputId(i), ability.cooldown()), ability.cooldown()))
-                        .withEffect(normalizeAbilityToken(draftOrContextValue(state, ctxObj, abilityEffectSelectId(i), ability.effect()), ability.effect()))
-                        .withBase(normalizeDecimalText(draftOrContextValue(state, ctxObj, abilityBaseInputId(i), ability.base()), ability.base(), false))
-                        .withPerLevel(normalizeDecimalText(draftOrContextValue(state, ctxObj, abilityPerLevelInputId(i), ability.perLevel()), ability.perLevel(), false));
+                        .withChance(normalizeDecimalText(draftValue(state, abilityChanceInputId(i), ability.chance()), ability.chance(), false))
+                        .withCooldown(normalizeIntegerText(draftValue(state, abilityCooldownInputId(i), ability.cooldown()), ability.cooldown()))
+                        .withEffect(normalizeAbilityToken(draftValue(state, abilityEffectSelectId(i), ability.effect()), ability.effect()))
+                        .withBase(normalizeDecimalText(draftValue(state, abilityBaseInputId(i), ability.base()), ability.base(), false))
+                        .withPerLevel(normalizeDecimalText(draftValue(state, abilityPerLevelInputId(i), ability.perLevel()), ability.perLevel(), false));
             }
             after.add(formatAbilityEntry(updated));
             if (state != null) {
@@ -1945,16 +1533,16 @@ public final class RuntimeConfigUI {
         return 1;
     }
 
-    private static int applyLoreStatusInputs(ViewState state, Object ctxObj, List<String> configsToSave) {
+    private static int applyLoreStatusInputs(ViewState state, List<String> configsToSave) {
         int changed = 0;
         List<StatusRuleEntry> rulesBefore = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
         List<StatusRuleEntry> rulesAfter = new ArrayList<>();
         for (int i = 0; i < rulesBefore.size(); i++) {
             StatusRuleEntry entry = rulesBefore.get(i);
             rulesAfter.add(new StatusRuleEntry(
-                    normalizeStatusKeyForUi(draftOrContextValue(state, ctxObj, statusRuleStatusSelectId(i), entry.status())),
-                    normalizeIntegerText(draftOrContextValue(state, ctxObj, statusRuleStepInputId(i), entry.step()), entry.step()),
-                    normalizeStatusPattern(draftOrContextValue(state, ctxObj, statusRulePatternSelectId(i), entry.pattern()))));
+                    normalizeStatusKeyForUi(draftValue(state, statusRuleStatusSelectId(i), entry.status())),
+                    normalizeIntegerText(draftValue(state, statusRuleStepInputId(i), entry.step()), entry.step()),
+                    normalizeStatusPattern(draftValue(state, statusRulePatternSelectId(i), entry.pattern()))));
             if (state != null) {
                 state.draftValues.remove(statusRuleStatusSelectId(i));
                 state.draftValues.remove(statusRuleStepInputId(i));
@@ -1972,9 +1560,9 @@ public final class RuntimeConfigUI {
         for (int i = 0; i < resistBefore.size(); i++) {
             StatusResistanceEntry entry = resistBefore.get(i);
             resistAfter.add(new StatusResistanceEntry(
-                    normalizeNpcIdForUi(draftOrContextValue(state, ctxObj, statusResistanceNpcInputId(i), entry.npcId())),
-                    normalizeStatusKeyForUi(draftOrContextValue(state, ctxObj, statusResistanceStatusSelectId(i), entry.status())),
-                    normalizeDecimalText(draftOrContextValue(state, ctxObj, statusResistanceValueInputId(i), entry.value()), entry.value(), true)));
+                    normalizeNpcIdForUi(draftValue(state, statusResistanceNpcInputId(i), entry.npcId())),
+                    normalizeStatusKeyForUi(draftValue(state, statusResistanceStatusSelectId(i), entry.status())),
+                    normalizeDecimalText(draftValue(state, statusResistanceValueInputId(i), entry.value()), entry.value(), true)));
             if (state != null) {
                 state.draftValues.remove(statusResistanceNpcInputId(i));
                 state.draftValues.remove(statusResistanceStatusSelectId(i));
@@ -1992,8 +1580,8 @@ public final class RuntimeConfigUI {
         for (int i = 0; i < countersBefore.size(); i++) {
             StatusCounterEntry entry = countersBefore.get(i);
             countersAfter.add(new StatusCounterEntry(
-                    normalizeNpcIdForUi(draftOrContextValue(state, ctxObj, statusCounterNpcInputId(i), entry.npcId())),
-                    normalizeStatusKeyForUi(draftOrContextValue(state, ctxObj, statusCounterStatusSelectId(i), entry.status()))));
+                    normalizeNpcIdForUi(draftValue(state, statusCounterNpcInputId(i), entry.npcId())),
+                    normalizeStatusKeyForUi(draftValue(state, statusCounterStatusSelectId(i), entry.status()))));
             if (state != null) {
                 state.draftValues.remove(statusCounterNpcInputId(i));
                 state.draftValues.remove(statusCounterStatusSelectId(i));
@@ -2008,7 +1596,7 @@ public final class RuntimeConfigUI {
         List<String> bleedBefore = mutableList(loreConfig().getBleedBossCounterNpcIds());
         List<String> bleedAfter = new ArrayList<>();
         for (int i = 0; i < bleedBefore.size(); i++) {
-            String npcId = normalizeNpcIdForUi(draftOrContextValue(state, ctxObj, bleedCounterNpcInputId(i), bleedBefore.get(i)));
+            String npcId = normalizeNpcIdForUi(draftValue(state, bleedCounterNpcInputId(i), bleedBefore.get(i)));
             if (!npcId.isBlank()) {
                 bleedAfter.add(npcId);
             }
@@ -2024,1599 +1612,20 @@ public final class RuntimeConfigUI {
         return changed;
     }
 
-    private static void handleGemMappingTokenChange(Player player, ViewState state, int index, Object eventObj, Object ctxObj) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, gemMappingTokenInputId(index), "#" + gemMappingTokenInputId(index) + ".value");
-        }
-        String token = rawValue == null ? "" : rawValue.trim();
-        List<String> entries = mutableList(loreMappingConfig().getGemColorEntries());
-        if (index >= 0 && index < entries.size() && !token.isBlank()) {
-            KeyValue entry = parseKeyValue(entries.get(index));
-            entries.set(index, token + "=" + normalizeLoreColor(entry.value()));
-            saveGemColorEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleToggleCoreColor(Player player, ViewState state, String color) {
-        String normalizedColor = normalizeLoreColor(color);
-        List<String> colors = mutableList(loreMappingConfig().getCoreColorEntries());
-        boolean removed = colors.removeIf(entry -> normalizedColor.equals(normalizeLoreColor(entry)));
-        if (!removed) {
-            colors.add(normalizedColor);
-        }
-        loreMappingConfig().setCoreColorEntries(colors.toArray(String[]::new));
-        plugin.getConfigService().saveAndApply(LORE_MAPPING_CONFIG_NAME);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        requestReopen(player, state);
-    }
-
-    private static void handleAddSpiritMapping(Player player, ViewState state, String color) {
-        String nextSpirit = firstAvailableSpirit(color);
-        if (nextSpirit == null || nextSpirit.isBlank()) {
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_no_spirits", "No spirit entries available.");
-            requestReopen(player, state);
-            return;
-        }
-        List<String> spirits = spiritsForColor(color);
-        spirits.add(nextSpirit);
-        setSpiritsForColor(color, spirits);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteSpiritMapping(Player player, ViewState state, String color, int index) {
-        List<String> spirits = spiritsForColor(color);
-        if (index >= 0 && index < spirits.size()) {
-            spirits.remove(index);
-            setSpiritsForColor(color, spirits);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleSpiritMappingChange(Player player, ViewState state, String color, int index, Object eventObj, Object ctxObj) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, spiritMappingSelectId(color, index), "#" + spiritMappingSelectId(color, index) + ".value");
-        }
-        if (rawValue != null) {
-            state.draftValues.put(spiritMappingSelectId(color, index), rawValue);
-        }
-    }
-
-    private static void handleAddAbilityMapping(Player player, ViewState state) {
-        List<String> entries = mutableList(loreMappingConfig().getAbilityEntries());
-        String spirit = firstAvailableAbilitySpirit(entries);
-        entries.add(spirit + "=ON_HIT,0.10,2000,DAMAGE_TARGET,2.0,0.10");
-        saveAbilityEntries(entries);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteAbilityMapping(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(loreMappingConfig().getAbilityEntries());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            saveAbilityEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAbilitySpiritChange(Player player, ViewState state, int index, Object eventObj, Object ctxObj) {
-        String spirit = extractMappingEventValue(eventObj, ctxObj, abilitySpiritSelectId(index));
-        List<String> entries = mutableList(loreMappingConfig().getAbilityEntries());
-        if (index >= 0 && index < entries.size() && spirit != null && !spirit.isBlank()) {
-            AbilityEntry ability = parseAbilityEntry(entries.get(index));
-            entries.set(index, formatAbilityEntry(ability.withSpirit(spirit.trim())));
-            saveAbilityEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAbilityTriggerChange(Player player, ViewState state, int index, Object eventObj, Object ctxObj) {
-        String trigger = normalizeAbilityToken(extractMappingEventValue(eventObj, ctxObj, abilityTriggerSelectId(index)), "ON_HIT");
-        List<String> entries = mutableList(loreMappingConfig().getAbilityEntries());
-        if (index >= 0 && index < entries.size()) {
-            AbilityEntry ability = parseAbilityEntry(entries.get(index));
-            if (isSignatureAbility(trigger)) {
-                entries.set(index, formatAbilityEntry(ability.asSignature(trigger)));
-            } else {
-                entries.set(index, formatAbilityEntry(ability.asNormal(trigger)));
-            }
-            saveAbilityEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAbilityFieldChange(Player player, ViewState state, int index, AbilityField field, Object eventObj, Object ctxObj) {
-        String elementId = switch (field) {
-            case CHANCE -> abilityChanceInputId(index);
-            case COOLDOWN -> abilityCooldownInputId(index);
-            case EFFECT -> abilityEffectSelectId(index);
-            case BASE -> abilityBaseInputId(index);
-            case PER_LEVEL -> abilityPerLevelInputId(index);
-        };
-        String value = extractMappingEventValue(eventObj, ctxObj, elementId);
-        List<String> entries = mutableList(loreMappingConfig().getAbilityEntries());
-        if (index >= 0 && index < entries.size()) {
-            AbilityEntry ability = parseAbilityEntry(entries.get(index));
-            AbilityEntry updated = switch (field) {
-                case CHANCE -> ability.withChance(normalizeDecimalText(value, ability.chance(), false));
-                case COOLDOWN -> ability.withCooldown(normalizeIntegerText(value, ability.cooldown()));
-                case EFFECT -> ability.withEffect(normalizeAbilityToken(value, ability.effect()));
-                case BASE -> ability.withBase(normalizeDecimalText(value, ability.base(), false));
-                case PER_LEVEL -> ability.withPerLevel(normalizeDecimalText(value, ability.perLevel(), false));
-            };
-            entries.set(index, formatAbilityEntry(updated));
-            saveAbilityEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAddStatusRule(Player player, ViewState state) {
-        List<StatusRuleEntry> entries = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
-        entries.add(new StatusRuleEntry("bleed", "5", "FIBONACCI"));
-        saveStatusRuleEntries(entries);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteStatusRule(Player player, ViewState state, int index) {
-        List<StatusRuleEntry> entries = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            saveStatusRuleEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleStatusRuleChange(Player player, ViewState state, int index, StatusRuleField field, Object eventObj, Object ctxObj) {
-        String elementId = switch (field) {
-            case STATUS -> statusRuleStatusSelectId(index);
-            case STEP -> statusRuleStepInputId(index);
-            case PATTERN -> statusRulePatternSelectId(index);
-        };
-        String value = extractMappingEventValue(eventObj, ctxObj, elementId);
-        List<StatusRuleEntry> entries = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
-        if (index >= 0 && index < entries.size()) {
-            StatusRuleEntry entry = entries.get(index);
-            entries.set(index, switch (field) {
-                case STATUS -> new StatusRuleEntry(normalizeStatusKeyForUi(value), entry.step(), entry.pattern());
-                case STEP -> new StatusRuleEntry(entry.status(), normalizeIntegerText(value, entry.step()), entry.pattern());
-                case PATTERN -> new StatusRuleEntry(entry.status(), entry.step(), normalizeStatusPattern(value));
-            });
-            saveStatusRuleEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAddStatusResistance(Player player, ViewState state) {
-        List<StatusResistanceEntry> entries = parseStatusResistanceEntries(loreConfig().getNpcStatusResistanceEntries());
-        entries.add(new StatusResistanceEntry("NPC_ID", "bleed", "1.0"));
-        saveStatusResistanceEntries(entries);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteStatusResistance(Player player, ViewState state, int index) {
-        List<StatusResistanceEntry> entries = parseStatusResistanceEntries(loreConfig().getNpcStatusResistanceEntries());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            saveStatusResistanceEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleStatusResistanceChange(Player player, ViewState state, int index, StatusResistanceField field, Object eventObj, Object ctxObj) {
-        String elementId = switch (field) {
-            case NPC -> statusResistanceNpcInputId(index);
-            case STATUS -> statusResistanceStatusSelectId(index);
-            case VALUE -> statusResistanceValueInputId(index);
-        };
-        String value = extractMappingEventValue(eventObj, ctxObj, elementId);
-        List<StatusResistanceEntry> entries = parseStatusResistanceEntries(loreConfig().getNpcStatusResistanceEntries());
-        if (index >= 0 && index < entries.size()) {
-            StatusResistanceEntry entry = entries.get(index);
-            entries.set(index, switch (field) {
-                case NPC -> new StatusResistanceEntry(normalizeNpcIdForUi(value), entry.status(), entry.value());
-                case STATUS -> new StatusResistanceEntry(entry.npcId(), normalizeStatusKeyForUi(value), entry.value());
-                case VALUE -> new StatusResistanceEntry(entry.npcId(), entry.status(), normalizeDecimalText(value, entry.value(), true));
-            });
-            saveStatusResistanceEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAddStatusCounter(Player player, ViewState state) {
-        List<StatusCounterEntry> entries = parseStatusCounterEntries(loreConfig().getStatusBossCounterNpcIds());
-        entries.add(new StatusCounterEntry("NPC_ID", "bleed"));
-        saveStatusCounterEntries(entries);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteStatusCounter(Player player, ViewState state, int index) {
-        List<StatusCounterEntry> entries = parseStatusCounterEntries(loreConfig().getStatusBossCounterNpcIds());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            saveStatusCounterEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleStatusCounterChange(Player player, ViewState state, int index, StatusCounterField field, Object eventObj, Object ctxObj) {
-        String elementId = field == StatusCounterField.NPC
-                ? statusCounterNpcInputId(index)
-                : statusCounterStatusSelectId(index);
-        String value = extractMappingEventValue(eventObj, ctxObj, elementId);
-        List<StatusCounterEntry> entries = parseStatusCounterEntries(loreConfig().getStatusBossCounterNpcIds());
-        if (index >= 0 && index < entries.size()) {
-            StatusCounterEntry entry = entries.get(index);
-            entries.set(index, field == StatusCounterField.NPC
-                    ? new StatusCounterEntry(normalizeNpcIdForUi(value), entry.status())
-                    : new StatusCounterEntry(entry.npcId(), normalizeStatusKeyForUi(value)));
-            saveStatusCounterEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleAddBleedCounter(Player player, ViewState state) {
-        List<String> entries = mutableList(loreConfig().getBleedBossCounterNpcIds());
-        entries.add("NPC_ID");
-        saveBleedCounterEntries(entries);
-        state.statusText = tOrFallback(player, "ui.runtime_config.mapping_added", "Mapping added.");
-        requestReopen(player, state);
-    }
-
-    private static void handleDeleteBleedCounter(Player player, ViewState state, int index) {
-        List<String> entries = mutableList(loreConfig().getBleedBossCounterNpcIds());
-        if (index >= 0 && index < entries.size()) {
-            entries.remove(index);
-            saveBleedCounterEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_deleted", "Mapping deleted.");
-        }
-        requestReopen(player, state);
-    }
-
-    private static void handleBleedCounterChange(Player player, ViewState state, int index, Object eventObj, Object ctxObj) {
-        String npcId = extractMappingEventValue(eventObj, ctxObj, bleedCounterNpcInputId(index));
-        List<String> entries = mutableList(loreConfig().getBleedBossCounterNpcIds());
-        if (index >= 0 && index < entries.size()) {
-            entries.set(index, normalizeNpcIdForUi(npcId));
-            saveBleedCounterEntries(entries);
-            state.statusText = tOrFallback(player, "ui.runtime_config.mapping_updated", "Mapping updated.");
-        }
-        requestReopen(player, state);
-    }
-
     private static void requestReopen(Player player, ViewState state) {
         if (player == null) {
             return;
         }
         PlayerRef playerRef = player.getPlayerRef();
         viewStates.put(playerRef, state);
-        player.getWorld().execute(() -> openWithSync(player));
-    }
-
-    private static String buildCategoriesHtml(Player player, ViewState state) {
-        StringBuilder sb = new StringBuilder();
-        CategorySection activeCategory = resolveActiveCategory(state);
-        sb.append("<div style=\"layout-mode:Top; spacing:10;\">");
-        sb.append("<div style=\"anchor-width:")
-                .append(CATEGORY_WIDTH)
-                .append("; anchor-height:52; layout-mode:Left; spacing:8; background-color:#0f1520; padding:10; border-radius:6; overflow-x:auto; overflow-y:hidden;\">");
-        for (CategorySection category : categories) {
-            sb.append(buildNavigationButton(
-                    category.toggleButtonId,
-                    localizedCategoryTitle(player, category),
-                    category.id.equals(state.activeCategoryId),
-                    188));
-        }
-        sb.append("</div>");
-        if (activeCategory != null) {
-            sb.append(buildCategoryHtml(player, activeCategory, state));
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildCategoryTabsHtml(Player player, ViewState state) {
-        StringBuilder sb = new StringBuilder();
-        String activeId = state == null ? "" : state.activeCategoryId;
-        for (CategorySection category : categories) {
-            sb.append(buildNavigationButton(
-                    category.toggleButtonId,
-                    localizedCategoryTitle(player, category),
-                    category.id.equals(activeId),
-                    180));
-        }
-        return sb.toString();
-    }
-
-    private static String buildGroupNavHtml(Player player, CategorySection category, ControlGroup activeGroup) {
-        if (category == null || category.groups.isEmpty()) {
-            return "<p style=\"font-size:11; color:#b0b0c2;\">" + escapeHtml(t(player, "ui.runtime_config.empty_sections")) + "</p>";
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode: top; spacing: 6;\">");
-        sb.append("<p style=\"font-size:11; color:#D8C27A; font-weight:bold;\">")
-                .append(escapeHtml(localizedCategoryTitle(player, category)))
-                .append("</p>");
-        String categorySummary = localizedCategorySummary(player, category);
-        if (!categorySummary.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(categorySummary))
-                    .append("</p>");
-        }
-        for (ControlGroup group : category.groups) {
-            sb.append(buildNavigationButton(
-                    group.buttonId(category.id),
-                    localizedGroupTitle(player, category, group),
-                    activeGroup != null && group.id.equals(activeGroup.id),
-                    260));
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildCategorySummaryHtml(CategorySection category) {
-        if (category == null) {
-            return buildPickerSummaryCard("No categories available.", "");
-        }
-        return buildPickerSummaryCard(category.title, category.summary);
-    }
-
-    private static String buildGroupSummaryHtml(CategorySection category, ControlGroup group) {
-        if (category == null) {
-            return buildPickerSummaryCard("Select a category first.", "");
-        }
-        if (group == null) {
-            return buildPickerSummaryCard("No sections available.", "");
-        }
-        return buildPickerSummaryCard(group.title, group.description);
-    }
-
-    private static String buildPickerSummaryCard(String title, String summary) {
-        String safeTitle = title == null ? "" : title;
-        String safeSummary = summary == null ? "" : summary;
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-height:72; anchor-width:440; layout-mode:Top; padding:6; background-image:url(output_bg.png); background-size:100% 100%; background-repeat:no-repeat; background-position:center;\">");
-        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(safeTitle)).append("</p>");
-        if (!safeSummary.isBlank()) {
-            sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(safeSummary)).append("</p>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildControlsHtml(Player player, CategorySection category, ControlGroup group, ViewState state) {
-        if (category == null) {
-            return "<p>" + escapeHtml(t(player, "ui.runtime_config.empty_categories")) + "</p>";
-        }
-        if (group == null) {
-            return "<p>" + escapeHtml(t(player, "ui.runtime_config.empty_sections")) + "</p>";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode: top; spacing: 4; padding-bottom: 8;\">");
-        sb.append("<p style=\"font-size:12; color:#D8C27A; font-weight:bold;\">")
-                .append(escapeHtml(localizedGroupTitle(player, category, group)))
-                .append("</p>");
-        String groupDescription = localizedGroupDescription(player, category, group);
-        if (!groupDescription.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(groupDescription))
-                    .append("</p>");
-        }
-        sb.append("</div>");
-        sb.append(buildControlsListHtml(player, group, state));
-        String noteText = localizedCategoryNote(player, category);
-        if (!noteText.isBlank()) {
-            sb.append("<div style=\"layout-mode:Top; padding:8; background-color:#191919; border-radius:4;\">")
-                    .append("<p style=\"color:#C9B26D;\">")
-                    .append(escapeHtml(noteText))
-                    .append("</p></div>");
-        }
-        return sb.toString();
-    }
-
-    private static String buildControlsListHtml(Player player, ControlGroup group, ViewState state) {
-        if (group == null) {
-            return "<p>" + escapeHtml(t(player, "ui.runtime_config.empty_controls")) + "</p>";
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div id=\"controlsList\" style=\"layout-mode: top; spacing: 6; anchor-width: 1100; background-color: #121B29; padding: 10; overflow-x:auto; overflow-y:visible;\">");
-        if (GROUP_LORE_MAPPING_GEMS.equals(group.id)) {
-            sb.append(buildGemMappingCardsHtml(player));
-        } else if (GROUP_LORE_MAPPING_SPIRITS.equals(group.id)) {
-            sb.append(buildSpiritMappingCardsHtml(player));
-        } else if (GROUP_LORE_MAPPING_ABILITIES.equals(group.id)) {
-            sb.append(buildAbilityMappingCardsHtml(player));
-        } else if (GROUP_LORE_STATUS_RULES.equals(group.id)) {
-            sb.append(buildLoreStatusCardsHtml(player));
-        } else if (isLootInjectionGroup(group.id)) {
-            sb.append(buildLootInjectionCardsHtml(player, group.id));
-        } else if (isAffinityMappingGroup(group.id)) {
-            sb.append(buildAffinityMappingCardsHtml(player, group.id));
-        } else if (GROUP_REFORGE_SUPPORT_MATERIALS.equals(group.id)) {
-            sb.append(buildReforgeSupportMaterialCardsHtml(player));
-        } else if (GROUP_RESONANCE_CLASS_MAPPINGS.equals(group.id)) {
-            sb.append(buildResonanceMappingCardsHtml(player));
-        } else if (GROUP_RESONANCE_CLASS_HINTS.equals(group.id)) {
-            sb.append(buildResonanceHintCardsHtml(player));
-        } else if (GROUP_CLOCKWORK_AMMO_HINTS.equals(group.id)) {
-            sb.append(buildClockworkAmmoHintCardsHtml(player));
-        } else if ("refine_limits".equals(group.id)) {
-            sb.append(buildRefineLimitsWithWeightCardsHtml(player, group, state));
-        } else if (group.controls == null || group.controls.isEmpty()) {
-            sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(t(player, "ui.runtime_config.empty_controls_section"))).append("</p>");
-        } else {
-            int singleColumnWidth = 1100;
-            for (ControlEntry entry : group.controls) {
-                if (entry instanceof NumericControl control) {
-                    sb.append(buildControlCell(player, control, singleColumnWidth, state));
-                } else if (entry instanceof TextControl control) {
-                    sb.append(buildTextControlCell(player, control, singleColumnWidth, state));
-                } else if (entry instanceof SelectControl control) {
-                    sb.append(buildSelectControlCell(player, control, singleColumnWidth, state));
-                }
+        player.getWorld().execute(() -> {
+            NativeRuntimeConfigPage nativePage = openPages.get(playerRef);
+            if (nativePage != null) {
+                nativePage.refresh(player);
+            } else {
+                openWithSync(player);
             }
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildGemMappingCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = loreMappingConfig().getGemColorEntries();
-        for (String color : LORE_COLORS) {
-            sb.append("<div style=\"layout-mode:Top; spacing:4; anchor-width:730; padding:6; background-color:#0d131d; border-radius:4;\">");
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:28; padding-left:6;\">");
-            sb.append("<p style=\"font-size:12; color:")
-                    .append(loreColorHex(color))
-                    .append("; font-weight:bold; anchor-width:120;\">")
-                    .append(escapeHtml(localizedLoreColor(player, color)))
-                    .append("</p>");
-            String coreKey = isCoreLoreColor(color) ? "ui.runtime_config.mapping_core_on" : "ui.runtime_config.mapping_core_off";
-            String coreFallback = isCoreLoreColor(color) ? "Core: On" : "Core: Off";
-            sb.append("<button id=\"").append(coreColorToggleButtonId(color))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:110; anchor-height:24;\">")
-                    .append(escapeHtml(tOrFallback(player, coreKey, coreFallback)))
-                    .append("</button>");
-            sb.append("</div>");
-
-            boolean any = false;
-            for (int i = 0; i < entries.length; i++) {
-                KeyValue entry = parseKeyValue(entries[i]);
-                if (!color.equals(normalizeLoreColor(entry.value()))) {
-                    continue;
-                }
-                any = true;
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-                sb.append("<input type=\"text\" id=\"").append(gemMappingTokenInputId(i))
-                        .append("\" style=\"anchor-width:640; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.key()))
-                        .append("\">");
-                sb.append("</div>");
-            }
-            if (!any) {
-                sb.append("<p style=\"font-size:10; color:#78849A;\">")
-                        .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_empty_color", "No mappings for this color.")))
-                        .append("</p>");
-            }
-            sb.append("</div>");
-        }
-        return sb.toString();
-    }
-
-    private static String buildSpiritMappingCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        for (String color : LORE_COLORS) {
-            List<String> spirits = spiritsForColor(color);
-            sb.append("<div style=\"layout-mode:Top; spacing:4; anchor-width:730; padding:6; background-color:#0d131d; border-radius:4;\">");
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:28; padding-left:6;\">");
-            sb.append("<p style=\"font-size:12; color:")
-                    .append(loreColorHex(color))
-                    .append("; font-weight:bold; anchor-width:120;\">")
-                    .append(escapeHtml(localizedLoreColor(player, color)))
-                    .append("</p>");
-            sb.append("<button id=\"").append(spiritMappingAddButtonId(color))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">")
-                    .append("+")
-                    .append("</button>");
-            sb.append("</div>");
-
-            if (spirits.isEmpty()) {
-                sb.append("<p style=\"font-size:10; color:#78849A;\">")
-                        .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_all_spirits", "No spirit cards yet. Empty means all spirits are allowed.")))
-                        .append("</p>");
-            }
-            for (int i = 0; i < spirits.size(); i++) {
-                String selected = spirits.get(i);
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-                sb.append("<input type=\"text\" id=\"").append(spiritMappingSelectId(color, i))
-                        .append("\" style=\"anchor-width:390; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(selected))
-                        .append("\">");
-                sb.append("<button id=\"").append(spiritMappingDeleteButtonId(color, i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">")
-                        .append("x")
-                        .append("</button>");
-                sb.append("</div>");
-            }
-            sb.append("</div>");
-        }
-        appendBlankSpiritMappingSpacerCards(sb);
-        return sb.toString();
-    }
-
-    private static String buildLootInjectionCardsHtml(Player player, String groupId) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = lootInjectionEntries(groupId);
-        boolean npcGroup = isNpcLootInjectionGroup(groupId);
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1260; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1240; anchor-height:30; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
-                .append(escapeHtml(lootInjectionGroupTitle(player, groupId)))
-                .append("</p>");
-        sb.append("<button id=\"").append(lootInjectionAddButtonId(groupId))
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1040; anchor-height:20; padding-left:8;\">")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:")
-                .append(npcGroup ? 330 : 460)
-                .append(";\">Item ID</p>");
-        if (npcGroup) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:190;\">NPC / Role ID</p>");
-        }
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:110;\">Chance (0-1)</p>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:70;\">Min</p>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:70;\">Max</p>");
-        sb.append("</div>");
-        if (entries.length == 0) {
-            sb.append("<p style=\"font-size:10; color:#78849A;\">")
-                    .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_empty_loot_rules", "No injected loot rules.")))
-                    .append("</p>");
-        }
-        for (int i = 0; i < entries.length; i++) {
-            LootRuleEntry entry = parseLootRuleEntry(entries[i]);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1040; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(lootInjectionItemInputId(groupId, i))
-                    .append("\" style=\"anchor-width:").append(npcGroup ? 330 : 460).append("; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.itemId())).append("\">");
-            if (npcGroup) {
-                sb.append("<input type=\"text\" id=\"").append(lootInjectionTargetInputId(groupId, i))
-                        .append("\" style=\"anchor-width:190; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.targetId())).append("\">");
-            }
-            sb.append("<input type=\"text\" id=\"").append(lootInjectionChanceInputId(groupId, i))
-                    .append("\" style=\"anchor-width:110; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.chance())).append("\">");
-            sb.append("<input type=\"text\" id=\"").append(lootInjectionMinInputId(groupId, i))
-                    .append("\" style=\"anchor-width:70; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.min())).append("\">");
-            sb.append("<input type=\"text\" id=\"").append(lootInjectionMaxInputId(groupId, i))
-                    .append("\" style=\"anchor-width:70; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.max())).append("\">");
-            sb.append("<button id=\"").append(lootInjectionDeleteButtonId(groupId, i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        for (int i = 0; i < 4; i++) {
-            sb.append("<div style=\"anchor-width:1040; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildResonanceMappingCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = resonanceMappingDisplayEntries();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.resonance_mapping_title", "Resonance Class Mapping")))
-                .append("</p>");
-        sb.append("<button id=\"").append(resonanceMappingAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
-                .append(escapeHtml(tOrFallback(player,
-                        "ui.runtime_config.resonance_mapping_help",
-                        "Allowed values: WEAPON, ARMOR, or comma-separated weapon classes: SWORD, AXE, MACE, DAGGER, BOW, CROSSBOW, STAFF, GUN, GLAIVE, KNUCKLE.")))
-                .append("</p>");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:300;\">Resonance</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:420;\">Allowed Class / Scope</p>")
-                .append("</div>");
-        if (entries.length == 0) {
-            sb.append("<p style=\"font-size:10; color:#78849A;\">No resonance mappings available.</p>");
-        }
-        for (int i = 0; i < entries.length; i++) {
-            ResonanceMappingEntry entry = parseResonanceMappingEntry(entries[i]);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(resonanceMappingNameInputId(i))
-                    .append("\" style=\"anchor-width:300; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.name())).append("\">");
-            sb.append("<input type=\"text\" id=\"").append(resonanceMappingClassesInputId(i))
-                    .append("\" style=\"anchor-width:420; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.classes())).append("\">");
-            sb.append("<button id=\"").append(resonanceMappingDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        for (int i = 0; i < 5; i++) {
-            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildResonanceHintCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = socketConfig().getResonanceWeaponClassHints();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">Resonance Class Hints</p>");
-        sb.append("<button id=\"").append(resonanceHintAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
-                .append("Class hints classify item IDs before built-in weapon checks. Example: GLAIVE=glaive,glaives")
-                .append("</p>");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:180;\">Class</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:600;\">Item ID hints</p>")
-                .append("</div>");
-        for (int i = 0; i < entries.length; i++) {
-            ResonanceHintEntry entry = parseResonanceHintEntry(entries[i]);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(resonanceHintClassInputId(i))
-                    .append("\" style=\"anchor-width:180; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.weaponClass())).append("\">");
-            sb.append("<input type=\"text\" id=\"").append(resonanceHintTokensInputId(i))
-                    .append("\" style=\"anchor-width:600; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.hints())).append("\">");
-            sb.append("<button id=\"").append(resonanceHintDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        for (int i = 0; i < 5; i++) {
-            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildClockworkAmmoHintCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = socketConfig().getClockworkAmmoItemHints();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:30; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">Clockwork Ammo Hints</p>");
-        sb.append("<button id=\"").append(clockworkAmmoHintAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8; white-space:wrap;\">")
-                .append("Item ID tokens treated as ammo-like consumables for Clockwork Loader refunds. Matching items are also excluded from socketable weapon fallback checks.")
-                .append("</p>");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:20; padding-left:8;\">")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:360;\">Ammo item-id hint</p>")
-                .append("</div>");
-        for (int i = 0; i < entries.length; i++) {
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(clockworkAmmoHintInputId(i))
-                    .append("\" style=\"anchor-width:360; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entries[i])).append("\">");
-            sb.append("<button id=\"").append(clockworkAmmoHintDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        for (int i = 0; i < 5; i++) {
-            sb.append("<div style=\"anchor-width:1020; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildReforgeSupportMaterialCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = refinementConfig().getSupportMaterialEntries();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1060; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1040; anchor-height:30; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:260;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.reforge_support_table", "Reforge Support Materials")))
-                .append("</p>");
-        sb.append("<button id=\"").append(reforgeSupportAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; padding-left:8;\">")
-                .append(escapeHtml(tOrFallback(player,
-                        "ui.runtime_config.reforge_support_table_help",
-                        "Break x: 0 = no break, 0.05 = 95% less break chance. Upgrade% and Jackpot% force outcomes after the break check. Upgrade x and Jackpot x boost roll weights.")))
-                .append("</p>");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1040; anchor-height:20; padding-left:8;\">")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:250;\">Item ID</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Break x</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Dur</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Anti</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:95;\">Consume</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Up%</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Jack%</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Up x</p>")
-                .append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:56;\">Jack x</p>")
-                .append("</div>");
-        if (entries == null || entries.length == 0) {
-            sb.append("<p style=\"font-size:10; color:#78849A;\">")
-                    .append(escapeHtml(tOrFallback(player, "ui.runtime_config.reforge_support_empty", "No custom reforge supports yet.")))
-                    .append("</p>");
-        } else {
-            for (int i = 0; i < entries.length; i++) {
-                ReforgeSupportRuleEntry entry = parseReforgeSupportEntry(entries[i]);
-                sb.append("<div style=\"layout-mode:Top; spacing:4; anchor-width:1040; anchor-height:78; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:30;\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportItemInputId(i))
-                        .append("\" style=\"anchor-width:250; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.itemId())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportBreakInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.breakMultiplier())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportDurabilityInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.durabilityLoss())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportAntiInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.antiDegradeChance())).append("\">");
-                sb.append("<select id=\"").append(reforgeSupportConsumeInputId(i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:95; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildOptions(REFORGE_SUPPORT_CONSUME_MODES, entry.consumeMode()))
-                        .append("</select>");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportUpgradeGuaranteeInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.upgradeGuarantee())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportJackpotGuaranteeInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.jackpotGuarantee())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportUpgradeWeightInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.upgradeWeight())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportJackpotWeightInputId(i))
-                        .append("\" style=\"anchor-width:56; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.jackpotWeight())).append("\">");
-                sb.append("<button id=\"").append(reforgeSupportDeleteButtonId(i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-                sb.append("</div>");
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:30;\">");
-                sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:80; vertical-align:center;\">Description</p>");
-                sb.append("<input type=\"text\" id=\"").append(reforgeSupportDescriptionInputId(i))
-                        .append("\" style=\"anchor-width:920; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.description())).append("\">");
-                sb.append("</div>");
-                sb.append("</div>");
-            }
-        }
-        for (int i = 0; i < 4; i++) {
-            sb.append("<div style=\"anchor-width:1040; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static void appendBlankSpiritMappingSpacerCards(StringBuilder sb) {
-        for (int i = 0; i < SPIRIT_MAPPING_BOTTOM_SPACER_CARDS; i++) {
-            sb.append("<div style=\"anchor-width:730; anchor-height:38; padding:5; background-color:#101827; border-radius:3;\"></div>");
-        }
-    }
-
-    private static String buildAbilityMappingCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = loreMappingConfig().getAbilityEntries();
-        List<String> allSpirits = allSpiritIds();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1060; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1040; anchor-height:28; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:190;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_ability_title", "Spirit Abilities")))
-                .append("</p>");
-        sb.append("<button id=\"").append(abilityMappingAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-
-        if (entries == null || entries.length == 0) {
-            sb.append("<p style=\"font-size:10; color:#78849A;\">")
-                    .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_empty_abilities", "No spirit ability cards yet.")))
-                    .append("</p>");
-        } else {
-            for (int i = 0; i < entries.length; i++) {
-                AbilityEntry ability = parseAbilityEntry(entries[i]);
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1040; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<select id=\"").append(abilitySpiritSelectId(i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:220; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildSpiritOptions(allSpirits, ability.spirit()))
-                        .append("</select>");
-                sb.append("<select id=\"").append(abilityTriggerSelectId(i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:250; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildAbilityTriggerOptions(ability.trigger()))
-                        .append("</select>");
-                if (ability.signature()) {
-                    sb.append("<p style=\"font-size:10; color:#B8B8C8; anchor-width:430;\">")
-                            .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_signature_preset", "Signature preset uses built-in trigger, chance, cooldown, and effect values.")))
-                            .append("</p>");
-                } else {
-                    sb.append("<input type=\"text\" id=\"").append(abilityChanceInputId(i))
-                            .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                            .append(escapeHtml(ability.chance())).append("\">");
-                    sb.append("<input type=\"text\" id=\"").append(abilityCooldownInputId(i))
-                            .append("\" style=\"anchor-width:82; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                            .append(escapeHtml(ability.cooldown())).append("\">");
-                    sb.append("<select id=\"").append(abilityEffectSelectId(i))
-                            .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                            .append(" style=\"anchor-width:220; anchor-height:26; background-color:#1b2332;\">")
-                            .append(buildOptions(LORE_EFFECTS, ability.effect()))
-                            .append("</select>");
-                    sb.append("<input type=\"text\" id=\"").append(abilityBaseInputId(i))
-                            .append("\" style=\"anchor-width:58; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                            .append(escapeHtml(ability.base())).append("\">");
-                    sb.append("<input type=\"text\" id=\"").append(abilityPerLevelInputId(i))
-                            .append("\" style=\"anchor-width:58; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                            .append(escapeHtml(ability.perLevel())).append("\">");
-                }
-                sb.append("<button id=\"").append(abilityDeleteButtonId(i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-                sb.append("</div>");
-            }
-        }
-        appendBlankAbilitySpacerCards(sb);
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static void appendBlankAbilitySpacerCards(StringBuilder sb) {
-        for (int i = 0; i < ABILITY_MAPPING_BOTTOM_SPACER_CARDS; i++) {
-            sb.append("<div style=\"anchor-width:1040; anchor-height:42; padding:7; background-color:#101827; border-radius:3;\"></div>");
-        }
-    }
-
-    private static String buildAffinityMappingCardsHtml(Player player, String groupId) {
-        if (isAffinityRuleGroup(groupId)) {
-            return buildAffinityRuleCardsHtml(player, groupId);
-        }
-        return GROUP_AFFINITY_SHIELDS.equals(groupId)
-                ? buildAffinityShieldCardsHtml(player)
-                : buildAffinityMultiplierCardsHtml(player);
-    }
-
-    private static String buildAffinityRuleCardsHtml(Player player, String groupId) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = affinityRuleEntries(groupId);
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
-                .append(escapeHtml(isCustomAffinityRuleGroup(groupId)
-                        ? tOrFallback(player, "ui.runtime_config.mapping_affinity_custom_title", "Custom Affinity Overrides")
-                        : tOrFallback(player, "ui.runtime_config.mapping_affinity_default_title", "Default Affinity Rules")))
-                .append("</p>");
-        sb.append("<button id=\"").append(affinityRuleAddButtonId(groupId))
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        if (entries == null || entries.length == 0) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_rules", "No affinity rule cards yet."));
-        } else {
-            for (int i = 0; i < entries.length; i++) {
-                AffinityRuleEntry entry = parseAffinityRuleEntry(entries[i]);
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<select id=\"").append(affinityRuleModeSelectId(groupId, i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:90; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
-                sb.append("<input type=\"text\" id=\"").append(affinityRuleTargetInputId(groupId, i))
-                        .append("\" style=\"anchor-width:400; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.target())).append("\">");
-                sb.append("<select id=\"").append(affinityRuleElementSelectId(groupId, i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:150; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildOptions(AFFINITY_ELEMENTS, entry.element())).append("</select>");
-                sb.append("<button id=\"").append(affinityRuleDeleteButtonId(groupId, i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-                sb.append("</div>");
-            }
-        }
-        appendBlankAffinitySpacerCards(sb, 1020, 42);
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildAffinityMultiplierCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = affinityMultiplierEntries(GROUP_AFFINITY_MULTIPLIERS);
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_affinity_multiplier_title", "Per-Target Effectiveness")))
-                .append("</p>");
-        sb.append("<button id=\"").append(affinityMultiplierAddButtonId(GROUP_AFFINITY_MULTIPLIERS))
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<div style=\"layout-mode:Top; spacing:2; anchor-width:1020; padding:7; background-color:#111b2b; border-radius:3;\">");
-        sb.append("<p style=\"font-size:11; color:#D8E2F0; white-space:wrap;\">")
-                .append(escapeHtml(tOrFallback(player,
-                        "ui.runtime_config.mapping_affinity_multiplier_help",
-                        "Multiplier guide: values above 1.0 mean the target is weak to that incoming element and takes more damage; values below 1.0 mean the target resists it and takes less damage; exactly 1.0 is neutral and keeps the hit as physical/white damage.")))
-                .append("</p>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5; white-space:wrap;\">")
-                .append(escapeHtml(tOrFallback(player,
-                        "ui.runtime_config.mapping_affinity_multiplier_formula",
-                        "Damage delta is scaled by the weapon's socket affinity rate, so 0.90 is only a small resistance while 0.001 is near-immunity.")))
-                .append("</p>");
-        sb.append("</div>");
-        if (entries == null || entries.length == 0) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_multipliers", "No effectiveness cards yet."));
-        } else {
-            for (int i = 0; i < entries.length; i++) {
-                AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(entries[i]);
-                sb.append("<div style=\"layout-mode:Left; spacing:5; anchor-width:1020; anchor-height:62; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<select id=\"").append(affinityMultiplierModeSelectId(GROUP_AFFINITY_MULTIPLIERS, i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
-                sb.append("<input type=\"text\" id=\"").append(affinityMultiplierTargetInputId(GROUP_AFFINITY_MULTIPLIERS, i))
-                        .append("\" style=\"anchor-width:230; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.target())).append("\">");
-                for (String element : AFFINITY_ELEMENTS) {
-                    sb.append("<div style=\"layout-mode:Top; spacing:1; anchor-width:84;\">");
-                    sb.append("<p style=\"font-size:9; color:#9EA8B5; text-align:center;\">").append(escapeHtml(element)).append("</p>");
-                    sb.append("<input type=\"text\" id=\"").append(affinityMultiplierElementInputId(GROUP_AFFINITY_MULTIPLIERS, i, element))
-                            .append("\" style=\"anchor-width:78; anchor-height:24; background-color:#1b2332; padding:4;\" value=\"")
-                            .append(escapeHtml(entry.multipliers().getOrDefault(element, ""))).append("\">");
-                    sb.append("</div>");
-                }
-                sb.append("<button id=\"").append(affinityMultiplierDeleteButtonId(GROUP_AFFINITY_MULTIPLIERS, i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-                sb.append("</div>");
-            }
-        }
-        appendBlankAffinitySpacerCards(sb, 1020, 62);
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildAffinityShieldCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        String[] entries = elementalAffinityConfig().getElementShields();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1040; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1020; anchor-height:28; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:220;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.mapping_affinity_shield_title", "Elemental Shields")))
-                .append("</p>");
-        sb.append("<button id=\"").append(affinityShieldAddButtonId())
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        sb.append("<div style=\"layout-mode:Top; spacing:2; anchor-width:1020; padding:7; background-color:#111b2b; border-radius:3;\">");
-        sb.append("<p style=\"font-size:11; color:#D8E2F0; white-space:wrap;\">")
-                .append(escapeHtml(tOrFallback(player,
-                        "ui.runtime_config.mapping_affinity_shield_help",
-                        "Shield guide: map one enemy/role to shield HP plus recharge delay, rate, and duration. Recharge only checks after depletion.")))
-                .append("</p>");
-        sb.append("</div>");
-        if (entries == null || entries.length == 0) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_affinity_shields", "No elemental shield cards yet."));
-        } else {
-            for (int i = 0; i < entries.length; i++) {
-                AffinityShieldEntry entry = parseAffinityShieldEntry(entries[i]);
-                sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:1020; anchor-height:42; padding:7; background-color:#172033; border-radius:3;\">");
-                sb.append("<select id=\"").append(affinityShieldModeSelectId(i))
-                        .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                        .append(" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332;\">")
-                        .append(buildOptions(AFFINITY_MODES, entry.mode())).append("</select>");
-                sb.append("<input type=\"text\" id=\"").append(affinityShieldTargetInputId(i))
-                        .append("\" style=\"anchor-width:360; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.target())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(affinityShieldValueInputId(i))
-                        .append("\" style=\"anchor-width:72; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.shield())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(affinityShieldDelayInputId(i))
-                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.delay())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(affinityShieldRateInputId(i))
-                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.rate())).append("\">");
-                sb.append("<input type=\"text\" id=\"").append(affinityShieldDurationInputId(i))
-                        .append("\" style=\"anchor-width:64; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                        .append(escapeHtml(entry.duration())).append("\">");
-                sb.append("<p style=\"font-size:10; color:#9EA8B5; anchor-width:230; vertical-align:center;\">HP, delay s, rate/sec, duration s</p>");
-                sb.append("<button id=\"").append(affinityShieldDeleteButtonId(i))
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-                sb.append("</div>");
-            }
-        }
-        appendBlankAffinitySpacerCards(sb, 1020, 42);
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static void appendBlankAffinitySpacerCards(StringBuilder sb, int width, int height) {
-        for (int i = 0; i < 5; i++) {
-            sb.append("<div style=\"anchor-width:")
-                    .append(width)
-                    .append("; anchor-height:")
-                    .append(height)
-                    .append("; padding:7; background-color:#101827; border-radius:3;\"></div>");
-        }
-    }
-
-    private static String buildLoreStatusCardsHtml(Player player) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(buildStatusRuleCardsHtml(player));
-        sb.append(buildStatusResistanceCardsHtml(player));
-        sb.append(buildStatusCounterCardsHtml(player));
-        sb.append(buildBleedCounterCardsHtml(player));
-        return sb.toString();
-    }
-
-    private static String buildStatusRuleCardsHtml(Player player) {
-        List<StatusRuleEntry> entries = parseStatusRuleEntries(loreConfig().getStatusBossReapplyRules());
-        StringBuilder sb = new StringBuilder();
-        sb.append(buildMappingSectionHeader(player, "ui.runtime_config.mapping_status_reapply_title", "Boss Reapply Rules", statusRuleAddButtonId()));
-        if (entries.isEmpty()) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_status_rules", "No reapply rules yet."));
-        }
-        for (int i = 0; i < entries.size(); i++) {
-            StatusRuleEntry entry = entries.get(i);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-            sb.append("<select id=\"").append(statusRuleStatusSelectId(i))
-                    .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                    .append(" style=\"anchor-width:130; anchor-height:26; background-color:#1b2332;\">")
-                    .append(buildOptions(LORE_STATUS_KEYS, entry.status())).append("</select>");
-            sb.append("<input type=\"text\" id=\"").append(statusRuleStepInputId(i))
-                    .append("\" style=\"anchor-width:80; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.step())).append("\">");
-            sb.append("<select id=\"").append(statusRulePatternSelectId(i))
-                    .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                    .append(" style=\"anchor-width:130; anchor-height:26; background-color:#1b2332;\">")
-                    .append(buildOptions(LORE_STATUS_PATTERNS, entry.pattern())).append("</select>");
-            sb.append("<button id=\"").append(statusRuleDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildStatusResistanceCardsHtml(Player player) {
-        List<StatusResistanceEntry> entries = parseStatusResistanceEntries(loreConfig().getNpcStatusResistanceEntries());
-        StringBuilder sb = new StringBuilder();
-        sb.append(buildMappingSectionHeader(player, "ui.runtime_config.mapping_status_resistance_title", "NPC Status Resistances", statusResistanceAddButtonId()));
-        if (entries.isEmpty()) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_status_resistances", "No NPC resistance cards yet."));
-        }
-        for (int i = 0; i < entries.size(); i++) {
-            StatusResistanceEntry entry = entries.get(i);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(statusResistanceNpcInputId(i))
-                    .append("\" style=\"anchor-width:250; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.npcId())).append("\">");
-            sb.append("<select id=\"").append(statusResistanceStatusSelectId(i))
-                    .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                    .append(" style=\"anchor-width:120; anchor-height:26; background-color:#1b2332;\">")
-                    .append(buildOptions(LORE_STATUS_KEYS, entry.status())).append("</select>");
-            sb.append("<input type=\"text\" id=\"").append(statusResistanceValueInputId(i))
-                    .append("\" style=\"anchor-width:70; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.value())).append("\">");
-            sb.append("<button id=\"").append(statusResistanceDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildStatusCounterCardsHtml(Player player) {
-        List<StatusCounterEntry> entries = parseStatusCounterEntries(loreConfig().getStatusBossCounterNpcIds());
-        StringBuilder sb = new StringBuilder();
-        sb.append(buildMappingSectionHeader(player, "ui.runtime_config.mapping_status_counter_title", "Status Counter NPCs", statusCounterAddButtonId()));
-        if (entries.isEmpty()) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_status_counters", "No status counter NPC cards yet."));
-        }
-        for (int i = 0; i < entries.size(); i++) {
-            StatusCounterEntry entry = entries.get(i);
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(statusCounterNpcInputId(i))
-                    .append("\" style=\"anchor-width:260; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entry.npcId())).append("\">");
-            sb.append("<select id=\"").append(statusCounterStatusSelectId(i))
-                    .append("\"").append(COMPACT_DROPDOWN_ATTRS)
-                    .append(" style=\"anchor-width:130; anchor-height:26; background-color:#1b2332;\">")
-                    .append(buildOptions(LORE_STATUS_KEYS, entry.status())).append("</select>");
-            sb.append("<button id=\"").append(statusCounterDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildBleedCounterCardsHtml(Player player) {
-        List<String> entries = mutableList(loreConfig().getBleedBossCounterNpcIds());
-        StringBuilder sb = new StringBuilder();
-        sb.append(buildMappingSectionHeader(player, "ui.runtime_config.mapping_bleed_counter_title", "Legacy Bleed Counter NPCs", bleedCounterAddButtonId()));
-        if (entries.isEmpty()) {
-            sb.append(buildEmptyMappingText(player, "ui.runtime_config.mapping_empty_bleed_counters", "No legacy bleed counter NPC cards yet."));
-        }
-        for (int i = 0; i < entries.size(); i++) {
-            sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:38; padding:5; background-color:#172033; border-radius:3;\">");
-            sb.append("<input type=\"text\" id=\"").append(bleedCounterNpcInputId(i))
-                    .append("\" style=\"anchor-width:330; anchor-height:26; background-color:#1b2332; padding:5;\" value=\"")
-                    .append(escapeHtml(entries.get(i))).append("\">");
-            sb.append("<button id=\"").append(bleedCounterDeleteButtonId(i))
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:26;\">x</button>");
-            sb.append("</div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildMappingSectionHeader(Player player, String titleKey, String fallbackTitle, String addButtonId) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode:Top; spacing:4; anchor-width:730; padding:6; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:6; anchor-width:710; anchor-height:28; padding-left:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold; anchor-width:190;\">")
-                .append(escapeHtml(tOrFallback(player, titleKey, fallbackTitle)))
-                .append("</p>");
-        sb.append("<button id=\"").append(addButtonId)
-                .append("\" class=\"secondary-button default-style\" style=\"anchor-width:34; anchor-height:24;\">+</button>");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildEmptyMappingText(Player player, String key, String fallback) {
-        return "<p style=\"font-size:10; color:#78849A;\">" + escapeHtml(tOrFallback(player, key, fallback)) + "</p>";
-    }
-
-    private static int computeControlMaxPage(List<ControlEntry> controls) {
-        if (controls == null || controls.isEmpty()) {
-            return 0;
-        }
-        return Math.max(0, (controls.size() - 1) / CONTROL_PAGE_SIZE);
-    }
-
-    private static List<PickerEntry> buildPickerEntries(PickerMode mode, CategorySection activeCategory) {
-        List<PickerEntry> entries = new ArrayList<>();
-        if (mode == PickerMode.CATEGORY) {
-            for (CategorySection category : categories) {
-                entries.add(new PickerEntry(category.id, category.title, category.summary));
-            }
-        } else if (mode == PickerMode.GROUP && activeCategory != null) {
-            for (ControlGroup group : activeCategory.groups) {
-                entries.add(new PickerEntry(group.id, group.title, group.description));
-            }
-        }
-        return entries;
-    }
-
-    private static String buildPickerModalHtml(Player player, ViewState state, CategorySection activeCategory, ControlGroup activeGroup) {
-        PickerMode picker = state != null ? state.picker : PickerMode.NONE;
-        if (picker == null || picker == PickerMode.NONE) {
-            return "";
-        }
-        List<PickerEntry> entries = buildPickerEntries(picker, activeCategory);
-        String selectedId = picker == PickerMode.CATEGORY
-                ? (activeCategory != null ? activeCategory.id : null)
-                : (activeGroup != null ? activeGroup.id : null);
-        String title = picker == PickerMode.CATEGORY
-                ? t(player, "ui.runtime_config.picker_title_category")
-                : t(player, "ui.runtime_config.picker_title_section");
-        String emptyLabel = picker == PickerMode.CATEGORY
-                ? t(player, "ui.runtime_config.picker_empty_categories")
-                : t(player, "ui.runtime_config.picker_empty_sections");
-
-        int maxPage = computePickerMaxPage(entries);
-        int page = Math.max(0, Math.min(maxPage, state.pickerPage));
-        String pageLabel = t(player, "ui.runtime_config.page_label", page + 1, Math.max(1, maxPage + 1));
-
-        String prevDisabled = page <= 0 ? "disabled=\"true\"" : "";
-        String nextDisabled = page >= maxPage ? "disabled=\"true\"" : "";
-        String cards = buildPickerCardList(entries, selectedId, emptyLabel, page);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div id=\"pickerOverlay\" style=\"anchor-full:200; layout-mode:Left; background-color:#0b0b1200;\">");
-        sb.append("<div style=\"layout-mode:Left;\">");
-        sb.append("<div style=\"anchor-width:350; anchor-height:700; layout-mode:Top; background-color:#1a1a2b; padding:10; border-radius:6;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:10;\">");
-        sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(title)).append("</p>");
-        sb.append("<div style=\"flex-weight:1;\"></div>");
-        sb.append("<button id=\"pickerCloseButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\">")
-                .append(escapeHtml(t(player, "ui.runtime_config.button_close")))
-                .append("</button>");
-        sb.append("</div>");
-        sb.append("<img src=\"divider.png\" style=\"anchor-width: 350; anchor-height: 3;\">");
-        sb.append("<reorderable-list id=\"pickerList\" style=\"layout-mode:Top; spacing:6; anchor-width:350; anchor-height:600; background-color:#141426; padding:6; border-radius:4;\">");
-        sb.append(cards);
-        sb.append("</reorderable-list>");
-        sb.append("<div style=\"layout-mode:Center; spacing:8; anchor-width:700;\">");
-        sb.append("<button id=\"pickerPrevButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
-                .append(prevDisabled).append(">")
-                .append(escapeHtml(t(player, "ui.runtime_config.button_prev")))
-                .append("</button>");
-        sb.append("<p style=\"font-size:11; color:#b0b0c2;\">").append(escapeHtml(pageLabel)).append("</p>");
-        sb.append("<button id=\"pickerNextButton\" class=\"secondary-button\" style=\"anchor-width:120; anchor-height:32;\" ")
-                .append(nextDisabled).append(">")
-                .append(escapeHtml(t(player, "ui.runtime_config.button_next")))
-                .append("</button>");
-        sb.append("</div>");
-        sb.append("</div>");
-        sb.append("</div>");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildPickerCardList(List<PickerEntry> entries, String selectedId, String emptyLabel, int page) {
-        if (entries == null || entries.isEmpty()) {
-            String label = emptyLabel == null ? "No entries" : emptyLabel;
-            return "<p style=\"font-size:11; color:#b0b0c2;\">" + escapeHtml(label) + "</p>";
-        }
-        int start = page * PICKER_PAGE_SIZE;
-        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
-        StringBuilder sb = new StringBuilder();
-        for (int i = start; i < end; i++) {
-            PickerEntry entry = entries.get(i);
-            boolean selected = entry.id.equals(selectedId) || (selectedId == null && i == 0);
-            String bg = selected ? "#343a5a" : "#202036";
-            String border = selected ? "#7fa5ff" : "#2c2c4b";
-            sb.append("<button id=\"pickerEntry_").append(i)
-                    .append("\" class=\"custom-button\" style=\"anchor-width:330; anchor-height:64; text-align:left; padding:6; background-color:")
-                    .append(bg).append("; border:1px solid ").append(border)
-                    .append("; border-radius:2; layout-mode:Top;\">");
-            sb.append("<p style=\"font-weight:bold;\">").append(escapeHtml(entry.title)).append("</p>");
-            if (entry.summary != null && !entry.summary.isBlank()) {
-                sb.append("<p style=\"font-size:11; color:#b0b0c2;\">")
-                        .append(escapeHtml(entry.summary))
-                        .append("</p>");
-            }
-            sb.append("</button>");
-        }
-        return sb.toString();
-    }
-
-    private static int computePickerMaxPage(List<PickerEntry> entries) {
-        if (entries == null || entries.isEmpty()) {
-            return 0;
-        }
-        return Math.max(0, (entries.size() - 1) / PICKER_PAGE_SIZE);
-    }
-
-    private static List<Integer> computePickerIndices(List<PickerEntry> entries, int page) {
-        List<Integer> indices = new ArrayList<>();
-        if (entries == null || entries.isEmpty()) {
-            return indices;
-        }
-        int start = page * PICKER_PAGE_SIZE;
-        int end = Math.min(entries.size(), start + PICKER_PAGE_SIZE);
-        for (int i = start; i < end; i++) {
-            indices.add(i);
-        }
-        return indices;
-    }
-
-    private static String buildCategoryHtml(Player player, CategorySection category, ViewState state) {
-        ControlGroup activeGroup = resolveActiveGroup(category, state);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:")
-                .append(CATEGORY_WIDTH)
-                .append("; layout-mode:Top; spacing:8; background-color:#0f1520; padding:10; border-radius:6;\">");
-        sb.append("<div style=\"layout-mode:Top; spacing:6;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4;\"><b>")
-                .append(escapeHtml(localizedCategoryTitle(player, category)))
-                .append("</b></p>");
-        sb.append("<p style=\"color:#B8B8C8;\">")
-                .append(escapeHtml(localizedCategorySummary(player, category)))
-                .append("</p>");
-        sb.append("</div>");
-
-        sb.append("<div style=\"anchor-width:")
-                .append(GROUP_WIDTH)
-                .append("; layout-mode:Top; spacing:6; background-color:#121b29; padding:8; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-height:")
-                .append(GROUP_PANEL_HEIGHT)
-                .append(";\">");
-        sb.append("<div style=\"anchor-width:")
-                .append(GROUP_LIST_COLUMN_WIDTH)
-                .append("; anchor-height:")
-                .append(GROUP_PANEL_HEIGHT)
-                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4; overflow-y:auto;\">");
-        for (ControlGroup group : category.groups) {
-            sb.append(buildNavigationButton(
-                    group.buttonId(category.id),
-                    localizedGroupTitle(player, category, group),
-                    activeGroup != null && group.id.equals(activeGroup.id),
-                    GROUP_LIST_COLUMN_WIDTH - 16));
-        }
-        sb.append("</div>");
-
-        sb.append("<div style=\"anchor-width:")
-                .append(CONTROL_PANEL_WIDTH)
-                .append("; anchor-height:")
-                .append(GROUP_PANEL_HEIGHT)
-                .append("; layout-mode:Top; spacing:6; background-color:#0f1520; padding:8; border-radius:4; overflow-y:auto;\">");
-        if (activeGroup != null) {
-            sb.append(buildGroupHtml(player, category, activeGroup, null));
-        }
-        sb.append("</div>");
-        sb.append("</div>");
-
-        String noteText = localizedCategoryNote(player, category);
-        if (!noteText.isBlank()) {
-            sb.append("<div style=\"layout-mode:Top; padding:8; background-color:#191919; border-radius:4;\">")
-                    .append("<p style=\"color:#C9B26D;\">")
-                    .append(escapeHtml(noteText))
-                    .append("</p></div>");
-        }
-
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildNavigationButton(String id, String label, boolean active, int width) {
-        String text = active ? "[@] "+label  : label;
-        String wrapBg = active ? "#3448ab" : "#1b2332";
-        String wrapBorder = active ? "#5d70ce" : "#2A3448";
-        return "<div style=\"anchor-width:" + width + "; anchor-height:36; layout-mode:Top; padding:1; background-color:" + wrapBg
-                + "; border-radius:2; border-color:" + wrapBorder + "; border-size:1;\">"
-                + "<button id=\"" + id + "\" class=\"secondary-button default-style\" style=\"anchor-width:" + (width - 4) + "; anchor-height:30;\">"
-                + escapeHtml(text)
-                + "</button></div>";
-    }
-
-    private static String buildGroupHtml(Player player, CategorySection category, ControlGroup group, ViewState state) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:")
-                .append(CONTROL_PANEL_WIDTH - 16)
-                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#121b29; border-radius:4;\">");
-        sb.append("<p style=\"font-size:11; color:#D8C27A;\"><b>")
-                .append(escapeHtml(localizedGroupTitle(player, category, group)))
-                .append("</b></p>");
-        String groupDescription = localizedGroupDescription(player, category, group);
-        if (!groupDescription.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(groupDescription))
-                    .append("</p>");
-        }
-        int singleColumnWidth = CONTROL_PANEL_WIDTH - 32;
-        for (ControlEntry entry : group.controls) {
-            if (entry instanceof NumericControl control) {
-                sb.append(buildControlCell(player, control, singleColumnWidth, state));
-            } else if (entry instanceof TextControl control) {
-                sb.append(buildTextControlCell(player, control, singleColumnWidth, state));
-            } else if (entry instanceof SelectControl control) {
-                sb.append(buildSelectControlCell(player, control, singleColumnWidth, state));
-            }
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildControlCell(Player player, NumericControl control, int width, ViewState state) {
-        int dividerWidth = Math.max(60, width - 20);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:")
-                .append(width)
-                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Top; spacing:2;\">");
-        sb.append("<p><b>").append(escapeHtml(localizedControlLabel(player, control))).append("</b></p>");
-        String controlDescription = localizedControlDescription(player, control);
-        if (!controlDescription.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(controlDescription))
-                    .append("</p>");
-        }
-        sb.append("</div>");
-        sb.append("<div style=\"layout-mode:Left; spacing:8;\">");
-        if (control.displayKind == DisplayKind.TOGGLE) {
-            boolean enabled = control.currentValue() > 0.0;
-            String toggleBg = enabled ? "#284D37" : "#4A2630";
-            sb.append("<button id=\"")
-                    .append(control.plusButtonId())
-                    .append("\" class=\"secondary-button default-style\" style=\"anchor-width:")
-                    .append(VALUE_WIDTH)
-                    .append("; anchor-height:34; background-color:")
-                    .append(toggleBg)
-                    .append(";\">")
-                    .append(escapeHtml(control.formatCurrentValue()))
-                    .append("</button>");
-        } else {
-            String inputStep = inputStep(control);
-            int inputDecimals = inputDecimals(control);
-            String inputMin = inputMin(control);
-            String inputMax = inputMax(control);
-            boolean useNumberInput = control.displayKind == DisplayKind.INTEGER;
-            sb.append("<input type=\"")
-                    .append(useNumberInput ? "number" : "text")
-                    .append("\" id=\"")
-                    .append(control.inputElementId())
-                    .append("\" style=\"anchor-width:")
-                    .append(VALUE_WIDTH)
-                    .append("; anchor-height:30; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
-                    .append(escapeHtml(draftValue(state, control.inputElementId(), control.formatInputValue())))
-                    .append("\"");
-            if (!useNumberInput) {
-                sb.append(" inputmode=\"decimal\"");
-            }
-            if (useNumberInput) {
-                sb.append(" step=\"").append(inputStep).append("\"");
-            }
-            sb.append(" data-hyui-max-decimal-places=\"").append(inputDecimals).append("\"");
-            if (inputMin != null) {
-                if (useNumberInput) {
-                    sb.append(" min=\"").append(inputMin).append("\"");
-                }
-                sb.append(" data-hyui-min=\"").append(inputMin).append("\"");
-            }
-            if (inputMax != null) {
-                if (useNumberInput) {
-                    sb.append(" max=\"").append(inputMax).append("\"");
-                }
-                sb.append(" data-hyui-max=\"").append(inputMax).append("\"");
-            }
-            sb.append(">");
-            if (isRefineMaxLevelControl(control)) {
-                sb.append("<button id=\"")
-                        .append(REFINE_RECALCULATE_WEIGHTS_BUTTON)
-                        .append("\" class=\"secondary-button default-style\" style=\"anchor-width:170; anchor-height:30;\">")
-                        .append(escapeHtml(tOrFallback(player, "ui.runtime_config.button_recalculate_weights", "Recalc Weights")))
-                        .append("</button>");
-            }
-        }
-        sb.append("</div>");
-        sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
-                .append(Math.min(DIVIDER_WIDTH, dividerWidth))
-                .append("; anchor-height: 2;\">");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildTextControlCell(Player player, TextControl control, int width, ViewState state) {
-        int dividerWidth = Math.max(60, width - 20);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:")
-                .append(width)
-                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Top; spacing:2;\">");
-        sb.append("<p><b>").append(escapeHtml(localizedControlLabel(player, control))).append("</b></p>");
-        String controlDescription = localizedControlDescription(player, control);
-        if (!controlDescription.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(controlDescription))
-                    .append("</p>");
-        }
-        sb.append("</div>");
-        sb.append("<div style=\"layout-mode:Left; spacing:8;\">");
-        if (control.multiline) {
-            sb.append("<textarea id=\"")
-                    .append(control.inputElementId())
-                    .append("\" rows=\"6\" style=\"anchor-width:")
-                    .append(Math.max(VALUE_WIDTH, width - 24))
-                    .append("; anchor-height:120; text-align:left; background-color:#1b2332; padding:6; border-radius:4; white-space:wrap;\" value=\"")
-                    .append(escapeHtml(draftValue(state, control.inputElementId(), control.currentValue())).replace("\n", "&#10;"))
-                    .append("\"></textarea>");
-        } else {
-            sb.append("<input type=\"text\" id=\"")
-                    .append(control.inputElementId())
-                    .append("\" style=\"anchor-width:")
-                    .append(VALUE_WIDTH)
-                    .append("; anchor-height:30; text-align:left; background-color:#1b2332; padding:6; border-radius:4;\" value=\"")
-                    .append(escapeHtml(draftValue(state, control.inputElementId(), control.currentValue())))
-                    .append("\">");
-        }
-        sb.append("</div>");
-        sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
-                .append(Math.min(DIVIDER_WIDTH, dividerWidth))
-                .append("; anchor-height: 2;\">");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildSelectControlCell(Player player, SelectControl control, int width, ViewState state) {
-        int dividerWidth = Math.max(60, width - 20);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:")
-                .append(width)
-                .append("; layout-mode:Top; spacing:6; padding:8; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<div style=\"layout-mode:Top; spacing:2;\">");
-        sb.append("<p><b>").append(escapeHtml(localizedControlLabel(player, control))).append("</b></p>");
-        String controlDescription = localizedControlDescription(player, control);
-        if (!controlDescription.isBlank()) {
-            sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                    .append(escapeHtml(controlDescription))
-                    .append("</p>");
-        }
-        sb.append("</div>");
-        sb.append("<select id=\"")
-                .append(control.inputElementId())
-                .append("\" style=\"anchor-width:")
-                .append(Math.max(VALUE_WIDTH, 240))
-                .append("; anchor-height:30; background-color:#1b2332; padding:4; border-radius:4;\">")
-                .append(buildOptions(control.options, draftValue(state, control.inputElementId(), control.currentValue())))
-                .append("</select>");
-        sb.append("<img src=\"divider.png\" style=\"anchor-width: ")
-                .append(Math.min(DIVIDER_WIDTH, dividerWidth))
-                .append("; anchor-height: 2;\">");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildRefineLimitsWithWeightCardsHtml(Player player, ControlGroup group, ViewState state) {
-        StringBuilder sb = new StringBuilder();
-        int width = 1100;
-        for (ControlEntry entry : group.controls) {
-            if (entry instanceof NumericControl control && !isWeightControl(control)) {
-                sb.append(buildControlCell(player, control, width, state));
-            } else if (entry instanceof TextControl control) {
-                sb.append(buildTextControlCell(player, control, width, state));
-            } else if (entry instanceof SelectControl control) {
-                sb.append(buildSelectControlCell(player, control, width, state));
-            }
-        }
-
-        sb.append("<div style=\"layout-mode:Top; spacing:8; anchor-width:1100; padding:8; background-color:#0d131d; border-radius:4;\">");
-        sb.append("<p style=\"font-size:12; color:#F1E2A4; font-weight:bold;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.refine_outcome_weights_title", "Outcome Weights")))
-                .append("</p>");
-        sb.append("<p style=\"font-size:10; color:#9EA8B5;\">")
-                .append(escapeHtml(tOrFallback(player, "ui.runtime_config.refine_outcome_weights_description", "Each transition is a compact card. Editing one outcome auto-normalizes the rest back to 100%.")))
-                .append("</p>");
-        int maxLevel = Math.max(1, refinementConfig().getMaxLevel());
-        for (int level = 0; level < maxLevel; level++) {
-            sb.append(buildOutcomeWeightCard(player, level, state));
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildOutcomeWeightCard(Player player, int level, ViewState state) {
-        List<ControlEntry> controls = buildWeightControls(level);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode:Top; spacing:6; anchor-width:1060; padding:8; background-color:#172033; border-radius:3;\">");
-        sb.append("<p style=\"font-size:11; color:#D8C27A; font-weight:bold;\">")
-                .append("L").append(level).append(" -> L").append(level + 1)
-                .append("</p>");
-        sb.append("<div style=\"layout-mode:Left; spacing:8; anchor-width:1040; anchor-height:62;\">");
-        for (ControlEntry entry : controls) {
-            if (entry instanceof NumericControl control) {
-                sb.append(buildOutcomeWeightMiniCard(player, control, state));
-            }
-        }
-        sb.append("</div>");
-        sb.append("</div>");
-        return sb.toString();
-    }
-
-    private static String buildOutcomeWeightMiniCard(Player player, NumericControl control, ViewState state) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode:Top; spacing:3; anchor-width:245; anchor-height:58; padding:5; background-color:#0f1520; border-radius:3;\">");
-        sb.append("<p style=\"font-size:10; color:#D8DEE9; font-weight:bold;\">")
-                .append(escapeHtml(localizedWeightOutcomeLabel(player, control)))
-                .append("</p>");
-        sb.append("<input type=\"text\" id=\"")
-                .append(control.inputElementId())
-                .append("\" inputmode=\"decimal\" data-hyui-max-decimal-places=\"2\" data-hyui-min=\"0\" data-hyui-max=\"100\" style=\"anchor-width:92; anchor-height:24; background-color:#1b2332; padding:5; border-radius:4;\" value=\"")
-                .append(escapeHtml(draftValue(state, control.inputElementId(), control.formatInputValue())))
-                .append("\">");
-        sb.append("</div>");
-        return sb.toString();
+        });
     }
 
     private static boolean isWeightControl(NumericControl control) {
@@ -3627,38 +1636,13 @@ public final class RuntimeConfigUI {
         return control != null && "refine_max_level".equals(control.id);
     }
 
-    private static String localizedWeightOutcomeLabel(Player player, NumericControl control) {
-        String id = control == null ? "" : control.id;
-        String fallback = control == null ? "" : control.label;
-        if (id.endsWith("_degrade")) {
-            return tOrFallback(player, "ui.runtime_config.refine_outcome_degrade", "Degrade");
-        }
-        if (id.endsWith("_same")) {
-            return tOrFallback(player, "ui.runtime_config.refine_outcome_same", "Same");
-        }
-        if (id.endsWith("_upgrade")) {
-            return tOrFallback(player, "ui.runtime_config.refine_outcome_upgrade", "Upgrade");
-        }
-        if (id.endsWith("_jackpot")) {
-            return tOrFallback(player, "ui.runtime_config.refine_outcome_jackpot", "Jackpot");
-        }
-        return fallback;
-    }
-
-    private static String buildButton(String id, String label) {
-        return "<button id=\"" + id + "\" class=\"secondary-button default-style\" style=\"anchor-width:58; anchor-height:30;\">" + escapeHtml(label) + "</button>";
-    }
-
     private static ViewState createDefaultViewState(PlayerRef playerRef) {
         CategorySection defaultCategory = categories.isEmpty() ? null : categories.get(0);
         String statusText = tOrFallback(playerRef, DEFAULT_STATUS_KEY, DEFAULT_STATUS_FALLBACK);
         return new ViewState(
                 defaultCategory == null ? CATEGORY_SOCKET : defaultCategory.id,
                 firstGroupId(defaultCategory),
-                statusText,
-                PickerMode.NONE,
-                0,
-                0);
+                statusText);
     }
 
     private static CategorySection resolveActiveCategory(ViewState state) {
@@ -5015,14 +2999,6 @@ public final class RuntimeConfigUI {
         return normalized;
     }
 
-    private static String loadTemplate() {
-        return UITemplateUtils.loadTemplate(
-                RuntimeConfigUI.class,
-                TEMPLATE_PATH,
-                "<div><p>Runtime config template missing.</p></div>",
-                "RuntimeConfigUI");
-    }
-
     private static String buttonIdForDelta(NumericControl control, double delta) {
         if (control.displayKind == DisplayKind.TOGGLE) {
             if (roughlyEqual(delta, -control.smallStep)) {
@@ -5156,7 +3132,7 @@ public final class RuntimeConfigUI {
             return new String[0];
         }
         String normalized = value.replace("\r\n", "\n").replace('\r', '\n');
-        String[] lines = normalized.split("\n");
+        String[] lines = normalized.replace(',', '\n').split("\n");
         List<String> entries = new ArrayList<>();
         for (String line : lines) {
             if (line == null) {
@@ -5181,6 +3157,448 @@ public final class RuntimeConfigUI {
             }
         }
         return list;
+    }
+
+    private static List<ArraySection> arraySections(String groupId) {
+        if (groupId == null) return List.of();
+        if (GROUP_RESONANCE_CLASS_MAPPINGS.equals(groupId))
+            return List.of(new ArraySection("socket.resonance_mappings", "Resonance class mappings", SOCKET_CONFIG_NAME));
+        if (GROUP_RESONANCE_CLASS_HINTS.equals(groupId))
+            return List.of(new ArraySection("socket.resonance_class_hints", "Weapon class hints", SOCKET_CONFIG_NAME));
+        if (GROUP_CLOCKWORK_AMMO_HINTS.equals(groupId))
+            return List.of(new ArraySection("socket.clockwork_ammo_hints", "Ammo item hints", SOCKET_CONFIG_NAME));
+        if (GROUP_REFORGE_SUPPORT_MATERIALS.equals(groupId))
+            return List.of(new ArraySection("refinement.support_materials", "Support material rules", REFINEMENT_CONFIG_NAME));
+        if (GROUP_LORE_MAPPING_GEMS.equals(groupId))
+            return List.of(
+                    new ArraySection("lore_mapping.gem_colors", "Gem color mappings", LORE_MAPPING_CONFIG_NAME),
+                    new ArraySection("lore_mapping.core_colors", "Core lore colors", LORE_MAPPING_CONFIG_NAME));
+        if (GROUP_LORE_MAPPING_SPIRITS.equals(groupId))
+            return List.of(new ArraySection("lore_mapping.color_spirits", "Color to spirit mappings", LORE_MAPPING_CONFIG_NAME));
+        if (GROUP_LORE_MAPPING_ABILITIES.equals(groupId))
+            return List.of(new ArraySection("lore_mapping.abilities", "Spirit ability mappings", LORE_MAPPING_CONFIG_NAME));
+        if (GROUP_LORE_STATUS_RULES.equals(groupId))
+            return List.of(
+                    new ArraySection("lore.status_reapply", "Boss status reapply rules", LORE_CONFIG_NAME),
+                    new ArraySection("lore.status_resistance", "NPC status resistance", LORE_CONFIG_NAME),
+                    new ArraySection("lore.status_counters", "Boss status counters", LORE_CONFIG_NAME),
+                    new ArraySection("lore.bleed_counters", "Bleed counter NPCs", LORE_CONFIG_NAME));
+        if (isLootInjectionGroup(groupId))
+            return List.of(new ArraySection("loot." + groupId, localizedArrayTitle(groupId), LOOT_CONFIG_NAME));
+        if (isAffinityRuleGroup(groupId))
+            return List.of(new ArraySection("affinity.rules." + groupId, localizedArrayTitle(groupId), ELEMENTAL_AFFINITY_CONFIG_NAME));
+        if (GROUP_AFFINITY_MULTIPLIERS.equals(groupId) || GROUP_AFFINITY_SHIELDS.equals(groupId))
+            return List.of(new ArraySection("affinity.values." + groupId, localizedArrayTitle(groupId), ELEMENTAL_AFFINITY_CONFIG_NAME));
+        return List.of();
+    }
+
+    private static String localizedArrayTitle(String groupId) {
+        for (CategorySection category : categories) {
+            for (ControlGroup group : category.groups) {
+                if (group.id.equals(groupId)) return group.title;
+            }
+        }
+        return "Entries";
+    }
+
+    private static String[] readArray(String sectionId) {
+        if (sectionId == null) return new String[0];
+        return switch (sectionId) {
+            case "socket.resonance_mappings" -> resonanceMappingDisplayEntries();
+            case "socket.resonance_class_hints" -> socketConfig().getResonanceWeaponClassHints();
+            case "socket.clockwork_ammo_hints" -> socketConfig().getClockworkAmmoItemHints();
+            case "refinement.support_materials" -> refinementConfig().getSupportMaterialEntries();
+            case "lore_mapping.gem_colors" -> loreMappingConfig().getGemColorEntries();
+            case "lore_mapping.core_colors" -> loreMappingConfig().getCoreColorEntries();
+            case "lore_mapping.color_spirits" -> loreMappingConfig().getColorSpiritEntries();
+            case "lore_mapping.abilities" -> loreMappingConfig().getAbilityEntries();
+            case "lore.status_reapply" -> loreConfig().getStatusBossReapplyRules();
+            case "lore.status_resistance" -> loreConfig().getNpcStatusResistanceEntries();
+            case "lore.status_counters" -> loreConfig().getStatusBossCounterNpcIds();
+            case "lore.bleed_counters" -> loreConfig().getBleedBossCounterNpcIds();
+            default -> readParameterizedArray(sectionId);
+        };
+    }
+
+    private static String[] readParameterizedArray(String sectionId) {
+        if (sectionId.startsWith("loot.")) return lootInjectionEntries(sectionId.substring("loot.".length()));
+        if (sectionId.startsWith("affinity.rules.")) return affinityRuleEntries(sectionId.substring("affinity.rules.".length()));
+        if (sectionId.startsWith("affinity.values.")) return affinityMultiplierEntries(sectionId.substring("affinity.values.".length()));
+        return new String[0];
+    }
+
+    private static void writeArray(String sectionId, String[] values) {
+        String[] safe = values == null ? new String[0] : values;
+        switch (sectionId) {
+            case "socket.resonance_mappings" -> socketConfig().setResonanceClassMappings(safe);
+            case "socket.resonance_class_hints" -> socketConfig().setResonanceWeaponClassHints(safe);
+            case "socket.clockwork_ammo_hints" -> socketConfig().setClockworkAmmoItemHints(safe);
+            case "refinement.support_materials" -> refinementConfig().setSupportMaterialEntries(safe);
+            case "lore_mapping.gem_colors" -> loreMappingConfig().setGemColorEntries(safe);
+            case "lore_mapping.core_colors" -> loreMappingConfig().setCoreColorEntries(safe);
+            case "lore_mapping.color_spirits" -> loreMappingConfig().setColorSpiritEntries(safe);
+            case "lore_mapping.abilities" -> loreMappingConfig().setAbilityEntries(safe);
+            case "lore.status_reapply" -> loreConfig().setStatusBossReapplyRules(safe);
+            case "lore.status_resistance" -> loreConfig().setNpcStatusResistanceEntries(safe);
+            case "lore.status_counters" -> loreConfig().setStatusBossCounterNpcIds(safe);
+            case "lore.bleed_counters" -> loreConfig().setBleedBossCounterNpcIds(safe);
+            default -> writeParameterizedArray(sectionId, safe);
+        }
+    }
+
+    private static void writeParameterizedArray(String sectionId, String[] values) {
+        if (sectionId.startsWith("loot.")) setLootInjectionEntries(sectionId.substring("loot.".length()), values);
+        else if (sectionId.startsWith("affinity.rules.")) setAffinityRuleEntries(sectionId.substring("affinity.rules.".length()), values);
+        else if (sectionId.startsWith("affinity.values.")) setAffinityMultiplierEntries(sectionId.substring("affinity.values.".length()), values);
+    }
+
+    private static String arrayDraftKey(String sectionId, int index) {
+        return "array_" + sectionId.replace('.', '_') + "_" + index;
+    }
+
+    /** Returns table columns for arrays whose entries contain more than one setting. */
+    private static List<String> structuredArrayLabels(String sectionId, List<String> entries) {
+        if (sectionId == null) return null;
+        return switch (sectionId) {
+            case "socket.resonance_mappings" -> List.of("Equipment name", "Resonance classes");
+            case "socket.resonance_class_hints" -> List.of("Weapon class", "Item hints");
+            case "socket.clockwork_ammo_hints" -> List.of("Ammo item hint");
+            case "refinement.support_materials" -> List.of("Item ID", "Break multiplier", "Durability loss",
+                    "Anti-degrade chance", "Consume mode", "Upgrade guarantee", "Jackpot guarantee",
+                    "Upgrade weight", "Jackpot weight", "Description");
+            case "lore_mapping.gem_colors", "lore_mapping.core_colors" -> List.of("Mapping key", "Color");
+            case "lore_mapping.color_spirits" -> List.of("Lore color", "Spirit IDs");
+            case "lore_mapping.abilities" -> List.of("Spirit", "Trigger", "Chance", "Cooldown (ms)",
+                    "Effect", "Base amount", "Per-level amount");
+            case "lore.status_reapply" -> List.of("Status", "Reapply step", "Pattern");
+            case "lore.status_resistance" -> List.of("NPC ID", "Status 1", "Value 1", "Status 2", "Value 2",
+                    "Status 3", "Value 3", "Status 4", "Value 4", "Status 5", "Value 5", "More pairs (| separated)");
+            case "lore.status_counters" -> List.of("NPC ID", "Status 1", "Status 2", "Status 3", "Status 4",
+                    "Status 5", "Status 6", "Status 7", "Status 8", "Status 9", "Status 10", "More statuses (| separated)");
+            case "lore.bleed_counters" -> List.of("NPC ID");
+            case "affinity.values." + GROUP_AFFINITY_MULTIPLIERS -> List.of("Mode", "Target", "Fire", "Water", "Ice",
+                    "Lightning", "Life", "Void");
+            case "affinity.values." + GROUP_AFFINITY_SHIELDS -> List.of("Mode", "Target", "Shield", "Delay", "Rate", "Duration");
+            default -> {
+                if (sectionId.startsWith("loot.")) {
+                    yield isNpcLootInjectionGroup(sectionId.substring("loot.".length()))
+                            ? List.of("Item ID", "Chance", "Min", "Max", "NPC target ID")
+                            : List.of("Item ID", "Chance", "Min", "Max");
+                }
+                if (sectionId.startsWith("affinity.rules.")) yield List.of("Mode", "Target", "Element");
+                yield null;
+            }
+        };
+    }
+
+    private static boolean isAffinityStructuredModeSection(String sectionId) {
+        return sectionId != null && (sectionId.startsWith("affinity.rules.")
+                || sectionId.equals("affinity.values." + GROUP_AFFINITY_MULTIPLIERS)
+                || sectionId.equals("affinity.values." + GROUP_AFFINITY_SHIELDS));
+    }
+
+    private static int appendColorSpiritMappings(
+            UICommandBuilder commands,
+            UIEventBuilder events,
+            List<String> entries,
+            int cardIndex) {
+        for (int rowIndex = 0; rowIndex < entries.size(); rowIndex++) {
+            ColorSpiritMapping mapping = parseColorSpiritMapping(entries.get(rowIndex));
+            String rowTarget = "lore_mapping.color_spirits:" + rowIndex;
+            commands.append("#RuntimeConfigCards", COLOR_SPIRIT_HEADER_UI);
+            String headerBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+            String colorInput = headerBase + " #ColorSpiritName";
+            commands.set(colorInput + ".Value", mapping.color());
+            events.addEventBinding(CustomUIEventBindingType.ValueChanged, colorInput,
+                    EventData.of("Action", "color_spirit_value").append("Target", rowTarget)
+                            .append("@Text", colorInput + ".Value"), false);
+            events.addEventBinding(CustomUIEventBindingType.Activating, headerBase + " #ColorSpiritAddNpc",
+                    EventData.of("Action", "color_spirit_add_npc").append("Target", rowTarget));
+            events.addEventBinding(CustomUIEventBindingType.Activating, headerBase + " #ColorSpiritRemove",
+                    EventData.of("Action", "array_remove").append("Target", rowTarget));
+
+            for (int npcIndex = 0; npcIndex < mapping.npcIds().size(); npcIndex++) {
+                commands.append("#RuntimeConfigCards", COLOR_SPIRIT_NPC_UI);
+                String npcBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
+                String npcTarget = rowTarget + ":" + npcIndex;
+                String npcInput = npcBase + " #ColorSpiritNpcId";
+                commands.set(npcInput + ".Value", mapping.npcIds().get(npcIndex));
+                events.addEventBinding(CustomUIEventBindingType.ValueChanged, npcInput,
+                        EventData.of("Action", "color_spirit_npc_value").append("Target", npcTarget)
+                                .append("@Text", npcInput + ".Value"), false);
+                events.addEventBinding(CustomUIEventBindingType.Activating, npcBase + " #ColorSpiritNpcRemove",
+                        EventData.of("Action", "color_spirit_remove_npc").append("Target", npcTarget));
+            }
+        }
+        return cardIndex;
+    }
+
+    private static ColorSpiritMapping parseColorSpiritMapping(String raw) {
+        if (raw == null) return new ColorSpiritMapping("", new ArrayList<>());
+        String[] keyValue = raw.split("=", 2);
+        String color = keyValue[0].trim();
+        List<String> npcIds = new ArrayList<>();
+        if (keyValue.length > 1 && !keyValue[1].isEmpty()) {
+            for (String npcId : keyValue[1].split(",", -1)) npcIds.add(npcId.trim());
+        }
+        return new ColorSpiritMapping(color, npcIds);
+    }
+
+    private static String formatColorSpiritMapping(ColorSpiritMapping mapping) {
+        return mapping.color().trim() + "=" + String.join(",", mapping.npcIds());
+    }
+
+    private static void setColorSpiritDraft(ViewState state, String target, String value, boolean npcField) {
+        if (state == null || target == null) return;
+        int npcSeparator = target.lastIndexOf(':');
+        int rowSeparator = npcField && npcSeparator > 0 ? target.lastIndexOf(':', npcSeparator - 1) : npcSeparator;
+        if (rowSeparator <= 0) return;
+        String sectionId = target.substring(0, rowSeparator);
+        int rowIndex = parseIntSafe(target.substring(rowSeparator + 1, npcField ? npcSeparator : target.length()), -1);
+        int npcIndex = npcField ? parseIntSafe(target.substring(npcSeparator + 1), -1) : -1;
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (rowIndex < 0 || rowIndex >= entries.size()) return;
+        ColorSpiritMapping mapping = parseColorSpiritMapping(entries.get(rowIndex));
+        if (npcField) {
+            if (npcIndex < 0 || npcIndex >= mapping.npcIds().size()) return;
+            mapping.npcIds().set(npcIndex, value == null ? "" : value.trim());
+        } else {
+            mapping = new ColorSpiritMapping(value == null ? "" : value.trim(), mapping.npcIds());
+        }
+        entries.set(rowIndex, formatColorSpiritMapping(mapping));
+    }
+
+    private static void addColorSpiritNpcDraft(ViewState state, String target) {
+        if (state == null || target == null) return;
+        int separator = target.lastIndexOf(':');
+        if (separator <= 0) return;
+        String sectionId = target.substring(0, separator);
+        int rowIndex = parseIntSafe(target.substring(separator + 1), -1);
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (rowIndex < 0 || rowIndex >= entries.size()) return;
+        ColorSpiritMapping mapping = parseColorSpiritMapping(entries.get(rowIndex));
+        mapping.npcIds().add("NPC_ID");
+        entries.set(rowIndex, formatColorSpiritMapping(mapping));
+    }
+
+    private static void removeColorSpiritNpcDraft(ViewState state, String target) {
+        if (state == null || target == null) return;
+        int npcSeparator = target.lastIndexOf(':');
+        int rowSeparator = npcSeparator <= 0 ? -1 : target.lastIndexOf(':', npcSeparator - 1);
+        if (rowSeparator <= 0) return;
+        String sectionId = target.substring(0, rowSeparator);
+        int rowIndex = parseIntSafe(target.substring(rowSeparator + 1, npcSeparator), -1);
+        int npcIndex = parseIntSafe(target.substring(npcSeparator + 1), -1);
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (rowIndex < 0 || rowIndex >= entries.size()) return;
+        ColorSpiritMapping mapping = parseColorSpiritMapping(entries.get(rowIndex));
+        if (npcIndex < 0 || npcIndex >= mapping.npcIds().size()) return;
+        mapping.npcIds().remove(npcIndex);
+        entries.set(rowIndex, formatColorSpiritMapping(mapping));
+    }
+
+    private static List<String> structuredArrayFields(String sectionId, String raw, int fieldCount) {
+        List<String> fields = new ArrayList<>(Collections.nCopies(fieldCount, ""));
+        if (sectionId == null || fieldCount == 0) return fields;
+        String value = raw == null ? "" : raw.trim();
+        switch (sectionId) {
+            case "socket.resonance_mappings" -> {
+                ResonanceMappingEntry entry = parseResonanceMappingEntry(value);
+                putFields(fields, entry.name(), entry.classes());
+            }
+            case "socket.resonance_class_hints" -> {
+                ResonanceHintEntry entry = parseResonanceHintEntry(value);
+                putFields(fields, entry.weaponClass(), entry.hints());
+            }
+            case "socket.clockwork_ammo_hints", "lore.bleed_counters" -> putFields(fields, value);
+            case "refinement.support_materials" -> {
+                ReforgeSupportRuleEntry entry = parseReforgeSupportEntry(value);
+                putFields(fields, entry.itemId(), entry.breakMultiplier(), entry.durabilityLoss(), entry.antiDegradeChance(),
+                        entry.consumeMode(), entry.upgradeGuarantee(), entry.jackpotGuarantee(), entry.upgradeWeight(),
+                        entry.jackpotWeight(), entry.description());
+            }
+            case "lore_mapping.gem_colors", "lore_mapping.core_colors", "lore_mapping.color_spirits" -> {
+                KeyValue entry = parseKeyValue(value);
+                putFields(fields, entry.key(), entry.value());
+            }
+            case "lore_mapping.abilities" -> {
+                AbilityEntry entry = parseAbilityEntry(value);
+                putFields(fields, entry.spirit(), entry.trigger(), entry.chance(), entry.cooldown(), entry.effect(),
+                        entry.base(), entry.perLevel());
+            }
+            case "lore.status_reapply" -> {
+                String[] parts = value.split(",", 2);
+                KeyValue entry = parseKeyValue(parts[0]);
+                putFields(fields, entry.key(), entry.value(), parts.length > 1 ? parts[1].trim() : "LINEAR");
+            }
+            case "lore.status_resistance" -> {
+                String[] parts = value.split("\\|", -1);
+                if (parts.length > 0) fields.set(0, parts[0].trim());
+                int pairCount = Math.min(5, Math.max(0, parts.length - 1));
+                for (int i = 0; i < pairCount; i++) {
+                    KeyValue pair = parseKeyValue(parts[i + 1]);
+                    fields.set(1 + i * 2, pair.key());
+                    fields.set(2 + i * 2, pair.value());
+                }
+                if (parts.length > 6) fields.set(11, String.join("|", Arrays.copyOfRange(parts, 6, parts.length)));
+            }
+            case "lore.status_counters" -> {
+                String[] parts = value.split("\\|", -1);
+                if (parts.length > 0) fields.set(0, parts[0].trim());
+                if (parts.length == 1 && fieldCount > 1) fields.set(1, "*");
+                int statusCount = Math.min(10, Math.max(0, parts.length - 1));
+                for (int i = 0; i < statusCount; i++) fields.set(i + 1, parts[i + 1].trim());
+                if (parts.length > 11) fields.set(11, String.join("|", Arrays.copyOfRange(parts, 11, parts.length)));
+            }
+            default -> {
+                if (sectionId.startsWith("loot.")) {
+                    LootRuleEntry entry = parseLootRuleEntry(value);
+                    putFields(fields, entry.itemId(), entry.chance(), entry.min(), entry.max());
+                    if (fieldCount > 4) fields.set(4, entry.targetId());
+                } else if (sectionId.startsWith("affinity.rules.")) {
+                    AffinityRuleEntry entry = parseAffinityRuleEntry(value);
+                    putFields(fields, entry.mode(), entry.target(), entry.element());
+                } else if (sectionId.equals("affinity.values." + GROUP_AFFINITY_MULTIPLIERS)) {
+                    AffinityMultiplierEntry entry = parseAffinityMultiplierEntry(value);
+                    putFields(fields, entry.mode(), entry.target());
+                    for (int i = 0; i < AFFINITY_ELEMENTS.length && i + 2 < fieldCount; i++) {
+                        fields.set(i + 2, entry.multipliers().getOrDefault(AFFINITY_ELEMENTS[i], ""));
+                    }
+                } else if (sectionId.equals("affinity.values." + GROUP_AFFINITY_SHIELDS)) {
+                    AffinityShieldEntry entry = parseAffinityShieldEntry(value);
+                    putFields(fields, entry.mode(), entry.target(), entry.shield(), entry.delay(), entry.rate(), entry.duration());
+                }
+            }
+        }
+        return fields;
+    }
+
+    private static void putFields(List<String> target, String... values) {
+        for (int i = 0; i < Math.min(target.size(), values.length); i++) {
+            target.set(i, values[i] == null ? "" : values[i]);
+        }
+    }
+
+    private static String formatStructuredArrayFields(String sectionId, List<String> fields) {
+        if (sectionId == null || fields == null) return "";
+        switch (sectionId) {
+            case "socket.resonance_mappings", "lore_mapping.gem_colors", "lore_mapping.core_colors",
+                    "lore_mapping.color_spirits" -> { return field(fields, 0) + "=" + field(fields, 1); }
+            case "socket.resonance_class_hints" -> { return field(fields, 0) + "=" + field(fields, 1); }
+            case "socket.clockwork_ammo_hints", "lore.bleed_counters" -> { return field(fields, 0); }
+            case "refinement.support_materials" -> {
+                return field(fields, 0) + "=" + String.join(",", fields.subList(1, Math.min(10, fields.size())));
+            }
+            case "lore_mapping.abilities" -> {
+                String prefix = field(fields, 0) + "=" + field(fields, 1);
+                if (isSignatureAbility(field(fields, 1))) return prefix;
+                return prefix + "," + String.join(",", fields.subList(2, Math.min(7, fields.size())));
+            }
+            case "lore.status_reapply" -> { return field(fields, 0) + "=" + field(fields, 1) + ", " + field(fields, 2); }
+            case "lore.status_resistance" -> {
+                List<String> parts = new ArrayList<>();
+                parts.add(field(fields, 0));
+                for (int i = 1; i <= 9; i += 2) {
+                    if (!field(fields, i).isBlank() || !field(fields, i + 1).isBlank()) {
+                        parts.add(field(fields, i) + "=" + field(fields, i + 1));
+                    }
+                }
+                appendPipeParts(parts, field(fields, 11));
+                return String.join("|", parts);
+            }
+            case "lore.status_counters" -> {
+                List<String> parts = new ArrayList<>();
+                parts.add(field(fields, 0));
+                for (int i = 1; i <= 10; i++) if (!field(fields, i).isBlank()) parts.add(field(fields, i));
+                appendPipeParts(parts, field(fields, 11));
+                return String.join("|", parts);
+            }
+            default -> {
+                if (sectionId.startsWith("loot.")) {
+                    String formatted = field(fields, 0) + "=" + field(fields, 1) + "," + field(fields, 2) + "," + field(fields, 3);
+                    return field(fields, 4).isBlank() ? formatted : formatted + "," + field(fields, 4);
+                }
+                if (sectionId.startsWith("affinity.rules.")) {
+                    return field(fields, 0) + ":" + field(fields, 1) + "=" + field(fields, 2);
+                }
+                if (sectionId.equals("affinity.values." + GROUP_AFFINITY_MULTIPLIERS)) {
+                    List<String> values = new ArrayList<>();
+                    for (int i = 0; i < AFFINITY_ELEMENTS.length && i + 2 < fields.size(); i++) {
+                        if (!field(fields, i + 2).isBlank()) values.add(AFFINITY_ELEMENTS[i] + ":" + field(fields, i + 2));
+                    }
+                    return field(fields, 0) + ":" + field(fields, 1) + "=" + String.join(",", values);
+                }
+                if (sectionId.equals("affinity.values." + GROUP_AFFINITY_SHIELDS)) {
+                    return field(fields, 0) + ":" + field(fields, 1) + "=" + field(fields, 2) + ","
+                            + field(fields, 3) + "," + field(fields, 4) + "," + field(fields, 5);
+                }
+            }
+        }
+        return String.join(",", fields);
+    }
+
+    private static String field(List<String> fields, int index) {
+        return fields != null && index >= 0 && index < fields.size() && fields.get(index) != null ? fields.get(index).trim() : "";
+    }
+
+    private static void appendPipeParts(List<String> parts, String raw) {
+        if (raw == null || raw.isBlank()) return;
+        for (String part : raw.split("\\|")) if (!part.isBlank()) parts.add(part.trim());
+    }
+
+    private static void setStructuredArrayDraft(ViewState state, String target, String value) {
+        if (state == null || target == null) return;
+        int fieldCountSeparator = target.lastIndexOf(':');
+        int fieldSeparator = fieldCountSeparator <= 0 ? -1 : target.lastIndexOf(':', fieldCountSeparator - 1);
+        int rowSeparator = fieldSeparator <= 0 ? -1 : target.lastIndexOf(':', fieldSeparator - 1);
+        if (rowSeparator <= 0) return;
+        String sectionId = target.substring(0, rowSeparator);
+        int row = parseIntSafe(target.substring(rowSeparator + 1, fieldSeparator), -1);
+        int fieldIndex = parseIntSafe(target.substring(fieldSeparator + 1, fieldCountSeparator), -1);
+        int fieldCount = parseIntSafe(target.substring(fieldCountSeparator + 1), -1);
+        if (row < 0 || fieldIndex < 0 || fieldCount <= fieldIndex || fieldCount > MAX_STRUCTURED_ARRAY_FIELDS) return;
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (row >= entries.size()) return;
+        List<String> fields = structuredArrayFields(sectionId, entries.get(row), fieldCount);
+        fields.set(fieldIndex, value == null ? "" : value);
+        entries.set(row, formatStructuredArrayFields(sectionId, fields));
+    }
+
+    private static void setArrayDraft(ViewState state, String target, String value) {
+        int separator = target == null ? -1 : target.lastIndexOf(':');
+        if (separator <= 0) return;
+        String sectionId = target.substring(0, separator);
+        int index = parseIntSafe(target.substring(separator + 1), -1);
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (index >= 0 && index < entries.size()) {
+            entries.set(index, value == null ? "" : value);
+        }
+    }
+
+    private static void mutateArray(ViewState state, String sectionId, int index, String value) {
+        if (sectionId == null) return;
+        List<String> entries = state.arrayDrafts.computeIfAbsent(sectionId, ignored -> mutableList(readArray(sectionId)));
+        if (index < 0) entries.add(value == null ? "" : value);
+        else if (index < entries.size()) entries.remove(index);
+    }
+
+    private static int applyNativeArrayInputs(ViewState state, ControlGroup group, List<String> configsToSave) {
+        if (state == null || group == null) return 0;
+        int changed = 0;
+        for (ArraySection section : arraySections(group.id)) {
+            List<String> draft = state.arrayDrafts.get(section.id());
+            if (draft == null) continue;
+            List<String> cleaned = new ArrayList<>();
+            for (String value : draft) if (value != null && !value.isBlank()) cleaned.add(value.trim());
+            String[] before = readArray(section.id());
+            String[] after = cleaned.toArray(String[]::new);
+            if (!Arrays.equals(before, after)) {
+                writeArray(section.id(), after);
+                addUniqueConfig(configsToSave, section.configName());
+                changed++;
+            }
+        }
+        return changed;
     }
 
     private static void saveGemColorEntries(List<String> entries) {
@@ -5359,57 +3777,6 @@ public final class RuntimeConfigUI {
             }
         }
         return "red";
-    }
-
-    private static String buildAbilityTriggerOptions(String selectedTrigger) {
-        String selected = normalizeAbilityToken(selectedTrigger, "ON_HIT");
-        StringBuilder sb = new StringBuilder();
-        for (String trigger : LORE_TRIGGERS) {
-            appendOption(sb, trigger, selected);
-        }
-        for (String signature : LORE_SIGNATURES) {
-            appendOption(sb, signature, selected);
-        }
-        return sb.toString();
-    }
-
-    private static String buildOptions(String[] values, String selectedValue) {
-        String selected = selectedValue == null ? "" : selectedValue.trim();
-        StringBuilder sb = new StringBuilder();
-        if (values != null) {
-            for (String value : values) {
-                appendOption(sb, value, selected);
-            }
-        }
-        return sb.toString();
-    }
-
-    private static void appendOption(StringBuilder sb, String value, String selectedValue) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        String trimmed = value.trim();
-        sb.append("<option value=\"").append(escapeHtml(trimmed)).append("\"");
-        if (trimmed.equalsIgnoreCase(selectedValue == null ? "" : selectedValue.trim())) {
-            sb.append(" selected=\"true\"");
-        }
-        sb.append(">").append(escapeHtml(trimmed)).append("</option>");
-    }
-
-    private static String buildSpiritOptions(List<String> allSpirits, String selectedSpirit) {
-        String selected = selectedSpirit == null ? "" : selectedSpirit.trim();
-        StringBuilder sb = new StringBuilder();
-        if (!selected.isBlank() && (allSpirits == null || !allSpirits.contains(selected))) {
-            appendOption(sb, selected, selected);
-        }
-        for (String spirit : allSpirits) {
-            sb.append("<option value=\"").append(escapeHtml(spirit)).append("\"");
-            if (spirit.equals(selected)) {
-                sb.append(" selected=\"true\"");
-            }
-            sb.append(">").append(escapeHtml(spirit)).append("</option>");
-        }
-        return sb.toString();
     }
 
     private static List<String> allSpiritIds() {
@@ -5745,47 +4112,46 @@ public final class RuntimeConfigUI {
 
     private static ReforgeSupportRuleEntry readReforgeSupportEntryFromInputs(
             ViewState state,
-            Object ctxObj,
             int index,
             ReforgeSupportRuleEntry fallback) {
-        String itemId = draftOrContextValue(state, ctxObj, reforgeSupportItemInputId(index), fallback.itemId()).trim();
+        String itemId = draftValue(state, reforgeSupportItemInputId(index), fallback.itemId()).trim();
         String breakMultiplier = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportBreakInputId(index), fallback.breakMultiplier()),
+                draftValue(state, reforgeSupportBreakInputId(index), fallback.breakMultiplier()),
                 fallback.breakMultiplier(),
                 0.0d,
                 10.0d);
         String durabilityLoss = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportDurabilityInputId(index), fallback.durabilityLoss()),
+                draftValue(state, reforgeSupportDurabilityInputId(index), fallback.durabilityLoss()),
                 fallback.durabilityLoss(),
                 0.0d,
                 1.0d);
         String antiDegradeChance = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportAntiInputId(index), fallback.antiDegradeChance()),
+                draftValue(state, reforgeSupportAntiInputId(index), fallback.antiDegradeChance()),
                 fallback.antiDegradeChance(),
                 0.0d,
                 1.0d);
-        String consumeMode = normalizeReforgeSupportMode(draftOrContextValue(state, ctxObj, reforgeSupportConsumeInputId(index), fallback.consumeMode()));
+        String consumeMode = normalizeReforgeSupportMode(draftValue(state, reforgeSupportConsumeInputId(index), fallback.consumeMode()));
         String upgradeGuarantee = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportUpgradeGuaranteeInputId(index), fallback.upgradeGuarantee()),
+                draftValue(state, reforgeSupportUpgradeGuaranteeInputId(index), fallback.upgradeGuarantee()),
                 fallback.upgradeGuarantee(),
                 0.0d,
                 1.0d);
         String jackpotGuarantee = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportJackpotGuaranteeInputId(index), fallback.jackpotGuarantee()),
+                draftValue(state, reforgeSupportJackpotGuaranteeInputId(index), fallback.jackpotGuarantee()),
                 fallback.jackpotGuarantee(),
                 0.0d,
                 1.0d);
         String upgradeWeight = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportUpgradeWeightInputId(index), fallback.upgradeWeight()),
+                draftValue(state, reforgeSupportUpgradeWeightInputId(index), fallback.upgradeWeight()),
                 fallback.upgradeWeight(),
                 0.0d,
                 10.0d);
         String jackpotWeight = normalizeBoundedDecimalText(
-                draftOrContextValue(state, ctxObj, reforgeSupportJackpotWeightInputId(index), fallback.jackpotWeight()),
+                draftValue(state, reforgeSupportJackpotWeightInputId(index), fallback.jackpotWeight()),
                 fallback.jackpotWeight(),
                 0.0d,
                 10.0d);
-        String description = draftOrContextValue(state, ctxObj, reforgeSupportDescriptionInputId(index), fallback.description())
+        String description = draftValue(state, reforgeSupportDescriptionInputId(index), fallback.description())
                 .replace('\n', ' ')
                 .replace('\r', ' ')
                 .trim();
@@ -5841,22 +4207,6 @@ public final class RuntimeConfigUI {
             }
         }
         return false;
-    }
-
-    private static String extractMappingEventValue(Object eventObj, Object ctxObj, String elementId) {
-        String rawValue = HyUIReflectionUtils.extractEventValue(eventObj);
-        if (rawValue == null) {
-            rawValue = HyUIReflectionUtils.getContextValue(ctxObj, elementId, "#" + elementId + ".value");
-        }
-        return rawValue == null ? "" : rawValue.trim();
-    }
-
-    private static String currentContextValue(Object ctxObj, String elementId, String fallback) {
-        String value = HyUIReflectionUtils.getContextValue(ctxObj, elementId, "#" + elementId + ".value");
-        if (value == null) {
-            return fallback == null ? "" : fallback;
-        }
-        return value;
     }
 
     private static boolean isAffinityMappingGroup(String groupId) {
@@ -6318,13 +4668,6 @@ public final class RuntimeConfigUI {
         return parsed == null ? fallback : parsed;
     }
 
-    private static String draftOrContextValue(ViewState state, Object ctxObj, String elementId, String fallback) {
-        if (state != null && elementId != null && state.draftValues.containsKey(elementId)) {
-            return state.draftValues.get(elementId);
-        }
-        return currentContextValue(ctxObj, elementId, fallback);
-    }
-
     private static String draftValue(ViewState state, String elementId, String fallback) {
         if (state != null && elementId != null && state.draftValues.containsKey(elementId)) {
             return state.draftValues.get(elementId);
@@ -6478,6 +4821,7 @@ public final class RuntimeConfigUI {
     private record StatusRuleEntry(String status, String step, String pattern) {}
     private record StatusResistanceEntry(String npcId, String status, String value) {}
     private record StatusCounterEntry(String npcId, String status) {}
+    private record ColorSpiritMapping(String color, List<String> npcIds) {}
     private record LootRuleEntry(String itemId, String chance, String min, String max, String targetId) {}
     private record ReforgeSupportRuleEntry(
             String itemId,
@@ -6587,17 +4931,6 @@ public final class RuntimeConfigUI {
         return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
-    private static Object getStore(PlayerRef playerRef) throws Exception {
-        return HyUIReflectionUtils.getStore(playerRef);
-    }
-
-    private static void closePageIfOpen(PlayerRef playerRef) {
-        HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
-    }
-
-    private static String escapeHtml(String text) {
-        return UITemplateUtils.escapeHtml(text);
-    }
 
     private static String t(Object player, String key, Object... params) {
         return LangLoader.getUITranslation(player, key, params);

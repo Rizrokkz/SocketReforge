@@ -1,0 +1,2 @@
+$Common = "../SocketReforge_Common.ui";
+Group #GroupCard { Anchor: (Height: 36); Padding: (Bottom: 4); TextButton #GroupButton { Anchor: (Full: 0); Text: "Section"; Style: $Common.@SecondaryTextButtonStyle; Padding: (Horizontal: 8); } }

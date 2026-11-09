@@ -1,0 +1,6 @@
+Group #PatternIconTile {
+  Anchor: (Width: 24, Height: 24);
+  LayoutMode: Center;
+  Background: #202b3a;
+  ItemIcon #PatternEssence { ItemId: ""; Anchor: (Width: 22, Height: 22); Visible: false; }
+}

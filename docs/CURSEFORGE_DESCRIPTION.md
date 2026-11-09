@@ -643,7 +643,7 @@
   <li><strong>Iron Building Hammer support</strong> — used in both Essence and Reforge benches with durability wear</li>
   <li><strong>DynamicTooltips compatibility</strong> — socket and essence info displayed as in-game tooltips<br><em>(Requires <a href="https://www.curseforge.com/hytale/mods/dynamictooltipslib">DynamicTooltipsLib</a>)</em></li>
   <li><strong>HyUI Support</strong> — Optional enhanced UI when HyUI mod is installed</li>
-  <li><strong>HyUI fallback safety</strong> — bench interactions remain usable if HyUI is unavailable</li>
+  <li><strong>Native bench interfaces</strong> — Reforge, Socket Punch, Essence Socket, and Lore Socket benches work without HyUI</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
   <li><strong>Bench preview UIs</strong> with detailed refinement/socket outcome information</li>
   <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>

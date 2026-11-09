@@ -1,0 +1,78 @@
+$Common = "../SocketReforge_Common.ui";
+
+@CompendiumTabStyle = TextButtonStyle(
+  Default: (Background: #18212d, LabelStyle: (FontSize: 11, TextColor: #cbd4df)),
+  Hovered: (Background: #263549, LabelStyle: (FontSize: 11, TextColor: #ffffff)),
+  Pressed: (Background: #30445e, LabelStyle: (FontSize: 11, TextColor: #ffffff))
+);
+
+Group #CompendiumRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Full;
+  Background: #080d14;
+
+  Group #CompendiumHeader {
+    Anchor: (Left: 12, Right: 12, Top: 12, Height: 58);
+    LayoutMode: Left;
+    Background: $Common.@PanelBackground;
+    Padding: (Left: 14, Right: 14, Top: 7, Bottom: 7);
+    Label #CompendiumTitle { FlexWeight: 1; Style: (FontSize: 19, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "RESONANT COMPENDIUM"; }
+    Label #CompendiumSummary { Anchor: (Width: 360); Style: (FontSize: 11, TextColor: #aab7c5, HorizontalAlignment: End, VerticalAlignment: Center, Wrap: true); Text: ""; }
+  }
+
+  Group #CompendiumBody {
+    Anchor: (Left: 12, Right: 12, Top: 78, Bottom: 52);
+    LayoutMode: Full;
+
+    Group #CompendiumFamilyPane {
+      Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 220);
+      LayoutMode: Full;
+      Background: $Common.@PanelBackground;
+      Label #FamilyHeading { Anchor: (Left: 10, Right: 10, Top: 8, Height: 28); Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "WEAPON FAMILIES"; }
+      Group #FamilyList { Anchor: (Left: 8, Right: 8, Top: 38, Bottom: 210); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+      Label #RarityHeading { Anchor: (Left: 10, Right: 10, Bottom: 178, Height: 28); Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "RARITY"; }
+      Group #RarityList { Anchor: (Left: 8, Right: 8, Bottom: 8, Height: 166); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+    }
+
+    Group #CompendiumShardPane {
+      Anchor: (Left: 228, Right: 412, Top: 0, Bottom: 0);
+      LayoutMode: Full;
+      Background: $Common.@PanelBackground;
+      Label #RecipeListTitle { Anchor: (Left: 12, Right: 12, Top: 8, Height: 28); Style: (FontSize: 15, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "Recipes"; }
+      Group #SelectedRecipeSummary {
+        Anchor: (Left: 8, Right: 8, Top: 40, Height: 56);
+        LayoutMode: Top;
+        Background: #151c26;
+        Padding: (Left: 10, Right: 10, Top: 6, Bottom: 6);
+        Label #SelectedRecipeName { Anchor: (Height: 23); Style: (FontSize: 13, TextColor: #eef1f5, RenderBold: true, VerticalAlignment: Center); Text: "Select a recipe"; }
+        Label #SelectedRecipeDetails { Anchor: (Height: 19); Style: (FontSize: 10, TextColor: #aab7c5, VerticalAlignment: Center); Text: ""; }
+      }
+      Label #ShardEmpty { Anchor: (Left: 20, Right: 20, Top: 106, Height: 32); Style: (FontSize: 11, TextColor: #9eacbb, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Group #ShardRecipeList { Anchor: (Left: 8, Right: 8, Top: 102, Bottom: 8); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+    }
+
+    Group #CompendiumRightPane {
+      Anchor: (Right: 0, Top: 0, Bottom: 0, Width: 400);
+      LayoutMode: Full;
+      Background: $Common.@PanelBackground;
+      Label #RightPaneTitle { Anchor: (Left: 12, Right: 12, Top: 8, Height: 28); Style: (FontSize: 15, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "Completed Recipes"; }
+      Label #RightPaneHint { Anchor: (Left: 12, Right: 12, Top: 37, Height: 34); Style: (FontSize: 10, TextColor: #9eacbb, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Label #CompletedEmpty { Anchor: (Left: 20, Right: 20, Top: 78, Height: 36); Style: (FontSize: 11, TextColor: #9eacbb, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Group #RightRecipeList { Anchor: (Left: 8, Right: 8, Top: 76, Bottom: 62); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+      Group #RightPaneActions { Anchor: (Left: 8, Right: 8, Bottom: 8, Height: 46); LayoutMode: Left;
+        TextButton #CombineCancelButton { Anchor: (Width: 118, Height: 36); Style: @CompendiumTabStyle; Text: "CANCEL"; Visible: false; }
+        Group { FlexWeight: 1; }
+        TextButton #CombineSelectedButton { Anchor: (Width: 188, Height: 36); Style: $Common.@PrimaryTextButtonStyle; Text: "COMBINE SELECTED"; Visible: false; }
+      }
+    }
+  }
+
+  Group #CompendiumFooter {
+    Anchor: (Left: 12, Right: 12, Bottom: 10, Height: 34);
+    LayoutMode: Left;
+    Background: #101722;
+    Padding: (Left: 12, Right: 12, Top: 4, Bottom: 4);
+    Label #CompendiumStatus { FlexWeight: 1; Style: (FontSize: 11, TextColor: #b8c4d2, VerticalAlignment: Center, Wrap: true); Text: ""; }
+    TextButton #CompendiumClose { Anchor: (Width: 108, Height: 28); Style: @CompendiumTabStyle; Text: "CLOSE"; }
+  }
+}

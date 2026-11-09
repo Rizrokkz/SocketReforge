@@ -26,6 +26,25 @@ public final class ResonantCompendiumUtils {
         }
     }
 
+    public enum CombineFailure {
+        NONE,
+        ENTRY_MISSING,
+        SAME_ENTRY,
+        NAME_MISMATCH,
+        BASE_COMPLETE,
+        NO_NEW_DATA
+    }
+
+    public record CombineResult(
+            CombineFailure failure,
+            int gainedSlots,
+            int revealedSlots,
+            int totalSlots) {
+        public boolean succeeded() {
+            return failure == CombineFailure.NONE;
+        }
+    }
+
     public static boolean isCompendiumItem(ItemStack stack) {
         return stack != null && !stack.isEmpty() && COMPENDIUM_ITEM_ID.equalsIgnoreCase(stack.getItemId());
     }
@@ -104,6 +123,63 @@ public final class ResonantCompendiumUtils {
         }
 
         return true;
+    }
+
+    /** Combines two recipe stacks already stored in the same compendium. */
+    public static CombineResult combineEntries(
+            Map<String, CompendiumEntry> data,
+            String baseKey,
+            String mergeKey) {
+        if (data == null || baseKey == null || mergeKey == null) {
+            return failed(CombineFailure.ENTRY_MISSING);
+        }
+        if (baseKey.equals(mergeKey)) {
+            return failed(CombineFailure.SAME_ENTRY);
+        }
+
+        CompendiumEntry base = data.get(baseKey);
+        CompendiumEntry merge = data.get(mergeKey);
+        if (base == null || merge == null) {
+            return failed(CombineFailure.ENTRY_MISSING);
+        }
+        if (!ResonantRecipeUtils.normalizeRecipeName(base.name)
+                .equals(ResonantRecipeUtils.normalizeRecipeName(merge.name))) {
+            return failed(CombineFailure.NAME_MISMATCH);
+        }
+
+        ResonantRecipeUtils.PatternStats before = ResonantRecipeUtils.getPatternStats(base.pattern);
+        if (before.isComplete()) {
+            return new CombineResult(CombineFailure.BASE_COMPLETE, 0,
+                    before.revealedSlots(), before.totalSlots());
+        }
+
+        String mergedPattern = ResonantRecipeUtils.mergePatterns(base.pattern, merge.pattern);
+        ResonantRecipeUtils.PatternStats after = ResonantRecipeUtils.getPatternStats(mergedPattern);
+        int gained = Math.max(0, after.revealedSlots() - before.revealedSlots());
+        if (gained <= 0) {
+            return new CombineResult(CombineFailure.NO_NEW_DATA, 0,
+                    before.revealedSlots(), before.totalSlots());
+        }
+
+        if (base.quantity > 1) {
+            base.quantity--;
+            addShardToCompendium(data, base.name, mergedPattern, base.usages, 1);
+        } else {
+            base.pattern = mergedPattern;
+        }
+
+        if (merge.quantity > 1) {
+            merge.quantity--;
+        } else {
+            data.remove(mergeKey);
+        }
+
+        return new CombineResult(CombineFailure.NONE, gained,
+                after.revealedSlots(), after.totalSlots());
+    }
+
+    private static CombineResult failed(CombineFailure failure) {
+        return new CombineResult(failure, 0, 0, 0);
     }
 
     private static String buildEntryKey(String name, String pattern, String usages) {

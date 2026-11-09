@@ -35,7 +35,7 @@ public class RuntimeConfigCommand extends CommandBase {
             return;
         }
         if (!RuntimeConfigUI.isAvailable()) {
-            context.sendMessage(Message.raw("Runtime config UI is unavailable (HyUI missing)."));
+            context.sendMessage(Message.raw("Runtime config UI is unavailable."));
             return;
         }
         RuntimeConfigUI.open(player);

@@ -1,5 +1,7 @@
 package irai.mod.reforge.Common.UI;
 
+import java.util.List;
+
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
@@ -94,5 +96,17 @@ public final class UIInventoryUtils {
             return false;
         }
         return removeItem(player, hotbar, slot, amount);
+    }
+
+    public static <T> T resolveIndex(List<T> entries, String value) {
+        if (entries == null || value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            int index = Integer.parseInt(value.trim());
+            return index >= 0 && index < entries.size() ? entries.get(index) : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 }

@@ -1,0 +1,2 @@
+$Common = "../SocketReforge_Common.ui";
+Group #SelectCard { Anchor: (Height: 94); LayoutMode: Top; Padding: (Left: 10, Right: 10, Top: 7, Bottom: 7); Background: #151e2a; Label #SelectTitle { Anchor: (Height: 23); Style: (FontSize: 12, TextColor: #e6ebf2, RenderBold: true, VerticalAlignment: Center); Text: "Setting"; } Label #SelectDescription { Anchor: (Height: 24); Style: (FontSize: 10, TextColor: #9eacbb, VerticalAlignment: Center, Wrap: true); Text: ""; } DropdownBox #SelectValue { Anchor: (Width: 360, Height: 30); Value: ""; Style: $Common.@DefaultDropdownBoxStyle; } }

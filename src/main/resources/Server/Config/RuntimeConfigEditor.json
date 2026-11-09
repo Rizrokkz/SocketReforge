@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "schema": "socketreforge.runtime-config-editor",
+  "cardLayouts": {
+    "setting_cards": "Scalar, toggle, text, and choice cards",
+    "probability_matrix": "Compact per-level outcome probability table",
+    "numeric_table": "Compact setting and value table for related numeric controls",
+    "mapping_cards": "Editable mapping entry cards",
+    "rule_cards": "Editable rule entry cards",
+    "loot_rule_cards": "Editable loot rule cards",
+    "support_rule_cards": "Editable support material rule cards",
+    "ability_cards": "Editable lore ability mapping cards"
+  },
+  "categories": [
+    {
+      "id": "socket",
+      "groups": [
+        { "id": "limits", "layout": "setting_cards" },
+        { "id": "punch_success", "layout": "setting_cards" },
+        { "id": "punch_break", "layout": "setting_cards" },
+        { "id": "special_rules", "layout": "setting_cards" },
+        { "id": "resonance_class_mappings", "layout": "mapping_cards" },
+        { "id": "resonance_class_hints", "layout": "mapping_cards" },
+        { "id": "clockwork_ammo_hints", "layout": "mapping_cards" }
+      ]
+    },
+    {
+      "id": "refinement",
+      "groups": [
+        { "id": "refine_limits", "layout": "probability_matrix" },
+        { "id": "refine_name_format", "layout": "setting_cards" },
+        { "id": "refine_level_labels_weapon", "layout": "setting_cards" },
+        { "id": "refine_level_labels_armor", "layout": "setting_cards" },
+        { "id": "refine_material_tiers", "layout": "numeric_table" },
+        { "id": "reforge_support_materials", "layout": "support_rule_cards" },
+        { "id": "weapon_multipliers", "layout": "setting_cards" },
+        { "id": "armor_multipliers", "layout": "setting_cards" },
+        { "id": "weapon_break", "layout": "setting_cards" },
+        { "id": "armor_break", "layout": "setting_cards" },
+        { "id": "softcore_breaks", "layout": "setting_cards" }
+      ]
+    },
+    {
+      "id": "cross_mod",
+      "groups": [{ "id": "crossmod_loot", "layout": "setting_cards" }]
+    },
+    {
+      "id": "loot",
+      "groups": [
+        { "id": "chest_loot", "layout": "numeric_table" },
+        { "id": "loot_chest_injections", "layout": "loot_rule_cards" },
+        { "id": "npc_drops", "layout": "numeric_table" },
+        { "id": "loot_npc_injections", "layout": "loot_rule_cards" },
+        { "id": "loot_npc_aquatic_injections", "layout": "loot_rule_cards" },
+        { "id": "loot_npc_flying_injections", "layout": "loot_rule_cards" },
+        { "id": "loot_npc_void_injections", "layout": "loot_rule_cards" },
+        { "id": "essence_fill", "layout": "setting_cards" },
+        { "id": "broken_socket_range", "layout": "numeric_table" }
+      ]
+    },
+    {
+      "id": "damage_numbers",
+      "groups": [{ "id": "damage_numbers_mode", "layout": "setting_cards" }]
+    },
+    {
+      "id": "elemental_affinity",
+      "groups": [
+        { "id": "affinity_core", "layout": "setting_cards" },
+        { "id": "affinity_role_rules", "layout": "rule_cards" },
+        { "id": "affinity_custom_role_rules", "layout": "rule_cards" },
+        { "id": "affinity_multipliers", "layout": "rule_cards" },
+        { "id": "affinity_shields", "layout": "rule_cards" }
+      ]
+    },
+    {
+      "id": "ascension",
+      "groups": [
+        { "id": "ascension_core", "layout": "setting_cards" },
+        { "id": "ascension_costs", "layout": "setting_cards" },
+        { "id": "corruption_core", "layout": "setting_cards" },
+        { "id": "corruption_costs", "layout": "setting_cards" },
+        { "id": "corruption_chances", "layout": "numeric_table" },
+        { "id": "corruption_modifiers", "layout": "numeric_table" }
+      ]
+    },
+    {
+      "id": "lore",
+      "groups": [
+        { "id": "lore_socket_rolls", "layout": "numeric_table" },
+        { "id": "lore_leveling", "layout": "numeric_table" },
+        { "id": "lore_feeding", "layout": "setting_cards" },
+        { "id": "lore_bleed", "layout": "setting_cards" },
+        { "id": "lore_status_rules", "layout": "rule_cards" },
+        { "id": "lore_mapping_gems", "layout": "mapping_cards" },
+        { "id": "lore_mapping_spirits", "layout": "mapping_cards" },
+        { "id": "lore_mapping_abilities", "layout": "ability_cards" }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 import irai.mod.reforge.UI.EssenceBenchUI;
 
 /**
- * OP-only command to open the essence socket HyUI page.
+ * OP-only command to open the native essence socket bench.
  */
 public class EssenceCommand extends CommandBase {
 
@@ -31,10 +31,6 @@ public class EssenceCommand extends CommandBase {
         }
         if (!CommandUtils.isOperator(player)) {
             context.sendMessage(Message.raw("OP only command."));
-            return;
-        }
-        if (!EssenceBenchUI.isAvailable()) {
-            context.sendMessage(Message.raw("Essence bench UI is unavailable (HyUI missing)."));
             return;
         }
         EssenceBenchUI.open(player);

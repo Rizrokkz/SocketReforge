@@ -1,0 +1,2 @@
+$Common = "../SocketReforge_Common.ui";
+Group #ArraySection { Anchor: (Height: 40); LayoutMode: Left; Padding: (Left: 4, Right: 4, Top: 4, Bottom: 4); Label #ArraySectionTitle { FlexWeight: 1; Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "Entries"; } TextButton #ArrayAdd { Anchor: (Width: 92, Height: 28); Text: "+ ADD"; Style: $Common.@SecondaryTextButtonStyle; } }

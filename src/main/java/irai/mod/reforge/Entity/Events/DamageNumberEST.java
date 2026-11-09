@@ -226,6 +226,9 @@ public class DamageNumberEST extends DamageEventSystem {
         String kindId = resolveKind(damage);
         boolean skipCombatText = DamageNumberMeta.shouldSkipCombatText(damage)
                 || LoreDamageUtils.isStatusDamage(damage);
+        if (!skipCombatText) {
+            applyNativeCriticalTextColor(damage);
+        }
         boolean showAffinityDamageGroup = isAffinityDamageGroupEnabled() && !skipCombatText;
         EnemyAffinityHudUI.showDamage(
                 store,
@@ -881,6 +884,29 @@ public class DamageNumberEST extends DamageEventSystem {
         Essence.Type strongestElement = strongestElementFromPayload(
                 damage == null ? null : damage.getIfPresentMetaObject(EquipmentRefineEST.META_WEAPON_ELEMENTAL_DAMAGE));
         return strongestElement == null ? resolved : kindIdForElement(strongestElement);
+    }
+
+    /**
+     * Native combat text derives its color from the damage cause asset. Use a physical
+     * child cause for critical physical hits so Hytale renders those numbers red without
+     * replacing its built-in combat text renderer.
+     */
+    private static void applyNativeCriticalTextColor(Damage damage) {
+        if (damage == null || !DamageNumberMeta.isCritical(damage)) {
+            return;
+        }
+        DamageCause cause = damage.getCause();
+        if (cause == null || !cause.isOrInherits(DamageCause.PHYSICAL)) {
+            return;
+        }
+        IndexedLookupTableAssetMap<String, DamageCause> assetMap = DamageCause.getAssetMap();
+        if (assetMap == null) {
+            return;
+        }
+        int criticalCauseIndex = assetMap.getIndexOrDefault("SocketReforge_Critical", -1);
+        if (criticalCauseIndex >= 0 && damage.getDamageCauseIndex() != criticalCauseIndex) {
+            damage.setDamageCauseIndex(criticalCauseIndex);
+        }
     }
 
     private static float resolveDisplayAmount(float hpDamage, double shieldDamage, boolean shieldActiveHit) {

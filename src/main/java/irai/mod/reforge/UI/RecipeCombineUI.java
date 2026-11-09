@@ -214,6 +214,31 @@ public final class RecipeCombineUI {
     // Internal flow
     // ═══════════════════════════════════════════════════════════════
 
+    /** Combines two shards stored in the selected compendium without opening another page. */
+    public static String combineCompendiumEntries(Player player, short compendiumSlot,
+                                                   String baseCompendiumKey, String mergeCompendiumKey) {
+        if (player == null || player.getPlayerRef() == null) {
+            return "Could not combine the selected recipe shards.";
+        }
+        PlayerRef ref = player.getPlayerRef();
+        activeCompendiums.put(ref, new CompendiumHandle(compendiumSlot));
+        Snapshot snapshot = collectSnapshot(player);
+        Entry base = findCompendiumEntry(snapshot.entries, baseCompendiumKey);
+        Entry merge = findCompendiumEntry(snapshot.entries, mergeCompendiumKey);
+        if (base == null || merge == null) {
+            return LangLoader.getUITranslation(player, "ui.recipe_combine.error_compendium_missing");
+        }
+        return processCombine(player, base, merge).status;
+    }
+
+    private static Entry findCompendiumEntry(List<Entry> entries, String key) {
+        if (entries == null || key == null) return null;
+        for (Entry entry : entries) {
+            if (entry != null && entry.source == Source.COMPENDIUM && key.equals(entry.compendiumKey)) return entry;
+        }
+        return null;
+    }
+
     private static void openWithSync(Player player) {
         Snapshot snapshot = collectSnapshot(player);
         SelectionState state = pendingSelections.remove(player.getPlayerRef());

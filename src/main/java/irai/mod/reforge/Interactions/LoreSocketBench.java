@@ -4,7 +4,6 @@ import org.checkerframework.checker.nullness.compatqual.NonNullDecl;
 
 import com.hypixel.hytale.codec.builder.BuilderCodec;
 import com.hypixel.hytale.protocol.InteractionType;
-import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.component.Ref;
@@ -14,7 +13,6 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.UI.LoreSocketBenchUI;
-import irai.mod.reforge.Util.LangLoader;
 
 /**
  * Opens the Lore Socket Bench UI when the bench is used.
@@ -39,12 +37,7 @@ public class LoreSocketBench extends SimpleInteraction {
             return;
         }
 
-        if (LoreSocketBenchUI.isAvailable()) {
-            LoreSocketBenchUI.open(player);
-            return;
-        }
-
-        player.getPlayerRef().sendMessage(Message.raw("<color=#FF5555>" + LangLoader.getUITranslation(player, "ui.lore_socket.hyui_missing")));
+        LoreSocketBenchUI.open(player);
     }
 
     /**

@@ -1,0 +1,13 @@
+@RarityCardStyle = TextButtonStyle(
+  Default: (Background: #18212d, LabelStyle: (FontSize: 10, TextColor: #cbd4df)),
+  Hovered: (Background: #263549, LabelStyle: (FontSize: 10, TextColor: #ffffff)),
+  Pressed: (Background: #30445e, LabelStyle: (FontSize: 10, TextColor: #ffffff))
+);
+
+Group #RarityCard {
+  Anchor: (Height: 34);
+  Background: #151c26;
+  Group #RaritySelected { Anchor: (Left: 2, Top: 3, Bottom: 3, Width: 3); Background: #e8c030; Visible: false; }
+  Label #RarityCount { Anchor: (Right: 9, Top: 0, Width: 26, Height: 34); Style: (FontSize: 9, TextColor: #aab7c5, HorizontalAlignment: End, VerticalAlignment: Center); Text: "0"; }
+  TextButton #RarityButton { Anchor: (Left: 8, Right: 34, Top: 2, Bottom: 2); Style: @RarityCardStyle; Padding: (Left: 7, Right: 3); Text: "All"; }
+}

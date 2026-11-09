@@ -231,6 +231,26 @@ public class EquipmentRefineEST extends DamageEventSystem {
                 || Boolean.TRUE.equals(damage.getIfPresentMetaObject(META_SKIP_REFORGE))
                 || elementalComponent;
 
+        // Native entity-effect ticks bypass the weapon/refinement pipeline, but still receive
+        // character-path damage bonuses. Explicit Socket Reforge ticks already calculate their
+        // own proc scaling before reaching this filter. Refinement, socket bonuses, and weapon
+        // base are intentionally omitted here.
+        if (source instanceof Damage.EntityEffectSource && attacker != null) {
+            ItemStack heldWeapon = PlayerInventoryUtils.getHeldItem(attacker);
+            String heldWeaponId = heldWeapon == null || heldWeapon.isEmpty()
+                    || !ReforgeEquip.isWeapon(heldWeapon) ? null : heldWeapon.getItemId();
+            double pathDamagePercent = CharacterPathService.bonusForWeapon(attacker, heldWeaponId,
+                    Bonus.DAMAGE_PERCENT);
+            if (Double.isFinite(pathDamagePercent) && pathDamagePercent != 0.0d) {
+                float beforePathBonus = damage.getAmount();
+                float afterPathBonus = (float) (beforePathBonus * (1.0d + pathDamagePercent));
+                damage.setAmount(Math.max(0.0f, afterPathBonus));
+                DamageStackDelayEST.logDamageStage("equipment:status-path", damage,
+                        beforePathBonus, damage.getAmount(),
+                        String.format(java.util.Locale.ROOT, "pathDamagePct=%.2f", pathDamagePercent * 100.0d));
+            }
+        }
+
         // ── Attacker weapon bonus (damage multiplier) ─────────────────────────
         if (!skipRefine) {
             if (attacker != null) {

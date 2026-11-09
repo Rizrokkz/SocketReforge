@@ -1,6 +1,5 @@
 package irai.mod.reforge.UI;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -35,11 +34,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import irai.mod.reforge.Common.PlayerInventoryUtils;
 import irai.mod.reforge.Common.CorruptionUtils;
-import irai.mod.reforge.Common.UI.HyUIReflectionUtils;
-import irai.mod.reforge.Common.UI.UIHtmlUtils;
+import irai.mod.reforge.Common.UI.UIInventoryUtils;
 import irai.mod.reforge.Common.UI.UIItemUtils;
 import irai.mod.reforge.Common.UI.UISocketVisualUtils;
-import irai.mod.reforge.Common.UI.UITemplateUtils;
 import irai.mod.reforge.Lore.LoreAbility;
 import irai.mod.reforge.Lore.LoreAbilityRegistry;
 import irai.mod.reforge.Lore.LoreGemRegistry;
@@ -54,17 +51,11 @@ import irai.mod.reforge.Socket.SocketManager;
 import irai.mod.reforge.Util.LangLoader;
 
 /**
- * HyUI lore gem socketing page opened through command.
- * Uses reflection so the plugin still runs when HyUI is not present.
+ * Native lore gem socketing page opened through command.
  */
 public final class LoreSocketBenchUI {
     private LoreSocketBenchUI() {}
 
-    private static final String HYUI_PAGE_BUILDER = "au.ellie.hyui.builders.PageBuilder";
-    private static final String HYUI_PLUGIN = "au.ellie.hyui.HyUIPlugin";
-    private static final String HYUI_EVENT_BINDING = "com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType";
-    private static final String UI_COMMAND_BUILDER = "com.hypixel.hytale.server.core.ui.builder.UICommandBuilder";
-    private static final String TEMPLATE_PATH = "Common/UI/Custom/Pages/LoreSocketBench.html";
     private static final String NATIVE_PAGE_UI = "Pages/LoreSocketBench.ui";
     private static final String EQUIPMENT_CARD_UI = "Pages/EssenceBenchEquipmentCard.ui";
     private static final String GEM_CARD_UI = "Pages/EssenceBenchEssenceCard.ui";
@@ -85,8 +76,6 @@ public final class LoreSocketBenchUI {
     private static final int EQUIPMENT_CARDS_PER_PAGE = 4;
     private static final int MATERIAL_CARDS_PER_PAGE = 5;
 
-    private static boolean nativeUiAvailable = true;
-    private static final Map<PlayerRef, Object> openPages = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, SelectionState> pendingSelections = new ConcurrentHashMap<>();
     private static final Map<PlayerRef, Boolean> pendingNavToFeed = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -183,14 +172,6 @@ public final class LoreSocketBenchUI {
         }
     }
 
-    public static void initialize() {
-        nativeUiAvailable = true;
-    }
-
-    public static boolean isAvailable() {
-        return nativeUiAvailable;
-    }
-
     public static void open(Player player) {
         if (player == null) {
             return;
@@ -198,7 +179,6 @@ public final class LoreSocketBenchUI {
         PlayerRef playerRef = player.getPlayerRef();
         LoreUiState.setActive(playerRef, LoreUiState.Page.SOCKET);
         pendingNavToFeed.remove(playerRef);
-        closePageIfOpen(playerRef);
         pendingSelections.remove(playerRef);
         player.getWorld().execute(() -> openWithSync(player));
     }
@@ -311,48 +291,13 @@ public final class LoreSocketBenchUI {
             if (entityRef == null || store == null) return;
             NativeLoreSocketBenchPage page = new NativeLoreSocketBenchPage(playerRef, snapshot, selectionState);
             player.getPageManager().openCustomPage(entityRef, store, page);
-            openPages.put(playerRef, page);
         } catch (Exception e) {
             System.err.println("[SocketReforge] Native LoreSocketBenchUI open error: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private static String buildHtml(Player player, Snapshot snapshot, SelectionState state) {
-        String equipmentKey = state != null ? state.equipmentKey : null;
-        String gemKey = state != null ? state.gemKey : null;
-        String supportKey = state != null ? state.supportKey : null;
-        String slotKey = state != null ? state.slotKey : null;
-        String status = state != null && state.statusText != null
-                ? state.statusText
-                : LangLoader.getUITranslation(player, "ui.lore_socket.status_idle");
 
-        Entry selectedEquipment = findByKey(snapshot.equipments, equipmentKey);
-        Entry selectedGem = findByKey(materialEntries(snapshot, selectedEquipment), gemKey);
-        Entry selectedSupport = findByKey(snapshot.supports, supportKey);
-
-        String html = loadTemplate();
-        html = html.replace("{{equipmentCards}}", buildEquipmentCardsHtml(player, snapshot, state));
-        html = html.replace("{{materialsCards}}", buildMaterialsCardsHtml(player, snapshot, state, selectedEquipment));
-        html = html.replace("{{selectedEquipmentLabel}}", escapeHtml(selectedEquipment != null
-                ? selectedEquipment.displayName
-                : LangLoader.getUITranslation(player, "ui.lore_socket.metadata_no_equipment")));
-        html = html.replace("{{selectedGemLabel}}", escapeHtml(selectedGem != null
-                ? selectedGem.displayName
-                : LangLoader.getUITranslation(player, "ui.lore_socket.option_none")));
-        html = html.replace("{{selectedSupportLabel}}", escapeHtml(selectedSupport != null
-                ? selectedSupport.displayName
-                : LangLoader.getUITranslation(player, "ui.lore_socket.option_none")));
-        html = html.replace("{{slotLabel}}", escapeHtml(buildSelectedSlotLabel(player, selectedEquipment, slotKey)));
-        html = html.replace("{{socketIcons}}", buildSocketPreview(player, selectedEquipment, slotKey));
-        html = html.replace("{{slotDetails}}", buildSelectedSlotSummaryHtml(player, selectedEquipment, slotKey));
-        html = html.replace("{{statusText}}", escapeHtml(status));
-        html = html.replace("{{metadataText}}", escapeHtml(buildMetadata(player, selectedEquipment)));
-        html = html.replace("{{processDisabledAttr}}", shouldDisable(selectedEquipment, selectedGem, selectedSupport, slotKey) ? "disabled=\"true\"" : "");
-        html = html.replace("{{processButtonLabel}}", escapeHtml(resolveProcessButtonLabel(player, selectedEquipment, selectedGem, selectedSupport, slotKey)));
-        html = html.replace("{{detailOverlay}}", "");
-        return LangLoader.replaceUiTokens(player, html);
-    }
 
     private static SelectionState stateWith(SelectionState state,
                                             String equipmentKey,
@@ -375,195 +320,33 @@ public final class LoreSocketBenchUI {
                 detailSlotKey);
     }
 
-    private static SelectionState stateWithPages(SelectionState state, int equipmentPage, int gemPage, int supportPage) {
-        return new SelectionState(
-                state != null ? state.equipmentKey : null,
-                state != null ? state.gemKey : null,
-                state != null ? state.supportKey : null,
-                state != null ? state.slotKey : null,
-                state != null ? state.statusText : null,
-                equipmentPage,
-                gemPage,
-                supportPage,
-                state != null ? state.detailEquipmentKey : null,
-                state != null ? state.detailSlotKey : null);
-    }
 
-    private static String buildEquipmentCardsHtml(Player player, Snapshot snapshot, SelectionState state) {
-        List<Entry> entries = snapshot != null ? snapshot.equipments : List.of();
-        StringBuilder sb = new StringBuilder();
-        if (entries.isEmpty()) {
-            return "<p style=\"font-size:12; color:#b0b0c2;\">" + escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_equipment")) + "</p>";
-        }
-        int pageCount = cardPageCount(entries.size(), EQUIPMENT_CARDS_PER_PAGE);
-        int page = clampPage(state != null ? state.equipmentPage : 0, pageCount);
-        sb.append(buildPagerHtml(player, "equipmentCardsPrev", "equipmentCardsNext", page, pageCount, 420));
-        int start = page * EQUIPMENT_CARDS_PER_PAGE;
-        int end = Math.min(entries.size(), start + EQUIPMENT_CARDS_PER_PAGE);
-        for (int i = start; i < end; i++) {
-            appendEquipmentCardHtml(player, sb, entries.get(i), i, String.valueOf(i).equals(state != null ? state.equipmentKey : null));
-        }
-        return sb.toString();
-    }
 
-    private static void appendEquipmentCardHtml(Player player, StringBuilder sb, Entry entry, int index, boolean selected) {
-        if (entry == null) {
-            return;
-        }
-        LoreSocketData loreData = LoreSocketManager.getLoreSocketData(entry.item);
-        SocketData socketData = SocketManager.getSocketData(entry.item);
-        String background = selected ? "#253456" : "#151526";
-        sb.append("<button id=\"").append(equipmentCardButtonId(index)).append("\" class=\"raw-button\" style=\"anchor-width:420; anchor-height:88; layout-mode:top; padding:0; border:0; background-color:#00000000;\">")
-                .append("<div style=\"anchor-width:420; anchor-height:84; layout-mode:left; spacing:0; padding:6; background-color:").append(background).append(";\">")
-                .append("<div style=\"anchor-width:66; anchor-height:66; background-image:url('slot_bg.png'); background-size:100% 100%; padding:3;\">")
-                .append("<span class=\"item-icon\" data-hyui-item-id=\"").append(escapeHtml(entry.itemId)).append("\" style=\"anchor-width:60; anchor-height:60;\"></span>")
-                .append("</div>")
-                .append("<div style=\"anchor-width:12;\"></div>")
-                .append("<div style=\"anchor-width:330; anchor-height:70; layout-mode:top; spacing:3;\">")
-                .append("<p style=\"anchor-height:20; font-weight:bold; text-align:left; white-space:nowrap;\">")
-                .append(escapeHtml(entry.displayName))
-                .append("</p>")
-                .append("<div style=\"anchor-width:330; anchor-height:34; layout-mode:left; spacing:0;\">")
-                .append("<div style=\"anchor-width:150; anchor-height:32; layout-mode:leftcenterwrap; spacing:5;\">");
-        appendSmallEssenceSocketsHtml(sb, socketData);
-        sb.append("</div>")
-                .append("<div style=\"anchor-width:18;\"></div>")
-                .append("<div style=\"anchor-width:150; anchor-height:32; layout-mode:leftcenterwrap; spacing:5;\">");
-        if (loreData != null) {
-            for (int i = 0; i < loreData.getSocketCount(); i++) {
-                appendSmallLoreSocketHtml(sb, loreData.getSocket(i));
-            }
-        }
-        sb.append("</div></div></div></div></button><p style=\"anchor-height:3;\"></p>");
-    }
 
-    private static void appendSmallEssenceSocketsHtml(StringBuilder sb, SocketData data) {
-        if (data == null || data.getSockets() == null || data.getSockets().isEmpty()) {
-            for (int i = 0; i < 4; i++) {
-                sb.append("<div style=\"anchor-width:28; anchor-height:28; padding:2; background-color:#00000000;\">")
-                        .append("<img src=\"slot_bg.png\" width=\"24\" height=\"24\"/>")
-                        .append("</div>");
-            }
-            return;
-        }
-        for (Socket socket : data.getSockets()) {
-            appendSmallEssenceSocketHtml(sb, socket);
-        }
-    }
 
-    private static void appendSmallEssenceSocketHtml(StringBuilder sb, Socket socket) {
-        boolean broken = socket != null && socket.isBroken();
-        boolean filled = socket != null && !socket.isEmpty() && !broken;
-        String baseIcon = broken ? resolveSmallBrokenSocketIconName() : (filled ? resolveSmallEmptySocketIconName() : resolveSmallEmptySocketIconName());
-        String overlayIcon = filled ? resolveSmallEssenceIconName(socket) : null;
-        String border = broken ? "#8A2020" : (filled ? getSmallEssenceColorHex(socket) : "#362f1e");
-        sb.append("<div style=\"anchor-width:28; anchor-height:28; padding:2; background-color:").append(border).append(";\">")
-                .append("<div style=\"anchor-width:24; anchor-height:24; layout-mode:center; background-image:url('")
-                .append(baseIcon)
-                .append("'); background-size:100% 100%;\">");
-        if (overlayIcon != null) {
-            sb.append("<img src=\"").append(overlayIcon).append("\" width=\"22\" height=\"22\"/>");
-        }
-        sb.append("</div></div>");
-    }
 
-    private static String resolveSmallEmptySocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_Empty.png");
-    }
 
-    private static String resolveSmallFilledSocketBaseIconName() {
-        return UISocketVisualUtils.filledSocketIconName();
-    }
 
-    private static String resolveSmallBrokenSocketIconName() {
-        return UISocketVisualUtils.brokenSocketIconName();
-    }
 
-    private static String getSmallEssenceColorHex(Socket socket) {
-        if (socket == null || socket.isEmpty()) {
-            return "#362f1e";
-        }
-        return UISocketVisualUtils.socketColorHex(socket);
-    }
 
-    private static String resolveSmallEssenceIconName(Socket socket) {
-        return UISocketVisualUtils.essenceIconName(socket);
-    }
 
-    private static void appendSmallLoreSocketHtml(StringBuilder sb, LoreSocketData.LoreSocket socket) {
-        String color = resolveLoreColorHex(socket);
-        sb.append("<div style=\"anchor-width:28; anchor-height:28; padding:2; background-color:").append(color).append(";\">")
-                .append("<div style=\"anchor-width:24; anchor-height:24; background-image:url('GemSlotEmpty.png'); background-size:100% 100%;\">");
-        appendLoreSocketOverlayHtml(sb, socket, 22);
-        sb.append("</div></div>");
-    }
 
-    private static void appendLoreSocketOverlayHtml(StringBuilder sb, LoreSocketData.LoreSocket socket, int size) {
-        if (socket == null || socket.isEmpty()) {
-            return;
-        }
-        if (socket.hasRune()) {
-            sb.append("<span class=\"item-icon\" data-hyui-item-id=\"")
-                    .append(escapeHtml(socket.getRuneItemId()))
-                    .append("\" style=\"anchor-width:").append(size)
-                    .append("; anchor-height:").append(size).append(";\"></span>");
-            return;
-        }
-        String icon = resolveLoreGemOverlayIcon(socket);
-        if (icon != null) {
-            sb.append("<img src=\"").append(icon).append("\" width=\"").append(size)
-                    .append("\" height=\"").append(size).append("\"/>");
-        }
-    }
 
-    private static String buildEquipmentSocketSummary(Player player, LoreSocketData data, boolean runeDelta) {
-        if (data == null || data.getSocketCount() == 0) {
-            return LangLoader.getUITranslation(player, "ui.lore_socket.metadata_no_sockets");
-        }
-        int filled = 0;
-        int spirits = 0;
-        int runes = 0;
-        int feedReady = 0;
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            if (socket == null) {
-                continue;
-            }
-            if (!socket.isEmpty()) {
-                filled++;
-            }
-            if (socket.hasSpirit()) {
-                spirits++;
-            }
-            if (socket.hasRune()) {
-                runes++;
-            }
-            if (socket.hasSpirit() && LoreSocketManager.needsFeed(socket)) {
-                feedReady++;
-            } else if (LoreSocketManager.needsRuneFeed(socket)) {
-                feedReady++;
-            }
-        }
-        return runeDelta
-                ? LangLoader.getUITranslation(player, "ui.lore_socket.card_summary_runes",
-                        data.getSocketCount(), filled, runes, feedReady)
-                : LangLoader.getUITranslation(player, "ui.lore_socket.card_summary",
-                        data.getSocketCount(), filled, spirits, feedReady);
-    }
 
-    private static String buildMaterialsCardsHtml(Player player, Snapshot snapshot, SelectionState state, Entry selectedEquipment) {
-        StringBuilder sb = new StringBuilder();
-        boolean runeDelta = isRuneDeltaEquipment(selectedEquipment);
-        appendMaterialSectionHtml(player, sb,
-                runeDelta ? "ui.lore_socket.materials_runes" : "ui.lore_socket.materials_gems",
-                materialEntries(snapshot, selectedEquipment),
-                state != null ? state.gemKey : null, state != null ? state.gemPage : 0, true,
-                runeDelta ? "ui.lore_socket.option_no_rune" : "ui.lore_socket.option_no_gem");
-        appendMaterialSectionHtml(player, sb, "ui.lore_socket.materials_supports", snapshot != null ? snapshot.supports : List.of(),
-                state != null ? state.supportKey : null, state != null ? state.supportPage : 0, false,
-                "ui.lore_socket.option_no_support");
-        return sb.toString();
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private static boolean isRuneDeltaEquipment(Entry equipment) {
         return equipment != null
@@ -578,187 +361,19 @@ public final class LoreSocketBenchUI {
         return isRuneDeltaEquipment(equipment) ? snapshot.runes : snapshot.gems;
     }
 
-    private static void appendMaterialSectionHtml(Player player,
-                                                  StringBuilder sb,
-                                                  String titleKey,
-                                                  List<Entry> entries,
-                                                  String selectedKey,
-                                                  int page,
-                                                  boolean gemSection,
-                                                  String emptyKey) {
-        sb.append("<div style=\"anchor-width:330; layout-mode:top; spacing:4;\">")
-                .append("<p style=\"anchor-height:18; text-align:left; font-weight:bold;\">")
-                .append(escapeHtml(LangLoader.getUITranslation(player, titleKey))).append("</p>")
-                .append("<img src=\"divider.png\" style=\"anchor-width: 320; anchor-height: 3;\">");
-        int totalCards = gemSection ? (entries == null ? 0 : entries.size()) : (entries == null ? 0 : entries.size()) + 1;
-        if (gemSection && totalCards == 0) {
-            sb.append("<p style=\"font-size:11; color:#b0b0c2; text-align:left;\">")
-                    .append(escapeHtml(LangLoader.getUITranslation(player, emptyKey))).append("</p>");
-        } else {
-            int pageCount = cardPageCount(totalCards, MATERIAL_CARDS_PER_PAGE);
-            int currentPage = clampPage(page, pageCount);
-            sb.append(buildPagerHtml(player, gemSection ? "gemCardsPrev" : "supportCardsPrev",
-                    gemSection ? "gemCardsNext" : "supportCardsNext", currentPage, pageCount, 320));
-            int start = currentPage * MATERIAL_CARDS_PER_PAGE;
-            int end = Math.min(totalCards, start + MATERIAL_CARDS_PER_PAGE);
-            for (int visibleIndex = start; visibleIndex < end; visibleIndex++) {
-                if (!gemSection && visibleIndex == 0) {
-                    appendSupportNoneCardHtml(player, sb, selectedKey == null || selectedKey.isBlank());
-                    continue;
-                }
-                int entryIndex = gemSection ? visibleIndex : visibleIndex - 1;
-                appendMaterialCardHtml(player, sb, entries.get(entryIndex), entryIndex,
-                        String.valueOf(entryIndex).equals(selectedKey), gemSection);
-            }
-        }
-        sb.append("</div>");
-    }
 
-    private static void appendSupportNoneCardHtml(Player player, StringBuilder sb, boolean selected) {
-        String background = selected ? "#253456" : "#151526";
-        String border = selected ? "#FFD24D" : "#00000000";
-        sb.append("<button id=\"").append(supportNoneCardButtonId()).append("\" class=\"raw-button\" style=\"anchor-width:320; anchor-height:58; layout-mode:top; padding:0; border:0; background-color:#00000000;\">")
-                .append("<div style=\"anchor-width:320; anchor-height:58; layout-mode:left; spacing:8; padding:5; background-color:").append(background).append(";\">")
-                .append("<div style=\"anchor-width:48; anchor-height:48; padding:2; background-color:").append(border).append(";\">")
-                .append("<img src=\"slot_bg.png\" width=\"44\" height=\"44\"/>")
-                .append("</div>")
-                .append("<div style=\"anchor-width:250; anchor-height:48; layout-mode:top;\">")
-                .append("<p style=\"anchor-height:22; font-weight:bold; text-align:left;\">")
-                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_none")))
-                .append("</p>")
-                .append("<p style=\"anchor-height:18; font-size:10; color:#b0b0c2; text-align:left;\">")
-                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.support")))
-                .append("</p>")
-                .append("</div></div></button><p style=\"anchor-height:3;\"></p>");
-    }
 
-    private static void appendMaterialCardHtml(Player player, StringBuilder sb, Entry entry, int index, boolean selected, boolean gemSection) {
-        if (entry == null) {
-            return;
-        }
-        String buttonId = materialCardButtonId(gemSection, index);
-        String background = selected ? "#253456" : "#151526";
-        String border = selected ? "#FFD24D" : "#00000000";
-        sb.append("<button id=\"").append(buttonId).append("\" class=\"raw-button\" style=\"anchor-width:320; anchor-height:58; layout-mode:top; padding:0; border:0; background-color:#00000000;\">")
-                .append("<div style=\"anchor-width:320; anchor-height:58; layout-mode:left; spacing:8; padding:5; background-color:").append(background).append(";\">")
-                .append("<div style=\"anchor-width:48; anchor-height:48; padding:2; background-color:").append(border).append(";\">")
-                .append("<span class=\"item-icon\" data-hyui-item-id=\"").append(escapeHtml(entry.itemId)).append("\" style=\"anchor-width:44; anchor-height:44;\"></span>")
-                .append("</div>")
-                .append("<div style=\"anchor-width:250; anchor-height:48; layout-mode:top;\">")
-                .append("<p style=\"anchor-height:18; font-weight:bold; text-align:left; white-space:nowrap;\">").append(escapeHtml(entry.displayName)).append("</p>")
-                .append("<p style=\"anchor-height:14; font-size:10; color:#b0b0c2; text-align:left; white-space:nowrap;\">")
-                .append(escapeHtml(buildMaterialDescription(player, entry, gemSection))).append("</p>")
-                .append("<p style=\"anchor-height:14; font-size:10; color:#d6d6e8; text-align:left;\">x").append(entry.quantity).append("</p>")
-                .append("</div></div></button><p style=\"anchor-height:3;\"></p>");
-    }
 
-    private static String buildOptions(List<Entry> entries, String emptyLabel, String selectedKey) {
-        if (entries.isEmpty()) {
-            return "<option value=\"\" selected=\"true\">" + escapeHtml(emptyLabel) + "</option>";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            String key = String.valueOf(i);
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) {
-                sb.append(" selected=\"true\"");
-            }
-            sb.append(">").append(escapeHtml(entry.displayName)).append(" x").append(entry.quantity).append("</option>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildGemOptions(Player player, List<Entry> entries, String selectedKey) {
-        StringBuilder sb = new StringBuilder();
-        boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
-        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
-                .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_none"))).append("</option>");
 
-        if (entries.isEmpty()) {
-            sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
-                    .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_gem"))).append("</option>");
-            return sb.toString();
-        }
 
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            String key = String.valueOf(i);
-            String color = LoreGemRegistry.resolveColor(entry.itemId);
-            String label = entry.displayName;
-            if (color != null && !color.isBlank()) {
-                label = LangLoader.getUITranslation(player, "ui.lore_socket.gem_color_label", entry.displayName, color);
-            }
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) {
-                sb.append(" selected=\"true\"");
-            }
-            sb.append(">").append(escapeHtml(label)).append(" x").append(entry.quantity).append("</option>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildSupportOptions(Player player, List<Entry> entries, String selectedKey) {
-        StringBuilder sb = new StringBuilder();
-        boolean hasSelection = selectedKey != null && !selectedKey.isEmpty();
-        sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
-                .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_none"))).append("</option>");
 
-        if (entries.isEmpty()) {
-            sb.append("<option value=\"\"").append(!hasSelection ? " selected=\"true\"" : "")
-                    .append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_support"))).append("</option>");
-            return sb.toString();
-        }
 
-        for (int i = 0; i < entries.size(); i++) {
-            Entry entry = entries.get(i);
-            String key = String.valueOf(i);
-            String label = entry.displayName + " x" + entry.quantity;
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) {
-                sb.append(" selected=\"true\"");
-            }
-            sb.append(">").append(escapeHtml(label)).append("</option>");
-        }
-        return sb.toString();
-    }
 
-    private static String buildSlotOptions(Player player, Entry equipment, String selectedKey, String gemColor) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<option value=\"auto\"");
-        if (selectedKey == null || selectedKey.isBlank() || "auto".equalsIgnoreCase(selectedKey)) {
-            sb.append(" selected=\"true\"");
-        }
-        sb.append(">").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_auto"))).append("</option>");
 
-        if (equipment == null) {
-            sb.append("<option value=\"\" selected=\"true\">")
-                    .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_equipment")))
-                    .append("</option>");
-            return sb.toString();
-        }
 
-        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
-        if (data == null || data.getSocketCount() == 0) {
-            sb.append("<option value=\"\" selected=\"true\">")
-                    .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets")))
-                    .append("</option>");
-            return sb.toString();
-        }
 
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            String key = String.valueOf(i);
-            String label = buildSlotLabel(player, socket, i + 1, gemColor, isRuneDeltaEquipment(equipment));
-            sb.append("<option value=\"").append(key).append("\"");
-            if (key.equals(selectedKey)) {
-                sb.append(" selected=\"true\"");
-            }
-            sb.append(">").append(escapeHtml(label)).append("</option>");
-        }
-        return sb.toString();
-    }
 
     private static String buildSlotLabel(Player player,
                                          LoreSocketData.LoreSocket socket,
@@ -786,74 +401,7 @@ public final class LoreSocketBenchUI {
         return base + " (" + colorLabel + ")";
     }
 
-    private static String buildSocketPreview(Player player, Entry equipment, String selectedSlotKey) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"layout-mode:left; spacing:14;\"><div style=\"flex-weight:1;\"></div>");
-        if (equipment == null) {
-            sb.append("<p>").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_equipment")))
-                    .append("</p>");
-            sb.append("<div style=\"flex-weight:1;\"></div></div>");
-            return sb.toString();
-        }
-        ItemStack equipmentItem = getEffectiveEquipmentItem(player, equipment);
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipmentItem);
-        if (data == null || data.getSocketCount() == 0) {
-            sb.append("<p>").append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.option_no_sockets")))
-                    .append("</p>");
-            sb.append("<div style=\"flex-weight:1;\"></div></div>");
-            return sb.toString();
-        }
 
-        String baseIcon = UITemplateUtils.resolveCustomUiAsset("GemSlotEmpty.png", "GemSlotEmpty.png");
-        int tileSize = 82;
-        int wrapSize = 104;
-        int overlaySize = 54;
-
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            String colorHex = resolveLoreColorHex(socket);
-            boolean selected = String.valueOf(i).equals(selectedSlotKey);
-            boolean feedReady = socket != null && socket.hasSpirit() && LoreSocketManager.needsFeed(socket);
-            String border = selected ? "#FFD24D" : colorHex;
-            int xpPercent = resolveXpPercent(socket);
-
-            String wrapStyle = "anchor-width:" + wrapSize + "; anchor-height:" + (feedReady ? 142 : 124) + ";"
-                    + " layout-mode:top; padding:4;";
-            String tileStyle = "anchor-width:" + tileSize + "; anchor-height:" + tileSize + ";"
-                    + " background-image:url('" + baseIcon + "'); background-size:100% 100%;"
-                    + " background-repeat:no-repeat; layout-mode:Top;";
-
-            sb.append("<div style=\"").append(wrapStyle).append("\">");
-            if (socket != null && socket.hasSpirit()) {
-                sb.append("<div style=\"anchor-width:96; anchor-height:8; background-color:#0b0705; border-color:#5b3a0c;\">")
-                        .append("<div style=\"anchor-width:").append(Math.max(2, xpPercent)).append("; anchor-height:8; background-color:#d39a28;\"></div>")
-                        .append("</div>");
-            } else {
-                sb.append("<p style=\"anchor-height:8;\"></p>");
-            }
-            sb.append("<button id=\"").append(loreSlotButtonId(i)).append("\" class=\"raw-button\" style=\"anchor-width:96; anchor-height:92; layout-mode:top; padding:0; border:0; background-color:#00000000;\">")
-                    .append("<div style=\"anchor-width:92; anchor-height:92; background-color:").append(border).append("; layout-mode:top; padding:5;\">")
-                    .append("<div style=\"").append(tileStyle).append("\">")
-                    .append("<div style=\"flex-weight:1;\"></div>")
-                    .append("<div style=\"layout-mode:Left;\">")
-                    .append("<div style=\"flex-weight:1;\"></div>");
-            appendLoreSocketOverlayHtml(sb, socket, overlaySize);
-            sb.append("<div style=\"flex-weight:1;\"></div>")
-                    .append("</div>")
-                    .append("<div style=\"flex-weight:1;\"></div>")
-                    .append("</div>")
-                    .append("</div>")
-                    .append("</button>");
-            if (feedReady) {
-                sb.append("<button id=\"").append(feedButtonId(i)).append("\" class=\"small-secondary-button\" style=\"anchor-width:96; anchor-height:24;\">")
-                        .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.feed_button")))
-                        .append("</button>");
-            }
-            sb.append("</div>");
-        }
-        sb.append("<div style=\"flex-weight:1;\"></div></div>");
-        return sb.toString();
-    }
 
     private static String buildSelectedSlotLabel(Player player, Entry equipment, String slotKey) {
         LoreSocketData.LoreSocket socket = resolveSelectedSocket(equipment, slotKey);
@@ -864,133 +412,17 @@ public final class LoreSocketBenchUI {
                 isRuneDeltaEquipment(equipment));
     }
 
-    private static String buildSelectedSlotSummaryHtml(Player player, Entry equipment, String slotKey) {
-        LoreSocketData.LoreSocket socket = resolveSelectedSocket(equipment, slotKey);
-        if (socket == null) {
-            return detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_click_slot"));
-        }
-        return buildSlotDetailHtml(player, socket, isRuneDeltaEquipment(equipment));
-    }
 
-    private static String buildSlotDetailHtml(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
-        if (socket == null) {
-            return detailText(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_socket"));
-        }
-        String color = displaySocketColor(player, socket, runeDelta);
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div style=\"anchor-width:860; layout-mode:top; spacing:5;\">")
-                .append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_socket_section")))
-                .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_slot_label"),
-                        String.valueOf(socket.getSlotIndex() + 1)))
-                .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_color_label"), color));
 
-        if (socket.hasRune()) {
-            sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")))
-                    .append(detailText(formatRunestoneNameWithLevel(player, socket)));
-            if (socket.getRuneDamageFeeds() > 0) {
-                sb.append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.rune_damage_feed_bonus",
-                        LoreSocketManager.getRuneDamageBonusPercent(socket.getRuneDamageFeeds()))));
-            }
-            if (socket.getRuneManaFeeds() > 0) {
-                sb.append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.rune_mana_feed_bonus",
-                        LoreSocketManager.getRuneManaCostReductionPercent(socket.getRuneManaFeeds()))));
-            }
-        } else if (socket.hasSpirit()) {
-            String spiritName = localizeSpiritName(player, socket.getSpiritId());
-            int needed = Math.max(1, LoreSocketManager.getXpRequiredForLevel(Math.max(1, socket.getLevel())));
-            sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_spirit_section")))
-                    .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_spirit_label"), spiritName))
-                    .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_level_label"),
-                            LangLoader.getUITranslation(player, "ui.lore_feed.level_label", Math.max(1, socket.getLevel()))
-                                    + " | " + LangLoader.getUITranslation(player, "ui.lore_feed.feed_tier", Math.max(0, socket.getFeedTier()))))
-                    .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_xp_label"),
-                            LangLoader.getUITranslation(player, "ui.lore_feed.progress_xp", Math.max(0, socket.getXp()), needed)))
-                    .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_feed_label"),
-                            LoreSocketManager.needsFeed(socket)
-                                    ? LangLoader.getUITranslation(player, "ui.lore_feed.value_yes")
-                                    : LangLoader.getUITranslation(player, "ui.lore_feed.value_no")));
 
-            LoreAbility ability = LoreAbilityRegistry.getAbility(socket.getSpiritId());
-            if (ability != null) {
-                String langCode = resolveLangCode(player);
-                sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_ability_section")))
-                        .append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_ability_label"),
-                                ability.resolveAbilityName(langCode)));
-                String effect = ability.describeEffectOnly(langCode, Math.max(1, socket.getLevel()), Math.max(0, socket.getFeedTier()));
-                if (effect != null && !effect.isBlank()) {
-                    sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.detail_effect_label"), effect));
-                }
-                if (LoreSocketManager.isOmnislashSpirit(socket.getSpiritId())) {
-                    String runeItemId = LoreSocketManager.resolveOmnislashRuneItemId(
-                            socket.getLevel(), socket.getFeedTier());
-                    String runeName = LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name");
-                    sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.omnislash_rune_stage"),
-                            runeName));
-                }
-                if (LoreSocketManager.isWolfPackSpirit(socket.getSpiritId())) {
-                    String runeItemId = LoreSocketManager.resolveWolfPackRuneItemId(socket.getFeedTier());
-                    String runeName = LangLoader.getUITranslation(player, "irai.items." + runeItemId + ".name");
-                    sb.append(detailRow(LangLoader.getUITranslation(player, "ui.lore_socket.wolfpack_rune_stage"),
-                            runeName));
-                }
-                if (LoreSoulstoneUtils.isInfusedSoulstoneId(socket.getGemItemId())) {
-                    sb.append(detailText(LangLoader.getUITranslation(
-                            player, "ui.lore_socket.infused_soulstone_hit_roll")));
-                }
-            }
-        } else if (runeDelta) {
-            sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")))
-                    .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_rune")))
-                    .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible_runes")));
-        } else {
-            sb.append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_section")))
-                    .append(detailText(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty")))
-                    .append(detailSection(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible")));
-            List<String> names = buildCompatibleSpiritNames(player, color);
-            sb.append(buildEligibleSpiritGrid(player, names));
-        }
 
-        sb.append("</div>");
-        return sb.toString();
-    }
 
-    private static String detailSection(String title) {
-        return "<p style=\"anchor-height:20; font-weight:bold; color:#FFD24D; text-align:left;\">" + escapeHtml(title) + "</p>";
-    }
 
-    private static String detailRow(String label, String value) {
-        return "<div style=\"anchor-width:850; layout-mode:left; spacing:8;\">"
-                + "<p style=\"anchor-width:150; font-size:13; color:#b0b0c2; text-align:left; white-space:wrap;\">"
-                + escapeHtml(label) + "</p>"
-                + "<p style=\"anchor-width:680; font-size:13; text-align:left; white-space:wrap; word-break:break-word;\">"
-                + escapeHtml(value) + "</p>"
-                + "</div>";
-    }
 
-    private static String detailText(String text) {
-        return "<p style=\"anchor-width:840; font-size:13; text-align:left; white-space:wrap; word-break:break-word;\">"
-                + escapeHtml(text) + "</p>";
-    }
 
-    private static String buildEligibleSpiritGrid(Player player, List<String> names) {
-        if (names == null || names.isEmpty()) {
-            return detailText(LangLoader.getUITranslation(player, "ui.lore_feed.value_none"));
-        }
-        StringBuilder sb = new StringBuilder("<div style=\"anchor-width:850; layout-mode:top; spacing:3;\">");
-        for (int i = 0; i < names.size(); i += 3) {
-            sb.append("<div style=\"anchor-width:850; layout-mode:left; spacing:8;\">");
-            for (int col = 0; col < 3; col++) {
-                int index = i + col;
-                String name = index < names.size() ? names.get(index) : "";
-                sb.append("<p style=\"anchor-width:270; font-size:12; text-align:left; white-space:wrap; word-break:break-word;\">")
-                        .append(escapeHtml(name))
-                        .append("</p>");
-            }
-            sb.append("</div>");
-        }
-        sb.append("</div>");
-        return sb.toString();
-    }
+
+
+
 
     private static LoreSocketData.LoreSocket resolveSelectedSocket(Entry equipment, String slotKey) {
         if (equipment == null || equipment.item == null || slotKey == null || slotKey.isBlank()) {
@@ -1001,14 +433,7 @@ public final class LoreSocketBenchUI {
         return data != null && slotIndex >= 0 && slotIndex < data.getSocketCount() ? data.getSocket(slotIndex) : null;
     }
 
-    private static int resolveXpPercent(LoreSocketData.LoreSocket socket) {
-        if (socket == null || !socket.hasSpirit()) {
-            return 0;
-        }
-        int needed = Math.max(1, LoreSocketManager.getXpRequiredForLevel(Math.max(1, socket.getLevel())));
-        int xp = Math.max(0, Math.min(needed, socket.getXp()));
-        return Math.max(2, Math.min(96, (int) Math.round((xp * 96.0d) / needed)));
-    }
+
 
     private static String buildMaterialDescription(Player player, Entry entry, boolean gemSection) {
         if (entry == null) {
@@ -1155,301 +580,37 @@ public final class LoreSocketBenchUI {
         return LangLoader.getUITranslation(player, "ui.lore_socket.metadata_inventory", location, entry.slot);
     }
 
-    private static String buildPagerHtml(Player player, String prevId, String nextId, int page, int pageCount, int width) {
-        if (pageCount <= 1) {
-            return "";
-        }
-        return UIHtmlUtils.pager(
-                prevId,
-                LangLoader.getUITranslation(player, "ui.lore_socket.pager_prev"),
-                LangLoader.getUITranslation(player, "ui.lore_socket.pager_page", page + 1, pageCount),
-                nextId,
-                LangLoader.getUITranslation(player, "ui.lore_socket.pager_next"),
-                width,
-                30,
-                92,
-                24,
-                true);
-    }
 
-    private static int cardPageCount(int size, int perPage) {
-        return Math.max(1, (int) Math.ceil(Math.max(0, size) / (double) Math.max(1, perPage)));
-    }
 
-    private static int clampPage(int page, int pageCount) {
-        return Math.max(0, Math.min(Math.max(1, pageCount) - 1, page));
-    }
 
-    private static String equipmentCardButtonId(int index) {
-        return "loreEquipmentCard" + index;
-    }
 
-    private static String materialCardButtonId(boolean gem, int index) {
-        return (gem ? "loreGemCard" : "loreSupportCard") + index;
-    }
 
-    private static String supportNoneCardButtonId() {
-        return "loreSupportNoneCard";
-    }
 
-    private static String loreSlotButtonId(int index) {
-        return "loreSlotButton" + index;
-    }
 
-    private static String feedButtonId(int index) {
-        return "loreFeedButton" + index;
-    }
 
-    private static void registerEquipmentCardListeners(Object pageBuilder,
-                                                       Method addListener,
-                                                       Object activating,
-                                                       Player player,
-                                                       Snapshot snapshot,
-                                                       SelectionState state) throws Exception {
-        List<Entry> entries = snapshot != null ? snapshot.equipments : List.of();
-        int pageCount = cardPageCount(entries.size(), EQUIPMENT_CARDS_PER_PAGE);
-        int page = clampPage(state != null ? state.equipmentPage : 0, pageCount);
-        registerPager(pageBuilder, addListener, activating, player, state, "equipmentCardsPrev", "equipmentCardsNext", page, pageCount, 0);
-        int start = page * EQUIPMENT_CARDS_PER_PAGE;
-        int end = Math.min(entries.size(), start + EQUIPMENT_CARDS_PER_PAGE);
-        for (int i = start; i < end; i++) {
-            final String equipmentKey = String.valueOf(i);
-            addListener.invoke(pageBuilder, equipmentCardButtonId(i), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        pendingSelections.put(player.getPlayerRef(),
-                                stateWith(state, equipmentKey, null,
-                                        state != null ? state.supportKey : null, "", null, null, null));
-                        player.getWorld().execute(() -> openWithSync(player));
-                    });
-        }
-    }
 
-    private static void registerMaterialCardListeners(Object pageBuilder,
-                                                      Method addListener,
-                                                      Object activating,
-                                                      Player player,
-                                                      Snapshot snapshot,
-                                                      SelectionState state) throws Exception {
-        Entry equipment = snapshot != null && state != null
-                ? resolveSelection(snapshot.equipments, state.equipmentKey)
-                : null;
-        List<Entry> gems = materialEntries(snapshot, equipment);
-        List<Entry> supports = snapshot != null ? snapshot.supports : List.of();
-        int gemPageCount = cardPageCount(gems.size(), MATERIAL_CARDS_PER_PAGE);
-        int supportPageCount = cardPageCount(supports.size() + 1, MATERIAL_CARDS_PER_PAGE);
-        int gemPage = clampPage(state != null ? state.gemPage : 0, gemPageCount);
-        int supportPage = clampPage(state != null ? state.supportPage : 0, supportPageCount);
-        registerPager(pageBuilder, addListener, activating, player, state, "gemCardsPrev", "gemCardsNext", gemPage, gemPageCount, 1);
-        registerPager(pageBuilder, addListener, activating, player, state, "supportCardsPrev", "supportCardsNext", supportPage, supportPageCount, 2);
-        registerVisibleMaterialCards(pageBuilder, addListener, activating, player, state, gems, gemPage, true);
-        registerVisibleMaterialCards(pageBuilder, addListener, activating, player, state, supports, supportPage, false);
-    }
 
-    private static void registerVisibleMaterialCards(Object pageBuilder,
-                                                     Method addListener,
-                                                     Object activating,
-                                                     Player player,
-                                                     SelectionState state,
-                                                     List<Entry> entries,
-                                                     int page,
-                                                     boolean gemSection) throws Exception {
-        if (gemSection && (entries == null || entries.isEmpty())) {
-            return;
-        }
-        int totalCards = gemSection ? entries.size() : (entries != null ? entries.size() : 0) + 1;
-        int start = clampPage(page, cardPageCount(totalCards, MATERIAL_CARDS_PER_PAGE)) * MATERIAL_CARDS_PER_PAGE;
-        int end = Math.min(totalCards, start + MATERIAL_CARDS_PER_PAGE);
-        for (int visibleIndex = start; visibleIndex < end; visibleIndex++) {
-            final boolean noneSupport = !gemSection && visibleIndex == 0;
-            final int entryIndex = gemSection ? visibleIndex : visibleIndex - 1;
-            final String key = noneSupport ? "" : String.valueOf(entryIndex);
-            addListener.invoke(pageBuilder, noneSupport ? supportNoneCardButtonId() : materialCardButtonId(gemSection, entryIndex), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        String gemKey = gemSection ? key : null;
-                        String supportKey = gemSection ? null : key;
-                        pendingSelections.put(player.getPlayerRef(),
-                                stateWith(state, state != null ? state.equipmentKey : null, gemKey, supportKey,
-                                        state != null ? state.slotKey : null, null, null, null));
-                        player.getWorld().execute(() -> openWithSync(player));
-                    });
-        }
-    }
 
-    private static void registerSocketPreviewListeners(Object pageBuilder,
-                                                       Method addListener,
-                                                       Object activating,
-                                                       Player player,
-                                                       Snapshot snapshot,
-                                                       SelectionState state) throws Exception {
-        if (snapshot == null || state == null) {
-            return;
-        }
-        Entry equipment = resolveSelection(snapshot.equipments, state.equipmentKey);
-        LoreSocketData data = equipment != null ? LoreSocketManager.getLoreSocketData(equipment.item) : null;
-        if (data == null || data.getSocketCount() == 0) {
-            return;
-        }
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            final String slotKey = String.valueOf(i);
-            addListener.invoke(pageBuilder, loreSlotButtonId(i), activating,
-                    (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                        pendingSelections.put(player.getPlayerRef(),
-                                stateWith(state, state.equipmentKey, state.gemKey, state.supportKey, slotKey,
-                                        null, null, null));
-                        player.getWorld().execute(() -> openWithSync(player));
-                    });
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            if (socket != null && socket.hasSpirit() && LoreSocketManager.needsFeed(socket)) {
-                addListener.invoke(pageBuilder, feedButtonId(i), activating,
-                        (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                            ProcessResult result = processFeed(player, equipment, slotKey);
-                            pendingSelections.put(player.getPlayerRef(),
-                                    stateWith(state, state.equipmentKey, state.gemKey, state.supportKey, slotKey,
-                                            result.status, state.detailEquipmentKey, state.detailSlotKey));
-                            player.getWorld().execute(() -> openWithSync(player));
-                        });
-            }
-        }
-    }
 
-    private static void registerPager(Object pageBuilder,
-                                      Method addListener,
-                                      Object activating,
-                                      Player player,
-                                      SelectionState state,
-                                      String prevId,
-                                      String nextId,
-                                      int page,
-                                      int pageCount,
-                                      int pageKind) throws Exception {
-        if (pageCount <= 1) {
-            return;
-        }
-        addListener.invoke(pageBuilder, prevId, activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                    if (page <= 0) {
-                        return;
-                    }
-                    pendingSelections.put(player.getPlayerRef(), pageState(state, pageKind, page - 1));
-                    player.getWorld().execute(() -> openWithSync(player));
-                });
-        addListener.invoke(pageBuilder, nextId, activating,
-                (java.util.function.BiConsumer<Object, Object>) (eventObj, ctxObj) -> {
-                    if (page >= pageCount - 1) {
-                        return;
-                    }
-                    pendingSelections.put(player.getPlayerRef(), pageState(state, pageKind, page + 1));
-                    player.getWorld().execute(() -> openWithSync(player));
-                });
-    }
 
-    private static SelectionState pageState(SelectionState state, int pageKind, int page) {
-        int equipmentPage = state != null ? state.equipmentPage : 0;
-        int gemPage = state != null ? state.gemPage : 0;
-        int supportPage = state != null ? state.supportPage : 0;
-        if (pageKind == 0) {
-            equipmentPage = page;
-        } else if (pageKind == 1) {
-            gemPage = page;
-        } else {
-            supportPage = page;
-        }
-        return stateWithPages(state, equipmentPage, gemPage, supportPage);
-    }
 
-    private static String buildDetailOverlayHtml(Player player, Snapshot snapshot, SelectionState state) {
-        if (snapshot == null || state == null || state.detailEquipmentKey == null || state.detailSlotKey == null) {
-            return "";
-        }
-        Entry equipment = resolveSelection(snapshot.equipments, state.detailEquipmentKey);
-        LoreSocketData.LoreSocket socket = resolveSelectedSocket(equipment, state.detailSlotKey);
-        if (equipment == null || socket == null) {
-            return "";
-        }
-        List<String> lines = buildSlotDetailLines(player, equipment, socket);
-        int lineCount = Math.max(4, lines.size());
-        int height = Math.min(520, 110 + (lineCount * 24));
-        StringBuilder sb = new StringBuilder();
-        sb.append("<div id=\"loreDetailOverlay\" style=\"anchor-full:200; layout-mode:left; background-color:#0b0b1200;\">")
-                .append("<div style=\"anchor-width:430; anchor-height:").append(height)
-                .append("; layout-mode:top; background-color:#151526; padding:10;\">")
-                .append("<div style=\"anchor-width:410; anchor-height:34; layout-mode:left;\">")
-                .append("<p style=\"anchor-width:280; font-weight:bold; color:#FFD24D; text-align:left;\">")
-                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.detail_title"))).append("</p>")
-                .append("<button id=\"loreDetailOverlayClose\" class=\"small-secondary-button\" style=\"anchor-width:110; anchor-height:28;\">")
-                .append(escapeHtml(LangLoader.getUITranslation(player, "ui.lore_socket.detail_close"))).append("</button>")
-                .append("</div>")
-                .append("<p style=\"anchor-height:22; font-weight:bold; text-align:left;\">")
-                .append(escapeHtml(equipment.displayName)).append("</p>")
-                .append("<img src=\"divider.png\" style=\"anchor-width: 400; anchor-height: 3;\">")
-                .append("<div style=\"anchor-width:400; layout-mode:top; spacing:4;\">");
-        for (String line : lines) {
-            sb.append("<p style=\"anchor-height:20; font-size:14; text-align:left; white-space:nowrap;\">")
-                    .append(escapeHtml(line)).append("</p>");
-        }
-        sb.append("</div></div></div>");
-        return sb.toString();
-    }
 
-    private static List<String> buildSlotDetailLines(Player player, Entry equipment, LoreSocketData.LoreSocket socket) {
-        List<String> lines = new ArrayList<>();
-        if (socket == null) {
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.status_no_socket"));
-            return lines;
-        }
-        boolean runeDelta = isRuneDeltaEquipment(equipment);
-        String color = displaySocketColor(player, socket, runeDelta);
-        lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_slot", socket.getSlotIndex() + 1));
-        lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_color", color));
-        if (socket.hasRune()) {
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.materials_runes")
-                    + ": " + formatRunestoneNameWithLevel(player, socket));
-            if (socket.getRuneDamageFeeds() > 0) {
-                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_damage_feed_bonus",
-                        LoreSocketManager.getRuneDamageBonusPercent(socket.getRuneDamageFeeds())));
-            }
-            if (socket.getRuneManaFeeds() > 0) {
-                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_mana_feed_bonus",
-                        LoreSocketManager.getRuneManaCostReductionPercent(socket.getRuneManaFeeds())));
-            }
-            if (!LoreSocketManager.needsRuneFeed(socket)) {
-                lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.rune_feed_maxed"));
-            }
-        } else if (socket.hasSpirit()) {
-            String spiritName = localizeSpiritName(player, socket.getSpiritId());
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.spirit_label", spiritName));
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.level_label", Math.max(1, socket.getLevel()))
-                    + " | " + LangLoader.getUITranslation(player, "ui.lore_feed.feed_tier", Math.max(0, socket.getFeedTier())));
-            int needed = Math.max(1, LoreSocketManager.getXpRequiredForLevel(Math.max(1, socket.getLevel())));
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.progress_xp", Math.max(0, socket.getXp()), needed));
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.feed_required",
-                    LoreSocketManager.needsFeed(socket)
-                            ? LangLoader.getUITranslation(player, "ui.lore_feed.value_yes")
-                            : LangLoader.getUITranslation(player, "ui.lore_feed.value_no")));
-            LoreAbility ability = LoreAbilityRegistry.getAbility(socket.getSpiritId());
-            if (ability != null) {
-                String langCode = resolveLangCode(player);
-                lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.preview_ability", ability.resolveAbilityName(langCode)));
-                String effect = ability.describeEffectOnly(langCode, Math.max(1, socket.getLevel()), Math.max(0, socket.getFeedTier()));
-                if (effect != null && !effect.isBlank()) {
-                    lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.preview_effect", effect));
-                }
-            }
-        } else if (runeDelta) {
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty_rune"));
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible_runes"));
-        } else {
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_empty"));
-            lines.add(LangLoader.getUITranslation(player, "ui.lore_socket.detail_eligible"));
-            List<String> names = buildCompatibleSpiritNames(player, color);
-            if (names.isEmpty()) {
-                lines.add(LangLoader.getUITranslation(player, "ui.lore_feed.value_none"));
-            } else {
-                lines.addAll(names);
-            }
-        }
-        return lines;
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private static List<String> buildCompatibleSpiritNames(Player player, String color) {
         List<String> names = new ArrayList<>();
@@ -1522,59 +683,13 @@ public final class LoreSocketBenchUI {
         return code == null || code.isBlank() ? "en-US" : code;
     }
 
-    private static String resolveLoreColorHex(LoreSocketData.LoreSocket socket) {
-        return UISocketVisualUtils.loreColorHex(socket);
-    }
 
-    private static String resolveLoreGemOverlayIcon(LoreSocketData.LoreSocket socket) {
-        return UISocketVisualUtils.loreGemOverlayIcon(socket);
-    }
 
-    private static String buildMetadata(Player player, Entry equipment) {
-        if (equipment == null) {
-            return LangLoader.getUITranslation(player, "ui.lore_socket.metadata_no_equipment");
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_header_item")).append("\n");
-        sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_name", equipment.displayName)).append("\n");
-        sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_id", equipment.itemId)).append("\n");
-        String location = equipment.kind == ContainerKind.HOTBAR
-                ? LangLoader.getUITranslation(player, "ui.lore_socket.metadata_hotbar")
-                : LangLoader.getUITranslation(player, "ui.lore_socket.metadata_storage");
-        sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_inventory", location, equipment.slot))
-                .append("\n");
 
-        LoreSocketData data = LoreSocketManager.getLoreSocketData(equipment.item);
-        if (data == null || data.getSocketCount() == 0) {
-            sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_no_sockets"));
-            return sb.toString();
-        }
-        sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_header_sockets")).append("\n");
-        for (int i = 0; i < data.getSocketCount(); i++) {
-            LoreSocketData.LoreSocket socket = data.getSocket(i);
-            String state = socketStateLabel(player, socket, isRuneDeltaEquipment(equipment));
-            sb.append(LangLoader.getUITranslation(player, "ui.lore_socket.metadata_socket_line", i + 1, state))
-                    .append("\n");
-        }
-        return sb.toString().trim();
-    }
 
-    private static String socketStateLabel(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
-        if (socket == null) {
-            return LangLoader.getUITranslation(player, "ui.lore_socket.socket_empty");
-        }
-        String base;
-        if (socket.isLocked()) {
-            base = LangLoader.getUITranslation(player, "ui.lore_socket.socket_locked");
-        } else if (socket.isEmpty()) {
-            base = LangLoader.getUITranslation(player,
-                    runeDelta ? "ui.lore_socket.slot_empty_rune_state" : "ui.lore_socket.socket_empty");
-        } else {
-            base = LangLoader.getUITranslation(player, "ui.lore_socket.socket_filled");
-        }
-        String color = displaySocketColor(player, socket, runeDelta);
-        return base + " (" + color + ")";
-    }
+
+
+
 
     private static String displaySocketColor(Player player, LoreSocketData.LoreSocket socket, boolean runeDelta) {
         if (socket != null && socket.getColor() != null && !socket.getColor().isBlank()) {
@@ -2302,12 +1417,10 @@ public final class LoreSocketBenchUI {
     }
 
     private static Entry resolveSelection(List<Entry> entries, String key) {
-        return HyUIReflectionUtils.resolveIndexSelection(entries, key);
+        return UIInventoryUtils.resolveIndex(entries, key);
     }
 
-    private static Entry findByKey(List<Entry> entries, String key) {
-        return HyUIReflectionUtils.resolveIndexSelection(entries, key);
-    }
+
 
     private static ItemStack getEffectiveEquipmentItem(Player player, Entry equipment) {
         if (player == null || equipment == null) {
@@ -2353,33 +1466,13 @@ public final class LoreSocketBenchUI {
         return kind == ContainerKind.HOTBAR ? player.getInventory().getHotbar() : player.getInventory().getStorage();
     }
 
-    private static String loadTemplate() {
-        return UITemplateUtils.loadTemplate(
-                LoreSocketBenchUI.class,
-                TEMPLATE_PATH,
-                "<div style=\"padding:20px;\">Lore socket UI template missing.</div>",
-                "LoreSocketBenchUI");
-    }
 
-    private static String escapeHtml(String text) {
-        return UITemplateUtils.escapeHtml(text);
-    }
 
-    private static String extractEventValue(Object eventObj) {
-        return HyUIReflectionUtils.extractEventValue(eventObj);
-    }
 
-    private static String getContextValue(Object ctxObj, String... keys) {
-        return HyUIReflectionUtils.getContextValue(ctxObj, keys);
-    }
 
-    private static Object getStore(PlayerRef playerRef) throws Exception {
-        return HyUIReflectionUtils.getStore(playerRef);
-    }
 
-    private static void closePageIfOpen(PlayerRef playerRef) {
-        HyUIReflectionUtils.closePageIfOpen(openPages, playerRef);
-    }
+
+
 
     private static PatchStyle textureBackground(String texturePath) {
         return new PatchStyle(Value.of(texturePath), Value.of(0));
@@ -2486,7 +1579,6 @@ public final class LoreSocketBenchUI {
             dismissed = true;
             pendingSelections.remove(owner);
             pendingNavToFeed.remove(owner);
-            openPages.remove(owner, this);
             super.onDismiss(playerRef, store);
         }
 

@@ -167,7 +167,6 @@ import irai.mod.reforge.UI.LoreFeedBenchUI;
 import irai.mod.reforge.UI.LoreSocketBenchUI;
 import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
-import irai.mod.reforge.UI.ResonantCompendiumUI;
 import irai.mod.reforge.UI.RuntimeConfigUI;
 import irai.mod.reforge.UI.SocketBenchUI;
 import irai.mod.reforge.UI.StatueConfirmationUI;
@@ -346,18 +345,12 @@ public class ReforgePlugin extends JavaPlugin {
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
         DynamicTooltipUtils.init();
-        // Initialize EquipmentListUI for HyUI integration
-        SocketBenchUI.initialize();
-        EssenceBenchUI.initialize();
-        LoreSocketBenchUI.initialize();
         LoreFeedBenchUI.initialize();
-        ReforgeBenchUI.initialize();
         EquipmentStatsUI.initialize();
         StatueConfirmationUI.initialize();
         EnemyAffinityHudUI.initialize();
         ToolPartsUI.initialize();
         RecipeCombineUI.initialize();
-        ResonantCompendiumUI.initialize();
         CharacterPathUI.initialize();
         RuntimeConfigUI.initialize(this);
         // Initialize weapon upgrade tracker with persistence

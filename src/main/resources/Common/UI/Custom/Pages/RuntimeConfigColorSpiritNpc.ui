@@ -1,0 +1,9 @@
+$Common = "../SocketReforge_Common.ui";
+Group #ColorSpiritNpc {
+  Anchor: (Height: 36);
+  LayoutMode: Left;
+  Padding: (Left: 28, Right: 6, Top: 3, Bottom: 3);
+  Background: #151e2a;
+  TextField #ColorSpiritNpcId { FlexWeight: 1; Anchor: (Height: 30); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; }
+  TextButton #ColorSpiritNpcRemove { Anchor: (Width: 34, Height: 30); Text: "×"; Style: $Common.@DestructiveTextButtonStyle; }
+}

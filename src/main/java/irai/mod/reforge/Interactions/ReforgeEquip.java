@@ -120,16 +120,7 @@ public class ReforgeEquip extends SimpleInteraction {
         if (player == null) return;
         //yif (!isValidReforgebench(context)) {return ;}
 
-        // The refinement bench uses the native Hytale custom UI.
-        if (ReforgeBenchUI.isAvailable()) {
-            ReforgeBenchUI.open(player);
-            return;
-        }
-
-        ItemStack heldItem = context.getHeldItem();
-        if (heldItem == null) return;
-
-        processReforge(player, heldItem, context);
+        ReforgeBenchUI.open(player);
     }
 
     private void processReforge(Player player, ItemStack heldItem, InteractionContext context) {

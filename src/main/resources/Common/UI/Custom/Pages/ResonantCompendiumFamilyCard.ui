@@ -1,0 +1,13 @@
+@FamilyCardStyle = TextButtonStyle(
+  Default: (Background: #18212d, LabelStyle: (FontSize: 11, TextColor: #cbd4df)),
+  Hovered: (Background: #263549, LabelStyle: (FontSize: 11, TextColor: #ffffff)),
+  Pressed: (Background: #30445e, LabelStyle: (FontSize: 11, TextColor: #ffffff))
+);
+
+Group #FamilyCard {
+  Anchor: (Height: 36);
+  Background: #151c26;
+  Group #FamilySelected { Anchor: (Left: 2, Top: 3, Bottom: 3, Width: 3); Background: #e8c030; Visible: false; }
+  Label #FamilyCount { Anchor: (Right: 10, Top: 0, Width: 32, Height: 36); Style: (FontSize: 10, TextColor: #e8c030, HorizontalAlignment: End, VerticalAlignment: Center); Text: "0"; }
+  TextButton #FamilyButton { Anchor: (Left: 8, Right: 42, Top: 2, Bottom: 2); Style: @FamilyCardStyle; Padding: (Left: 8, Right: 4); Text: "All"; }
+}

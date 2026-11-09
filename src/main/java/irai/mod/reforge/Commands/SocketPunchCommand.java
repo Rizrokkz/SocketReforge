@@ -33,10 +33,6 @@ public class SocketPunchCommand extends CommandBase {
             context.sendMessage(Message.raw("OP only command."));
             return;
         }
-        if (!SocketBenchUI.isAvailable()) {
-            context.sendMessage(Message.raw("Socket bench UI is unavailable."));
-            return;
-        }
         SocketBenchUI.open(player);
     }
 }

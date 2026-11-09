@@ -1,0 +1,97 @@
+$Common = "../SocketReforge_Common.ui";
+
+@ConfigNav = TextButtonStyle(
+  Default: (Background: #18212d, LabelStyle: (FontSize: 11, TextColor: #cbd4df)),
+  Hovered: (Background: #243246, LabelStyle: (FontSize: 11, TextColor: #ffffff)),
+  Pressed: (Background: #2a3c52, LabelStyle: (FontSize: 11, TextColor: #ffffff))
+);
+
+Group #RuntimeConfigRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Full;
+  Background: #080d14;
+
+  Group #ConfigHeader {
+    Anchor: (Left: 12, Right: 12, Top: 12, Height: 82);
+    LayoutMode: Top;
+    Background: $Common.@PanelBackground;
+    Padding: (Left: 14, Right: 14, Top: 8, Bottom: 8);
+    Group {
+      LayoutMode: Left;
+      Anchor: (Height: 32);
+      Label #ConfigTitle { FlexWeight: 1; Style: (FontSize: 18, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "RUNTIME CONFIGURATION"; }
+      TextButton #ConfigReload { Anchor: (Width: 150, Height: 30); Style: @ConfigNav; Text: "RELOAD FROM DISK"; }
+      Group { Anchor: (Width: 6); }
+      TextButton #ConfigReset { Anchor: (Width: 138, Height: 30); Style: @ConfigNav; Text: "RESET CATEGORY"; }
+    }
+    Label #ConfigStatus { Anchor: (Height: 28); Style: (FontSize: 11, TextColor: #aab7c5, VerticalAlignment: Center, Wrap: true); Text: "Changes apply when saved."; }
+  }
+
+  Group #RuntimeConfigCategories {
+    Anchor: (Left: 12, Right: 12, Top: 102, Height: 44);
+    LayoutMode: LeftScrolling;
+    Padding: (Full: 4);
+    Background: #101722;
+    ScrollbarStyle: $Common.@DefaultScrollbarStyle;
+    Overscroll: true;
+    KeepScrollPosition: true;
+  }
+
+  Group #ConfigBody {
+    Anchor: (Left: 12, Right: 12, Top: 154, Bottom: 12);
+    LayoutMode: Full;
+
+    Group #RuntimeConfigGroups {
+      Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 270);
+      LayoutMode: Full;
+      Padding: (Full: 8);
+      Background: $Common.@PanelBackground;
+      Label #ConfigGroupHeading { Anchor: (Left: 8, Right: 8, Top: 8, Height: 28); Style: (FontSize: 12, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "SECTIONS"; }
+      Group #ConfigGroupCardsHost {
+        Anchor: (Left: 8, Right: 8, Top: 36, Bottom: 8);
+        LayoutMode: Full;
+        Group #ConfigGroupCards {
+          Anchor: (Full: 0);
+          LayoutMode: TopScrolling;
+          ScrollbarStyle: $Common.@DefaultScrollbarStyle;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+      }
+    }
+
+    Group #ConfigContent {
+      Anchor: (Left: 278, Right: 0, Top: 0, Bottom: 0);
+      LayoutMode: Full;
+      Background: $Common.@PanelBackground;
+      Label #ConfigCategorySummary { Anchor: (Left: 12, Right: 12, Top: 10, Height: 30); Style: (FontSize: 11, TextColor: #9eacbb, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Group {
+        Anchor: (Left: 12, Right: 12, Top: 40, Height: 28);
+        LayoutMode: Left;
+        Label #ConfigGroupTitle { FlexWeight: 1; Style: (FontSize: 15, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: ""; }
+        Label #ConfigGroupLayout { Style: (FontSize: 9, TextColor: #8898aa, HorizontalAlignment: End, VerticalAlignment: Center); Text: ""; }
+      }
+      Label #ConfigGroupDescription { Anchor: (Left: 12, Right: 12, Top: 68, Height: 34); Style: (FontSize: 10, TextColor: #9eacbb, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      Group { Anchor: (Left: 12, Right: 12, Top: 105, Height: 3); Background: (TexturePath: "../divider.png"); }
+      Group #RuntimeConfigCardsHost {
+        Anchor: (Left: 12, Right: 12, Top: 112, Bottom: 56);
+        LayoutMode: Full;
+        Group #RuntimeConfigCards {
+          Anchor: (Full: 0);
+          LayoutMode: TopScrolling;
+          Padding: (Full: 5);
+          Background: #0d131d;
+          ScrollbarStyle: $Common.@DefaultScrollbarStyle;
+          Overscroll: true;
+          KeepScrollPosition: true;
+        }
+      }
+      Group {
+        Anchor: (Left: 12, Right: 12, Bottom: 10, Height: 36);
+        LayoutMode: Left;
+        Group { FlexWeight: 1; }
+        TextButton #ConfigApply { Anchor: (Width: 160, Height: 34); Style: $Common.@PrimaryTextButtonStyle; Text: "APPLY CHANGES"; }
+      }
+    }
+  }
+}

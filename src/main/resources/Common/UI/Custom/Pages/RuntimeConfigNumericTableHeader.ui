@@ -1,0 +1,2 @@
+$Common = "../SocketReforge_Common.ui";
+Group #NumericTableHeader { Anchor: (Height: 30); LayoutMode: Left; Padding: (Left: 10, Right: 10, Top: 5, Bottom: 5); Background: #202b3a; Label { FlexWeight: 1; Text: "SETTING"; Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center); } Label { Anchor: (Width: 240); Text: "VALUE"; Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center); } }

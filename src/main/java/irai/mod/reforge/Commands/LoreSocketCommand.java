@@ -34,10 +34,6 @@ public class LoreSocketCommand extends CommandBase {
             context.sendMessage(Message.raw("OP only command."));
             return;
         }
-        if (!LoreSocketBenchUI.isAvailable()) {
-            context.sendMessage(Message.raw("Lore socket UI is unavailable (HyUI missing)."));
-            return;
-        }
         LoreSocketBenchUI.open(player);
     }
 }
