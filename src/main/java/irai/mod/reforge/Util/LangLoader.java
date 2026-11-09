@@ -93,8 +93,6 @@ public final class LangLoader {
     // Loaded flag
     private static boolean initialized = false;
 
-    private static final Pattern UI_TOKEN_PATTERN = Pattern.compile("\\{\\{\\s*(ui\\.[^}\\s]+)\\s*}}");
-    
     /**
      * Sets the default UI language.
      * 
@@ -680,28 +678,6 @@ public final class LangLoader {
         return template;
     }
 
-    /**
-     * Replaces inline {{ui.key}} tokens in HTML with localized strings.
-     *
-     * @param player The player
-     * @param html HTML template containing {{ui.key}} tokens
-     * @return HTML with tokens replaced
-     */
-    public static String replaceUiTokens(Object player, String html) {
-        if (html == null || html.isEmpty()) {
-            return html;
-        }
-        Matcher matcher = UI_TOKEN_PATTERN.matcher(html);
-        StringBuffer sb = new StringBuffer();
-        while (matcher.find()) {
-            String key = matcher.group(1);
-            String replacement = getUITranslation(player, key);
-            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(sb);
-        return sb.toString();
-    }
-    
     /**
      * Resolves a translation key to its localized value.
      * If not found in .lang files, extracts a readable name from the key.

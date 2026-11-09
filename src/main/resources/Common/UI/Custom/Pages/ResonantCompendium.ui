@@ -58,7 +58,12 @@ Group #CompendiumRoot {
       Label #RightPaneTitle { Anchor: (Left: 12, Right: 12, Top: 8, Height: 28); Style: (FontSize: 15, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "Completed Recipes"; }
       Label #RightPaneHint { Anchor: (Left: 12, Right: 12, Top: 37, Height: 34); Style: (FontSize: 10, TextColor: #9eacbb, VerticalAlignment: Center, Wrap: true); Text: ""; }
       Label #CompletedEmpty { Anchor: (Left: 20, Right: 20, Top: 78, Height: 36); Style: (FontSize: 11, TextColor: #9eacbb, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
-      Group #RightRecipeList { Anchor: (Left: 8, Right: 8, Top: 76, Bottom: 62); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+      Group #RightRecipeList { Anchor: (Left: 8, Right: 8, Top: 76, Bottom: 170); LayoutMode: TopScrolling; ScrollbarStyle: $Common.@DefaultScrollbarStyle; Overscroll: true; KeepScrollPosition: true; }
+      Group #CompletedRecipeDescription { Anchor: (Left: 8, Right: 8, Bottom: 60, Height: 104); LayoutMode: Full; Background: #151c26; Visible: false;
+        Group { Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 3); Background: #d6a92c; }
+        Label #CompletedDescriptionTitle { Anchor: (Left: 12, Right: 10, Top: 7, Height: 20); Style: (FontSize: 10, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "RECIPE DESCRIPTION"; }
+        Label #CompletedDescriptionText { Anchor: (Left: 12, Right: 10, Top: 29, Bottom: 7); Style: (FontSize: 10, TextColor: #c1cad5, VerticalAlignment: Center, Wrap: true); Text: ""; }
+      }
       Group #RightPaneActions { Anchor: (Left: 8, Right: 8, Bottom: 8, Height: 46); LayoutMode: Left;
         TextButton #CombineCancelButton { Anchor: (Width: 118, Height: 36); Style: @CompendiumTabStyle; Text: "CANCEL"; Visible: false; }
         Group { FlexWeight: 1; }

@@ -1171,6 +1171,24 @@ public final class ResonanceSystem {
     }
 
     /**
+     * Builds the recipe description with both its flavor text and the actual stat/proc bonuses.
+     */
+    public static String buildRecipeDescription(String recipeName, boolean isWeapon, String langCode) {
+        ResonanceResult result = getResultForRecipeName(recipeName);
+        if (result == null || !result.active()) return "";
+
+        String flavor = getLocalizedEffect(recipeName, result.effect(), langCode);
+        String details = buildDetailedEffect(result, isWeapon, langCode);
+        if (details == null || details.isBlank()) return flavor == null ? "" : flavor;
+        if (flavor == null || flavor.isBlank() || flavor.equals(details)) return details;
+        return flavor + "\n" + details;
+    }
+
+    public static String buildRecipeDescription(String recipeName, boolean isWeapon, Object player) {
+        return buildRecipeDescription(recipeName, isWeapon, LangLoader.getPlayerLanguage(player));
+    }
+
+    /**
      * Applies the greater-essence multiplier to the resonance bonuses if needed.
      * This is used for tooltips where we have the socket data but not a full item evaluation.
      */

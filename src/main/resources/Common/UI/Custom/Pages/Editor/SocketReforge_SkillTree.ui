@@ -8,6 +8,16 @@ $Container = "../../SocketReforge_Container.ui";
 @EditorCompactButton = $Common.@CompactSecondaryTextButtonStyle;
 @EditorCompactAction = $Common.@CompactPrimaryTextButtonStyle;
 @EditorCompactDanger = $Common.@CompactDestructiveTextButtonStyle;
+@EditorIconToolHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #e8c030(0.16), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #e8c030(0.24), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
+@EditorIconToolDangerHitStyle = TextButtonStyle(
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #e34a62(0.22), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #e34a62(0.32), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+);
 @EditorScrollbar = $Common.@DefaultScrollbarStyle;
 
 Group #SkillTreeRoot {
@@ -110,29 +120,72 @@ Group #SkillTreeRoot {
       Background: $Common.@PanelBackground;
       Padding: (Left: 6, Right: 6, Top: 8, Bottom: 8);
 
-      TextButton #ToolAdd { Text: "+"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Add node"; }
+      Group #ToolAddWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolAddIcon { ItemId: "EditorTool_Paint"; Anchor: (Full: 4); }
+        TextButton #ToolAdd { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Add node"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolLink { Text: "L"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Link or unlink nodes"; }
+      Group #ToolLinkWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolLinkIcon { ItemId: "EditorTool_Line"; Anchor: (Full: 4); }
+        Group #ToolLinkActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolLink { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Link or unlink nodes"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolMove { Text: "M"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Move selected node or group"; }
+      Group #ToolMoveWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolMoveIcon { ItemId: "EditorTool_Sculpt"; Anchor: (Full: 4); }
+        Group #ToolMoveActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolMove { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Move selected node or group"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolSelect { Text: "S"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle multi-select; click nodes to add or remove them"; }
+      Group #ToolSelectWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolSelectIcon { ItemId: "EditorTool_Selection"; Anchor: (Full: 4); }
+        Group #ToolSelectActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolSelect { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Toggle multi-select; click nodes to add or remove them"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolSelectAll { Text: "A"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Select all nodes"; }
+      Group #ToolSelectAllWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolSelectAllIcon { ItemId: "EditorTool_Selection"; Anchor: (Full: 4); }
+        TextButton #ToolSelectAll { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Select all nodes"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolClearSelection { Text: "C"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Clear node selection"; }
+      Group #ToolClearSelectionWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolClearSelectionIcon { ItemId: "EditorTool_Selection"; Anchor: (Full: 4); }
+        TextButton #ToolClearSelection { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Clear node selection"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolGrid { Text: "G"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Place selected node or group on grid"; }
+      Group #ToolGridWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolGridIcon { ItemId: "EditorTool_Layers"; Anchor: (Full: 4); }
+        Group #ToolGridActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolGrid { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Place selected node or group on grid"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolGridVisibility { Text: "V"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle canvas grid"; }
+      Group #ToolGridVisibilityWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolGridVisibilityIcon { ItemId: "EditorTool_Layers"; Anchor: (Full: 4); }
+        Group #ToolGridVisibilityActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolGridVisibility { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Toggle canvas grid"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolDuplicate { Text: "D"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Duplicate one node beside it; mirror a multi-selected group using the F direction"; }
+      Group #ToolDuplicateWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolDuplicateIcon { ItemId: "EditorTool_Paste"; Anchor: (Full: 4); }
+        TextButton #ToolDuplicate { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Duplicate one node beside it; mirror a multi-selected group using the F direction"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolMirrorFlip { Text: "F"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Toggle group mirror direction: left/right by default, top/bottom when enabled"; }
+      Group #ToolMirrorFlipWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolMirrorFlipIcon { ItemId: "EditorTool_Sculpt"; Anchor: (Full: 4); }
+        Group #ToolMirrorFlipActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolMirrorFlip { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Toggle group mirror direction: left/right by default, top/bottom when enabled"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolCopyProperties { Text: "P"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactButton; Padding: (Full: 0); TooltipText: "Copy properties from the selected node; click a destination node"; }
+      Group #ToolCopyPropertiesWell { Anchor: (Width: 32, Height: 32); Background: #26384c;
+        ItemIcon #ToolCopyPropertiesIcon { ItemId: "EditorTool_Paste"; Anchor: (Full: 4); }
+        Group #ToolCopyPropertiesActive { Anchor: (Right: 2, Top: 2, Width: 5, Height: 5); Background: #f4d35e; Visible: false; }
+        TextButton #ToolCopyProperties { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolHitStyle; Padding: (Full: 0); TooltipText: "Copy properties from the selected node; click a destination node"; }
+      }
       Group { Anchor: (Height: 5); }
-      TextButton #ToolRemove { Text: "X"; Anchor: (Width: 32, Height: 32); Style: @EditorCompactDanger; Padding: (Full: 0); TooltipText: "Remove selected node"; }
+      Group #ToolRemoveWell { Anchor: (Width: 32, Height: 32); Background: #3a202b;
+        ItemIcon #ToolRemoveIcon { ItemId: "EditorTool_Sculpt"; Anchor: (Full: 4); }
+        TextButton #ToolRemove { Text: ""; Anchor: (Full: 0); Style: @EditorIconToolDangerHitStyle; Padding: (Full: 0); TooltipText: "Remove selected node"; }
+      }
     }
 
     Group { Anchor: (Width: 6); }

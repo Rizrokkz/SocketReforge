@@ -1,0 +1,24 @@
+$Common = "../SocketReforge_Common.ui";
+
+Group #StatueConfirmRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Center;
+  Background: #000000(0.68);
+  Group #ConfirmPanel {
+    Anchor: (Width: 540, Height: 330);
+    LayoutMode: Top;
+    Background: $Common.@PanelBackground;
+    Padding: (Left: 22, Right: 22, Top: 16, Bottom: 16);
+    Label #ConfirmTitle { Anchor: (Height: 36); Style: (FontSize: 19, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: "Confirm"; }
+    Group { Anchor: (Height: 2); Background: (TexturePath: "../divider.png"); }
+    Label #ConfirmVoice { Anchor: (Height: 68); Style: (FontSize: 12, TextColor: #d9c6ff, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
+    Label #ConfirmItem { Anchor: (Height: 30); Style: (FontSize: 14, TextColor: #eef1f5, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
+    Label #ConfirmWarning { FlexWeight: 1; Style: (FontSize: 12, TextColor: #ffb76e, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true); Text: ""; }
+    Group { Anchor: (Height: 18); }
+    Group #ConfirmActions { Anchor: (Height: 42); LayoutMode: Center;
+      TextButton #ConfirmButton { Anchor: (Width: 168, Height: 38); Style: $Common.@PrimaryTextButtonStyle; Text: "Continue"; }
+      Group { Anchor: (Width: 14); }
+      TextButton #CancelButton { Anchor: (Width: 142, Height: 38); Style: $Common.@SecondaryTextButtonStyle; Text: "Cancel"; }
+    }
+  }
+}

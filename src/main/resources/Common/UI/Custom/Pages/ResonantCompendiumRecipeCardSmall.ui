@@ -4,9 +4,9 @@
   Pressed: (Background: #8fb7df(0.14), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
 );
 @RecipeToolStyle = TextButtonStyle(
-  Default: (Background: #26384c, LabelStyle: (FontSize: 10, TextColor: #d5dfeb, RenderBold: true)),
-  Hovered: (Background: #35506d, LabelStyle: (FontSize: 10, TextColor: #ffffff, RenderBold: true)),
-  Pressed: (Background: #42658b, LabelStyle: (FontSize: 10, TextColor: #ffffff, RenderBold: true))
+  Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Hovered: (Background: #8fb7df(0.18), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #8fb7df(0.28), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
 );
 
 Group #RecipeCard {
@@ -41,7 +41,13 @@ Group #RecipeCard {
   Group #RecipeBottomRim { Anchor: (Left: 5, Right: 7, Bottom: 3, Height: 1); Background: #52647a(0.5); }
   TextButton #RecipeSelect { Anchor: (Full: 0); Style: @RecipeCardHitStyle; Padding: (Full: 0); Text: ""; }
   Group #RecipeTools { Anchor: (Right: 1, Top: 0, Bottom: 0, Width: 18); LayoutMode: Full;
-    TextButton #RecipeExtract { Anchor: (Right: 0, Top: 34, Width: 18, Height: 18); Style: @RecipeToolStyle; Padding: (Full: 0); Text: "E"; TooltipText: "Extract recipe"; Visible: false; }
-    TextButton #RecipeCombine { Anchor: (Right: 0, Bottom: 8, Width: 18, Height: 18); Style: @RecipeToolStyle; Padding: (Full: 0); Text: "C"; TooltipText: "Combine recipe"; Visible: false; }
+    Group #RecipeExtractTool { Anchor: (Right: 0, Top: 38, Width: 18, Height: 18); Background: #26384c; Visible: false;
+      ItemIcon #RecipeExtractIcon { ItemId: "EditorTool_Selection"; Anchor: (Full: 2); }
+      TextButton #RecipeExtract { Anchor: (Full: 0); Style: @RecipeToolStyle; Padding: (Full: 0); Text: ""; TooltipText: "Extract recipe"; }
+    }
+    Group #RecipeCombineTool { Anchor: (Right: 0, Top: 58, Width: 18, Height: 18); Background: #26384c; Visible: false;
+      ItemIcon #RecipeCombineIcon { ItemId: "EditorTool_Line"; Anchor: (Full: 2); }
+      TextButton #RecipeCombine { Anchor: (Full: 0); Style: @RecipeToolStyle; Padding: (Full: 0); Text: ""; TooltipText: "Combine recipe"; }
+    }
   }
 }

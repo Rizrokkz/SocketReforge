@@ -64,6 +64,8 @@ public final class RuntimeConfigUI {
     private static final String ARRAY_ENTRY_UI = "Pages/RuntimeConfigArrayEntry.ui";
     private static final String STRUCTURED_ARRAY_HEADER_UI = "Pages/RuntimeConfigStructuredHeader.ui";
     private static final String STRUCTURED_ARRAY_ENTRY_UI = "Pages/RuntimeConfigStructuredEntry.ui";
+    private static final String AFFINITY_STRUCTURED_ARRAY_HEADER_UI = "Pages/RuntimeConfigAffinityStructuredHeader.ui";
+    private static final String AFFINITY_STRUCTURED_ARRAY_ENTRY_UI = "Pages/RuntimeConfigAffinityStructuredEntry.ui";
     private static final String COLOR_SPIRIT_HEADER_UI = "Pages/RuntimeConfigColorSpiritHeader.ui";
     private static final String COLOR_SPIRIT_NPC_UI = "Pages/RuntimeConfigColorSpiritNpc.ui";
     private static final String ARRAY_RULE_ENTRY_UI = "Pages/RuntimeConfigRuleEntry.ui";
@@ -926,7 +928,9 @@ public final class RuntimeConfigUI {
                 }
                 List<String> columnLabels = structuredArrayLabels(section.id(), values);
                 if (columnLabels != null) {
-                    commands.append("#RuntimeConfigCards", STRUCTURED_ARRAY_HEADER_UI);
+                    boolean affinityModeColumns = isAffinityStructuredModeSection(section.id());
+                    commands.append("#RuntimeConfigCards", affinityModeColumns
+                            ? AFFINITY_STRUCTURED_ARRAY_HEADER_UI : STRUCTURED_ARRAY_HEADER_UI);
                     String headerBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
                     for (int field = 0; field < MAX_STRUCTURED_ARRAY_FIELDS; field++) {
                         boolean visible = field < columnLabels.size();
@@ -940,7 +944,8 @@ public final class RuntimeConfigUI {
                 for (int itemIndex = 0; itemIndex < values.size(); itemIndex++) {
                     String target = section.id() + ":" + itemIndex;
                     if (columnLabels != null) {
-                        commands.append("#RuntimeConfigCards", STRUCTURED_ARRAY_ENTRY_UI);
+                        commands.append("#RuntimeConfigCards", isAffinityStructuredModeSection(section.id())
+                                ? AFFINITY_STRUCTURED_ARRAY_ENTRY_UI : STRUCTURED_ARRAY_ENTRY_UI);
                         String itemBase = "#RuntimeConfigCards[" + cardIndex++ + "]";
                         List<String> fields = structuredArrayFields(section.id(), values.get(itemIndex), columnLabels.size());
                         for (int field = 0; field < MAX_STRUCTURED_ARRAY_FIELDS; field++) {

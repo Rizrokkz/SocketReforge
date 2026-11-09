@@ -286,8 +286,7 @@ The `USE_CUSTOM_COMBAT_TEXT` setting in `DamageNumberConfig.json` controls wheth
    - `DamageNumberConfig.json`
    - `WorldRepairConfig.json`
 3. Customize configs as needed and restart
-4. Optionally install HyUI for enhanced UI experiences
-5. After major updates, run `/reforgeconfig` (OP) and reset defaults to populate new settings
+4. After major updates, run `/reforgeconfig` (OP) and reset defaults to populate new settings
 
 ### Localization Support
 
@@ -296,10 +295,6 @@ SocketReforge supports multiple languages. The system currently includes:
 - **German (de-DE)** - Full localization coverage
 
 Language files are loaded automatically based on player settings. Tooltips and UI elements are localized.
-
-**Optional Dependencies:**
-
-- **HyUI 0.9.0+** - Enhanced UI framework (recommended)
 
 ---
 

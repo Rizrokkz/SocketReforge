@@ -1207,6 +1207,14 @@ public class DynamicTooltipUtils {
         if (hasRecipeName && localizedRecipeName != null && !localizedRecipeName.isBlank()) {
             String resonanceLabel = tr(langCode, "tooltip.resonance_label", "Resonance");
             tooltipLines.add(COLOR_ORANGE + resonanceLabel + ": " + COLOR_WHITE + localizedRecipeName);
+            if (isRecipeItem) {
+                boolean recipeIsWeapon = recipeType == null || !recipeType.trim().equalsIgnoreCase("Armor");
+                String recipeDescription = ResonanceSystem.buildRecipeDescription(recipeName, recipeIsWeapon, langCode);
+                if (recipeDescription != null && !recipeDescription.isBlank()) {
+                    String descriptionLabel = tr(langCode, "tooltip.recipe_description_label", "Description");
+                    tooltipLines.add(COLOR_GRAY + descriptionLabel + ": " + COLOR_WHITE + recipeDescription);
+                }
+            }
         }
         if (hasRecipeType) {
             String typeLabel = tr(langCode, "tooltip.type_label", "Type");

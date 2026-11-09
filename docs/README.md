@@ -134,12 +134,7 @@ Custom configurable floating damage text. Can be toggled on/off via runtime conf
 1. Copy `irai.mod.reforge_SocketReforge.jar` to your Hytale server `mods` folder
 2. Start server — config files are generated automatically
 3. Customize configs as needed and restart
-4. Optionally install HyUI for enhanced UI experiences
-5. After major updates, run `/reforgeconfig` (OP) and reset defaults
-
-### Optional Dependencies
-
-- **HyUI 0.9.0+** - Enhanced UI framework (recommended)
+4. After major updates, run `/reforgeconfig` (OP) and reset defaults
 
 ---
 

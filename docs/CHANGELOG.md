@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Lore XP command** - Added the operator-only `/lorexp <slot> <amount>` command to grant XP to a spirit in the held equipment's lore socket.
 - **Attack speed multi-hit** - Attack speed bonuses now build from a base speed of 5 and grant a chance for one follow-up hit instead of multiplying hit damage. Follow-up hits deal 35% damage, with the chance capped at 75%; the Character Path tree includes attack-speed nodes.
 - **Soul Reaper rewards** - Deliver matching infused Soulstones directly to the reaper's inventory, preserve the mark through projectile kills, and report when inventory space is unavailable.
+- **Native UI cleanup** - Removed the HyUI dependency and legacy HTML pages. Tool Parts and statue confirmations now use native Custom UI; Lore Feed opens the native Lore Socket Bench, equipment stats use the detailed command report, and recipe shards use the compendium or automatic merge flow.
 ### Changed
 - **Native damage feedback** - Native Hytale combat text is now the default. Physical and weapon-affinity damage are combined into one rendered hit after damage resistance, while elemental damage absorbed by an enemy shield still gets native visual feedback without being applied to health twice.
 - **Status damage and essence bonuses** - Bleed, Poison, and Burn ticks use separate damage events and native combat text instead of inheriting weapon-hit bonuses. Matching weapon essences can increase their related status damage; Ice affinity builds toward Freeze before the target is frozen.
@@ -498,7 +499,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Runtime Config Editor (HyUI, OP-only)** - `/reforgeconfig` (aliases `configui`, `runtimeconfig`) for live tuning of socket, refinement, loot, and weather settings with instant save/apply and reload-from-disk support.
+- **Runtime Config Editor (OP-only)** - `/reforgeconfig` (aliases `configui`, `runtimeconfig`) for live tuning of socket, refinement, loot, and weather settings with instant save/apply and reload-from-disk support.
 - **Loot Socket Roll Config** - New `LootSocketRollConfig` for chest/NPC socket roll tuning, resonance roll chance, and broken-socket clamp ranges.
 - **Weather Event Spawns** - Spirit_Thunder rain spawns with `WeatherEventConfig` controls for timing, counts, distance, and despawn delay.
 - **Thorium Builder's Hammer** - New high-durability hammer; stronger break-chance reduction in the Reforge bench and essence refunds on successful clear in the Essence bench.
@@ -633,9 +634,8 @@ This update introduces the **Resonance System** — a runeword-like mechanic tha
     - `/reforgeadmin addmax <amount>`
   - Admin edits now refresh related socket/refinement tooltips after updates
 
-- **Reforge Bench HyUI Page**
-  - Added external HTML-driven Reforge bench page (`ReforgeBench.html`)
-  - Keeps compatibility with existing refinement logic and SFX pipeline
+- **Reforge Bench UI**
+  - Added the Reforge bench page while retaining existing refinement logic and SFX behavior
 
 ### Changed
 
@@ -679,19 +679,7 @@ This update introduces the **Resonance System** — a runeword-like mechanic tha
 
 ## [1.2.5] - 2026-03-01
 
-### New Feature: HyUI Integration & Enhanced Socket System
-
-This update adds optional HyUI support for better UI experiences and introduces new socket management features.
-
-#### HyUI Integration
-
-- **Optional HyUI Support**
-  - UI now uses HyUI framework when available
-  - Falls back gracefully when HyUI is not installed
-  - Enhanced UI responsiveness and interactivity
-  - EquipmentListUI, SocketBenchUI, and EssenceBenchUI now leverage HyUI components
-
-#### Socket Management
+### Socket Management
 
 - **Iron Building Hammer**
   - New item for clearing sockets from equipment

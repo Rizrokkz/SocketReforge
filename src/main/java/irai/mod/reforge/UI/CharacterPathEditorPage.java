@@ -186,13 +186,13 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
         commands.set("#CanvasWidthInput.Value", (double) canvasWidthInput);
         commands.set("#CanvasHeightInput.Value", (double) canvasHeightInput);
         commands.set("#EditorStatus.Text", status);
-        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
-        commands.set("#ToolMove.Text", moveMode ? "M*" : "M");
-        commands.set("#ToolSelect.Text", multiSelectMode ? "S*" : "S");
-        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
-        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
-        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
-        commands.set("#ToolMirrorFlip.Text", mirrorVertically ? "F*" : "F");
+        commands.set("#ToolLinkActive.Visible", connectMode);
+        commands.set("#ToolMoveActive.Visible", moveMode);
+        commands.set("#ToolSelectActive.Visible", multiSelectMode);
+        commands.set("#ToolGridActive.Visible", gridPlacementArmed);
+        commands.set("#ToolGridVisibilityActive.Visible", gridVisible);
+        commands.set("#ToolCopyPropertiesActive.Visible", copyPropertiesSourceId != null);
+        commands.set("#ToolMirrorFlipActive.Visible", mirrorVertically);
 
         bind(events, "#ToolAdd", "editor_add");
         bind(events, "#ToolDuplicate", "editor_duplicate");
@@ -929,13 +929,13 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     private void refreshToolTogglesInPlace() {
         UICommandBuilder commands = new UICommandBuilder();
-        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
-        commands.set("#ToolMove.Text", moveMode ? "M*" : "M");
-        commands.set("#ToolSelect.Text", multiSelectMode ? "S*" : "S");
-        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
-        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
-        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
-        commands.set("#ToolMirrorFlip.Text", mirrorVertically ? "F*" : "F");
+        commands.set("#ToolLinkActive.Visible", connectMode);
+        commands.set("#ToolMoveActive.Visible", moveMode);
+        commands.set("#ToolSelectActive.Visible", multiSelectMode);
+        commands.set("#ToolGridActive.Visible", gridPlacementArmed);
+        commands.set("#ToolGridVisibilityActive.Visible", gridVisible);
+        commands.set("#ToolCopyPropertiesActive.Visible", copyPropertiesSourceId != null);
+        commands.set("#ToolMirrorFlipActive.Visible", mirrorVertically);
         commands.set("#EditorStatus.Text", status);
         commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
         if (renderedClearanceChildIndex >= 0) {
@@ -946,7 +946,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     private void refreshGridVisibilityInPlace() {
         UICommandBuilder commands = new UICommandBuilder();
-        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
+        commands.set("#ToolGridVisibilityActive.Visible", gridVisible);
         if (gridVisible || gridPlacementArmed || coordinateGridPreview) {
             appendGridLayerContentsIfNeeded(commands, CharacterPathEditorService.snapshot());
         }
@@ -1011,9 +1011,9 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
 
     private void refreshCopyPropertiesToggleInPlace(String previousLinkSource) {
         UICommandBuilder commands = new UICommandBuilder();
-        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
-        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
-        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#ToolCopyPropertiesActive.Visible", copyPropertiesSourceId != null);
+        commands.set("#ToolLinkActive.Visible", connectMode);
+        commands.set("#ToolGridActive.Visible", gridPlacementArmed);
         commands.set("#EditorStatus.Text", status);
         if (renderedMoveTargetsLayer) {
             commands.set("#GridMoveTargetsLayer.Visible", gridPlacementArmed);
@@ -1037,13 +1037,13 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
                                        boolean refreshPanel) {
         EditorNode primary = selectedNode(document);
 
-        commands.set("#ToolLink.Text", connectMode ? "L*" : "L");
-        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
-        commands.set("#ToolMove.Text", moveMode ? "M*" : "M");
-        commands.set("#ToolSelect.Text", multiSelectMode ? "S*" : "S");
-        commands.set("#ToolGridVisibility.Text", gridVisible ? "V*" : "V");
-        commands.set("#ToolCopyProperties.Text", copyPropertiesSourceId == null ? "P" : "P*");
-        commands.set("#ToolMirrorFlip.Text", mirrorVertically ? "F*" : "F");
+        commands.set("#ToolLinkActive.Visible", connectMode);
+        commands.set("#ToolGridActive.Visible", gridPlacementArmed);
+        commands.set("#ToolMoveActive.Visible", moveMode);
+        commands.set("#ToolSelectActive.Visible", multiSelectMode);
+        commands.set("#ToolGridVisibilityActive.Visible", gridVisible);
+        commands.set("#ToolCopyPropertiesActive.Visible", copyPropertiesSourceId != null);
+        commands.set("#ToolMirrorFlipActive.Visible", mirrorVertically);
         commands.set("#EditorStatus.Text", status);
         commands.set("#EditorLinkCount.Text", "Links: " + document.edges.size());
         commands.set("#EditorApplied.Text", document.appliedToPlayers
@@ -1518,7 +1518,7 @@ public final class CharacterPathEditorPage extends InteractiveCustomUIPage<Chara
     private void refreshGridPlacementOverlay() {
         UICommandBuilder commands = new UICommandBuilder();
         UIEventBuilder events = new UIEventBuilder();
-        commands.set("#ToolGrid.Text", gridPlacementArmed ? "G*" : "G");
+        commands.set("#ToolGridActive.Visible", gridPlacementArmed);
         commands.set("#EditorGridLayer.Visible", gridVisible || gridPlacementArmed || coordinateGridPreview);
         commands.set("#EditorStatus.Text", status);
         if (renderedClearanceChildIndex >= 0) {

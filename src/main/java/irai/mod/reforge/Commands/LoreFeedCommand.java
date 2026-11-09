@@ -10,7 +10,7 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.permissions.HytalePermissions;
 
-import irai.mod.reforge.UI.LoreFeedBenchUI;
+import irai.mod.reforge.UI.LoreSocketBenchUI;
 import irai.mod.reforge.Commands.CommandUtils;
 
 /**
@@ -35,10 +35,6 @@ public class LoreFeedCommand extends CommandBase {
             context.sendMessage(Message.raw("OP only command."));
             return;
         }
-        if (!LoreFeedBenchUI.isAvailable()) {
-            context.sendMessage(Message.raw("Lore feed UI is unavailable (HyUI missing)."));
-            return;
-        }
-        LoreFeedBenchUI.open(player);
+        LoreSocketBenchUI.open(player);
     }
 }

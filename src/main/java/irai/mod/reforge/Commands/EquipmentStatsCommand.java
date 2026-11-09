@@ -32,7 +32,6 @@ import irai.mod.reforge.Socket.Essence;
 import irai.mod.reforge.Socket.EssenceEffect;
 import irai.mod.reforge.Socket.SocketData;
 import irai.mod.reforge.Socket.SocketManager;
-import irai.mod.reforge.UI.EquipmentStatsUI;
 
 /**
  * Shows the player's currently equipped armor stats and held weapon output.
@@ -56,11 +55,6 @@ public class EquipmentStatsCommand extends CommandBase {
         if (player == null) {
             return;
         }
-        if (EquipmentStatsUI.isAvailable()) {
-            EquipmentStatsUI.open(player);
-            return;
-        }
-
         context.sendMessage(Message.raw("=== Socket Reforge Equipment Stats ==="));
         sendWeaponStats(context, player);
         sendArmorStats(context, player);

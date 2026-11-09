@@ -1,0 +1,26 @@
+$Common = "../SocketReforge_Common.ui";
+Group #StructuredEntry {
+  Anchor: (Height: 44);
+  LayoutMode: Left;
+  Padding: (Left: 5, Right: 5, Top: 5, Bottom: 5);
+  Background: #151e2a;
+  Group #StructuredField0 { FlexWeight: 0.5; LayoutMode: Full;
+    TextField #StructuredField0Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; }
+    DropdownBox #StructuredField0Mode { Anchor: (Full: 0); Value: "hint"; Style: $Common.@DefaultDropdownBoxStyle;
+      DropdownEntry { Text: "Hint"; Value: "hint"; }
+      DropdownEntry { Text: "Role"; Value: "role"; }
+    }
+  }
+  Group #StructuredField1 { FlexWeight: 1.5; LayoutMode: Full; TextField #StructuredField1Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField2 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField2Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField3 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField3Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField4 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField4Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField5 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField5Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField6 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField6Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField7 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField7Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField8 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField8Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField9 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField9Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField10 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField10Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  Group #StructuredField11 { FlexWeight: 1; LayoutMode: Full; TextField #StructuredField11Value { Anchor: (Full: 0); Value: ""; Style: (FontSize: 10, TextColor: #e6ebf2); Background: #202c3b; } }
+  TextButton #StructuredRemove { Anchor: (Width: 34, Height: 30); Text: "×"; Style: $Common.@DestructiveTextButtonStyle; }
+}

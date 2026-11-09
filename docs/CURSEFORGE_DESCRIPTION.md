@@ -483,21 +483,6 @@
 
 <hr>
 
-<h2>🛠️ HyUI Integration</h2>
-
-<p>Socket Reforge now supports <strong>HyUI</strong> for enhanced user interfaces! When HyUI is installed, players get access to improved, responsive UI elements for all reforging and socketing operations.</p>
-
-<ul>
-  <li><strong>Optional Dependency</strong> — Works with or without HyUI installed</li>
-  <li><strong>Enhanced Equipment List</strong> — Improved equipment selection with real-time filtering</li>
-  <li><strong>Better Socket Previews</strong> — Visual socket state display with progress tracking</li>
-  <li><strong>Improved Event Handling</strong> — No more UI freezes or client locks</li>
-</ul>
-
-<p><em>Get HyUI from <a href="https://www.curseforge.com/hytale/mods/hyui">CurseForge</a> for the best experience!</em></p>
-
-<hr>
-
 <h2>🔨 Socket Management Tools</h2>
 
 <p>New tools for managing your socketed equipment!</p>
@@ -642,8 +627,7 @@
   <li><strong>Regeneration system</strong> — Life and Water essences grant HP regen on armor</li>
   <li><strong>Iron Building Hammer support</strong> — used in both Essence and Reforge benches with durability wear</li>
   <li><strong>DynamicTooltips compatibility</strong> — socket and essence info displayed as in-game tooltips<br><em>(Requires <a href="https://www.curseforge.com/hytale/mods/dynamictooltipslib">DynamicTooltipsLib</a>)</em></li>
-  <li><strong>HyUI Support</strong> — Optional enhanced UI when HyUI mod is installed</li>
-  <li><strong>Native bench interfaces</strong> — Reforge, Socket Punch, Essence Socket, and Lore Socket benches work without HyUI</li>
+  <li><strong>Native user interfaces</strong> — Benches, configuration, equipment details, and recipe management use built-in Custom UI</li>
   <li><strong>ECS damage & defense system</strong> that applies multipliers in real-time combat</li>
   <li><strong>Bench preview UIs</strong> with detailed refinement/socket outcome information</li>
   <li><strong>Socket Punching UI</strong> for adding sockets with risk/reward mechanics</li>

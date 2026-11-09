@@ -1,0 +1,84 @@
+$Common = "../SocketReforge_Common.ui";
+
+Group #ToolPartsRoot {
+  Anchor: (Full: 0);
+  LayoutMode: Center;
+  Background: #000000(0.72);
+
+  Group #ToolPartsPanel {
+    Anchor: (Width: 860, Height: 690);
+    LayoutMode: Top;
+    Padding: (Left: 22, Right: 22, Top: 16, Bottom: 16);
+    Background: $Common.@PanelBackground;
+
+    Label #ToolPartsTitle {
+      Anchor: (Height: 32);
+      Style: (FontSize: 20, TextColor: #ffd03b, RenderBold: true, VerticalAlignment: Center);
+      Text: "Tool Parts Bench";
+    }
+    Label #ToolPartsDescription {
+      Anchor: (Height: 26);
+      Style: (FontSize: 14, TextColor: #d4dce5, VerticalAlignment: Center);
+      Text: "Choose a tool";
+    }
+    Label #ToolPartsType {
+      Anchor: (Height: 24);
+      Style: (FontSize: 12, TextColor: #a9b6c5, VerticalAlignment: Center);
+      Text: "Tool type";
+    }
+    Group { Anchor: (Height: 1); Background: #c69b47; }
+
+    Label { Anchor: (Height: 30); Style: (FontSize: 15, TextColor: #e5eaf0, RenderBold: true, VerticalAlignment: Center); Text: "Equipment"; }
+    DropdownBox #ToolPartsEquipment {
+      Anchor: (Height: 38);
+      Style: $Common.@DefaultDropdownBoxStyle;
+      Value: "";
+    }
+
+    Label { Anchor: (Height: 34); Style: (FontSize: 15, TextColor: #e5eaf0, RenderBold: true, VerticalAlignment: Center); Text: "Parts"; }
+    Group #ToolPartsSlots { Anchor: (Height: 300); LayoutMode: Left;
+
+    Group #ToolPartsSlotOne {
+      FlexWeight: 1;
+      LayoutMode: Top;
+      Padding: (Right: 10);
+      Label #ToolPartsFirstLabel { Anchor: (Height: 28); Style: (FontSize: 14, TextColor: #e5eaf0, RenderBold: true, VerticalAlignment: Center); Text: "Handle"; }
+      Group { Anchor: (Height: 86); LayoutMode: Center; Background: #171c2a; Label #ToolPartsFirstTier { Style: (FontSize: 16, TextColor: #ffd03b, RenderBold: true, VerticalAlignment: Center, HorizontalAlignment: Center); Text: "Tier"; } }
+      DropdownBox #ToolPartsFirst { Anchor: (Height: 38); Style: $Common.@DefaultDropdownBoxStyle; Value: ""; }
+    }
+    Group #ToolPartsSlotTwo {
+      FlexWeight: 1;
+      LayoutMode: Top;
+      Padding: (Left: 5, Right: 5);
+      Label #ToolPartsSecondLabel { Anchor: (Height: 28); Style: (FontSize: 14, TextColor: #e5eaf0, RenderBold: true, VerticalAlignment: Center); Text: "Core"; }
+      Group { Anchor: (Height: 86); LayoutMode: Center; Background: #171c2a; Label #ToolPartsSecondTier { Style: (FontSize: 16, TextColor: #ffd03b, RenderBold: true, VerticalAlignment: Center, HorizontalAlignment: Center); Text: "Tier"; } }
+      DropdownBox #ToolPartsSecond { Anchor: (Height: 38); Style: $Common.@DefaultDropdownBoxStyle; Value: ""; }
+    }
+    Group #ToolPartsSlotThree {
+      FlexWeight: 1;
+      LayoutMode: Top;
+      Padding: (Left: 10);
+      Label #ToolPartsThirdLabel { Anchor: (Height: 28); Style: (FontSize: 14, TextColor: #e5eaf0, RenderBold: true, VerticalAlignment: Center); Text: "Head"; }
+      Group { Anchor: (Height: 86); LayoutMode: Center; Background: #171c2a; Label #ToolPartsThirdTier { Style: (FontSize: 16, TextColor: #ffd03b, RenderBold: true, VerticalAlignment: Center, HorizontalAlignment: Center); Text: "Tier"; } }
+      DropdownBox #ToolPartsThird { Anchor: (Height: 38); Style: $Common.@DefaultDropdownBoxStyle; Value: ""; }
+    }
+    }
+
+    Group { Anchor: (Height: 1); Background: #c69b47; }
+    Label #ToolPartsStatus {
+      Anchor: (Height: 68);
+      Style: (FontSize: 13, TextColor: #d4dce5, VerticalAlignment: Center, Wrap: true);
+      Text: "Select a tool and materials.";
+    }
+    Label #ToolPartsNote {
+      Anchor: (Height: 44);
+      Style: (FontSize: 11, TextColor: #a9b6c5, VerticalAlignment: Center, Wrap: true);
+      Text: "Materials are consumed when applied.";
+    }
+    TextButton #ToolPartsApply {
+      Anchor: (Width: 300, Height: 44);
+      Style: $Common.@PrimaryTextButtonStyle;
+      Text: "Apply Parts";
+    }
+  }
+}

@@ -48,7 +48,6 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
             return;
         }
 
-        // Prefer HyUI page when available; keeps legacy chat flow as fallback.
         String recipeName = ResonantRecipeUtils.getRecipeName(held);
         String recipePattern = ResonantRecipeUtils.getRecipePattern(held);
         if ((recipeName == null || recipeName.isBlank())
@@ -56,11 +55,6 @@ public class ResonantRecipeCombineUse extends SimpleInteraction {
             player.getPlayerRef().sendMessage(Message.raw("This recipe shard is blank."));
             return;
         }
-        if (irai.mod.reforge.UI.RecipeCombineUI.isAvailable()) {
-            irai.mod.reforge.UI.RecipeCombineUI.open(player);
-            return;
-        }
-
         short heldSlot = context.getHeldItemSlot();
         combineRecipes(player, held, heldSlot);
     }

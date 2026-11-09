@@ -161,16 +161,11 @@ import irai.mod.reforge.UI.DamagePopupHudUI;
 import irai.mod.reforge.UI.CharacterPathUI;
 import irai.mod.reforge.UI.CharacterPathEditorPage;
 import irai.mod.reforge.UI.EnemyAffinityHudUI;
-import irai.mod.reforge.UI.EquipmentStatsUI;
 import irai.mod.reforge.UI.EssenceBenchUI;
-import irai.mod.reforge.UI.LoreFeedBenchUI;
 import irai.mod.reforge.UI.LoreSocketBenchUI;
-import irai.mod.reforge.UI.RecipeCombineUI;
 import irai.mod.reforge.UI.ReforgeBenchUI;
 import irai.mod.reforge.UI.RuntimeConfigUI;
 import irai.mod.reforge.UI.SocketBenchUI;
-import irai.mod.reforge.UI.StatueConfirmationUI;
-import irai.mod.reforge.UI.ToolPartsUI;
 import irai.mod.reforge.Util.DynamicTooltipUtils;
 import irai.mod.reforge.Util.LangLoader;
 import irai.mod.reforge.Util.NameResolver;
@@ -345,12 +340,7 @@ public class ReforgePlugin extends JavaPlugin {
         LangLoader.initialize();
         // Tooltip refresh is handled automatically by the provider approach
         DynamicTooltipUtils.init();
-        LoreFeedBenchUI.initialize();
-        EquipmentStatsUI.initialize();
-        StatueConfirmationUI.initialize();
         EnemyAffinityHudUI.initialize();
-        ToolPartsUI.initialize();
-        RecipeCombineUI.initialize();
         CharacterPathUI.initialize();
         RuntimeConfigUI.initialize(this);
         // Initialize weapon upgrade tracker with persistence

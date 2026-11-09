@@ -15,7 +15,6 @@ repositories {
 dependencies {
     compileOnly(files("libs/HytaleServer.jar"))
     implementation(files("libs/HytaleServer.jar"))
-    implementation(files("libs/HyUI-0.9.0-2026.02.19.jar"))
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -44,7 +43,7 @@ tasks.register<Copy>("copyToServerMods") {
     rename { "irai.mod.reforge_SocketReforge.jar" }
     // Disable up-to-date check to ensure copy always happens
     outputs.upToDateWhen { false }
-    // Ensure this runs after compile tasks to avoid conflict with HyUI dependency
+    // Ensure this runs after compile tasks to avoid conflicting generated outputs
     mustRunAfter(tasks.compileJava)
     mustRunAfter(tasks.compileTestJava)
 }

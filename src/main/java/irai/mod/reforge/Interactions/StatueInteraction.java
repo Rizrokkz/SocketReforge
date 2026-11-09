@@ -106,11 +106,7 @@ public class StatueInteraction extends SimpleInteraction {
             return;
         }
 
-        if (StatueConfirmationUI.isAvailable()) {
-            StatueConfirmationUI.open(player, ActionType.ASCENSION, heldItem, selectedSlot);
-        } else {
-            executeAscension(player, heldItem, selectedSlot);
-        }
+        StatueConfirmationUI.open(player, ActionType.ASCENSION, heldItem, selectedSlot);
     }
 
     public static void executeAscension(Player player, ItemStack heldItem, short selectedSlot) {

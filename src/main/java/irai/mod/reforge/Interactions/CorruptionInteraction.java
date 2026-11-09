@@ -91,11 +91,7 @@ public class CorruptionInteraction extends SimpleInteraction {
             return;
         }
 
-        if (StatueConfirmationUI.isAvailable()) {
-            StatueConfirmationUI.open(player, ActionType.CORRUPTION, heldItem, context.getHeldItemSlot());
-        } else {
-            executeCorruption(player, heldItem, context.getHeldItemSlot());
-        }
+        StatueConfirmationUI.open(player, ActionType.CORRUPTION, heldItem, context.getHeldItemSlot());
     }
 
     public static void executeCorruption(Player player, ItemStack heldItem, short slot) {

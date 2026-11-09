@@ -1,0 +1,18 @@
+Group #StructuredHeader {
+  Anchor: (Height: 26);
+  LayoutMode: Left;
+  Padding: (Left: 5, Right: 39, Top: 3, Bottom: 3);
+  Background: #202c3b;
+  Group #StructuredHeaderField0 { FlexWeight: 0.5; Label #StructuredHeaderLabel0 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField1 { FlexWeight: 1.5; Label #StructuredHeaderLabel1 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField2 { FlexWeight: 1; Label #StructuredHeaderLabel2 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField3 { FlexWeight: 1; Label #StructuredHeaderLabel3 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField4 { FlexWeight: 1; Label #StructuredHeaderLabel4 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField5 { FlexWeight: 1; Label #StructuredHeaderLabel5 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField6 { FlexWeight: 1; Label #StructuredHeaderLabel6 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField7 { FlexWeight: 1; Label #StructuredHeaderLabel7 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField8 { FlexWeight: 1; Label #StructuredHeaderLabel8 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField9 { FlexWeight: 1; Label #StructuredHeaderLabel9 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField10 { FlexWeight: 1; Label #StructuredHeaderLabel10 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+  Group #StructuredHeaderField11 { FlexWeight: 1; Label #StructuredHeaderLabel11 { Anchor: (Full: 0); Style: (FontSize: 9, TextColor: #aab7c5, RenderBold: true, VerticalAlignment: Center, ShrinkTextToFit: true); Text: ""; } }
+}

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +55,21 @@ public final class ResonantCompendiumUI {
             "Sword", "Axe", "Mace", "Dagger", "Bow", "Crossbow", "Staff",
             "Gun", "Glaive", "Knuckle", "Weapon", "Armor", "Other");
     private static final List<String> RARITY_ORDER = List.of("ALL", "COMMON", "RARE", "LEGENDARY", "OTHER");
+
+    private static final class RecipeTypeIndex {
+        private static final Map<String, String> TYPES = build();
+
+        private static Map<String, String> build() {
+            Map<String, String> types = new HashMap<>();
+            for (ResonanceSystem.RecipeDisplay display : ResonanceSystem.getSeededRecipeDisplays()) {
+                if (display == null || display.name() == null || display.name().isBlank()) continue;
+                if (display.appliesTo() != null) {
+                    types.put(ResonantRecipeUtils.normalizeRecipeName(display.name()), display.appliesTo());
+                }
+            }
+            return Map.copyOf(types);
+        }
+    }
 
     private ResonantCompendiumUI() {}
 
@@ -167,14 +183,7 @@ public final class ResonantCompendiumUI {
 
     private static String resolveRecipeTypeFromSystem(String recipeName) {
         if (recipeName == null || recipeName.isBlank()) return "";
-        String normalized = ResonantRecipeUtils.normalizeRecipeName(recipeName);
-        for (ResonanceSystem.RecipeDisplay display : ResonanceSystem.getSeededRecipeDisplays()) {
-            if (display == null || display.name() == null) continue;
-            if (ResonantRecipeUtils.normalizeRecipeName(display.name()).equals(normalized)) {
-                return display.appliesTo();
-            }
-        }
-        return "";
+        return RecipeTypeIndex.TYPES.getOrDefault(ResonantRecipeUtils.normalizeRecipeName(recipeName), "");
     }
 
     private static boolean familyMatches(Entry entry, String selectedFamily) {
@@ -325,6 +334,13 @@ public final class ResonantCompendiumUI {
         return translated == null || translated.isBlank() || translated.equals(key) ? fallback : translated;
     }
 
+    private static String localizedRecipeDescription(Player player, String recipeName) {
+        String recipeType = resolveRecipeTypeFromSystem(recipeName);
+        boolean isWeapon = recipeType == null || !recipeType.trim().equalsIgnoreCase("Armor");
+        String description = ResonanceSystem.buildRecipeDescription(recipeName, isWeapon, player);
+        return description == null ? "" : description.trim();
+    }
+
     private static ProcessResult processExtract(Player player, short slot, String encodedKey) {
         String dataKey = decodeKey(encodedKey);
         if (dataKey == null) return new ProcessResult(t(player, "ui.compendium.error_pick_recipe", "Choose a recipe first."));
@@ -398,6 +414,9 @@ public final class ResonantCompendiumUI {
         private String combineCandidateKey;
         private String status = "";
         private boolean dismissed;
+        private Snapshot snapshotCache;
+        private String renderedSelectedKey;
+        private String renderedCandidateKey;
 
         NativeCompendiumPage(PlayerRef owner, short heldSlot) {
             super(owner, CustomPageLifetime.CanDismiss, PageEvent.CODEC);
@@ -427,24 +446,25 @@ public final class ResonantCompendiumUI {
                     selectedKey = null;
                     combineBaseKey = null;
                     combineCandidateKey = null;
-                    refresh(player);
+                    refreshFilteredLists(player, true);
                 }
                 case "rarity" -> {
                     rarity = event.target == null ? "ALL" : event.target;
                     selectedKey = null;
                     combineBaseKey = null;
                     combineCandidateKey = null;
-                    refresh(player);
+                    refreshFilteredLists(player, false);
                 }
                 case "recipe_select" -> {
                     selectedKey = event.target;
                     combineBaseKey = null;
                     combineCandidateKey = null;
-                    refresh(player);
+                    refreshSelection(player);
                 }
                 case "extract" -> {
                     ProcessResult result = processExtract(player, heldSlot, event.target);
                     status = result.status;
+                    snapshotCache = null;
                     selectedKey = event.target;
                     combineBaseKey = null;
                     combineCandidateKey = null;
@@ -459,18 +479,18 @@ public final class ResonantCompendiumUI {
                         combineCandidateKey = null;
                         status = "";
                     }
-                    refresh(player);
+                    refreshRightPane(player);
                 }
                 case "candidate_select" -> {
                     combineCandidateKey = event.target;
-                    refresh(player);
+                    refreshSelection(player);
                 }
                 case "combine_confirm" -> combineSelected(player);
                 case "combine_cancel" -> {
                     combineBaseKey = null;
                     combineCandidateKey = null;
                     status = "";
-                    refresh(player);
+                    refreshRightPane(player);
                 }
                 case "close" -> player.getPageManager().closePage(playerRef, store);
                 default -> { }
@@ -484,8 +504,10 @@ public final class ResonantCompendiumUI {
         }
 
         private Snapshot currentSnapshot(Player player) {
+            if (snapshotCache != null) return snapshotCache;
             CompendiumContext context = resolveCompendium(player, heldSlot);
-            return context == null ? new Snapshot(List.of(), 0, 0) : collectSnapshot(context.compendium);
+            snapshotCache = context == null ? new Snapshot(List.of(), 0, 0) : collectSnapshot(context.compendium);
+            return snapshotCache;
         }
 
         private void refresh(Player player) {
@@ -494,6 +516,167 @@ public final class ResonantCompendiumUI {
             UIEventBuilder events = new UIEventBuilder();
             populate(player, commands, events, true);
             sendUpdate(commands, events, false);
+        }
+
+        /** Selection only changes highlights, actions, and the detail panel; keep recipe grids intact. */
+        private void refreshSelection(Player player) {
+            if (dismissed) return;
+            Snapshot snapshot = currentSnapshot(player);
+            Entry selected = findEntry(snapshot.entries, selectedKey);
+            UICommandBuilder commands = new UICommandBuilder();
+            updateSelectedRecipeDetails(player, commands, selected);
+            List<Entry> shards = incompleteEntries(snapshot, family, rarity);
+            updateRecipeCardSelection(commands, "#ShardRecipeList", shards, 5,
+                    renderedSelectedKey, false, true, false);
+            updateRecipeCardSelection(commands, "#ShardRecipeList", shards, 5,
+                    selectedKey, true, true, false);
+
+            List<Entry> rightEntries = combineBaseKey == null
+                    ? completeEntries(snapshot, family)
+                    : combineCandidates(snapshot, findEntry(snapshot.entries, combineBaseKey));
+            boolean candidateList = combineBaseKey != null;
+            updateRecipeCardSelection(commands, "#RightRecipeList", rightEntries, 3,
+                    candidateList ? renderedCandidateKey : renderedSelectedKey,
+                    false, !candidateList, candidateList);
+            updateRecipeCardSelection(commands, "#RightRecipeList", rightEntries, 3,
+                    candidateList ? combineCandidateKey : selectedKey,
+                    true, !candidateList, candidateList);
+            commands.set("#CombineSelectedButton.Visible", combineBaseKey != null && combineCandidateKey != null);
+            renderedSelectedKey = selectedKey;
+            renderedCandidateKey = combineCandidateKey;
+            sendUpdate(commands, new UIEventBuilder(), false);
+        }
+
+        private void refreshFilteredLists(Player player, boolean rebuildRarities) {
+            if (dismissed) return;
+            Snapshot snapshot = currentSnapshot(player);
+            UICommandBuilder commands = new UICommandBuilder();
+            UIEventBuilder events = new UIEventBuilder();
+
+            List<String> families = familiesIn(snapshot);
+            for (int i = 0; i < families.size(); i++) {
+                commands.set("#FamilyList[" + i + "] #FamilySelected.Visible", families.get(i).equals(family));
+            }
+            commands.set("#RecipeListTitle.Text", familyLabel(player, family) + " · " + rarityLabel(player, rarity));
+            commands.set("#CompendiumStatus.Text", status == null ? "" : status);
+
+            List<String> rarities = raritiesIn(snapshot, family);
+            if (!rarities.contains(rarity)) rarity = "ALL";
+            if (rebuildRarities) {
+                commands.clear("#RarityList");
+                for (int i = 0; i < rarities.size(); i++) {
+                    String value = rarities.get(i);
+                    commands.append("#RarityList", RARITY_CARD_UI);
+                    String base = "#RarityList[" + i + "]";
+                    commands.set(base + " #RarityButton.Text", rarityLabel(player, value));
+                    commands.set(base + " #RaritySelected.Visible", value.equals(rarity));
+                    commands.set(base + " #RarityCount.Text", String.valueOf(countRarity(snapshot, family, value)));
+                    events.addEventBinding(CustomUIEventBindingType.Activating, base + " #RarityButton",
+                            EventData.of("Action", "rarity").append("Target", value));
+                }
+            } else {
+                for (int i = 0; i < rarities.size(); i++) {
+                    commands.set("#RarityList[" + i + "] #RaritySelected.Visible", rarities.get(i).equals(rarity));
+                }
+            }
+
+            commands.clear("#ShardRecipeList");
+            commands.clear("#RightRecipeList");
+            List<Entry> shards = incompleteEntries(snapshot, family, rarity);
+            appendRecipeGrid(player, commands, events, "#ShardRecipeList", shards, 5, true, false);
+            commands.set("#ShardEmpty.Text", shards.isEmpty()
+                    ? t(player, "ui.compendium.native.empty_shards", "No incomplete recipes in this group.") : "");
+            commands.set("#CompletedRecipeDescription.Visible", false);
+            commands.set("#CompletedDescriptionText.Text", "");
+            commands.set("#RightPaneTitle.Text", t(player, "ui.compendium.native.completed", "Completed Recipes"));
+            commands.set("#RightPaneHint.Text", t(player, "ui.compendium.native.completed_hint", "Completed recipes ready to extract."));
+            List<Entry> complete = completeEntries(snapshot, family);
+            appendRecipeGrid(player, commands, events, "#RightRecipeList", complete, 3, true, false);
+            commands.set("#CompletedEmpty.Text", complete.isEmpty()
+                    ? t(player, "ui.compendium.native.empty_complete", "No completed recipes in this family yet.") : "");
+            commands.set("#CombineSelectedButton.Visible", false);
+            commands.set("#CombineCancelButton.Visible", false);
+            updateSelectedRecipeDetails(player, commands, null);
+            renderedSelectedKey = selectedKey;
+            renderedCandidateKey = combineCandidateKey;
+            sendUpdate(commands, events, false);
+        }
+
+        private void refreshRightPane(Player player) {
+            if (dismissed) return;
+            Snapshot snapshot = currentSnapshot(player);
+            UICommandBuilder commands = new UICommandBuilder();
+            UIEventBuilder events = new UIEventBuilder();
+            commands.clear("#RightRecipeList");
+            commands.set("#CompendiumStatus.Text", status == null ? "" : status);
+            updateSelectedRecipeDetails(player, commands, findEntry(snapshot.entries, selectedKey));
+
+            if (combineBaseKey != null) {
+                Entry base = findEntry(snapshot.entries, combineBaseKey);
+                List<Entry> candidates = combineCandidates(snapshot, base);
+                if (!candidates.stream().anyMatch(entry -> entry.key.equals(combineCandidateKey))) combineCandidateKey = null;
+                commands.set("#RightPaneTitle.Text", t(player, "ui.compendium.native.candidates", "Combination Candidates"));
+                commands.set("#RightPaneHint.Text", t(player, "ui.compendium.native.candidate_hint",
+                        "Choose a compatible shard, then confirm the merge."));
+                appendRecipeGrid(player, commands, events, "#RightRecipeList", candidates, 3, false, true);
+                commands.set("#CompletedEmpty.Text", candidates.isEmpty()
+                        ? t(player, "ui.compendium.native.empty_candidates", "No compatible shard can reveal another socket.") : "");
+                commands.set("#CombineSelectedButton.Visible", combineCandidateKey != null);
+                commands.set("#CombineSelectedButton.Text", t(player, "ui.compendium.native.combine_selected", "COMBINE SELECTED"));
+                commands.set("#CombineCancelButton.Visible", true);
+                events.addEventBinding(CustomUIEventBindingType.Activating, "#CombineSelectedButton", EventData.of("Action", "combine_confirm"));
+                events.addEventBinding(CustomUIEventBindingType.Activating, "#CombineCancelButton", EventData.of("Action", "combine_cancel"));
+            } else {
+                List<Entry> complete = completeEntries(snapshot, family);
+                commands.set("#RightPaneTitle.Text", t(player, "ui.compendium.native.completed", "Completed Recipes"));
+                commands.set("#RightPaneHint.Text", t(player, "ui.compendium.native.completed_hint", "Completed recipes ready to extract."));
+                appendRecipeGrid(player, commands, events, "#RightRecipeList", complete, 3, true, false);
+                commands.set("#CompletedEmpty.Text", complete.isEmpty()
+                        ? t(player, "ui.compendium.native.empty_complete", "No completed recipes in this family yet.") : "");
+                commands.set("#CombineSelectedButton.Visible", false);
+                commands.set("#CombineCancelButton.Visible", false);
+            }
+            List<Entry> shards = incompleteEntries(snapshot, family, rarity);
+            updateRecipeCardSelection(commands, "#ShardRecipeList", shards, 5,
+                    renderedSelectedKey, false, true, false);
+            updateRecipeCardSelection(commands, "#ShardRecipeList", shards, 5,
+                    selectedKey, true, true, false);
+            renderedSelectedKey = selectedKey;
+            renderedCandidateKey = combineCandidateKey;
+            sendUpdate(commands, events, false);
+        }
+
+        private void updateSelectedRecipeDetails(Player player, UICommandBuilder commands, Entry selected) {
+            boolean showDescription = combineBaseKey == null && selected != null && selected.complete();
+            commands.set("#CompletedRecipeDescription.Visible", showDescription);
+            commands.set("#CompletedDescriptionText.Text",
+                    showDescription ? localizedRecipeDescription(player, selected.name) : "");
+            commands.set("#SelectedRecipeName.Text", selected == null
+                    ? t(player, "ui.compendium.native.select_recipe", "Select a recipe")
+                    : localizeRecipeName(player, selected.name));
+            commands.set("#SelectedRecipeDetails.Text", selected == null ? "" :
+                    selected.stats.revealedSlots() + "/" + selected.stats.totalSlots() + " sockets revealed   ·   x" + selected.quantity
+                            + (selected.complete() ? "   ·   " + formatUsages(player, selected)
+                                    : "   ·   " + t(player, "ui.compendium.usages_incomplete", "Incomplete")));
+        }
+
+        private void updateRecipeCardSelection(UICommandBuilder commands, String list,
+                                               List<Entry> entries, int columns,
+                                               String key, boolean selected,
+                                               boolean showActions, boolean candidate) {
+            if (key == null) return;
+            for (int index = 0; index < entries.size(); index++) {
+                Entry entry = entries.get(index);
+                if (!key.equals(entry.key)) continue;
+                int row = index / columns;
+                int column = index % columns;
+                String base = list + "[" + row + "] #RecipeGridCell" + column + "[0]";
+                commands.set(base + " #RecipeSelected.Visible", selected);
+                commands.set(base + " #RecipeSelectedFrame.Visible", selected);
+                commands.set(base + " #RecipeExtractTool.Visible", showActions && !candidate && selected);
+                commands.set(base + " #RecipeCombineTool.Visible", showActions && !candidate && selected && !entry.complete());
+                return;
+            }
         }
 
         private void populate(Player player, UICommandBuilder commands, UIEventBuilder events, boolean replace) {
@@ -522,10 +705,9 @@ public final class ResonantCompendiumUI {
             events.addEventBinding(CustomUIEventBindingType.Activating, "#CompendiumClose", EventData.of("Action", "close"));
 
             Entry selected = findEntry(snapshot.entries, selectedKey);
-            commands.set("#SelectedRecipeName.Text", selected == null ? t(player, "ui.compendium.native.select_recipe", "Select a recipe") : localizeRecipeName(player, selected.name));
-            commands.set("#SelectedRecipeDetails.Text", selected == null ? "" :
-                    selected.stats.revealedSlots() + "/" + selected.stats.totalSlots() + " sockets revealed   ·   x" + selected.quantity
-                            + (selected.complete() ? "   ·   " + formatUsages(player, selected) : "   ·   " + t(player, "ui.compendium.usages_incomplete", "Incomplete")));
+            updateSelectedRecipeDetails(player, commands, selected);
+            commands.set("#CompletedDescriptionTitle.Text",
+                    t(player, "ui.compendium.native.description_heading", "RECIPE DESCRIPTION"));
             List<String> families = familiesIn(snapshot);
             for (int i = 0; i < families.size(); i++) {
                 String value = families.get(i);
@@ -576,6 +758,8 @@ public final class ResonantCompendiumUI {
                 commands.set("#CombineSelectedButton.Visible", false);
                 commands.set("#CombineCancelButton.Visible", false);
             }
+            renderedSelectedKey = selectedKey;
+            renderedCandidateKey = combineCandidateKey;
         }
 
         private void appendRecipeGrid(Player player, UICommandBuilder commands, UIEventBuilder events,
@@ -601,8 +785,8 @@ public final class ResonantCompendiumUI {
             commands.set(base + " #RecipeMeta.Text", "x" + entry.quantity);
             commands.set(base + " #RecipeSelected.Visible", selected);
             commands.set(base + " #RecipeSelectedFrame.Visible", selected);
-            commands.set(base + " #RecipeExtract.Visible", showActions && !candidate && selected);
-            commands.set(base + " #RecipeCombine.Visible", showActions && !candidate && selected && !entry.complete());
+            commands.set(base + " #RecipeExtractTool.Visible", showActions && !candidate && selected);
+            commands.set(base + " #RecipeCombineTool.Visible", showActions && !candidate && selected && !entry.complete());
             commands.set(base + " #RecipeExtract.TooltipText", t(player, "ui.compendium.native.extract", "Extract recipe"));
             commands.set(base + " #RecipeCombine.TooltipText", t(player, "ui.compendium.native.combine", "Combine recipe"));
             List<String> patternTokens = parsePatternTokens(entry.pattern);
@@ -685,6 +869,7 @@ public final class ResonantCompendiumUI {
             }
             combineBaseKey = null;
             combineCandidateKey = null;
+            snapshotCache = null;
             refresh(player);
         }
 

@@ -2,7 +2,7 @@
   "Group": "irai.mod.reforge",
   "Name": "Socket Reforge",
   "Version": "1.4.6",
-  "Description": "Native equipment refinement, socketing, and lore benches with optional HyUI tools.",
+  "Description": "Native equipment refinement, socketing, lore, and configuration tools.",
   "Authors": [
     {
       "Name": "iRaiden",
@@ -12,7 +12,7 @@
   "Website": "",
   "ServerVersion": ">=0.6.0 <1.0.0",
   "Dependencies": {},
-  "OptionalDependencies": {"au.ellie:HyUI": "*",
+  "OptionalDependencies": {
                            "kyuubisoft:core": "*",
                            "MimStar:Loot4Everyone": "*"
                           },

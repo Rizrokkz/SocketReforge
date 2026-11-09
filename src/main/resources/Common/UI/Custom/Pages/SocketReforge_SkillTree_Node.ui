@@ -105,6 +105,13 @@ Group #TreeNode {
     Anchor: (Full: 0);
     Text: "";
     TooltipText: "";
+    TextTooltipStyle: (
+      LabelStyle: (FontSize: 11, TextColor: #d5dee8, Wrap: true),
+      Padding: (Left: 10, Right: 10, Top: 8, Bottom: 8),
+      Background: #0d141e(0.98),
+      MaxWidth: 360,
+      Alignment: BottomRight
+    );
     Style: @SkillTreeNodeHitStyle;
     Padding: (Full: 0);
   }

@@ -81,7 +81,7 @@ public final class UISocketVisualUtils {
             if (runeIcon != null) {
                 return runeIcon;
             }
-            return UITemplateUtils.resolveCustomUiAsset(
+            return UICustomAssetUtils.resolve(
                     "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
                     "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
         }
@@ -93,7 +93,7 @@ public final class UISocketVisualUtils {
         if (byColor != null) {
             return byColor;
         }
-        return UITemplateUtils.resolveCustomUiAsset(
+        return UICustomAssetUtils.resolve(
                 "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
                 "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png");
     }
@@ -145,17 +145,17 @@ public final class UISocketVisualUtils {
         } else {
             return null;
         }
-        return UITemplateUtils.resolveCustomUiAsset(
+        return UICustomAssetUtils.resolve(
                 "Icons/ItemsGenerated/Plant_Fruit_Spiral_Tree.png",
                 icon);
     }
 
     public static String filledSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_fille.png", "socket_filled.png");
+        return UICustomAssetUtils.resolve("socket_empty.png", "socket_fille.png", "socket_filled.png");
     }
 
     public static String brokenSocketIconName() {
-        return UITemplateUtils.resolveCustomUiAsset("socket_empty.png", "socket_broken.png", "socket_Broken.png");
+        return UICustomAssetUtils.resolve("socket_empty.png", "socket_broken.png", "socket_Broken.png");
     }
 
     public static String socketBackgroundIcon(boolean punched, boolean broken, String brokenIconName) {
@@ -263,7 +263,7 @@ public final class UISocketVisualUtils {
         String base = "essence_" + type.name().toLowerCase(Locale.ROOT);
         boolean greater = essenceId != null && SocketManager.isGreaterEssenceId(essenceId);
         if (greater) {
-            return UITemplateUtils.resolveCustomUiAsset(
+            return UICustomAssetUtils.resolve(
                     filledSocketIconName(),
                     base + "_concentrated.png",
                     base + "_greater.png",
@@ -271,7 +271,7 @@ public final class UISocketVisualUtils {
                     base + "_greater_icon.png",
                     base + ".png");
         }
-        return UITemplateUtils.resolveCustomUiAsset(
+        return UICustomAssetUtils.resolve(
                 filledSocketIconName(),
                 base + ".png",
                 base + "_icon.png");
