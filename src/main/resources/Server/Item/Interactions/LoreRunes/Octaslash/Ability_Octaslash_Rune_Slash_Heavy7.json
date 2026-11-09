@@ -3,7 +3,7 @@
   "Interactions": [
     {
       "Type": "Simple",
-      "RunTime": 0.18,
+      "RunTime": 0.8,
       "Effects": {
         "ItemPlayerAnimationsId": "SwordX",
         "ItemAnimationId": "SwingLeftRapdly",

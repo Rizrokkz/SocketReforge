@@ -1,0 +1,42 @@
+{
+  "Model": "SocketReforge_RuneDash_Rubble",
+  "Physics": {
+    "Type": "GroundFollow",
+    "MaxClimb": 1,
+    "MaxDrop": 1,
+    "Gravity": 0,
+    "TerminalVelocityAir": 45,
+    "TerminalVelocityWater": 36,
+    "RotationMode": "Velocity",
+    "ComputePitch": false,
+    "Bounciness": 0.0
+  },
+  "LaunchForce": 22.5,
+  "DirectionalHitBox": {
+    "Width": 1.25,
+    "Depth": 0.9
+  },
+  "SpawnOffset": {
+    "X": 0,
+    "Y": -1.4,
+    "Z": -0.5
+  },
+  "Interactions": {
+    "ProjectileHit": {
+      "Interactions": [
+        {
+          "Type": "CoreRuneProjectileHit",
+          "Ability": "Big_Arrow_3"
+        },
+        "Ability_Rune_Big_Arrow_Hit"
+      ]
+    },
+    "ProjectileMiss": {
+      "Interactions": [
+        {
+          "Type": "RemoveEntity"
+        }
+      ]
+    }
+  }
+}
