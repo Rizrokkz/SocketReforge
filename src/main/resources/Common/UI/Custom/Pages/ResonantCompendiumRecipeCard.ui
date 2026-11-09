@@ -1,7 +1,7 @@
 @RecipeCardHitStyle = TextButtonStyle(
   Default: (Background: #000000(0), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
-  Hovered: (Background: #ffffff(0.035), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
-  Pressed: (Background: #ffffff(0.07), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
+  Hovered: (Background: #8fb7df(0.08), LabelStyle: (FontSize: 1, TextColor: #ffffff(0))),
+  Pressed: (Background: #8fb7df(0.14), LabelStyle: (FontSize: 1, TextColor: #ffffff(0)))
 );
 @RecipeToolStyle = TextButtonStyle(
   Default: (Background: #26384c, LabelStyle: (FontSize: 11, TextColor: #d5dfeb, RenderBold: true)),
@@ -12,16 +12,33 @@
 Group #RecipeCard {
   Anchor: (Height: 234);
   LayoutMode: Full;
-  Background: #151c26;
-  Group #RecipeSelected { Anchor: (Left: 3, Top: 4, Bottom: 4, Width: 4); Background: #e8c030; Visible: false; }
-  Label #RecipeName { Anchor: (Left: 7, Right: 60, Top: 4, Height: 30); Style: (FontSize: 12, TextColor: #eef1f5, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Recipe"; }
-  Label #RecipeMeta { Anchor: (Right: 6, Top: 3, Width: 52, Height: 20); Style: (FontSize: 11, TextColor: #e8c030, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 8); Text: "x0"; }
+  Background: #080c12;
+  Group { Anchor: (Left: 3, Right: 0, Top: 4, Bottom: 0); Background: #03060b(0.9); }
+  Group { Anchor: (Left: 0, Right: 3, Top: 0, Bottom: 4); Background: #34445a; }
+  Group { Anchor: (Left: 1, Right: 4, Top: 1, Bottom: 5); Background: #151d29; }
+  Group { Anchor: (Left: 3, Right: 6, Top: 3, Height: 1); Background: #71849a(0.45); }
+  Group #RecipeCardFace { Anchor: (Left: 2, Right: 5, Top: 2, Bottom: 6); Background: #151c26; }
+  Group #RecipeSelectedFrame { Anchor: (Left: 0, Right: 3, Top: 0, Bottom: 4); Visible: false;
+    Group { Anchor: (Left: 0, Right: 0, Top: 0, Height: 2); Background: #f4d35e; }
+    Group { Anchor: (Left: 0, Right: 0, Bottom: 0, Height: 2); Background: #d6a92c; }
+    Group { Anchor: (Left: 0, Top: 0, Bottom: 0, Width: 2); Background: #f4d35e; }
+    Group { Anchor: (Right: 0, Top: 0, Bottom: 0, Width: 2); Background: #d6a92c; }
+  }
+  Group #RecipeHeaderWell { Anchor: (Left: 3, Right: 6, Top: 3, Height: 34); Background: #1c2735; }
+  Group #RecipeSelected { Anchor: (Left: 3, Top: 4, Bottom: 7, Width: 4); Background: #f4d35e; Visible: false; }
+  Label #RecipeName { Anchor: (Left: 10, Right: 52, Top: 4, Height: 30); Style: (FontSize: 12, TextColor: #eef1f5, RenderBold: true, HorizontalAlignment: Center, VerticalAlignment: Center, Wrap: true, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 9); Text: "Recipe"; }
+  Label #RecipeMeta { Anchor: (Right: 9, Top: 3, Width: 42, Height: 24); Style: (FontSize: 14, TextColor: #f4d35e, RenderBold: true, HorizontalAlignment: End, VerticalAlignment: Center, ShrinkTextToFit: true, MinShrinkTextToFitFontSize: 10); Text: "x0"; }
+  Group #RecipeIconFrame { Anchor: (Left: 33, Right: 33, Top: 42, Bottom: 33); Background: #324257; }
+  Group #RecipeIconWell { Anchor: (Left: 35, Right: 35, Top: 44, Bottom: 35); Background: #0b111a; }
+  Group #RecipePatternFrame { Anchor: (Left: 48, Right: 48, Bottom: 4, Height: 29); Background: #35465c; }
+  Group #RecipePatternWell { Anchor: (Left: 50, Right: 50, Bottom: 6, Height: 25); Background: #0c121b; }
   Group #RecipeIconCenter { Anchor: (Left: 0, Right: 0, Top: 42, Bottom: 34); LayoutMode: Center;
     ItemIcon #RecipeIcon { ItemId: "Resonant_Recipe"; Anchor: (Width: 108, Height: 108); }
   }
   Group #RecipePatternIcons { Anchor: (Left: 0, Right: 0, Bottom: 5, Height: 26); LayoutMode: Center;
-    Group #RecipePatternIconList { Anchor: (Width: 130, Height: 26); LayoutMode: Left; }
+    Group #RecipePatternIconList { Anchor: (Width: 130, Height: 26); LayoutMode: Center; }
   }
+  Group #RecipeBottomRim { Anchor: (Left: 6, Right: 9, Bottom: 5, Height: 1); Background: #52647a(0.55); }
   TextButton #RecipeSelect { Anchor: (Full: 0); Style: @RecipeCardHitStyle; Padding: (Full: 0); Text: ""; }
   Group #RecipeTools { Anchor: (Right: 3, Top: 0, Bottom: 0, Width: 26); LayoutMode: Full;
     TextButton #RecipeExtract { Anchor: (Right: 0, Top: 38, Width: 26, Height: 26); Style: @RecipeToolStyle; Padding: (Full: 0); Text: "E"; TooltipText: "Extract recipe"; Visible: false; }

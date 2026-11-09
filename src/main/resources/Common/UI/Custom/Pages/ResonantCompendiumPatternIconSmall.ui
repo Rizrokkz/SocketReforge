@@ -1,6 +1,7 @@
 Group #PatternIconTile {
   Anchor: (Width: 18, Height: 18);
   LayoutMode: Center;
-  Background: #202b3a;
-  ItemIcon #PatternEssence { ItemId: ""; Anchor: (Width: 16, Height: 16); Visible: false; }
+  Background: #090e16;
+  Group #PatternSocketBackground { Anchor: (Full: 0); Background: (TexturePath: "../slot_bg.png", Border: 0); }
+  ItemIcon #PatternEssence { ItemId: ""; Anchor: (Width: 12, Height: 12); Visible: false; }
 }

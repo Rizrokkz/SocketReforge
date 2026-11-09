@@ -600,6 +600,7 @@ public final class ResonantCompendiumUI {
             commands.set(base + " #RecipeName.Text", localizeRecipeName(player, entry.name));
             commands.set(base + " #RecipeMeta.Text", "x" + entry.quantity);
             commands.set(base + " #RecipeSelected.Visible", selected);
+            commands.set(base + " #RecipeSelectedFrame.Visible", selected);
             commands.set(base + " #RecipeExtract.Visible", showActions && !candidate && selected);
             commands.set(base + " #RecipeCombine.Visible", showActions && !candidate && selected && !entry.complete());
             commands.set(base + " #RecipeExtract.TooltipText", t(player, "ui.compendium.native.extract", "Extract recipe"));
