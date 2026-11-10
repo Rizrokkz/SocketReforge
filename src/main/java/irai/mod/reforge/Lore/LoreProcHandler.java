@@ -1425,6 +1425,7 @@ public final class LoreProcHandler {
             }
             if (isCoreEffectType(resolved.getEffectType())
                     && resolved.getEffectType() != LoreEffectType.OMNISLASH
+                    && resolved.getEffectType() != LoreEffectType.CORE_ABILITY_RUNE
                     && !isCoreColorForSpirit(spiritId)) {
                 LoreDebug.logKv("proc.skip", "reason", "NonCoreColor", "effect", resolveLogEffectLabel(resolved),
                         "spirit", spiritId);

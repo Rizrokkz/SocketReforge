@@ -1036,6 +1036,7 @@ public final class EssenceBenchUI {
             }
             Essence.Type mutationType = SocketManager.rerollSocketMutation(socketData, selectedSlot);
             if (mutationType == null) {
+                CharacterPathService.awardBenchXp(player, 10, "essence mutation", true);
                 return new ProcessResult(t(player, "ui.essence_bench.error_mutation_failed"), 0);
             }
             ItemStack updated = SocketManager.withSocketData(item, socketData);
@@ -1157,7 +1158,7 @@ public final class EssenceBenchUI {
             writeStack(player, equipment, cleared);
             socketData.registerTooltips(cleared, cleared.getItemId(), isWeapon);
             DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
-            CharacterPathService.awardBenchXp(player, success ? 12 : 8, "essence removal");
+            CharacterPathService.awardBenchXp(player, success ? 12 : 8, "essence removal", !success);
             if (success) {
                 int refunded = isThoriumHammer ? refundEssences(player, refundCounts) : 0;
                 sfxConfig.playSuccess(player);

@@ -768,8 +768,6 @@ public final class ReforgeBenchUI {
         if (consumeOnUseResult != null) {
             return consumeOnUseResult;
         }
-        CharacterPathService.awardBenchXp(player, 20, "refining");
-
         double breakChance = effectiveBreakChance(level, isArmor, materialId, breakSupport, smithyBonuses)
                 * (1.0d - supportEffects.breakProtectionFraction);
         String breakChanceSuffix = " " + t(player, "ui.reforge.break_roll_info", formatPercent(breakChance));
@@ -797,6 +795,7 @@ public final class ReforgeBenchUI {
                     return blockConsumeResult;
                 }
                 sfxConfig.playNoChange(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining", true);
                 return new ProcessResult(t(player, "ui.reforge.result_same", level,
                         hammerSuffix + " " + breakBlockSupportEntry.displayName + ": "
                                 + t(player, "ui.reforge.anti_degradation_blocked")
@@ -807,6 +806,7 @@ public final class ReforgeBenchUI {
                 writeStack(player, equipment, softened);
                 DynamicTooltipUtils.refreshPlayerTooltips(player.getPlayerRef());
                 sfxConfig.playFail(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining", true);
                 String statLabel = isArmor ? t(player, "ui.reforge.stat_defense") : t(player, "ui.reforge.stat_damage");
                 return new ProcessResult(
                         t(player,
@@ -819,6 +819,7 @@ public final class ReforgeBenchUI {
             }
             removeEquipment(player, equipment);
             sfxConfig.playShatter(player);
+            CharacterPathService.awardBenchXp(player, 20, "refining", true);
             return new ProcessResult(t(player, "ui.reforge.result_shattered", resultSuffix), 0);
         }
 
@@ -845,23 +846,28 @@ public final class ReforgeBenchUI {
         switch (outcome.type) {
             case DEGRADE, DEGRADE_B -> {
                 sfxConfig.playFail(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining", true);
                 return new ProcessResult(t(player, "ui.reforge.result_degraded", level, newLevel, resultSuffix), 100);
             }
             case SAME -> {
                 sfxConfig.playNoChange(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining", true);
                 return new ProcessResult(t(player, "ui.reforge.result_same", level,
                         hammerSuffix + antiDegradationSuffix + smithySuffix + breakChanceSuffix), 100);
             }
             case UPGRADE -> {
                 sfxConfig.playSuccess(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining");
                 return new ProcessResult(t(player, "ui.reforge.result_success", level, newLevel, resultSuffix), 100);
             }
             case JACKPOT -> {
                 sfxConfig.playJackpot(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining");
                 return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, resultSuffix), 100);
             }
             case JACKPOT_B -> {
                 sfxConfig.playJackpot(player);
+                CharacterPathService.awardBenchXp(player, 20, "refining");
                 return new ProcessResult(t(player, "ui.reforge.result_jackpot", level, newLevel, resultSuffix), 100);
             }
             default -> {

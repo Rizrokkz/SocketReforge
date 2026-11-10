@@ -156,7 +156,7 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
         commands.set("#TreeCanvas.KeepScrollPosition", !resetScroll);
         commands.set("#TreePointsLabel.Text", "Skill points: " + points);
         commands.set("#TreeLevelLabel.Text", "Character level " + level + "  |  "
-                + (profile.xp % CharacterPathService.XP_PER_LEVEL) + "/"
+                + CharacterPathService.xpProgressInLevel(profile) + "/"
                 + CharacterPathService.XP_PER_LEVEL + " XP");
         commands.set("#AvailablePoints.Text", "Available points: " + points);
         commands.set("#TreeZoomLabel.Text", "Zoom " + zoomPercent + "%");
@@ -426,7 +426,7 @@ public final class CharacterPathPage extends InteractiveCustomUIPage<CharacterPa
         Profile profile = CharacterPathService.profile(player);
         commands.set("#TreePointsLabel.Text", "Skill points: " + points);
         commands.set("#TreeLevelLabel.Text", "Character level " + CharacterPathService.level(player)
-                + "  |  " + (profile.xp % CharacterPathService.XP_PER_LEVEL) + "/"
+                + "  |  " + CharacterPathService.xpProgressInLevel(profile) + "/"
                 + CharacterPathService.XP_PER_LEVEL + " XP");
         commands.set("#AvailablePoints.Text", "Available points: " + points);
 

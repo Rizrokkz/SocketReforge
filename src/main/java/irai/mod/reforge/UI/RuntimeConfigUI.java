@@ -34,6 +34,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import irai.mod.DynamicFloatingDamageFormatter.DamageNumberConfig;
 import irai.mod.reforge.Common.LootInjectionUtils;
 import irai.mod.reforge.Config.AscensionConfig;
+import irai.mod.reforge.Config.CharacterPathProgressionConfig;
 import irai.mod.reforge.Config.CorruptionConfig;
 import irai.mod.reforge.Config.CrossModConfig;
 import irai.mod.reforge.Config.ElementalAffinityConfig;
@@ -91,6 +92,7 @@ public final class RuntimeConfigUI {
     private static final String ELEMENTAL_AFFINITY_CONFIG_NAME = "ElementalAffinityConfig";
     private static final String ASCENSION_CONFIG_NAME = "AscensionConfig";
     private static final String CORRUPTION_CONFIG_NAME = "CorruptionConfig";
+    private static final String CHARACTER_PATH_PROGRESSION_CONFIG_NAME = "CharacterPathProgressionConfig";
 
     private static final String CATEGORY_SOCKET = "socket";
     private static final String CATEGORY_REFINEMENT = "refinement";
@@ -785,6 +787,7 @@ public final class RuntimeConfigUI {
                 case "reload" -> handleReload(player, state);
                 case "reset" -> handleResetDefaults(player, state);
                 case "recalculate_weights" -> handleRecalculateRefinementWeights(player, state);
+                case "open_character_path_editor" -> CharacterPathUI.openEditor(player);
                 default -> { }
             }
         }
@@ -822,6 +825,7 @@ public final class RuntimeConfigUI {
             commands.set("#ConfigGroupLayout.Text", group == null ? "" : layoutLabel(groupLayout(group.id)));
             events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigReload", EventData.of("Action", "reload"));
             events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigReset", EventData.of("Action", "reset"));
+            events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigPathEditor", EventData.of("Action", "open_character_path_editor"));
             events.addEventBinding(CustomUIEventBindingType.Activating, "#ConfigApply", EventData.of("Action", "apply"));
 
             for (int i = 0; i < categories.size(); i++) {
@@ -1082,8 +1086,10 @@ public final class RuntimeConfigUI {
         if (CATEGORY_ASCENSION.equals(categoryId)) {
             ascensionConfig().resetToDefaults();
             corruptionConfig().resetToDefaults();
+            characterPathProgressionConfig().resetToDefaults();
             plugin.getConfigService().saveAndApply(ASCENSION_CONFIG_NAME);
             plugin.getConfigService().saveAndApply(CORRUPTION_CONFIG_NAME);
+            plugin.getConfigService().saveAndApply(CHARACTER_PATH_PROGRESSION_CONFIG_NAME);
         }
     }
 
@@ -2350,11 +2356,32 @@ public final class RuntimeConfigUI {
                 delta -> corruptionConfig().setMaxStatModifier(clamp(corruptionConfig().getMaxStatModifier() + delta, 0.0, 1.0))));
         groups.add(new ControlGroup("corruption_modifiers", "Corruption Modifiers", "Stat change magnitude range.", corruptionModifiers));
 
+        List<ControlEntry> characterPathXp = new ArrayList<>();
+        characterPathXp.add(chanceControl(
+                "character_path_success_xp_scale",
+                CATEGORY_ASCENSION,
+                CHARACTER_PATH_PROGRESSION_CONFIG_NAME,
+                "Successful bench XP rate",
+                "Share of normal Character Path bench XP awarded when an attempt succeeds. Default: 1%.",
+                () -> characterPathProgressionConfig().getSuccessfulBenchXpScale(),
+                delta -> characterPathProgressionConfig().setSuccessfulBenchXpScale(
+                        clamp(characterPathProgressionConfig().getSuccessfulBenchXpScale() + delta, 0.0, 1.0))));
+        characterPathXp.add(chanceControl(
+                "character_path_failed_xp_scale",
+                CATEGORY_ASCENSION,
+                CHARACTER_PATH_PROGRESSION_CONFIG_NAME,
+                "Failed attempt XP rate",
+                "Share of normal Character Path bench XP awarded when an attempt fails. Default: 4%, so failures award more XP.",
+                () -> characterPathProgressionConfig().getFailedBenchXpScale(),
+                delta -> characterPathProgressionConfig().setFailedBenchXpScale(
+                        clamp(characterPathProgressionConfig().getFailedBenchXpScale() + delta, 0.0, 1.0))));
+        groups.add(new ControlGroup("character_path_xp", "Character Path XP", "Set how much bench XP successful and failed attempts grant.", characterPathXp));
+
         return new CategorySection(
                 CATEGORY_ASCENSION,
                 "toggleEndgameCategory",
                 "Endgame System",
-                "Ascension and Corruption systems for maxed refinement equipment.",
+                "Character Path XP rates, ascension, and corruption settings.",
                 groups,
                 "Tier configurations update dynamically based on Max Ascension Tier. Corruption allows stat modification at a cost.");
     }
@@ -2668,6 +2695,10 @@ public final class RuntimeConfigUI {
 
     private static CorruptionConfig corruptionConfig() {
         return plugin.getCorruptionRuntimeConfig();
+    }
+
+    private static CharacterPathProgressionConfig characterPathProgressionConfig() {
+        return plugin.getCharacterPathProgressionRuntimeConfig();
     }
 
     private static List<MaterialTier> getMaterialTierSnapshot() {

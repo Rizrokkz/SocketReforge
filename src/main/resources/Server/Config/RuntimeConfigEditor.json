@@ -80,7 +80,8 @@
         { "id": "corruption_core", "layout": "setting_cards" },
         { "id": "corruption_costs", "layout": "setting_cards" },
         { "id": "corruption_chances", "layout": "numeric_table" },
-        { "id": "corruption_modifiers", "layout": "numeric_table" }
+        { "id": "corruption_modifiers", "layout": "numeric_table" },
+        { "id": "character_path_xp", "layout": "numeric_table" }
       ]
     },
     {

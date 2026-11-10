@@ -769,8 +769,6 @@ public class SocketBenchUI {
         if (wantsGhastly && !usedSupportMaterials.contains(SupportMaterial.GHASTLY_ESSENCE)) {
             return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_support_missing"), 0);
         }
-        CharacterPathService.awardBenchXp(player, 15, "socketing");
-
         if (usedSupportMaterials.contains(SupportMaterial.GHASTLY_ESSENCE)) {
             PunchResult loreResult = SocketManager.rollPunchResult(loreCurrent, SupportMaterial.GHASTLY_ESSENCE,
                     CharacterPathService.bonus(player, Bonus.SOCKET_CHANCE));
@@ -778,22 +776,27 @@ public class SocketBenchUI {
                 case SUCCESS -> {
                     ItemStack loreUpdated = LoreSocketManager.punchRandomLoreSocket(freshEquipment, null);
                     if (loreUpdated == null || loreUpdated == freshEquipment) {
+                        CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                         return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_lore_max", loreMax), 100);
                     }
                     writeUpdatedEquipment(player, equipment, loreUpdated, socketData);
                     sfxConfig.playSuccess(player);
+                    CharacterPathService.awardBenchXp(player, 15, "socketing");
                     return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_lore_success"), 100);
                 }
                 case BREAK -> {
                     sfxConfig.playShatter(player);
+                    CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                     return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_broke"), 100);
                 }
                 case FAIL -> {
                     sfxConfig.playFail(player);
+                    CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                     return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"), 100);
                 }
                 default -> {
                     sfxConfig.playFail(player);
+                    CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                     return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"), 100);
                 }
             }
@@ -821,6 +824,7 @@ public class SocketBenchUI {
         if (currentSockets >= maxSockets) {
             if (supportAdjusted) {
                 writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
+                CharacterPathService.awardBenchXp(player, 15, "socketing");
                 return new ProcessResult(withExpanderStatus(player,
                         LangLoader.getUITranslation(player, "ui.socket_bench.status_support_applied"),
                         expanderOutcome), 100);
@@ -836,10 +840,12 @@ public class SocketBenchUI {
                 if (!socketAdded) {
                     if (supportAdjusted) {
                         writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
+                        CharacterPathService.awardBenchXp(player, 15, "socketing");
                         return new ProcessResult(withExpanderStatus(player,
                                 LangLoader.getUITranslation(player, "ui.socket_bench.status_support_applied"),
                                 expanderOutcome), 100);
                     }
+                    CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                     return new ProcessResult(LangLoader.getUITranslation(player, "ui.socket_bench.error_max_sockets", socketData.getMaxSockets()), 100);
                 }
                 if (currentSockets == 3 && maxSockets == 4) {
@@ -853,6 +859,7 @@ public class SocketBenchUI {
                 }
                 writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
                 sfxConfig.playSuccess(player);
+                CharacterPathService.awardBenchXp(player, 15, "socketing");
                 return new ProcessResult(withExpanderStatus(player,
                         LangLoader.getUITranslation(player, "ui.socket_bench.status_success"),
                         expanderOutcome), 100);
@@ -866,6 +873,7 @@ public class SocketBenchUI {
                 }
                 writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
                 sfxConfig.playShatter(player);
+                CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                 return new ProcessResult(withExpanderStatus(player,
                         LangLoader.getUITranslation(player, "ui.socket_bench.status_broke"),
                         expanderOutcome), 100);
@@ -875,6 +883,7 @@ public class SocketBenchUI {
                     writeUpdatedEquipment(player, equipment, freshEquipment, socketData);
                 }
                 sfxConfig.playFail(player);
+                CharacterPathService.awardBenchXp(player, 15, "socketing", true);
                 return new ProcessResult(withExpanderStatus(player,
                         LangLoader.getUITranslation(player, "ui.socket_bench.status_failed"),
                         expanderOutcome), 100);

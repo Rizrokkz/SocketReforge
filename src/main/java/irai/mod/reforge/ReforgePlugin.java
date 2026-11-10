@@ -77,6 +77,7 @@ import irai.mod.reforge.Common.WeaponAffinityAppearanceState;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils;
 import irai.mod.reforge.Common.WorldDroplistRepairUtils.WorldDroplistRepairResult;
 import irai.mod.reforge.Config.AscensionConfig;
+import irai.mod.reforge.Config.CharacterPathProgressionConfig;
 import irai.mod.reforge.Config.ConfigService;
 import irai.mod.reforge.Config.CorruptionConfig;
 import irai.mod.reforge.Config.CrossModConfig;
@@ -229,6 +230,7 @@ public class ReforgePlugin extends JavaPlugin {
     private final Config<ElementalAffinityConfig> elementalAffinityConfig;
     private final Config<AscensionConfig> ascensionConfig;
     private final Config<CorruptionConfig> corruptionConfig;
+    private final Config<CharacterPathProgressionConfig> characterPathProgressionConfig;
     private final ConfigService configService;
     private boolean customCombatTextEnabled = false;
     private boolean systemsRegistered = false;
@@ -278,6 +280,7 @@ public class ReforgePlugin extends JavaPlugin {
         this.elementalAffinityConfig = this.withConfig("ElementalAffinityConfig", ElementalAffinityConfig.CODEC);
         this.ascensionConfig = this.withConfig("AscensionConfig", AscensionConfig.CODEC);
         this.corruptionConfig = this.withConfig("CorruptionConfig", CorruptionConfig.CODEC);
+        this.characterPathProgressionConfig = this.withConfig("CharacterPathProgressionConfig", CharacterPathProgressionConfig.CODEC);
 
         this.configService.register("SFXConfig", this.sfxconfig, cfg -> {
             if (reforgeEquip != null) {
@@ -325,6 +328,8 @@ public class ReforgePlugin extends JavaPlugin {
         this.configService.register("ElementalAffinityConfig", this.elementalAffinityConfig, ElementalAffinityUtils::setConfig);
         this.configService.register("AscensionConfig", this.ascensionConfig, AscensionUtils::setConfig);
         this.configService.register("CorruptionConfig", this.corruptionConfig, CorruptionUtils::setConfig);
+        this.configService.register("CharacterPathProgressionConfig", this.characterPathProgressionConfig, cfg ->
+                CharacterPathService.setBenchXpScales(cfg.getSuccessfulBenchXpScale(), cfg.getFailedBenchXpScale()));
         this.configService.register("AscensionConfig", this.ascensionConfig, AscensionUtils::setConfig);
     }
 
@@ -743,6 +748,10 @@ public class ReforgePlugin extends JavaPlugin {
 
     public CorruptionConfig getCorruptionRuntimeConfig() {
         return corruptionConfig.get();
+    }
+
+    public CharacterPathProgressionConfig getCharacterPathProgressionRuntimeConfig() {
+        return characterPathProgressionConfig.get();
     }
 
     /**

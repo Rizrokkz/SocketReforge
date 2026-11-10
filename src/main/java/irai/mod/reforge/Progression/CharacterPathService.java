@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +23,8 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 /** Persistent, bench-earned character progression and passive skill nodes. */
 public final class CharacterPathService {
     public static final int XP_PER_LEVEL = 100;
+    private static volatile double successfulBenchXpScale = 0.01d;
+    private static volatile double failedBenchXpScale = 0.04d;
 
     public enum Category {
         VITALITY, ARCANA, ENDURANCE, COMBAT, GUARD,
@@ -122,6 +125,8 @@ public final class CharacterPathService {
 
     public static final class Profile {
         public long xp;
+        /** Fractional bench XP carried between operations after progression-rate scaling. */
+        public double xpRemainder;
         public Map<String, Integer> ranks = new LinkedHashMap<>();
         /** Stat chosen by this player for each allocated path node. */
         public Map<String, String> pathChoices = new LinkedHashMap<>();
@@ -651,6 +656,7 @@ public final class CharacterPathService {
         if (id == null) return false;
         Profile profile = profile(id);
         profile.xp = 0L;
+        profile.xpRemainder = 0.0d;
         profile.ranks.clear();
         profile.pathChoices.clear();
         save(id, profile);
@@ -728,19 +734,58 @@ public final class CharacterPathService {
         }
     }
 
-    /** Awards XP only at successful bench operation points, after their inputs are committed. */
+    /** Awards reduced XP for a completed bench action; failed rolls receive a larger share. */
     public static synchronized void awardBenchXp(Player player, int amount, String processName) {
+        awardBenchXp(player, amount, processName, false);
+    }
+
+    /**
+     * Bench awards retain fractional XP so the 98% overall reduction does not round
+     * ordinary rewards down to zero. Failed attempts receive four times the successful
+     * reward rate; at roughly one failed attempt per three, the mean award is 2% of the
+     * previous rate.
+     */
+    public static synchronized void awardBenchXp(Player player, int amount, String processName,
+                                                  boolean failedAttempt) {
         UUID id = playerId(player);
         if (id == null || amount <= 0) return;
         Profile profile = profile(id);
+        double scale = failedAttempt ? failedBenchXpScale : successfulBenchXpScale;
+        double award = amount * scale;
+        double accrued = Math.max(0.0d, profile.xpRemainder) + award;
+        long wholeXp = (long) Math.floor(accrued + 1.0e-9d);
+        profile.xpRemainder = Math.max(0.0d, accrued - wholeXp);
         int oldPoints = pointsFromXp(profile.xp);
-        profile.xp = Math.max(0L, profile.xp) + amount;
+        long currentXp = Math.max(0L, profile.xp);
+        profile.xp = wholeXp > Long.MAX_VALUE - currentXp ? Long.MAX_VALUE : currentXp + wholeXp;
         int newPoints = pointsFromXp(profile.xp);
         save(id, profile);
         String label = processName == null || processName.isBlank() ? "bench work" : processName;
-        String message = "+" + amount + " character XP from " + label + " (" + profile.xp + " XP)";
+        String message = "+" + formatXp(award) + " character XP from " + label
+                + " (" + formatXp(profile.xp + profile.xpRemainder) + " XP)";
         if (newPoints > oldPoints) message += " - skill point earned";
         player.getPlayerRef().sendMessage(Message.raw(message));
+    }
+
+    /** Updates the live bench XP rates when runtime config is loaded or edited. */
+    public static void setBenchXpScales(double successfulScale, double failedScale) {
+        successfulBenchXpScale = clampXpScale(successfulScale);
+        failedBenchXpScale = clampXpScale(failedScale);
+    }
+
+    private static double clampXpScale(double value) {
+        return Double.isFinite(value) ? Math.max(0.0d, Math.min(1.0d, value)) : 0.0d;
+    }
+
+    public static String xpProgressInLevel(Profile profile) {
+        if (profile == null) return "0";
+        double progress = Math.max(0L, profile.xp) % XP_PER_LEVEL
+                + Math.max(0.0d, profile.xpRemainder);
+        return formatXp(progress);
+    }
+
+    private static String formatXp(double value) {
+        return String.format(Locale.ROOT, "%.2f", Math.max(0.0d, value));
     }
 
     private static int spentPoints(Profile profile) {
@@ -766,6 +811,14 @@ public final class CharacterPathService {
             Profile profile = GSON.fromJson(Files.readString(file.toPath(), StandardCharsets.UTF_8), Profile.class);
             if (profile == null) return new Profile();
             profile.xp = Math.max(0L, profile.xp);
+            if (!Double.isFinite(profile.xpRemainder) || profile.xpRemainder < 0.0d) {
+                profile.xpRemainder = 0.0d;
+            } else if (profile.xpRemainder >= 1.0d) {
+                long carriedXp = (long) profile.xpRemainder;
+                profile.xp = carriedXp > Long.MAX_VALUE - profile.xp
+                        ? Long.MAX_VALUE : profile.xp + carriedXp;
+                profile.xpRemainder -= carriedXp;
+            }
             if (profile.ranks == null) profile.ranks = new LinkedHashMap<>();
             if (profile.pathChoices == null) profile.pathChoices = new LinkedHashMap<>();
             Map<String, Integer> validRanks = new LinkedHashMap<>();

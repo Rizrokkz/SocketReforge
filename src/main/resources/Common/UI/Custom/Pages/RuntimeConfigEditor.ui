@@ -20,6 +20,8 @@ Group #RuntimeConfigRoot {
       LayoutMode: Left;
       Anchor: (Height: 32);
       Label #ConfigTitle { FlexWeight: 1; Style: (FontSize: 18, TextColor: #e8c030, RenderBold: true, VerticalAlignment: Center); Text: "RUNTIME CONFIGURATION"; }
+      TextButton #ConfigPathEditor { Anchor: (Width: 170, Height: 30); Style: @ConfigNav; Text: "OPEN PATH EDITOR"; }
+      Group { Anchor: (Width: 6); }
       TextButton #ConfigReload { Anchor: (Width: 150, Height: 30); Style: @ConfigNav; Text: "RELOAD FROM DISK"; }
       Group { Anchor: (Width: 6); }
       TextButton #ConfigReset { Anchor: (Width: 138, Height: 30); Style: @ConfigNav; Text: "RESET CATEGORY"; }
